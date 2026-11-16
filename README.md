@@ -120,11 +120,12 @@ even at a good place to stop. The question gives the model this sum for its
 context.
 
 [When to compact](docs/when-to-compact.md) models this trade and fits it to
-the same sessions. It compares the payback with the requests the context takes
-to grow back, rather than with one turn, and finds the cheapest turn-end
-threshold near 200k: compacting at every turn end past it saves 30%, against
-25% past 400k. Letting context size change the model's work by a coefficient
-from 0.8 to 1.2 moves that threshold by tens of thousands of tokens.
+the same sessions. It weighs the payback against the requests the context
+takes to grow back rather than against one turn, and by that measure a
+compaction near 200k does pay: compacting at every turn end past 200k saves
+30.5%, against 25.4% past 400k. Letting context size change the model's work,
+by a coefficient from 0.8 to 1.2, moves that threshold by tens of thousands of
+tokens.
 
 **Idle sessions.** In my background sessions over the same days, 92 returns
 after an hour or more wrote 27.6M tokens back to the cache, about $220.

@@ -13,18 +13,20 @@ typing `/compact`, can compact only at the end of a turn.
 
 For the author's sessions on Opus 5.5 with a one-hour cache, the model says to
 compact at the first turn end past about **200k tokens**. Compacting there
-every time costs 30% less than never compacting, where compacting at every
-turn end past 400k, sparkjoy's current floor, costs 25% less. The answer
-depends on how context size changes what each request gets done, which the
-model carries as a coefficient κ. Across the range 0.8 to 1.2 it moves little:
+every time costs 30.5% less than never compacting, where compacting at every
+turn end past 400k, sparkjoy's current floor, costs 25.4% less. Compacting idle
+sessions as well, from about 175k, raises the best turn-end threshold to 250k
+and the saving to 31.2%. The answer depends on how context size changes what
+each request gets done, which the model carries as a coefficient κ. Across the
+range 0.8 to 1.2 it moves little:
 
 | κ   | best point, compacting after any request | best threshold at turn ends | saved there | saved at 400k |
 | --- | ---------------------------------------- | --------------------------- | ----------- | ------------- |
-| 0.8 | 243k (235–253k)                          | 200k (190–210k)             | 36%         | 30%           |
-| 0.9 | 250k (242–261k)                          | 200k (200–220k)             | 33%         | 28%           |
-| 1.0 | 259k (251–270k)                          | 200k (200–220k)             | 30%         | 25%           |
-| 1.1 | 271k (262–282k)                          | 200k (200–250k)             | 27%         | 23%           |
-| 1.2 | 285k (276–297k)                          | 250k (200–270k)             | 24%         | 20%           |
+| 0.8 | 243k (235–253k)                          | 200k (190–210k)             | 36.4%       | 29.9%         |
+| 0.9 | 250k (242–261k)                          | 200k (190–220k)             | 33.6%       | 27.7%         |
+| 1.0 | 259k (251–270k)                          | 200k (200–240k)             | 30.5%       | 25.4%         |
+| 1.1 | 271k (262–282k)                          | 240k (200–250k)             | 27.3%       | 22.9%         |
+| 1.2 | 285k (276–297k)                          | 240k (210–250k)             | 23.9%       | 20.3%         |
 
 The second column is the steady-state model's optimum, derived below. The
 third comes from replaying the sessions with compaction only at turn ends.
@@ -177,17 +179,19 @@ one-hour cache the sessions used:
 | S, summary output                       | 4,000                    | assumed      | the summary request isn't logged                                                   |
 | h, c₀, F₀, K′                           | 1.22, 134k, 4.77M, 142k  |              | derived; F₀ is $0.95                                                               |
 
-At κ = 1, X\* is 260k. Without E it would be 229k; without the lapses in h,
-272k; with twice the assumed S, 264k. E likely leans high, since the turns
-after a compaction more often start new work, which reads more files anyway.
+At κ = 1, X\* is 260k by the closed form above (259k on the script's 1k grid).
+Without E it would be 229k; without the lapses in h, 272k; with twice the
+assumed S, 264k. E likely leans high, since the turns after a compaction more
+often start new work, which reads more files anyway.
 
 Two measurements bear on what the model assumes:
 
-- **Re-reading.** Of the 20 requests after a compaction, 0.24 more read a file
-  that had been read before the compaction than, after an ordinary turn end,
-  read a file read earlier in the context (90%: 0.04 to 0.44). Claude Code
-  attaches the files a session used last, so few have to be read again.
-- **Growth.** g falls from 2.3k tokens per request at 100–200k to 1.4k at
+- **Re-reading.** Over the 20 requests after a compaction, whatever turns they
+  fall in, 0.24 more requests read a file that had been read before the
+  compaction than, after an ordinary turn end, read a file read earlier in the
+  context (90%: 0.04 to 0.44). Claude Code attaches the files a session used
+  last, which may be why the excess is small.
+- **Growth.** g falls from 2.3k tokens per request at 100–200k to 1.5k at
   400–500k, where the model takes it as constant. The replay below uses each
   request's own growth.
 
@@ -197,14 +201,15 @@ Two measurements bear on what the model assumes:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-threshold-dark.svg">
-  <img alt="Best compaction point against κ from 0.6 to 2. The steady-state point rises slowly from 231k at κ = 0.6 to 285k at 1.2, crosses 400k near κ = 1.55 and reaches 965k, Claude Code's own compaction, near 1.8. The replay's best turn-end threshold stays lower, at 180k to 300k up to κ = 1.6." src="../assets/model-threshold-light.svg">
+  <img alt="Best compaction point against κ from 0.6 to 2. The steady-state point rises slowly from 231k at κ = 0.6 to 285k at 1.2, crosses 400k near κ = 1.55 and reaches 965k, Claude Code's own compaction, near 1.8. The replay's best turn-end threshold stays lower, at 190k to 290k up to κ = 1.6." src="../assets/model-threshold-light.svg">
 </picture>
 
 Across κ from 0.8 to 1.2 the best point moves from 243k to 285k. Reading cost
 grows in proportion to the context, and work per request only as x^(κ−1), so a
 coefficient near 1 barely shifts the balance. For the point to reach 400k, κ
 has to be 1.55, where a request at 800k does about twice the work of one at
-200k. Above κ = 1.82, compacting before Claude Code does never pays.
+200k. In the steady state, compacting before Claude Code does never pays above
+κ = 1.82; the replay still finds a fraction of a percent to save at 850k–930k.
 
 The range 0.8 to 1.2 is an assumption, not a measurement. Long-context
 retrieval benchmarks give a sense of scale: if work tracked their scores, κ
@@ -223,25 +228,27 @@ chance to compact. The best threshold at turn ends therefore sits below X\*.
 The replay measures how far. It keeps every logged request, with its growth,
 output and timing, and moves only the compactions: those sparkjoy or Claude
 Code's auto-compaction made are removed, those the user typed stay, and each
-arm compacts by its own rule. Compacting after any request, its best point is
-260k, beside the steady state's 259k, so uneven growth, real lapses and
-sessions ending barely move the optimum. Compacting only at turn ends moves it
-to 200k.
+arm compacts by its own rule. It charges E at once at each compaction an arm
+makes, and takes E out of the growth of the requests after each one it
+removes. Compacting after any request, the replay's best point is 260k, beside
+the steady state's 259k: uneven growth, real lapses and sessions ending
+together move the optimum little, though they may offset one another.
+Compacting only at turn ends moves it to 200k.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-cost-dark.svg">
-  <img alt="Replayed cost per unit of work against the turn-end threshold, for κ of 0.8, 1 and 1.2. Each curve falls to a flat minimum (200k at 64%, 200k at 70%, 250k at 76% of the cost of never compacting) and rises steadily to 100% near 950k. sparkjoy asks from 400k." src="../assets/model-cost-light.svg">
+  <img alt="Replayed cost per unit of work against the turn-end threshold, for κ of 0.8, 1 and 1.2. Each curve falls to a flat minimum (200k at 64%, 200k at 69%, 240k at 76% of the cost of never compacting) and rises steadily to 100% near 950k. sparkjoy asks from 400k." src="../assets/model-cost-light.svg">
 </picture>
 
 At κ = 1, any threshold from 170k to 280k comes within one percentage point of
 the best. A threshold of 400k costs 7% more per unit of work than the best,
-and 600k costs 24% more.
+and 600k costs 25% more.
 
 ### Lost detail
 
 The model prices a compaction in tokens. Its other cost is work the summary no
 longer supports: a mistake, a correction from the user, a step re-run. If that
-costs D cached reads on average, D adds to F₀, and X\* grows with
+costs D cached reads on average, D adds to F₀, and X\* − K′ grows with
 √(F₀ + K′ + D). At κ = 1, X\* reaches 400k when D is 18.8M cached reads, $3.75
 at Opus 5.5 prices: 3.6 times the compaction's own cost at 400k, or the price
 of writing 481k tokens again, about 24 times the E measured. LangWatch's
@@ -266,19 +273,23 @@ x > \frac{o\,S + w\,K'}{w - 1} \approx 156\text{k}
 ```
 
 counting the next request alone; the cheaper requests after it only add to the
-saving. sparkjoy asks after 55 idle minutes. Replayed at κ = 1, with every
-policy compacting wherever it allows:
+saving. sparkjoy asks once a session has sat 55 minutes since its last reply
+without a new message. The replay runs that timer from each reply to the next
+message, and takes a session's last reply to be followed by such a wait.
+Replayed at κ = 1, with every policy compacting wherever it allows:
 
-| policy                                        | saved |
-| --------------------------------------------- | ----- |
-| turn ends from 400k, sparkjoy's current floor | 25.4% |
-| and idle sessions from 200k, its idle floor   | 29.5% |
-| turn ends from 200k                           | 30.3% |
-| and idle sessions from 156k                   | 30.8% |
+| policy                                                   | saved |
+| -------------------------------------------------------- | ----- |
+| turn ends from 400k, sparkjoy's current floor            | 25.4% |
+| and idle sessions from 200k, its idle floor              | 28.8% |
+| turn ends from 200k, the best without idle compaction    | 30.5% |
+| turn ends from 250k and idle sessions from 175k, the best pair | 31.2% |
 
-18% of turn ends here are followed by an hour's gap, so idle compaction does
-most of what a lower turn-end threshold would. With both in place, sparkjoy's
-floors save 1.3 points less than the best ones.
+The pairs come from a grid of turn-end thresholds in steps of 50k and idle
+thresholds in steps of 25k; every pair of 200k–250k at turn ends and 150k–175k
+idle comes within 0.3 points of the best. 18% of turn ends here are followed by
+an hour's gap, so idle compaction does much of what a lower turn-end threshold
+would: sparkjoy's two floors together save 2.4 points less than the best pair.
 
 ### Other prices and cache lifetimes
 
@@ -286,10 +297,10 @@ The same sessions, priced again, at κ = 1:
 
 | prices               | cache     | ℓ     | h    | X\*  | best at turn ends | saved | idle break-even |
 | -------------------- | --------- | ----- | ---- | ---- | ----------------- | ----- | --------------- |
-| Opus 5.5, Sonnet 5.5 | 1 hour    | 0.56% | 1.22 | 259k | 200k              | 30.3% | 156k            |
-| Opus 5.5, Sonnet 5.5 | 5 minutes | 2.33% | 1.56 | 226k | 160k              | 37.3% | 165k            |
-| Fable 5.2            | 1 hour    | 0.56% | 1.44 | 294k | 250k              | 27.0% | 154k            |
-| Fable 5.2            | 5 minutes | 2.33% | 2.14 | 243k | 180k              | 36.8% | 162k            |
+| Opus 5.5, Sonnet 5.5 | 1 hour    | 0.56% | 1.22 | 259k | 200k              | 30.5% | 156k            |
+| Opus 5.5, Sonnet 5.5 | 5 minutes | 2.33% | 1.56 | 226k | 160k              | 37.6% | 165k            |
+| Fable 5.2            | 1 hour    | 0.56% | 1.44 | 294k | 250k              | 27.3% | 154k            |
+| Fable 5.2            | 5 minutes | 2.33% | 2.14 | 243k | 180k              | 37.0% | 162k            |
 
 A Fable 5.2 cache write costs twice as many cached reads, which raises F₀ and
 with it X\*. A five-minute cache lapses after 2.3% of requests, 57% of them at
@@ -297,8 +308,8 @@ turn ends, which makes a large context dearer to hold and lowers X\*.
 
 ## What it implies for sparkjoy
 
-At κ near 1, the model supports asking at turn ends from about 200k rather than
-400k, and in idle sessions from about 160k rather than 200k. The question's
+At κ near 1, the model supports asking at turn ends from 200k–250k rather than
+400k, and in idle sessions from 150k–175k rather than 200k. The question's
 payback sum misleads when it is set beside the length of a turn. A compaction
 is repaid over every request until the context grows back, (x − K′)/g of them,
 and at a turn end it pays even before its payback falls to half of that,
@@ -325,8 +336,6 @@ with the question.
 
 ## Prior work
 
-- **The economics.** Harris's order quantity, Kletke's replacement rule, and
-  the renewal-reward theorem in Ross, all cited above.
 - **Long contexts degrade.**
   [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/),
   [RULER](https://arxiv.org/abs/2404.06654),
