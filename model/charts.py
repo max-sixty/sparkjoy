@@ -53,7 +53,7 @@ def compacted(ax, K1, t, y, va):
 
 def progress_curve(p, c, t, path):
     """A request's progress against its context, 1 - exp(-x/s), as a share of what unlimited context
-    would give, for the values of s the cost chart draws. Each curve reaches 63% at x = s."""
+    would give, for the values of s the cost chart draws. Each curve reaches 1 - 1/e at x = s."""
     fig, ax = plt.subplots(figsize=(9, 3.2))
     style(ax, t)
     compacted(ax, fit.terms(p, c)[3], t, 0.75, "center")
@@ -64,7 +64,7 @@ def progress_curve(p, c, t, path):
         if k:
             ax.plot([k], [at_s], "o", ms=7, mfc=color, mec=t["page"], mew=1.5, zorder=3)
     ax.axhline(at_s, color=t["muted"], lw=0.8, ls=":")
-    ax.text(fit.AUTO, at_s - 0.03, "each dot is at x = s, where progress reaches 63%", ha="right", va="top",
+    ax.text(fit.AUTO, at_s - 0.03, "each dot is at x = s, where progress reaches 1 − 1/e ≈ 63%", ha="right", va="top",
             fontsize=9, color=t["muted"])
     ax.set_xlim(0, fit.AUTO)
     ax.xaxis.set_major_formatter(tokens)
