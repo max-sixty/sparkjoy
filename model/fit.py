@@ -67,8 +67,8 @@ class Session:
     out: np.ndarray  # output tokens
     grew: np.ndarray  # tokens the context gained since the request before
     recent: np.ndarray  # among the SPAN requests after a compaction
-    dropped: np.ndarray  # ... after a compaction each replayed arm drops (a POLICY one)
     gap: np.ndarray  # seconds since the request before
+    idle: np.ndarray  # seconds from the reply before to what started this request's turn, or 0
     rewrote: np.ndarray  # the log shows the whole context written again
     end: np.ndarray  # the request ended a turn (stop_reason end_turn)
     ttl: int  # the cache lifetime the session's writes used, in seconds
@@ -97,9 +97,10 @@ def load(root, since, until):
     for path in root.glob("*/*.jsonl"):  # a subagent's transcript sits a level deeper
         if path.stat().st_mtime < since.timestamp():
             continue
-        reqs, comps, entry, mod = {}, [], None, False
+        reqs, comps, prompts, entry, mod = {}, [], [], None, False
         for raw in path.open(errors="replace"):
-            if '"assistant"' not in raw and "compact_boundary" not in raw and "Compacting at" not in raw:
+            prompt = '"type":"user"' in raw and '"tool_result"' not in raw  # a message that starts a turn
+            if not prompt and '"assistant"' not in raw and "compact_boundary" not in raw and "Compacting at" not in raw:
                 continue
             try:
                 e = json.loads(raw)
@@ -108,7 +109,9 @@ def load(root, since, until):
             if not lo <= e.get("timestamp", "") < hi or e.get("isSidechain"):
                 continue
             t = datetime.fromisoformat(e["timestamp"].replace("Z", "+00:00")).timestamp()
-            if e.get("type") == "assistant":
+            if prompt and e.get("type") == "user":
+                prompts.append(t)
+            elif e.get("type") == "assistant":
                 m = e.get("message") or {}
                 u = m.get("usage")
                 if not u or m.get("model") == "<synthetic>":
@@ -119,7 +122,8 @@ def load(root, since, until):
                      (u.get("cache_creation") or {}).get("ephemeral_5m_input_tokens") or 0, u.get("output_tokens") or 0)
                 # Claude Code logs each content block as an entry of its own,
                 # each repeating the usage, which streaming grows.
-                q = reqs.setdefault(m["id"], [t, (0,) * 5, False, set()])
+                q = reqs.setdefault(m["id"], [t, (0,) * 5, False, set(), t])
+                q[4] = t  # when its last block was logged
                 q[1] = tuple(map(max, q[1], v))
                 q[2] = q[2] or m.get("stop_reason") == "end_turn"
                 q[3] |= {b["input"]["file_path"] for b in m.get("content") or []
@@ -131,13 +135,21 @@ def load(root, since, until):
                 comps.append((t, mod or md.get("trigger") == "auto", (md.get("durationMs") or 0) / 1000))
                 mod = False
         if entry == "cli" and len(reqs) > 1:
-            sessions.append(session(sorted(reqs.values(), key=lambda q: q[0]), comps))
+            sessions.append(session(sorted(reqs.values(), key=lambda q: q[0]), comps, sorted(prompts)))
     return sessions
 
 
-def session(reqs, comps):
+def session(reqs, comps, prompts):
     n = len(reqs)
     t = np.array([q[0] for q in reqs])
+    # After a turn ends, the session sits idle until the next message arrives (the user's,
+    # or a notification's), and sparkjoy's timer runs from the reply to that message.
+    idle = np.zeros(n)
+    for j in range(1, n):
+        if reqs[j - 1][2]:
+            done = reqs[j - 1][4]
+            k = np.searchsorted(prompts, done, side="right")
+            idle[j] = (prompts[k] if k < len(prompts) and prompts[k] <= t[j] else t[j]) - done
     inp, read, write, write5, out = (np.array([q[1][k] for q in reqs]) for k in range(5))
     size = inp + read + write
     kind = np.full(n, NORMAL)
@@ -152,12 +164,11 @@ def session(reqs, comps):
     # prompt; a new message's worth stands in for it.
     grew[kind == POLICY] = np.minimum(write[kind == POLICY], 4_000)
     # The requests after a compaction, whose growth includes what it made them read again.
-    recent, dropped = np.zeros(n, bool), np.zeros(n, bool)
+    recent = np.zeros(n, bool)
     for j in np.flatnonzero((kind == USER) | (kind == POLICY)):
         recent[j + 1:j + SPAN] = True
-        dropped[j + 1:j + SPAN] |= kind[j] == POLICY
-    return Session(kind=kind, size=size, read=read, write=write, inp=inp, out=out, grew=grew, recent=recent, dropped=dropped,
-                   gap=np.diff(t, prepend=t[0]), rewrote=(kind == NORMAL) & (write > 0.5 * size) & (size > 50_000),
+    return Session(kind=kind, size=size, read=read, write=write, inp=inp, out=out, grew=grew, recent=recent,
+                   gap=np.diff(t, prepend=t[0]), idle=idle, rewrote=(kind == NORMAL) & (write > 0.5 * size) & (size > 50_000),
                    end=np.array([q[2] for q in reqs]), ttl=300 if 2 * write5.sum() >= write.sum() else 3600,
                    durations=[d for _, _, d in comps if d], reads=[q[3] for q in reqs])
 
@@ -292,9 +303,14 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None):
     the session sits idle for IDLE of the cache's lifetime, as sparkjoy's timer does."""
     K1, P = p.K + p.E, p.P
     lapse = lapsed(s, ttl)
-    # Each arm charges E at its own compactions, so the requests after a dropped one lose the
-    # extra reading it caused, E spread over them.
-    growth = np.where(s.dropped, np.maximum(s.grew - p.E / (SPAN - 1), 0), s.grew)
+    # Each arm charges E, all at once, at each compaction it makes, so the requests after a
+    # dropped one give up E of their growth, the earliest first, where the re-reading falls.
+    growth = s.grew.astype(float)
+    for j in np.flatnonzero(s.kind == POLICY):
+        left = p.E
+        for i in range(j + 1, min(j + SPAN, len(growth))):
+            take = min(growth[i], left)
+            growth[i], left = growth[i] - take, left - take
     trace = np.empty(len(s.size))
     cost, ctx, pending, ended = 0.0, 0.0, False, False
     for j in range(len(s.size)):
@@ -305,7 +321,7 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None):
             ctx = s.size[j]
             cost += s.read[j] + c.write * s.write[j] + c.input * inp + c.output * out
         else:
-            if pending or (idle is not None and ended and ctx >= idle and s.gap[j] > IDLE * ttl):
+            if pending or (idle is not None and ctx >= idle and s.idle[j] > IDLE * ttl):
                 cost += ctx + c.output * SUMMARY  # read from the cache, which the turn end left warm
                 ctx, written = K1 + grew, K1 - P + grew
             else:
@@ -409,7 +425,7 @@ def main():
     for kappa in KAPPAS:
         i = ks.index(kappa)
         lo, hi = np.percentile(BX[:, i], [5, 95])
-        tlo, thi = np.percentile(BT[:, i], [5, 95])
+        tlo, thi = np.percentile(BT[:, i], [5, 95], method="nearest")
         print(f"  {kappa:.1f}  {k(steady(p, c, kappa)):>5} ({k(lo)}-{k(hi)})    {k(Tr[i]):>5}                  "
               f"{k(T[i]):>5} ({k(tlo)}-{k(thi)})              {1 - saved[i]:.1%}   {1 - J[at[400_000], i] / J[-1, i]:.1%}")
     print("  * resampling sessions with K, P and E held at their fitted values")
@@ -437,12 +453,19 @@ def main():
         return sum(replay(s, p, c, threshold, ttl, idle=idle)[0] for s in S)
 
     never = cost[:, -1].sum()
+    # Turn-end and idle thresholds chosen together.
+    pairs = {(t, i): arm(t, i) for t in range(150_000, 450_001, 50_000) for i in (None, *range(150_000, 300_001, 25_000))}
+    (bt, bi), low = min(pairs.items(), key=lambda kv: kv[1])
     print(f"\n  policy at κ = 1, compacting wherever it allows      saved   (never compacting: ${never * c.read:,.0f})")
     for label, threshold, idle in (("turn ends from 400k (sparkjoy's FLOOR)", 400_000, None),
                                    ("  and idle sessions from 200k (its IDLE_FLOOR)", 400_000, 200_000),
-                                   (f"turn ends from {k(T[one])} (the replay's best)", T[one], None),
-                                   (f"  and idle sessions from {k(idle_break_even(p, c))} (the break-even)", T[one], idle_break_even(p, c))):
-        print(f"  {label:50s} {1 - arm(threshold, idle) / never:6.1%}")
+                                   (f"turn ends from {k(T[one])} (the replay's best alone)", T[one], None),
+                                   (f"turn ends from {k(bt)}, idle sessions from {k(bi)} (best pair)", bt, bi)):
+        print(f"  {label:50s} {1 - pairs.get((threshold, idle), arm(threshold, idle)) / never:6.1%}")
+    print("  saved by pair (rows: turn-end threshold; columns: idle threshold, '-' for none):")
+    print("        " + " ".join(f"{'-' if i is None else k(i):>6}" for i in (None, *range(150_000, 300_001, 25_000))))
+    for t in range(150_000, 450_001, 50_000):
+        print(f"  {k(t):>5} " + " ".join(f"{1 - pairs[t, i] / never:6.1%}" for i in (None, *range(150_000, 300_001, 25_000))))
 
     print("\n  prices             cache   lapses (at turn ends)   h      steady X*   replay at turn ends   saved   idle break-even   (κ = 1)")
     for model in ("claude-opus-5-5", "claude-fable-5-2"):
