@@ -561,13 +561,13 @@ def main():
     at = {x: list(THRESHOLDS).index(x) for x in THRESHOLDS}
     J = cost.sum(0)[:, None] / progress.sum(0)
     k = lambda x: "never" if x == np.inf else f"{x / 1e3:.0f}k"
-    print("\n  s       steady X* (90%)   replay at any request   replay at turn ends (90%*)   saved   saved at 400k")
+    print("\n  s       steady X* (90%)   replay at any request   replay at turn ends (90%*)   saved   at 250k   at 400k")
     for scale in SCALES:
         i = ks.index(scale)
         lo, hi = np.percentile(BX[:, i], [5, 95])
         tlo, thi = np.percentile(BT[:, i], [5, 95], method="nearest")
         print(f"  {k(scale):>5}  {k(steady(p, c, scale)):>5} ({k(lo)}-{k(hi)})    {k(Tr[i]):>5}                  "
-              f"{k(T[i]):>5} ({k(tlo)}-{k(thi)})              {1 - saved[i]:.1%}   {1 - J[at[400_000], i] / J[-1, i]:.1%}")
+              f"{k(T[i]):>5} ({k(tlo)}-{k(thi)})              {1 - saved[i]:.1%}   {1 - J[at[250_000], i] / J[-1, i]:.1%}   {1 - J[at[400_000], i] / J[-1, i]:.1%}")
     print("  * resampling sessions with K, P and E held at their fitted values")
     print("\n  the steady-state point reaches", end="")
     for level in (300_000, 400_000, 600_000, AUTO):
