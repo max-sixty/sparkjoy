@@ -111,7 +111,7 @@ from the prompt cache and writes about a hundred tokens. A cached read costs
 [0.05× the input price](https://platform.claude.com/docs/en/about-claude/pricing)
 on Opus 5.5 and Sonnet 5.5, so a check costs about as much as one ordinary
 request in the session. Only turns that end at 400k or more are checked: 198 of
-the 36,251 requests, which came to $22. The model said yes at 122 of them.
+the 36,251 requests, which came to $22. It compacted at 122 of them.
 
 **What a compaction costs and saves.** Over my 141 compactions, the first
 request after one carried a median 122k tokens: an 85k opening prompt (system
