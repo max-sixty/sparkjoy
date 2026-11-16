@@ -45,7 +45,7 @@ def kappa_color(t, k):
 def sawtooth(p, c, t, path):
     """Context per request: compacting at X* against letting Claude Code compact near the window.
     The area under each line is what its requests read."""
-    X, _ = fit.steady(p, c, 1.0)
+    X = fit.steady(p, c, 1.0)
     K1, g = p.K + p.E, p.g
     n = int((fit.AUTO - K1) / g) + 120
     req = np.arange(n)
@@ -113,8 +113,9 @@ def cost_curve(cost, work, t, path):
 def thresholds(cost, work, BT, BX, p, c, t, path):
     """The best compaction point against κ: the steady-state model and the turn-end replay, with 90% bands."""
     ks = np.array(fit.CHART_KAPPAS)
-    X = [fit.steady(p, c, k)[0] for k in ks]
-    T, _ = fit.best(cost, work)
+    X = [fit.steady(p, c, k) for k in ks]
+    # Never compacting short of Claude Code's own compaction is drawn at it.
+    T, BT = (np.minimum(v, fit.AUTO) for v in (fit.best(cost, work)[0], BT))
     fig, ax = plt.subplots(figsize=(9, 3.6))
     style(ax, t)
     ax.axvspan(0.8, 1.2, color=tint(t["mid"], t["page"], 0.10), lw=0)
