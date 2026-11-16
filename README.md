@@ -122,9 +122,9 @@ A compaction repays over every request until the context grows back, not
 within one turn. Compacting costs least where it pays for itself in about half
 the time the context takes to grow back. [When to compact](docs/when-to-compact.md) models this and
 fits it to the same sessions: compacting at every turn end past about 200k
-costs least, saving 30.2% against 25.1% past 400k. A coefficient for how
-context size changes the progress a request makes, from 0.8 to 1.2, moves that
-by tens of thousands of tokens. The question gives the model the payback for its
+costs least, saving 30.2% against 25.1% past 400k. If more context helps a
+request up to a scale s, which the sessions put at no more than about 150k, the
+best turn-end threshold rises to 250k. The question gives the model the payback for its
 context.
 
 **Idle sessions.** In my background sessions over the same days, 92 returns

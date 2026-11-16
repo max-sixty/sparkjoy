@@ -8,12 +8,12 @@ import numpy as np
 
 import fit
 
-# "page" is GitHub's background in each theme. α is drawn on a diverging
-# scale: below 1 in orange, 1 in a neutral grey, above 1 in blue.
+# "page" is GitHub's background in each theme. s is drawn on a sequential scale, from a
+# neutral grey at 0 through deepening shades of blue.
 THEMES = {
-    "light": {"low": "#eb6834", "mid": "#52514e", "high": "#2a78d6", "ink": "#0b0b0b", "muted": "#52514e",
+    "light": {"mid": "#52514e", "high": "#2a78d6", "ink": "#0b0b0b", "muted": "#52514e",
               "grid": "#e4e3df", "page": "#ffffff", "band": 0.16},
-    "dark": {"low": "#d95926", "mid": "#9a998f", "high": "#3987e5", "ink": "#f0efec", "muted": "#c3c2b7",
+    "dark": {"mid": "#9a998f", "high": "#3987e5", "ink": "#f0efec", "muted": "#c3c2b7",
              "grid": "#3a3936", "page": "#0d1117", "band": 0.28},
 }
 
@@ -37,14 +37,10 @@ def tokens(v, _=None):
     return "1M" if v >= 1_000_000 else f"{v / 1000:.0f}k" if v else "0"
 
 
-def alpha_color(t, k):
-    return t["low"] if k < 1 else t["high"] if k > 1 else t["mid"]
-
-
 def sawtooth(p, c, t, path):
     """Context per request: compacting at X* against letting Claude Code compact near the window.
     The area under each line is what its requests read."""
-    X = fit.steady(p, c, 1.0)
+    X = fit.steady(p, c)
     K1, g = p.K + p.E, p.g
     n = int((fit.AUTO - K1) / g) + 120
     req = np.arange(n)
@@ -81,7 +77,8 @@ def sawtooth(p, c, t, path):
 
 
 def cost_curve(cost, progress, p, c, t, path):
-    """The steady state's cost per unit of progress against the compaction point, for α from 0.8 to 2: a compaction can follow any request, and the context grows smoothly. Against never compacting,
+    """The steady state's cost per unit of progress against the compaction point, for s from 0 to 500k:
+    a compaction can follow any request, and the context grows smoothly. Against never compacting,
     where Claude Code compacts at AUTO."""
     fig, ax = plt.subplots(figsize=(9, 3.4))
     style(ax, t)
@@ -89,13 +86,13 @@ def cost_curve(cost, progress, p, c, t, path):
     ax.axvspan(0, K1, color=tint(t["muted"], t["page"], 0.12), lw=0)
     ax.text(K1 / 2, 1.28, f"under {K1 / 1000:.0f}k,\nwhat a\ncompaction\nleaves", ha="center", va="top",
             fontsize=9, color=t["muted"])
-    # Above 1, deepening shades of the high colour, so the order of the curves reads at a glance.
-    shades = {0.8: t["low"], 1.0: t["mid"], 1.25: tint(t["high"], t["page"], 0.45),
-              1.5: tint(t["high"], t["page"], 0.72), 2.0: t["high"]}
+    # Deepening shades of the high colour as s grows, so the order of the curves reads at a glance.
+    shades = {0: t["mid"], 150_000: tint(t["high"], t["page"], 0.45), 300_000: tint(t["high"], t["page"], 0.72),
+              500_000: t["high"]}
     for k, color in shades.items():
         X, J = fit.curve(p, c, k)
         y = J / J[-1]
-        ax.plot(X, y, color=color, lw=2, label=f"α = {k:g}")
+        ax.plot(X, y, color=color, lw=2, label=f"s = {tokens(k)}")
         j = y.argmin()
         if j == len(y) - 1:
             continue  # no compaction short of Claude Code's own pays
@@ -115,15 +112,13 @@ def cost_curve(cost, progress, p, c, t, path):
 
 
 def thresholds(cost, progress, BT, BX, p, c, t, path):
-    """The best compaction point against α: the steady-state model and the turn-end replay, with 90% bands."""
-    ks = np.array(fit.CHART_ALPHAS)
+    """The best compaction point against s: the steady-state model and the turn-end replay, with 90% bands."""
+    ks = np.array(fit.CHART_SCALES)
     X = [fit.steady(p, c, k) for k in ks]
     # Never compacting short of Claude Code's own compaction is drawn at it.
     T, BT = (np.minimum(v, fit.AUTO) for v in (fit.best(cost, progress)[0], BT))
     fig, ax = plt.subplots(figsize=(9, 3.6))
     style(ax, t)
-    ax.axvspan(0.8, 1.2, color=tint(t["mid"], t["page"], 0.10), lw=0)
-    ax.text(1.0, 40_000, "α from 0.8 to 1.2", ha="center", va="bottom", fontsize=9, color=t["muted"])
     for level, label in ((fit.FLOOR, "sparkjoy asks from 400k"), (fit.AUTO, "Claude Code compacts")):
         ax.axhline(level, color=t["muted"], lw=0.8, ls=":")
         ax.text(ks[0], level + 12_000, label, fontsize=9, color=t["muted"])
@@ -133,10 +128,11 @@ def thresholds(cost, progress, BT, BX, p, c, t, path):
         ax.fill_between(ks, lo, hi, color=tint(color, t["page"], t["band"]), lw=0)
         ax.plot(ks, y, color=color, lw=2, label=label, marker="o", ms=4)
     ax.set_xlim(ks[0], ks[-1])
+    ax.xaxis.set_major_formatter(tokens)
     ax.set_ylim(0, 1_020_000)
     ax.yaxis.set_major_formatter(tokens)
     ax.set_yticks([0, 250_000, 500_000, 750_000, 1_000_000])
-    ax.set_xlabel("context efficiency coefficient α", color=t["muted"], fontsize=10)
+    ax.set_xlabel("s, the context past which more stops helping a request", color=t["muted"], fontsize=10)
     ax.set_ylabel("best compaction point", color=t["muted"], fontsize=10)
     ax.legend(frameon=False, fontsize=10, labelcolor=t["ink"], loc="lower right")
     fig.savefig(path, transparent=True, bbox_inches="tight", metadata={"Date": None})

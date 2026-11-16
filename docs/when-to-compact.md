@@ -32,17 +32,22 @@ requests and a mean 38, so a policy limited to turn ends does best compacting
 earlier, from about **200k**: 30.2% less than never compacting, where every
 turn end past 400k, sparkjoy's current floor, saves 25.1%. Compacting idle
 sessions as well, from about 175k, raises the best turn-end threshold to 250k
-and the saving to 30.9%. The answer depends on how context size changes what
-each request gets done, which the model carries as a coefficient α. Across the
-range 0.8 to 1.2 it moves little:
+and the saving to 30.9%.
 
-| α   | best point, compacting after any request | best threshold at turn ends | saved there | saved at 400k |
-| --- | ---------------------------------------- | --------------------------- | ----------- | ------------- |
-| 0.8 | 243k (235–252k)                          | 200k (190–210k)             | 36.1%       | 29.5%         |
-| 0.9 | 250k (243–259k)                          | 200k (190–220k)             | 33.3%       | 27.4%         |
-| 1.0 | 259k (251–269k)                          | 200k (200–240k)             | 30.2%       | 25.1%         |
-| 1.1 | 271k (262–281k)                          | 240k (200–250k)             | 27.0%       | 22.6%         |
-| 1.2 | 285k (276–296k)                          | 240k (210–250k)             | 23.7%       | 20.0%         |
+These figures take a request to get as much done at any context size. The
+model lets more context help a request, up to a scale s past which more stops
+helping; at s = 0, size doesn't matter. The sessions put s near 0 and at most
+about 150k, where the best point is 325k and the best threshold at turn ends
+250k:
+
+| s    | best point, compacting after any request | best threshold at turn ends | saved there | saved at 400k |
+| ---- | ---------------------------------------- | --------------------------- | ----------- | ------------- |
+| 0    | 259k (251–269k)                          | 200k (200–240k)             | 30.2%       | 25.1%         |
+| 50k  | 266k (258–275k)                          | 220k (200–240k)             | 29.6%       | 24.8%         |
+| 100k | 294k (286–303k)                          | 250k (240–260k)             | 26.5%       | 22.8%         |
+| 150k | 325k (318–334k)                          | 250k (240–290k)             | 22.7%       | 20.1%         |
+| 200k | 356k (348–366k)                          | 250k (250–290k)             | 19.3%       | 17.5%         |
+| 300k | 414k (405–425k)                          | 290k (270–340k)             | 13.9%       | 13.2%         |
 
 The second column is the steady-state model's optimum, derived below. The
 third comes from replaying the sessions with compaction only at turn ends.
@@ -109,23 +114,22 @@ F(x) = x + o\,S + (w-1)\,(K - P)
 
 F₀ = oS + (w−1)(K − P) is the part of F that doesn't depend on x.
 
-### Progress and the context efficiency coefficient
+### Progress and its scale s
 
 The size of the context can change how much a request gets done. A larger
-context can help, because more of the work's history is at hand, or hurt,
-because models attend less reliably over long inputs. The model has a request
-with context x do
+context helps when more of the work's history is at hand, and the help runs
+out once the context holds what the next steps need. The model has a request
+with context x make
 
 ```math
-\eta(x) = (x/W)^{\alpha - 1}
+\eta(x) = 1 - e^{-x/s}
 ```
 
-units of progress, where W is the 1M-token window and α is the context efficiency
-coefficient. At α = 1 every request makes the same progress, whatever its context.
-Below 1 smaller contexts do more, and above 1 larger ones do. At α = 0.9 a
-request with 200k of context does 15% more than one with 800k; at α = 1.2 it
-does 24% less. Only ratios of η enter the results, so the choice of W drops
-out.
+units of progress, its share of what it would make with unlimited context. s
+is the context past which more stops helping: a request makes 63% of its full
+progress at x = s, 86% at 2s and 95% at 3s. At s = 150k, a request at 400k
+makes 93% and one at 900k all of it; at s = 300k, 74% and 95%. At s = 0 every
+request makes the same progress, whatever its context.
 
 ### The best compaction point
 
@@ -151,7 +155,7 @@ summary would also read.) It is the rule for replacing a machine whose running
 cost rises with age: replace it when its marginal cost reaches its average
 cost ([Kletke 1969](https://ageconsearch.umn.edu/record/29853/files/01010045.pdf)).
 
-At α = 1 the condition solves in closed form:
+At s = 0 the condition solves in closed form:
 
 ```math
 X^* = K + \sqrt{\frac{2\,g\,(F_0 + K)}{h}}
@@ -169,9 +173,9 @@ compaction is an order with fixed cost F₀ + K. Two properties follow.
   380k here, raises the part of the cost that depends on X by 25%, which is 8%
   of a request's whole cost.
 
-For α ≠ 1, `model/fit.py` solves the condition numerically. There c₀ matters:
+For s > 0, `model/fit.py` solves the condition numerically. There c₀ matters:
 output and new tokens cost the same per request at any context, but a request's
-progress doesn't, so they weigh on the choice only when α ≠ 1.
+progress doesn't, so they weigh on the choice only when s > 0.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-sawtooth-dark.svg">
@@ -180,15 +184,17 @@ progress doesn't, so they weigh on the choice only when α ≠ 1.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-cost-dark.svg">
-  <img alt="Steady-state cost per unit of progress against the compaction point, for α of 0.8, 1, 1.25, 1.5 and 2, against never compacting. Each curve climbs steeply toward 142k, what a compaction leaves. The minima are at 243k (46%), 259k (55%), 294k (69%) and 372k (85%); the α = 2 curve falls all the way to 100% at 965k." src="../assets/model-cost-light.svg">
+  <img alt="Steady-state cost per unit of progress against the compaction point, for s of 0, 150k, 300k and 500k, against never compacting. Each curve climbs steeply toward 142k, what a compaction leaves. The minima are at 259k (55%), 325k (68%), 414k (82%) and 519k (91%)." src="../assets/model-cost-light.svg">
 </picture>
 
-The cost against the compaction point, for α from 0.8 to 2. It climbs
+The cost against the compaction point, for s from 0 to 500k. It climbs
 steeply toward K, where compactions come every few requests, and flattens
-around X\*. Above α ≈ 1.8 no compaction short of Claude Code's own pays, so
-the α = 2 curve has no minimum. These savings are larger than the replay's below because the
-steady state's never-compacting arm climbs to 965k in every cycle, where real
-sessions end before many cycles.
+around X\*. With s above 0, a compaction costs progress as well as tokens,
+since the requests after it work with less context until it refills, so X\*
+moves later and the saving shrinks. No compaction short of Claude Code's own
+pays above s ≈ 1.7M. These savings are larger than the replay's below because
+the steady state's never-compacting arm climbs to 965k in every cycle, where
+real sessions end before many cycles.
 
 ## Fitted parameters
 
@@ -207,7 +213,7 @@ one-hour cache the sessions used:
 | S, summary output                       | 4,000                    | 3,300–8,000  | the summary's text is a median 3,300 (chars/4); its thinking isn't logged, and the pass's median 58 s at this account's output speed allows up to about 8,000 |
 | K, context a compaction leaves; h, c₀, F₀ | 142k; 1.22, 134k, 4.77M |            | derived: K is the first request plus E; F₀ is $0.95                                |
 
-At α = 1, X\* is 260k by the closed form above (259k on the script's 1k grid).
+At s = 0, X\* is 260k by the closed form above (259k on the script's 1k grid).
 Without E it would be 229k; without the lapses in h, 272k; with S at 8,000,
 264k. E likely leans high, since the turns after a compaction more
 often start new work, which reads more files anyway.
@@ -225,28 +231,17 @@ Two measurements bear on what the model assumes:
 
 ## Results
 
-### α moves the point little
+### s moves the point later
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-threshold-dark.svg">
-  <img alt="Best compaction point against α from 0.6 to 2. The steady-state point rises slowly from 231k at α = 0.6 to 285k at 1.2, crosses 400k near α = 1.55 and reaches 965k, Claude Code's own compaction, near 1.8. The replay's best turn-end threshold stays lower, at 190k to 290k up to α = 1.6." src="../assets/model-threshold-light.svg">
+  <img alt="Best compaction point against s from 0 to 500k. The steady-state point rises from 259k at s = 0 to 325k at 150k, crosses 400k at 275k and reaches 519k at 500k. The replay's best turn-end threshold stays lower: 200k at s = 0, 250k from 100k to 200k, and 280k to 430k beyond." src="../assets/model-threshold-light.svg">
 </picture>
 
-Across α from 0.8 to 1.2 the best point moves from 243k to 285k. Reading cost
-grows in proportion to the context, and progress per request only as x^(α−1), so a
-coefficient near 1 barely shifts the balance. For the point to reach 400k, α
-has to be 1.55, where a request at 800k makes about twice the progress of one at
-200k. In the steady state, compacting before Claude Code does never pays above
-α = 1.82; the replay still finds a fraction of a percent to save at 850k–930k.
-
-The range 0.8 to 1.2 was an assumption; "Calibrating α" below measures 1.06
-(0.82–1.27) from what happens in the sessions. Long-context
-retrieval benchmarks give a sense of scale: if progress tracked their scores, α
-would sit just under 1. Anthropic's system cards report MRCR v2 (8 needles)
-for [Opus 4.6](https://anthropic.com/claude-opus-4-6-system-card) falling from
-91.9 at 256k to 78.3 at 1M, which is α ≈ 0.88, and GraphWalks BFS for
-[Opus 4.8](https://anthropic.com/claude-opus-4-8-system-card) falling from
-85.9 to 68.1, α ≈ 0.83. Retrieval measures much less than getting work done.
+Across s from 0 to 150k, the range "Calibrating s" below allows, the best point
+moves from 259k to 325k and the best turn-end threshold from 200k to 250k. For
+the point to reach 400k, s has to be 275k, where a request at 200k makes 52% of
+its full progress and one at 400k 77%.
 
 ### Turn ends lower the threshold
 
@@ -264,12 +259,12 @@ the steady state's 259k: uneven growth, real lapses and sessions ending
 together move the optimum little, though they may offset one another.
 Compacting only at turn ends moves it to 200k.
 
-At α = 1, any threshold from 170k to 280k comes within one percentage point of
+At s = 0, any threshold from 170k to 280k comes within one percentage point of
 the best. A threshold of 400k costs 7% more per unit of progress than the best,
 and 600k costs 24% more.
 
 Compacting too early can't run away at turn ends. Under K, every turn end
-compacts, and that still costs about a fifth less than never compacting at α = 1,
+compacts, and that still costs about a fifth less than never compacting at s = 0,
 because a turn grows the context by 68k on average. In the steady state, where
 a compaction could follow any request, compacting at 150k would cost 3.2 times
 as much per unit of progress as compacting at X\*: a compaction every four
@@ -280,13 +275,13 @@ requests or so.
 The model prices a compaction in tokens. Its other cost is work the summary no
 longer supports: a mistake, a correction from the user, a step re-run. If that
 costs D cached reads on average, D adds to F₀, and X\* − K grows with
-√(F₀ + K + D). At α = 1, X\* reaches 400k when D is 18.8M cached reads, $3.75
+√(F₀ + K + D). At s = 0, X\* reaches 400k when D is 18.8M cached reads, $3.75
 at Opus 5.5 prices: 3.6 times the compaction's own cost at 400k, or the price
 of writing 481k tokens again, about 24 times the E measured. LangWatch's
 author [found](https://langwatch.ai/blog/context-tax-when-to-compact) that in
 their sessions, 42% of their messages in the five steps after a compaction
 carried a correction, matched by phrase, against 18% otherwise. In these
-sessions, "Calibrating α" below finds D near zero where it could be measured.
+sessions, "Calibrating s" below finds D near zero where it could be measured.
 
 D varies from one turn end to the next, which a threshold can't see.
 sparkjoy's question asks the session's model whether the next turns will need
@@ -308,7 +303,7 @@ counting the next request alone; the cheaper requests after it only add to the
 saving. sparkjoy asks once a session has sat 55 minutes since its last reply
 without a new message. The replay runs that timer from each reply to the next
 message, and takes a session's last reply to be followed by such a wait.
-Replayed at α = 1, with every policy compacting wherever it allows:
+Replayed at s = 0, with every policy compacting wherever it allows:
 
 | policy                                                   | saved |
 | -------------------------------------------------------- | ----- |
@@ -325,7 +320,7 @@ would: sparkjoy's two floors together save 2.4 points less than the best pair.
 
 ### Other prices and cache lifetimes
 
-The same sessions, priced again, at α = 1:
+The same sessions, priced again, at s = 0:
 
 | prices               | cache     | ℓ     | h    | X\*  | best at turn ends | saved | idle break-even |
 | -------------------- | --------- | ----- | ---- | ---- | ----------------- | ----- | --------------- |
@@ -338,25 +333,25 @@ A Fable 5.2 cache write costs twice as many cached reads, which raises F₀ and
 with it X\*. A five-minute cache lapses after 2.3% of requests, 57% of them at
 turn ends, which makes a large context dearer to hold and lowers X\*.
 
-## Calibrating α
+## Calibrating s
 
 Progress isn't logged, but some of what is lost of it is: a tool call that
 fails, a lookup repeated while its result is still in the context, a turn the
 user corrects or interrupts. `model/calibrate.py` counts these as trouble and
-regresses it on the log of the context, with a fixed effect for each session
-and markers for the 20 requests and two turns after a compaction. If a share w
-of requests is wasted, progress per request is proportional to 1 − w, so
-α − 1 = −(dw/d ln x) / (1 − w̄). That assumes a request that goes right makes
-the same progress at any context; a gain there would show in none of these
+compares it across context sizes within each session, with a fixed effect for
+each session and markers for the 20 requests and two turns after a compaction.
+If a share w of requests is wasted, progress per request is proportional to
+1 − w, so each value of s predicts how much more trouble requests at small
+contexts see. That assumes a request that goes right makes the same progress
+at any context; a gain there would show in none of these
 signals. A corrected or interrupted turn counts as wholly wasted. Corrections
 are matched by a phrase list in what the user typed; scored blind against 160
 hand-labelled turns, it finds half of them, and a third of its matches aren't
 corrections, so its slopes are divided by J = sensitivity + specificity − 1 =
 0.42, whose own uncertainty the intervals carry.
 
-This page's window has only 207 turns the user answered by typing: α = 0.98
-(0.10–1.46). The 60 days to 16 November have 993 sessions, 311,386 requests
-and 3,465 answered turns (90% intervals from resampling sessions):
+The 60 days to 16 November have 993 sessions, 311,386 requests and 3,465
+turns the user answered by typing (90% intervals from resampling sessions):
 
 | trouble              | mean  | points per e-fold of context | points after a compaction |
 | -------------------- | ----- | ---------------------------- | ------------------------- |
@@ -365,27 +360,30 @@ and 3,465 answered turns (90% intervals from resampling sessions):
 | correction (matches) | 20%   | −1.5 (−7.9 to +5.5)          | −2.2 (−9.8 to +5.7)       |
 | interruption         | 0.7%  | +0.04 (−0.61 to +0.64)       | −0.59 (−1.00 to −0.14)    |
 
-Trouble doesn't rise with the context, so **α = 1.06 (0.82–1.27)**: X\* is
-265k (244–298k), and the best turn-end threshold 220k, from 200k to 250k across
-the interval. A compaction resets the context but not the session's age, so the
-two separate; controlling for the age moves α by 0.01. Counting corrections as
-wasting none of their turn gives 1.005, and twice their turn 1.16 (0.42–1.95).
+At s = 150k, requests below 200k would see 25 points more trouble than those
+at 400k–600k, and at s = 100k 16 points more; the measured difference is −13
+(−37 to +5).
+The best fit is **s near 0, at most 146k**: X\* is 259k, or 322k at the top of
+the interval, and the best turn-end threshold 200k, or 250k.
 
-**A saturating form**, η ∝ 1 − e^(−x/s), would make a compaction to 142k cost
-progress until the context refills. At s = 150k (X\* 325k), requests below
-200k would see 25 points more trouble than those at 400k–600k; they see −13
-(−37 to +5). The best fit is s near 0, flat above K, and the interval reaches
-146k (X\* 322k). The data bound the size of the effect but can't tell the
-shapes apart.
+**Long contexts hurting.** η can't fall as the context grows. A power law,
+η ∝ x^(α−1), can, for α below 1. Fitted to the same trouble, by
+α − 1 = −(dw/d ln x) / (1 − w̄), it gives α = 1.06 (0.82–1.27): no sign of
+harm. A compaction resets the context but not the session's age, so the two
+separate; controlling for the age moves α by 0.01. Counting corrections as
+wasting none of their turn gives 1.005, and twice their turn 1.16 (0.42–1.95).
+A flat η, the power law and the saturating form fit the trouble about equally
+well: the data bound the size of the effect but can't tell the shapes apart.
 
 **Lost detail.** The trouble after a compaction comes to −2.8 wasted requests
 (−19 to +13), D = −$0.16 (−$1.07 to +$0.73). It is lower after sparkjoy's
 compactions, which come where a piece of work ends: −34 requests (−85 to +5).
 After the user's and Claude Code's it is +6 requests (−3 to +20), $0.35
 (−$0.14 to +$1.12). X\* reaches 400k only at D = $3.75, 65 wasted requests; at
-$1.12, X\* is 322k and the best turn-end threshold 250k. An estimated 16% of
-first turns after a compaction drew a correction, against 23% of others, where
-LangWatch found 42% against 18%.
+$1.12, X\* is 314k and the best turn-end threshold 250k. With s at 146k as
+well, the best turn-end threshold is 290k, and 400k saves one point less. An
+estimated 16% of first turns after a compaction drew a correction, against 23%
+of others, where LangWatch found 42% against 18%.
 
 **Where compactions happen.** The sessions do compact much later than the
 model says, the user's own `/compact` included:
@@ -408,10 +406,12 @@ matters.
 
 ## What it implies for sparkjoy
 
-With α near 1, and D small where it could be measured, the model supports
-asking at turn ends from 200k–250k rather than 400k, and in idle sessions from
-150k–175k rather than 200k. The question's payback sum misleads when it is set
-beside the length of a turn. A compaction is repaid over every request until
+With s at most 150k, and D small where it could be measured, the model
+supports asking at turn ends from 250k rather than 400k: it is the best
+threshold for any s from 100k to 200k, and within a point of the best at
+s = 0. In idle sessions it supports asking from 150k–175k rather than 200k.
+The question's payback sum misleads when it is set beside the length of a
+turn. A compaction is repaid over every request until
 the context grows back, (x − K)/g of them, and at a turn end it pays even
 before its payback falls to half of that, because the next chance to compact
 may be hundreds of requests away. What a threshold can't see, whether the next
@@ -431,8 +431,16 @@ turns need detail a summary drops, stays with the question.
 - **Subagents,** whose contexts are separate.
 - **Subscription limits,** whose weighting of token kinds isn't published. If
   it follows API prices, the answer is the same.
-- **Progress beyond α.** The replay keeps every logged request, so each arm
-  makes the same progress by construction, and only α lets context size change it.
+- **Long contexts hurting.** η never falls as the context grows, though
+  long-context benchmarks do: Anthropic's system cards report MRCR v2 (8
+  needles) for [Opus 4.6](https://anthropic.com/claude-opus-4-6-system-card)
+  falling from 91.9 at 256k to 78.3 at 1M, and GraphWalks BFS for
+  [Opus 4.8](https://anthropic.com/claude-opus-4-8-system-card) from 85.9 to
+  68.1. If progress tracked them, compacting earlier would pay. Retrieval
+  measures much less than getting work done, and "Calibrating s" finds no sign
+  of harm in these sessions.
+- **Progress beyond s.** The replay keeps every logged request, so each arm
+  makes the same progress by construction, and only s lets context size change it.
 
 ## Prior work
 
@@ -477,7 +485,7 @@ uv run --script model/fit.py --since 2026-11-07T12:00Z --until 2026-11-16T00:00Z
 uv run --script model/fit.py --model claude-fable-5-2 --ttl 5m                     # other prices and cache
 uv run --script model/fit.py --charts assets                                       # redraw the charts
 uv run --script model/calibrate.py --since 2026-09-17T00:00Z --until 2026-11-16T00:00Z \
-  --costs-since 2026-11-07T12:00Z --costs-until 2026-11-16T00:00Z                  # α, s and D, as above
+  --costs-since 2026-11-07T12:00Z --costs-until 2026-11-16T00:00Z                  # s and D, as above
 ```
 
 The script reads the main thread of each interactive session in

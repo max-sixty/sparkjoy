@@ -3,8 +3,9 @@
 # requires-python = ">=3.12"
 # dependencies = ["numpy>=2.1", "matplotlib>=3.9"]
 # ///
-"""Fits α, the context efficiency coefficient, and D, the cost of the detail a compaction drops,
-to what happens in your sessions. See "Calibrating α" in docs/when-to-compact.md.
+"""Fits s, the context past which more context stops helping a request, and D, the cost of the
+detail a compaction drops, to what happens in your sessions. See "Calibrating s" in
+docs/when-to-compact.md.
 
     uv run --script model/calibrate.py --since 2026-09-17T00:00Z --until 2026-11-16T00:00Z \
         --costs-since 2026-11-07T12:00Z --costs-until 2026-11-16T00:00Z
@@ -13,10 +14,10 @@ Progress isn't logged, so the script measures what is lost of it, as trouble, an
 varies with the context within a session. A request is in trouble when a tool call it made
 failed or when it repeated a lookup its context already held; a turn is in trouble when the
 user's next message corrects it or they interrupt it. Regressions with a fixed effect for each
-session estimate how trouble changes with the log of the context, which gives α and bounds the
-saturating scale s, and how much more of it follows a compaction, which gives D, with 90%
-intervals from resampling sessions. Outcomes need many sessions, so the cost model that prices
-D and finds X* can come from a shorter, more recent window.
+session estimate how trouble changes with the context, which bounds s and gives α, the exponent
+of a power law that would let long contexts hurt, and how much more of it follows a compaction,
+which gives D, with 90% intervals from resampling sessions. Outcomes need many sessions, so the
+cost model that prices D and finds X* can come from a shorter, more recent window.
 """
 
 import argparse
@@ -265,7 +266,7 @@ def main():
     ap.add_argument("--costs-since", help="fit the cost model to the sessions from here instead (ISO time)")
     ap.add_argument("--costs-until", help="and to here (ISO time)")
     ap.add_argument("--model", default="claude-opus-5-5", choices=fit.PRICES, help="whose prices to fit")
-    ap.add_argument("--no-replay", action="store_true", help="skip replaying the sessions under the fitted α and D")
+    ap.add_argument("--no-replay", action="store_true", help="skip replaying the sessions under the fitted s and D")
     a = ap.parse_args()
     S, since, until = fit.read(a)
     # Outcomes need many sessions; the cost model can come from fewer, more recent ones.
@@ -334,9 +335,8 @@ def main():
               f"{x['profile'][k]:+.2%} ({X['profile'][0][k]:+.2%} to {X['profile'][1][k]:+.2%})")
     print(f"  per e-fold: {pct('slope', X, x)}; mean trouble {w:.1%}")
 
-    alpha, (alo, ahi) = x["alpha"], X["alpha"]
     ci = lambda key: f"{x[key]:.3f} ({X[key][0]:.3f} to {X[key][1]:.3f})"
-    print(f"\nα = {ci('alpha')}; controlling for requests since the session started, {ci('alpha, with age')}; "
+    print(f"\npower law, α = {ci('alpha')}; controlling for requests since the session started, {ci('alpha, with age')}; "
           f"counting a corrected turn as none of its requests wasted, {ci('alpha, F = 0')}, or twice them, "
           f"{ci('alpha, F = 2')}")
     s_lo, s_hi = X["scale"]
@@ -358,7 +358,7 @@ def main():
     # interval, where the user's and Claude Code's compactions reach.
     high = max(X["D"][1], X["D other"][1])
     need = (400_000 - K1) ** 2 * h / (2 * p.g) - K1 - F0
-    print(f"  X* reaches 400k at α = 1 with D = {need / 1e6:.1f}M reads (${need * c.read:.2f}), "
+    print(f"  X* reaches 400k at s = 0 with D = {need / 1e6:.1f}M reads (${need * c.read:.2f}), "
           f"{need / price(m['post x']):.0f} wasted requests per compaction")
     # A LangWatch-style comparison, without the session effects or the context.
     first, rest = d["tpost"] == 1, d["tpost"] == 0
@@ -367,19 +367,18 @@ def main():
     print(f"  corrections answering the first turn after a compaction: {r1:.0%} of {n1}; after other turns: {r0:.0%} of {n0}")
 
     k = lambda v: f"{v / 1e3:.0f}k"
-    print(f"\nsteady-state X*: α = 1, D = 0: {k(fit.steady(p, c, 1.0))}; fitted α: {k(fit.steady(p, c, alpha))} "
-          f"({k(fit.steady(p, c, alo))} to {k(fit.steady(p, c, ahi))}); with D at the top of its interval, "
-          f"${high * c.read:.2f}: {k(fit.steady(p, c, alpha, high))}; saturating at the fitted s: "
-          f"{k(fit.steady(p, c, 1.0, scale=x['scale']))} (at its 95th percentile, {k(fit.steady(p, c, 1.0, scale=s_hi))})")
+    print(f"\nsteady-state X*: s = 0, D = 0: {k(fit.steady(p, c))}; fitted s: {k(fit.steady(p, c, x['scale']))} "
+          f"(at its 95th percentile, {k(fit.steady(p, c, s_hi))}); with D at the top of its interval, "
+          f"${high * c.read:.2f}: {k(fit.steady(p, c, x['scale'], high))}")
     if not a.no_replay:
-        ks = (alo, alpha, ahi)
+        ks = (x["scale"], s_hi)
         for lost, label in ((0.0, "D = 0"), (high, "D at the top of its interval")):
-            cost, progress = fit.grid(C, p, c, ttl, alphas=ks, lost=lost)
+            cost, progress = fit.grid(C, p, c, ttl, scales=ks, lost=lost)
             T, saved = fit.best(cost, progress)
             at = list(fit.THRESHOLDS).index(fit.FLOOR)
             floor = cost[:, at].sum() / progress[:, at].sum(0) / (cost[:, -1].sum() / progress[:, -1].sum(0))
             print(f"best turn-end threshold, replayed, {label}: " + ", ".join(
-                f"α = {q:.2f}: {k(T[i])}, saving {1 - saved[i]:.1%} (400k: {1 - floor[i]:.1%})" for i, q in enumerate(ks)))
+                f"s = {k(q)}: {k(T[i])}, saving {1 - saved[i]:.1%} (400k: {1 - floor[i]:.1%})" for i, q in enumerate(ks)))
 
 
 if __name__ == "__main__":
