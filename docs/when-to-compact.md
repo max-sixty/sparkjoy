@@ -7,14 +7,30 @@ rewrite of the shorter context to the cache, and makes every later request
 cheaper. This page models that trade, fits the model to the author's sessions,
 and gives the context size at which to compact.
 
-A turn is everything Claude does between the user's message and its reply: a
-run of model requests, typically one per tool call. sparkjoy, like a person
-typing `/compact`, can compact only at the end of a turn.
-
 For the author's sessions on Opus 5.5 with a one-hour cache, the model says to
-compact at the first turn end past about **200k tokens**. Compacting there
-every time costs 30.2% less than never compacting, where compacting at every
-turn end past 400k, sparkjoy's current floor, costs 25.1% less. Compacting idle
+compact when the context reaches about **260k tokens**. In plain numbers: a
+compaction costs about as much as reading 4.8M cached tokens, $0.95; it leaves
+about 142k; each later request reads the difference less; and the context
+grows back about 1.7k tokens a request.
+
+| compacting at | each later request reads | pays for itself after | context grows back in |
+| ------------- | ------------------------ | --------------------- | --------------------- |
+| 200k          | 58k less                 | 71 requests           | 34 requests           |
+| 260k          | 118k less                | 35 requests           | 69 requests           |
+| 400k          | 258k less                | 16 requests           | 151 requests          |
+| 700k          | 558k less                | 8 requests            | 327 requests          |
+
+Compacting costs least where a compaction pays for itself in about half the
+time the context takes to grow back. At 200k it hasn't paid by the time the
+context is back; at 400k it paid for itself long before.
+
+A turn is everything Claude does between the user's message and its reply: a
+run of model requests, typically one per tool call. A compaction inside a turn
+would interrupt work in progress, so sparkjoy, like a person typing
+`/compact`, compacts only at the end of a turn. Turns are uneven, a median 9
+requests and a mean 38, so a policy limited to turn ends does best compacting
+earlier, from about **200k**: 30.2% less than never compacting, where every
+turn end past 400k, sparkjoy's current floor, saves 25.1%. Compacting idle
 sessions as well, from about 175k, raises the best turn-end threshold to 250k
 and the saving to 30.9%. The answer depends on how context size changes what
 each request gets done, which the model carries as a coefficient α. Across the
@@ -144,11 +160,8 @@ context is stock that costs h cached reads per token per request to hold, and a
 compaction is an order with fixed cost F₀ + K′. Two properties follow.
 
 - At X\*, a compaction pays for itself in about half the requests the context
-  takes to grow back to X\*. In the fitted sessions, a compaction at 300k pays
-  back after 26 requests and the context takes 92 to grow back, so 300k is
-  past X\*. At 200k the figures are 71 and 34, so 200k is short of it:
-  compacting later costs less per request. The yardstick for payback is the
-  regrowth time, not the length of a turn.
+  takes to grow back to X\*, as the table at the top shows. The yardstick for
+  payback is the regrowth time, not the length of a turn.
 - Cost is flat near X\*. Compacting at twice the optimal growth X\* − K′, near
   380k here, raises the part of the cost that depends on X by 25%, which is 8%
   of a request's whole cost.
