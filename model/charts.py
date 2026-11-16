@@ -81,21 +81,24 @@ def sawtooth(p, c, t, path):
 
 
 def cost_curve(cost, work, p, c, t, path):
-    """The steady state's cost per unit of work against the compaction point, for three values of
-    α: a compaction can follow any request, and the context grows smoothly. Against never compacting,
+    """The steady state's cost per unit of work against the compaction point, for α from 0.8 to 2: a compaction can follow any request, and the context grows smoothly. Against never compacting,
     where Claude Code compacts at AUTO."""
     fig, ax = plt.subplots(figsize=(9, 3.4))
     style(ax, t)
     K1 = fit.terms(p, c)[3]
     ax.axvspan(0, K1, color=tint(t["muted"], t["page"], 0.12), lw=0)
-    ax.text(K1 / 2, 1.18, f"under {K1 / 1000:.0f}k,\nwhat a\ncompaction\nleaves", ha="center", va="top",
+    ax.text(K1 / 2, 1.28, f"under {K1 / 1000:.0f}k,\nwhat a\ncompaction\nleaves", ha="center", va="top",
             fontsize=9, color=t["muted"])
-    for k in (0.8, 1.0, 1.2):
+    # Above 1, deepening shades of the high colour, so the order of the curves reads at a glance.
+    shades = {0.8: t["low"], 1.0: t["mid"], 1.25: tint(t["high"], t["page"], 0.45),
+              1.5: tint(t["high"], t["page"], 0.72), 2.0: t["high"]}
+    for k, color in shades.items():
         X, J = fit.curve(p, c, k)
         y = J / J[-1]
-        color = alpha_color(t, k)
         ax.plot(X, y, color=color, lw=2, label=f"α = {k:g}")
         j = y.argmin()
+        if j == len(y) - 1:
+            continue  # no compaction short of Claude Code's own pays
         ax.plot([X[j]], [y[j]], "o", ms=7, mfc=color, mec=t["page"], mew=1.5, zorder=3)
         ax.text(X[j] + 14_000, y[j] - 0.012, f"{X[j] / 1000:.0f}k: {y[j]:.0%}", ha="left", va="top", fontsize=9,
                 color=t["ink"])
@@ -103,7 +106,7 @@ def cost_curve(cost, work, p, c, t, path):
     ax.xaxis.set_major_formatter(tokens)
     ax.set_xticks([0, 200_000, 400_000, 600_000, 800_000])
     ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
-    ax.set_ylim(0.4, 1.2)
+    ax.set_ylim(0.4, 1.3)
     ax.legend(frameon=False, fontsize=10, labelcolor=t["ink"], loc="lower right")
     ax.set_xlabel("compact when the context reaches", color=t["muted"], fontsize=10)
     ax.set_ylabel("cost per unit of work,\nvs never compacting", color=t["muted"], fontsize=10)
