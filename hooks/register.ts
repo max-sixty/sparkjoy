@@ -15,21 +15,31 @@
 // The judge is the session's model over the whole transcript rather than a
 // small model over the last reply: which parts the work ahead still needs
 // depends on the work, and the fork reads it from cache. The question gives
-// the judge costs and a benefit to weigh rather than a rule, and never names
-// the floor. The mod runs only where a person is at the prompt: a `-p` run or
+// the judge the costs and the saving, sized for the context it holds, to weigh
+// rather than a rule, and never names the floor. The mod runs only where a person is at the prompt: a `-p` run or
 // an SDK host keeps the engine's own compaction, so no script pays for a judge
 // or finds its conversation changed.
 
 import type { EngineInterface, Register } from 'claude-code'
 
-// The judge is asked only from this many context tokens. A compaction leaves
-// about 120k whatever it starts from in the author's sessions (system prompt,
-// tools, instructions, the skills the session invoked, the summary and recent
-// files). It costs a summary pass and a rewrite of what it keeps to the cache,
-// and saves each later request what it removed, so the larger the context,
-// the sooner it pays back. A replay of the author's sessions priced lower
-// floors a few percent cheaper still; the floor sits above them because the
-// replay can't see what a compaction costs the work after it.
+// What a compaction leaves, whatever it starts from: across 141 compactions in
+// the author's sessions (7-16 Nov 2026) the first request after one carried a
+// median 122k tokens (quartiles 111k-128k): the opening prompt (system prompt,
+// tools, instructions; 85k), a summary of about 3k, and the recent messages
+// and files re-attached (34k). The next request writes it to the cache again.
+const KEPT = 120_000
+// The summary's output, with some allowance for the pass around it.
+const SUMMARY = 4_000
+// What a token costs, in cached reads: on Opus and Sonnet 5.5 a read is 0.05x
+// the input price, a one-hour cache write 2x and an output token 5x.
+const WRITE = 40
+const OUTPUT = 100
+
+// The judge is asked only from this many context tokens. A compaction there
+// pays for itself after about 19 requests (`payback`), within a typical turn;
+// at 200k it takes about 65. The question tells the judge that figure for the
+// context it holds; this floor stays until the evals show the judge weighs it
+// well on smaller contexts.
 const FLOOR = 400_000
 
 // An idle session is asked from this many tokens, the size from which Claude
@@ -111,7 +121,7 @@ async function afterTurn($: EngineInterface, watch: Watch, changes: number, repl
       $.clock.after(IDLE_MS, () => void idle($, isCurrent, say, tokens, reply))
     }
     if (tokens < FLOOR) return
-    await judge($, say, async () => isCurrent(), `${thousands(tokens)} tokens`, question(reply))
+    await judge($, say, async () => isCurrent(), `${thousands(tokens)} tokens`, question(reply, tokens))
   } catch (error) {
     say(`Failed: ${error}`)
   }
@@ -126,7 +136,7 @@ async function idle($: EngineInterface, isCurrent: () => boolean, say: (text: st
   try {
     if (!(await isUntouched())) return
     const minutes = IDLE_MS / 60_000
-    await judge($, say, isUntouched, `${thousands(tokens)} tokens, idle ${minutes} minutes`, question(reply, minutes))
+    await judge($, say, isUntouched, `${thousands(tokens)} tokens, idle ${minutes} minutes`, question(reply, tokens, minutes))
   } catch (error) {
     say(`Failed: ${error}`)
   }
@@ -164,16 +174,22 @@ async function judge(
 // The fork replays the turn's last request, which ends before the reply the
 // turn closed with, so the question carries the reply whole. Asked of an idle
 // session, it says so and that the prompt cache is about to lapse. README.md
-// shows both versions verbatim.
-function question(reply: string, idleMinutes?: number) {
-  const opening =
-    idleMinutes === undefined
-      ? 'Your turn just ended with this reply to the user:'
-      : `Your turn ended ${idleMinutes} minutes ago with this reply to the user, and nothing has happened since:`
-  const ask =
-    idleMinutes === undefined
-      ? 'Decide whether to compact the conversation now, while the user reads that reply.'
-      : "Decide whether to compact the conversation now. The prompt cache holding it lapses in a few minutes, and the first request after that writes the whole context to the cache again, which costs more than compacting now. So compact unless the work is in the middle of something that needs the transcript's detail."
+// shows both versions verbatim, for a 500k context.
+function question(reply: string, tokens: number, idleMinutes?: number) {
+  const now = thousands(tokens)
+  const kept = thousands(KEPT)
+  const isIdle = idleMinutes !== undefined
+  const opening = isIdle
+    ? `Your turn ended ${idleMinutes} minutes ago with this reply to the user, and nothing has happened since:`
+    : 'Your turn just ended with this reply to the user:'
+  const ask = isIdle
+    ? `Decide whether to compact the conversation now. The prompt cache holding it lapses in a few minutes, and the first request after that writes all ${now} tokens to the cache again, against about ${kept} after a compaction. So compact unless the work is in the middle of something that needs the transcript's detail.`
+    : 'Decide whether to compact the conversation now, while the user reads that reply.'
+  // Idle, the cache is about to go whatever the answer, so the sum is the one
+  // the request above states.
+  const sum = isIdle
+    ? ''
+    : ` At ${now} a compaction pays for itself after about ${payback(tokens)} more requests, as long as the work ahead doesn't need what it dropped; a turn of work often takes dozens of requests.`
   return `This message comes from the sparkjoy plugin, not from the user, and a program reads your reply. Use no tools.
 
 ${opening}
@@ -186,12 +202,19 @@ ${ask}
 
 After a compaction the context holds the system prompt and instructions, a summary of the conversation, the latest messages verbatim (this reply among them), the files read most recently, the status of background agents and shells, and the transcript's path on disk, where exact output or wording can be looked up. What is lost is detail the summary leaves out, and the knowledge that it was there to look up.
 
-A compaction costs a summary of the conversation, which takes many output tokens and about a minute. The cache no longer holds what the compaction carries over, such as the files read most recently, so the next request writes it all again.
+A compaction takes about a minute and writes a summary of about ${thousands(SUMMARY)} output tokens. Afterwards the context holds about ${kept} tokens, which the next request writes to the cache again. A cache write costs as much as ${WRITE} cached reads, and an output token as much as ${OUTPUT}.
 
-It saves carrying the parts of the transcript the work ahead no longer needs, such as file reads, command output and diffs for finished work, and detours since resolved. Every later request reads whatever the context keeps.
+It saves carrying the parts of the transcript the work ahead no longer needs, such as file reads, command output and diffs for finished work, and detours since resolved. Every later request reads whatever the context keeps: about ${kept} after a compaction, against ${now} now.${sum}
 
 Reply with one JSON object and nothing else:
 {"compact": true or false, "reason": "one short line saying why"}`
+}
+
+// How many later requests a compaction at `tokens` takes to pay for itself:
+// its summary and the rewrite of what it keeps, in cached reads, over what
+// each later request reads less.
+function payback(tokens: number) {
+  return Math.ceil((OUTPUT * SUMMARY + WRITE * KEPT) / (tokens - KEPT))
 }
 
 function parse(text: string): Verdict | undefined {

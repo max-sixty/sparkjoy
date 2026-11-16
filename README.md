@@ -114,11 +114,24 @@ on Opus 5.5 and Sonnet 5.5, so a check costs about as much as one ordinary
 request in the session. Only turns that end at 400k or more are checked: 198 of
 the 36,251 requests, which came to $22. The model said yes at 122 of them.
 
-**What a compaction costs and saves.** A compaction reads the conversation once
-to write a summary, and the next request writes the ~120k it keeps to the
-cache, about $1.20 in all at 400k. Each later request then reads ~120k instead
-of 400k or more, saving about 6 cents, so a compaction pays for itself within
-about 20 requests. A turn in these sessions averaged about 36 requests.
+**What a compaction costs and saves.** Over my 141 compactions, the first
+request after one carried a median 122k tokens: an 85k opening prompt (system
+prompt, tools, instructions), a summary of about 3k, and 34k of recent messages
+and files read back in. That request writes the ~120k to the cache, and a cache
+write costs as much as 40 cached reads, so a compaction costs about what
+reading 5M cached tokens would. Each later request then reads 120k instead of
+the whole context:
+
+| compacting at | each later request reads | pays for itself after |
+| ------------- | ------------------------ | --------------------- |
+| 200k          | 80k less                 | about 65 requests     |
+| 400k          | 280k less                | about 19 requests     |
+| 700k          | 580k less                | about 9 requests      |
+
+A turn in these sessions averaged about 36 requests. So at 200k a compaction
+rarely pays, even when the work has reached a good place to stop: it writes
+120k to the cache to save reading 80k a request. The question gives the model
+this sum for the context it holds.
 
 **Idle sessions.** In my background sessions over the same days, 92 returns
 after an hour or more wrote 27.6M tokens back to the cache, about $220 at Opus
@@ -132,8 +145,8 @@ leaves it out.
 The session's own model makes the call, reading the whole transcript from the
 prompt cache. Which parts of the transcript the work ahead still needs depends
 on the work, and the session's model is the one that knows the work. The
-question gives it the costs and the saving to weigh rather than a rule, and
-never mentions a size. An idle session gets the same question, told that the
+question gives it the costs and the saving to weigh, sized for its context,
+rather than a rule. An idle session gets the same question, told that the
 prompt cache is about to lapse.
 
 Across my sessions it was asked at 198 turn ends and compacted at 122. The size
@@ -142,7 +155,7 @@ ends it was asked about under 450k, and at 54% of those past 600k. Its
 compactions came at sizes up to 842k, half of them above 471k.
 
 <details>
-<summary>The question, verbatim</summary>
+<summary>The question, verbatim, for a 500k context</summary>
 
 ```
 This message comes from the sparkjoy plugin, not from the user, and a program reads your reply. Use no tools.
@@ -157,20 +170,21 @@ Decide whether to compact the conversation now, while the user reads that reply.
 
 After a compaction the context holds the system prompt and instructions, a summary of the conversation, the latest messages verbatim (this reply among them), the files read most recently, the status of background agents and shells, and the transcript's path on disk, where exact output or wording can be looked up. What is lost is detail the summary leaves out, and the knowledge that it was there to look up.
 
-A compaction costs a summary of the conversation, which takes many output tokens and about a minute. The cache no longer holds what the compaction carries over, such as the files read most recently, so the next request writes it all again.
+A compaction takes about a minute and writes a summary of about 4k output tokens. Afterwards the context holds about 120k tokens, which the next request writes to the cache again. A cache write costs as much as 40 cached reads, and an output token as much as 100.
 
-It saves carrying the parts of the transcript the work ahead no longer needs, such as file reads, command output and diffs for finished work, and detours since resolved. Every later request reads whatever the context keeps.
+It saves carrying the parts of the transcript the work ahead no longer needs, such as file reads, command output and diffs for finished work, and detours since resolved. Every later request reads whatever the context keeps: about 120k after a compaction, against 500k now. At 500k a compaction pays for itself after about 14 more requests, as long as the work ahead doesn't need what it dropped; a turn of work often takes dozens of requests.
 
 Reply with one JSON object and nothing else:
 {"compact": true or false, "reason": "one short line saying why"}
 ```
 
-Asked of an idle session, its second and fourth paragraphs read:
+Asked of an idle session, its second and fourth paragraphs read as below, and
+its sixth stops after "against 500k now.":
 
 ```
 Your turn ended 55 minutes ago with this reply to the user, and nothing has happened since:
 
-Decide whether to compact the conversation now. The prompt cache holding it lapses in a few minutes, and the first request after that writes the whole context to the cache again, which costs more than compacting now. So compact unless the work is in the middle of something that needs the transcript's detail.
+Decide whether to compact the conversation now. The prompt cache holding it lapses in a few minutes, and the first request after that writes all 500k tokens to the cache again, against about 120k after a compaction. So compact unless the work is in the middle of something that needs the transcript's detail.
 ```
 
 </details>

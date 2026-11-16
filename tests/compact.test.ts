@@ -113,6 +113,19 @@ test('a finished turn compacts with no instructions and no /compact row', async 
   expect(logs).toEqual(['Compacting at 500k tokens: the PR merged'])
 })
 
+test('the question sizes the saving for the context it asks about', async ($, on) => {
+  const { begin, forks, turn, resize } = engine(on, { verdict: KEEP })
+  await begin($)
+
+  await turn($, 't1')
+  resize(400_000)
+  await turn($, 't2')
+
+  // (100 × 4k summary + 40 × 120k rewrite) / (500k − 120k) read, rounded up.
+  expect(forks[0]).toContain('about 120k after a compaction, against 500k now. At 500k a compaction pays for itself after about 14 more requests')
+  expect(forks[1]).toContain('At 400k a compaction pays for itself after about 19 more requests')
+})
+
 test('a verdict to keep leaves the conversation alone and says why', async ($, on) => {
   const { begin, forks, compactions, logs, turn } = engine(on, { verdict: KEEP })
   await begin($)
@@ -275,7 +288,8 @@ test('a session left idle is asked again before its prompt cache lapses', async 
   await clock.settle()
   expect(forks.length).toBe(1)
   expect(forks[0]).toContain('Merged #13. ✅')
-  expect(forks[0]).toContain('The prompt cache holding it lapses in a few minutes')
+  expect(forks[0]).toContain('writes all 300k tokens to the cache again, against about 120k after a compaction')
+  expect(forks[0]).not.toContain('pays for itself')
   expect(compactions).toEqual([''])
   expect(logs).toEqual(['Compacting at 300k tokens, idle 55 minutes: the PR merged'])
 })
