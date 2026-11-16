@@ -5,31 +5,31 @@ finished, rather than when the context window fills.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/session-dark.svg">
-  <img alt="Context per request across one session. With compact-when-done, the context drops back to about 120k tokens five times. Without it, the context climbs to about 960k before Claude Code compacts." src="assets/session-light.svg">
+  <img alt="Context per request across one session. With compact-when-done, dots mark the 11 turn ends where the plugin asked whether to compact: at 5 the session kept going, and at 6 it compacted, at sizes from 417k to 728k tokens. Without it, the context climbs to about 960k before Claude Code compacts." src="assets/session-light.svg">
 </picture>
 
 This is one of my sessions, replayed without the plugin for comparison. Every
 request Claude makes re-reads the whole context, so the area under each line is
-what the session paid to read. With the plugin, the context fell back to about
-120k five times, each when the session's own model judged that the work ahead
-no longer needed most of the transcript. Three of the reasons it gave:
+what the session paid to read. Each dot is a turn end where the plugin asked the
+session's own model whether to compact. At the five hollow dots the model judged
+that the work still needed the transcript, and the session kept going. At the
+six filled ones it compacted, at sizes from 417k to 728k, when a piece of work
+had ended:
 
-> The work is finished (PR opened, CI green, page handed over); most of the
-> context is profiling, log dumps and review output that later turns won't
-> need.
+> Long transcript of finished exploration, reverted attempts and diffs;
+> remaining work is CI follow-up and the final closeout, which a summary
+> covers. *(728k)*
 
-> Long transcript of finished experiments, diffs and query output; remaining
-> work is just a CI watch and pending merges, which the summary carries.
+> The task is waiting on the user's picks, and the context holds bulky finished
+> probe output and file reads that later work won't need. *(417k)*
 
-> Implementation is committed and the review runs in the background; the large
-> file reads, diffs and test-debugging output are no longer needed and can be
-> re-read from disk if a finding needs them.
+> The hierarchy PR is open and handed over. The follow-up work needs only the
+> summary, not the transcript's diffs and logs. *(680k)*
 
-The first drop comes at 500k because the session's first turn ran on past 400k
-before it ended. Where the orange line dips below the blue, the session without
-the plugin has just compacted near the 1M limit. I picked this session because
-it shows the pattern clearly: it cost 36% less with the plugin, against 23%
-across all my sessions.
+Where the line climbs past 400k with no dot, a single long turn is still
+running, and the plugin waits for it to end. I picked this session because it
+shows both answers; it cost 25% less with the plugin, against 23% across all my
+sessions.
 
 ## Install
 
@@ -125,6 +125,11 @@ prompt cache. Which parts of the transcript the work ahead still needs depends
 on the work, and the session's model is the one that knows the work. The
 question gives it the costs and the saving to weigh rather than a rule, and
 never mentions the 400k threshold. An idle session compacts without asking.
+
+Across my sessions it asked at 198 turn ends and compacted at 122. The size of
+the context barely moved the answer: the model compacted at 60% of turn ends
+between 400k and 450k and at 54% of those past 600k. The compactions came at
+anything from 400k to 842k, half of them above 471k.
 
 <details>
 <summary>The question, verbatim</summary>
