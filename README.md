@@ -17,10 +17,8 @@ still need this transcript, or can it go?
 This is one of my sessions, replayed without the plugin for comparison. Every
 request Claude makes re-reads the whole context, so the area under each line is
 what the session paid to read. Each dot is a turn end where the plugin asked the
-session's own model whether to compact. At the five hollow dots the model judged
-that the work still needed the transcript, and the session kept going. At the
-six filled ones it compacted, at sizes from 417k to 728k, when a piece of work
-had ended:
+session's own model whether to compact. At the six filled dots it compacted, at
+sizes from 417k to 728k, when a piece of work had ended:
 
 > Long transcript of finished exploration, reverted attempts and diffs;
 > remaining work is CI follow-up and the final closeout, which a summary
@@ -32,11 +30,12 @@ had ended:
 > The hierarchy PR is open and handed over. The follow-up work needs only the
 > summary, not the transcript's diffs and logs. *(680k)*
 
-Where the line climbs with no dot, either a single long turn is still running,
-and the plugin waits for it to end, or the context is still under 400k, where
-the plugin doesn't ask yet ([Limits](#limits)). I picked this session because
-it shows both answers; it cost 25% less with the plugin, against 23% across all
-my sessions.
+At the five hollow dots the session went on without a compaction, and the
+plugin that week didn't record why. Where the line climbs with no dot, either a
+single long turn is still running, and the plugin waits for it to end, or the
+context is still under 400k, where the plugin doesn't ask yet
+([Limits](#limits)). This session cost 25% less with the plugin, against 23%
+across all my sessions.
 
 ## Install
 
@@ -149,10 +148,13 @@ question gives it the costs and the saving to weigh, sized for its context,
 rather than a rule. An idle session gets the same question, told that the
 prompt cache is about to lapse.
 
-Across my sessions it was asked at 198 turn ends and compacted at 122. The size
-of the context barely moved the answer: the model compacted at 60% of the turn
-ends it was asked about under 450k, and at 54% of those past 600k. Its
-compactions came at sizes up to 842k, half of them above 471k.
+So far it says yes too readily. Across my sessions it was asked at 198 turn
+ends and compacted at 122, at sizes up to 842k, half of them above 471k. At 49
+of the other 76 its verdict never stood, because the next turn began first or
+the plugin reloaded. Of the at most 149 verdicts that stood, 125 said compact.
+The [evals](evals/README.md) put the question to it at 12 recorded turn
+ends: it compacted at all of them, including four in the middle of a task and
+two natural breaks at 210k and 296k, where a compaction pays back too slowly.
 
 <details>
 <summary>The question, verbatim, for a 500k context</summary>
@@ -191,9 +193,10 @@ Decide whether to compact the conversation now. The prompt cache holding it laps
 
 ## Limits
 
-- It asks only once the context reaches 400k, or 200k in an idle session. On
-  smaller contexts the current question says yes too readily; a question that
-  judged them well would let that floor go.
+- It asks only once the context reaches 400k, or 200k in an idle session,
+  because the question says yes too readily ([How it decides](#how-it-decides)).
+  At 400k a compaction pays back within a typical turn. A question that told a
+  pause in the work from its end would let that floor go.
 - It acts between turns only. A long autonomous turn can grow large before it
   ends; Claude Code's own compaction near the end of the window still bounds
   it.
