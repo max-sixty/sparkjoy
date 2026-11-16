@@ -119,6 +119,13 @@ A turn here averaged about 36 requests, so at 200k a compaction rarely pays,
 even at a good place to stop. The question gives the model this sum for its
 context.
 
+[When to compact](docs/when-to-compact.md) models this trade and fits it to
+the same sessions. It compares the payback with the requests the context takes
+to grow back, rather than with one turn, and finds the cheapest turn-end
+threshold near 210k: 28% saved, against 23% at the 400k floor. Any plausible
+effect of context size on the model's work moves that by tens of thousands of
+tokens.
+
 **Idle sessions.** In my background sessions over the same days, 92 returns
 after an hour or more wrote 27.6M tokens back to the cache, about $220.
 Compacting first would have cost about $110 less; the plugin asks first, so it
