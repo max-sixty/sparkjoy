@@ -144,17 +144,24 @@ leaves it out.
 The session's own model makes the call, reading the whole transcript from the
 prompt cache. Which parts of the transcript the work ahead still needs depends
 on the work, and the session's model is the one that knows the work. The
-question gives it the costs and the saving to weigh, sized for its context,
-rather than a rule. An idle session gets the same question, told that the
-prompt cache is about to lapse.
+question tells it what decides the call, whether the next turns will need
+detail a summary drops, and gives it the costs to weigh, sized for its context.
+An idle session gets the same question, told that the prompt cache is about to
+lapse.
 
-So far it says yes too readily. Across my sessions it was asked at 198 turn
-ends and compacted at 122, at sizes up to 842k, half of them above 471k. At 49
-of the other 76 its verdict never stood, because the next turn began first or
-the plugin reloaded. Of the at most 149 verdicts that stood, 125 said compact.
-The [evals](evals/README.md) put the question to it at 12 recorded turn
-ends: it compacted at all of them, including four in the middle of a task and
-two natural breaks at 210k and 296k, where a compaction pays back too slowly.
+The first question said yes too readily. Across my sessions it was asked at
+198 turn ends and compacted at 122, at sizes up to 842k, half of them above
+471k. At 49 of the other 76 its verdict never stood, because the next turn
+began first or the plugin reloaded. Of the at most 149 verdicts that stood, 125
+said compact. In the [evals](evals/README.md), which put the question to it at
+12 recorded turn ends, it compacted at every one, mid-task ones included,
+reasoning that the transcript was mostly finished work, as nearly any long
+transcript is.
+
+The question now says that this settles nothing, and names what does. In the
+evals it keeps at all four mid-task turn ends and compacts at all six finished
+ones. It still compacts at natural breaks at 210k and 296k, where a compaction
+repays slowly.
 
 <details>
 <summary>The question, verbatim, for a 500k context</summary>
@@ -170,33 +177,34 @@ Your turn just ended with this reply to the user:
 
 Decide whether to compact the conversation now, while the user reads that reply.
 
-After a compaction the context holds the system prompt and instructions, a summary of the conversation, the latest messages verbatim (this reply among them), the files read most recently, the status of background agents and shells, and the transcript's path on disk, where exact output or wording can be looked up. What is lost is detail the summary leaves out, and the knowledge that it was there to look up.
+Nearly every long transcript is mostly finished work, so that alone is no reason to compact. What decides it is whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
 
-A compaction takes about a minute and writes a summary of about 4k output tokens. Afterwards the context holds about 120k tokens, which the next request writes to the cache again. A cache write costs as much as 40 cached reads, and an output token as much as 100.
+A compaction takes about a minute and writes a summary of about 4k output tokens. Afterwards the context holds about 120k tokens, which the next request writes to the cache again. A cache write costs as much as 40 cached reads, and an output token as much as 100. At 500k a compaction pays for itself after about 14 more requests that need nothing it dropped.
 
-It saves carrying the parts of the transcript the work ahead no longer needs, such as file reads, command output and diffs for finished work, and detours since resolved. Every later request reads whatever the context keeps: about 120k after a compaction, against 500k now. At 500k a compaction pays for itself after about 14 more requests, as long as the work ahead doesn't need what it dropped; a turn of work often takes dozens of requests.
+Compact only when the next turns won't need such detail and enough requests will follow to repay it. Otherwise keep it: a later turn end, once that work is finished, is the place to compact.
 
-Reply with one JSON object and nothing else:
-{"compact": true or false, "reason": "one short line saying why"}
+Reply with one JSON object and nothing else, filling its fields in order:
+{"next": "what most likely comes next, in a few words", "needs_detail": true or false, "compact": true or false, "reason": "one short line saying why"}
 ```
 
 Asked of an idle session, its second and fourth paragraphs read as below, and
-its sixth stops after "against 500k now.":
+its sixth stops after "as much as 100.":
 
 ```
 Your turn ended 55 minutes ago with this reply to the user, and nothing has happened since:
 
-Decide whether to compact the conversation now. The prompt cache holding it lapses in a few minutes, and the first request after that writes all 500k tokens to the cache again, against about 120k after a compaction. So compact unless the work is in the middle of something that needs the transcript's detail.
+Decide whether to compact the conversation now. The prompt cache holding it lapses in a few minutes, and the first request after that writes all 500k tokens to the cache again, against about 120k after a compaction. So compact unless the next turn continues work that needs the transcript's detail.
 ```
 
 </details>
 
 ## Limits
 
-- It asks only once the context reaches 400k, or 200k in an idle session,
-  because the question says yes too readily ([How it decides](#how-it-decides)).
-  At 400k a compaction pays back within a typical turn. A question that told a
-  pause in the work from its end would let that floor go.
+- It asks only once the context reaches 400k, or 200k in an idle session.
+  The question now tells a pause in the work from its end, but at a natural
+  break below about 300k it compacts without weighing how slowly that repays
+  ([How it decides](#how-it-decides)). At 400k a compaction pays back within a
+  typical turn.
 - It acts between turns only. A long autonomous turn can grow large before it
   ends; Claude Code's own compaction near the end of the window still bounds
   it.

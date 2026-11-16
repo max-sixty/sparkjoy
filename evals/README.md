@@ -90,44 +90,58 @@ cache lapses either way.
 
 ## Results
 
-Three runs of each case on each question, from `run.py --report` on 16
-November 2026. `main` is the question on `main` at 02beed1 (the `evals` branch
-asks the same one); `sized-question` is cdfc871, which states the context's
-size, what a compaction leaves and how many requests it takes to pay back.
-Each cell counts the runs that matched the label.
+From `run.py --report` on 16 November 2026; each cell counts the runs that
+matched the label. `main` is the question published at 02beed1;
+`sized-question` (cdfc871) adds the context's size, what a compaction leaves
+and how many requests it takes to pay back; `detail` (0915ee8, the question
+now) says what decides it.
 
-| case | recorded | replayed | expected | main | sized-question |
-|---|---|---|---|---|---|
-| leaf-scaling-closeout | 742k | 520k | compact | 4/4 | 3/3 |
-| leaf-hover-closeout | 736k | 487k | compact | 3/3 | 3/3 |
-| leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 |
-| leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 |
-| worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 |
-| leaf-ring-test-rewrite-wait | 681k | 348k | keep | 0/3 | 0/3 |
-| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 |
-| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 |
-| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 |
-| leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 |
-| worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 |
-| leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 |
+| case | recorded | replayed | expected | main | sized-question | detail |
+|---|---|---|---|---|---|---|
+| leaf-scaling-closeout | 742k | 520k | compact | 4/4 | 3/3 | 3/3 |
+| leaf-hover-closeout | 736k | 488k | compact | 3/3 | 3/3 | 3/3 |
+| leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 | 3/3 |
+| leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 | 3/3 |
+| worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 | 4/4 |
+| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 |
+| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 |
+| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 |
+| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 |
+| leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 | 0/4 |
+| worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 | 0/4 |
+| leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 | 4/4 |
 
-Both questions said compact in all 73 runs, so each passes exactly the six
-compact cases. Their reasons for the keep cases agree too: the context is
-mostly finished work, and what the next step needs is in the summary, the
-files on disk or the transcript. Stating the size moved no verdict: told at
-210k that a compaction pays back after 58 requests, the sized question still
-compacted, reasoning that the next task wouldn't need the detail.
+The first two questions said compact in all 73 runs. Their reasons agree: the
+context is mostly finished work, and what the next step needs is in the
+summary, the files on disk or the transcript. That is true of nearly any long
+transcript, so it settled nothing.
 
-The labels deserve a second look before the question is tuned to them:
+`detail` says so, and names what does decide it: whether the next turns will
+need detail a summary drops, as work iterating on something just shown does,
+and a result to report or a new task doesn't. It asks for what comes next and
+whether that needs the detail before the verdict. It keeps at all four
+mid-task cases and still compacts at the six finished ones, the release whose
+run is still going included.
 
-- **At 296k, a compaction pays by the sized question's own sum.** It pays back
+It still compacts at the two small natural breaks. Its reasons there never
+weigh the cost; they say the next work is new, so a summary covers it. Two
+variants that framed the cost differently compacted there too, in all six
+runs: one asked for the requests ahead before the next natural break; the
+other put the scale of a turn (about 36 requests) beside the payback, and said
+that keeping only defers the compaction to a later turn end.
+
+The labels at those two cases deserve a second look:
+
+- **At 296k, a compaction pays by the question's own sum.** It pays back
   after about 30 requests, and a turn in the author's sessions averages about
   36. That case's keep label rests on the next task building on the change
   just landed, not on the cost.
-- **No mid-task case shows a compaction doing harm.** At
-  leaf-ring-test-rewrite-wait the plugin compacted live at this very turn end,
-  and the session finished the work within the hour. The keep labels encode
-  the rule that mid-task moments keep, not an observed cost.
+- **At 210k it pays back after about 58 requests**, under two average turns,
+  so the keep label holds only if the next stretch of work is short.
+
+The mid-task keep labels encode the rule that mid-task moments keep, not an
+observed cost: at leaf-ring-test-rewrite-wait the plugin compacted live, and
+the session finished the work within the hour.
 
 ## Against the live plugin
 
