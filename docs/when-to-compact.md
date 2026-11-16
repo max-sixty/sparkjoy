@@ -40,14 +40,14 @@ s; at s = 0, size doesn't matter. The sessions put s near 0 and at most
 about 150k, where the best point is 325k and the best threshold at turn ends
 250k:
 
-| s    | best point, compacting after any request | best threshold at turn ends | saved there | saved at 400k |
-| ---- | ---------------------------------------- | --------------------------- | ----------- | ------------- |
-| 0    | 259k (251–269k)                          | 200k (200–240k)             | 30.2%       | 25.1%         |
-| 50k  | 266k (258–275k)                          | 220k (200–240k)             | 29.6%       | 24.8%         |
-| 100k | 294k (286–303k)                          | 250k (240–260k)             | 26.5%       | 22.8%         |
-| 150k | 325k (318–334k)                          | 250k (240–290k)             | 22.7%       | 20.1%         |
-| 200k | 356k (348–366k)                          | 250k (250–290k)             | 19.3%       | 17.5%         |
-| 300k | 414k (405–425k)                          | 290k (270–340k)             | 13.9%       | 13.2%         |
+| s    | best point, compacting after any request | best threshold at turn ends | saved there | saved at 250k | saved at 400k |
+| ---- | ---------------------------------------- | --------------------------- | ----------- | ------------- | ------------- |
+| 0    | 259k (251–269k)                          | 200k (200–240k)             | 30.2%       | 30.0%         | 25.1%         |
+| 50k  | 266k (258–275k)                          | 220k (200–240k)             | 29.6%       | 29.5%         | 24.8%         |
+| 100k | 294k (286–303k)                          | 250k (240–260k)             | 26.5%       | 26.5%         | 22.8%         |
+| 150k | 325k (318–334k)                          | 250k (240–290k)             | 22.7%       | 22.7%         | 20.1%         |
+| 200k | 356k (348–366k)                          | 250k (250–290k)             | 19.3%       | 19.3%         | 17.5%         |
+| 300k | 414k (405–425k)                          | 290k (270–340k)             | 13.9%       | 13.7%         | 13.2%         |
 
 The second column is the steady-state model's optimum, derived below. The
 third comes from replaying the sessions with compaction only at turn ends.
@@ -370,7 +370,11 @@ At s = 150k, requests below 200k would see 25 points more trouble than those
 at 400k–600k, and at s = 100k 16 points more; the measured difference is −13
 (−37 to +5).
 The best fit is **s near 0, at most 146k**: X\* is 259k, or 322k at the top of
-the interval, and the best turn-end threshold 200k, or 250k.
+the interval, and the best turn-end threshold 200k, or 250k. It is weak
+evidence. Within a session the context grows as a piece of work goes on, and
+compactions come where work ends, so trouble by context is partly trouble by
+the work's phase, which the session's fixed effect doesn't remove. Randomizing
+the threshold across sessions would separate the two.
 
 **Long contexts hurting.** η can't fall as the context grows. A power law,
 η ∝ x^(α−1), can, for α below 1. Fitted to the same trouble, by
@@ -413,9 +417,9 @@ matters.
 ## What it implies for sparkjoy
 
 With s at most 150k, and D small where it could be measured, the model
-supports asking at turn ends from 250k rather than 400k: it is the best
-threshold for any s from 100k to 200k, and within a point of the best at
-s = 0. In idle sessions it supports asking from 150k–175k rather than 200k.
+supports asking at turn ends from 250k rather than 400k. 250k doesn't depend on
+the fit of s: it comes within 0.2 points of the best threshold for any s up to
+300k, where 400k gives up 5 points if s is near 0. In idle sessions it supports asking from 150k–175k rather than 200k.
 The question's payback sum misleads when it is set beside the length of a
 turn. A compaction is repaid over every request until
 the context grows back, (x − K)/g of them, and at a turn end it pays even
