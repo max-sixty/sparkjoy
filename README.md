@@ -115,17 +115,13 @@ Each later request then reads 120k instead of the whole context:
 | 400k          | 280k less                | about 19 requests     |
 | 700k          | 580k less                | about 9 requests      |
 
-A turn here averaged about 36 requests, so at 200k a compaction rarely pays
-back within the turn, even at a good place to stop. The question gives the model this sum for its
+A compaction repays over every request until the context grows back, not
+within one turn. [When to compact](docs/when-to-compact.md) models this and
+fits it to the same sessions: compacting at every turn end past about 200k
+costs least, saving 30.5% against 25.4% past 400k. A coefficient for how
+context size changes the model's work, from 0.8 to 1.2, moves that by tens of
+thousands of tokens. The question gives the model the payback for its
 context.
-
-[When to compact](docs/when-to-compact.md) models this trade and fits it to
-the same sessions. It weighs the payback against the requests the context
-takes to grow back rather than against one turn, and by that measure a
-compaction near 200k does pay: compacting at every turn end past 200k saves
-30.5%, against 25.4% past 400k. Letting context size change the model's work,
-by a coefficient from 0.8 to 1.2, moves that threshold by tens of thousands of
-tokens.
 
 **Idle sessions.** In my background sessions over the same days, 92 returns
 after an hour or more wrote 27.6M tokens back to the cache, about $220.
@@ -148,8 +144,9 @@ ones included, reasoning that the transcript was mostly finished work, as
 nearly any long transcript is.
 
 The question now says that settles nothing. In the evals it keeps at all four
-mid-task turn ends and compacts at all six finished ones, but still compacts at
-natural breaks at 210k and 296k, where a compaction repays slowly.
+mid-task turn ends and compacts at all six finished ones. It also compacts at
+natural breaks at 210k and 296k, which the evals label keep, though by the
+cost model compacting there pays.
 
 ## The prompt
 
@@ -210,9 +207,10 @@ Reply with one JSON object and nothing else, filling its fields in order:
 
 ## Limits
 
-- It asks only from 400k, or 200k in an idle session, because below about 300k
-  it compacts at natural breaks without weighing how slowly that repays. At
-  400k a compaction pays back within a typical turn.
+- It asks only from 400k, or 200k in an idle session. On cost alone the best
+  thresholds are lower, about 200–250k at turn ends and 150–175k when idle
+  ([When to compact](docs/when-to-compact.md)); the higher floors limit what a
+  wrong verdict costs while the question is new.
 - It acts between turns only. Claude Code's own compaction near the end of the
   window still bounds a long turn.
 - It is made for 1M-token context windows; on a 200k window, Claude Code

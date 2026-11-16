@@ -25,8 +25,8 @@ They need `claude` (tested on 2.1.325), `bun` and `uv`, and a Claude Code login
 or `ANTHROPIC_API_KEY`. `--question-from` can be given more than once, and
 every run appends a row to `results.jsonl`.
 
-A case writes its whole transcript to the cache once, about $6 per million
-tokens on Opus 5.5, so $0.55 to $3.25 a case. Every run of it after that,
+A case writes its whole transcript to the cache once, about $5 per million
+tokens on Opus 5.5, so $0.45 to $2.60 a case. Every run of it after that,
 whichever question it asks, reads the transcript from the cache for $0.02 to
 $0.25. Claude Code caches up to the last content block, so when there is more
 than one run, the runner first sends the questions' shared opening (through
@@ -138,6 +138,11 @@ The labels at those two cases deserve a second look:
   just landed, not on the cost.
 - **At 210k it pays back after about 58 requests**, under two average turns,
   so the keep label holds only if the next stretch of work is short.
+
+The cost model in [When to compact](../docs/when-to-compact.md) goes further:
+a compaction repays over every request until the context grows back, so at a
+natural break both cases should compact, and the best threshold at turn ends
+is about 200k.
 
 The mid-task keep labels encode the rule that mid-task moments keep, not an
 observed cost: at leaf-ring-test-rewrite-wait the plugin compacted live, and
