@@ -1,0 +1,11 @@
+{
+  "name": "compact-when-done",
+  "owner": { "name": "Maximilian Roos" },
+  "plugins": [
+    {
+      "name": "compact-when-done",
+      "source": "./",
+      "description": "Compacts Claude Code's conversation when a piece of work is finished, rather than when the context fills."
+    }
+  ]
+}
