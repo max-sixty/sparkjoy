@@ -46,7 +46,7 @@ range 0.8 to 1.2 it moves little:
 
 The second column is the steady-state model's optimum, derived below. The
 third comes from replaying the sessions with compaction only at turn ends.
-"Saved" is the cost per unit of work against never compacting, where Claude
+"Saved" is the cost per unit of progress against never compacting, where Claude
 Code still compacts near the end of the window. Ranges are 90% intervals from
 resampling the 85 sessions; for the replay, the resampling holds the fitted
 compaction parameters fixed.
@@ -109,7 +109,7 @@ F(x) = x + o\,S + (w-1)\,(K - P)
 
 F₀ = oS + (w−1)(K − P) is the part of F that doesn't depend on x.
 
-### Work and the context efficiency coefficient
+### Progress and the context efficiency coefficient
 
 The size of the context can change how much a request gets done. A larger
 context can help, because more of the work's history is at hand, or hurt,
@@ -120,8 +120,8 @@ with context x do
 \eta(x) = (x/W)^{\alpha - 1}
 ```
 
-units of work, where W is the 1M-token window and α is the context efficiency
-coefficient. At α = 1 every request does the same work, whatever its context.
+units of progress, where W is the 1M-token window and α is the context efficiency
+coefficient. At α = 1 every request makes the same progress, whatever its context.
 Below 1 smaller contexts do more, and above 1 larger ones do. At α = 0.9 a
 request with 200k of context does 15% more than one with 800k; at α = 1.2 it
 does 24% less. Only ratios of η enter the results, so the choice of W drops
@@ -132,8 +132,8 @@ out.
 Suppose a session compacts each time its context reaches X. Its context grows
 from K to X at g tokens per request, then starts again. By the renewal-reward
 theorem ([Ross](https://shop.elsevier.com/books/introduction-to-probability-models/ross/978-0-443-18761-2),
-ch. 7), its long-run cost per unit of work is one cycle's cost over one
-cycle's work:
+ch. 7), its long-run cost per unit of progress is one cycle's cost over one
+cycle's progress:
 
 ```math
 J(X) = \frac{g\,F(X) + \int_{K}^{X} c(x)\,dx}{\int_{K}^{X} \eta(x)\,dx}
@@ -145,7 +145,7 @@ Setting dJ/dX to zero gives the condition for the best point X\*:
 \frac{c(X^*) + g}{\eta(X^*)} = J(X^*)
 ```
 
-Compact when the next request's cost per unit of work reaches the average over
+Compact when the next request's cost per unit of progress reaches the average over
 the cycle, compaction included. (The g is the next request's growth, which the
 summary would also read.) It is the rule for replacing a machine whose running
 cost rises with age: replace it when its marginal cost reaches its average
@@ -171,7 +171,7 @@ compaction is an order with fixed cost F₀ + K. Two properties follow.
 
 For α ≠ 1, `model/fit.py` solves the condition numerically. There c₀ matters:
 output and new tokens cost the same per request at any context, but a request's
-work doesn't, so they weigh on the choice only when α ≠ 1.
+progress doesn't, so they weigh on the choice only when α ≠ 1.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-sawtooth-dark.svg">
@@ -180,7 +180,7 @@ work doesn't, so they weigh on the choice only when α ≠ 1.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-cost-dark.svg">
-  <img alt="Steady-state cost per unit of work against the compaction point, for α of 0.8, 1, 1.25, 1.5 and 2, against never compacting. Each curve climbs steeply toward 142k, what a compaction leaves. The minima are at 243k (46%), 259k (55%), 294k (69%) and 372k (85%); the α = 2 curve falls all the way to 100% at 965k." src="../assets/model-cost-light.svg">
+  <img alt="Steady-state cost per unit of progress against the compaction point, for α of 0.8, 1, 1.25, 1.5 and 2, against never compacting. Each curve climbs steeply toward 142k, what a compaction leaves. The minima are at 243k (46%), 259k (55%), 294k (69%) and 372k (85%); the α = 2 curve falls all the way to 100% at 965k." src="../assets/model-cost-light.svg">
 </picture>
 
 The cost against the compaction point, for α from 0.8 to 2. It climbs
@@ -233,14 +233,14 @@ Two measurements bear on what the model assumes:
 </picture>
 
 Across α from 0.8 to 1.2 the best point moves from 243k to 285k. Reading cost
-grows in proportion to the context, and work per request only as x^(α−1), so a
+grows in proportion to the context, and progress per request only as x^(α−1), so a
 coefficient near 1 barely shifts the balance. For the point to reach 400k, α
-has to be 1.55, where a request at 800k does about twice the work of one at
+has to be 1.55, where a request at 800k makes about twice the progress of one at
 200k. In the steady state, compacting before Claude Code does never pays above
 α = 1.82; the replay still finds a fraction of a percent to save at 850k–930k.
 
 The range 0.8 to 1.2 is an assumption, not a measurement. Long-context
-retrieval benchmarks give a sense of scale: if work tracked their scores, α
+retrieval benchmarks give a sense of scale: if progress tracked their scores, α
 would sit just under 1. Anthropic's system cards report MRCR v2 (8 needles)
 for [Opus 4.6](https://anthropic.com/claude-opus-4-6-system-card) falling from
 91.9 at 256k to 78.3 at 1M, which is α ≈ 0.88, and GraphWalks BFS for
@@ -264,14 +264,14 @@ together move the optimum little, though they may offset one another.
 Compacting only at turn ends moves it to 200k.
 
 At α = 1, any threshold from 170k to 280k comes within one percentage point of
-the best. A threshold of 400k costs 7% more per unit of work than the best,
+the best. A threshold of 400k costs 7% more per unit of progress than the best,
 and 600k costs 24% more.
 
 Compacting too early can't run away at turn ends. Under K, every turn end
 compacts, and that still costs about a fifth less than never compacting at α = 1,
 because a turn grows the context by 68k on average. In the steady state, where
 a compaction could follow any request, compacting at 150k would cost 3.2 times
-as much per unit of work as compacting at X\*: a compaction every four
+as much per unit of progress as compacting at X\*: a compaction every four
 requests or so.
 
 ### Lost detail
@@ -361,8 +361,8 @@ with the question.
 - **Subagents,** whose contexts are separate.
 - **Subscription limits,** whose weighting of token kinds isn't published. If
   it follows API prices, the answer is the same.
-- **Work beyond α.** The replay keeps every logged request, so each arm does
-  the same work by construction, and only α lets context size change it.
+- **Progress beyond α.** The replay keeps every logged request, so each arm
+  makes the same progress by construction, and only α lets context size change it.
 
 ## Prior work
 

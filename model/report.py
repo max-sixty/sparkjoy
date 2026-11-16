@@ -84,12 +84,12 @@ def thresholds(S, p, ttl):
             use[s.model] += len(s.size)
     model = use.most_common(1)[0][0] if use else "claude-opus-5-5"
     c = fit.prices(model, ttl)
-    cost, work = fit.grid(S, p, c, ttl)
+    cost, progress = fit.grid(S, p, c, ttl)
     one = fit.CHART_ALPHAS.index(1.0)
-    best, ratio = fit.best(cost, work)
+    best, ratio = fit.best(cost, progress)
     never = cost[:, -1].sum()
     floors = sum(fit.replay(s, p, c, fit.FLOOR, ttl, idle=fit.IDLE_FLOOR)[0] for s in S)
-    # At α = 1 every request does the same work, so cost per unit of work is cost.
+    # At α = 1 every request makes the same progress, so cost per unit of progress is cost.
     return {"model": model, "ttl": ttl, "best": best[one] if ratio[one] < 1 else None, "saved_best": 1 - ratio[one],
             "saved_floor": 1 - cost[:, list(fit.THRESHOLDS).index(fit.FLOOR)].sum() / never,
             "saved_floors": 1 - floors / never, "steady": fit.steady(p, c, 1.0),

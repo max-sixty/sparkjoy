@@ -80,8 +80,8 @@ def sawtooth(p, c, t, path):
     plt.close(fig)
 
 
-def cost_curve(cost, work, p, c, t, path):
-    """The steady state's cost per unit of work against the compaction point, for α from 0.8 to 2: a compaction can follow any request, and the context grows smoothly. Against never compacting,
+def cost_curve(cost, progress, p, c, t, path):
+    """The steady state's cost per unit of progress against the compaction point, for α from 0.8 to 2: a compaction can follow any request, and the context grows smoothly. Against never compacting,
     where Claude Code compacts at AUTO."""
     fig, ax = plt.subplots(figsize=(9, 3.4))
     style(ax, t)
@@ -109,17 +109,17 @@ def cost_curve(cost, work, p, c, t, path):
     ax.set_ylim(0.4, 1.3)
     ax.legend(frameon=False, fontsize=10, labelcolor=t["ink"], loc="lower right")
     ax.set_xlabel("compact when the context reaches", color=t["muted"], fontsize=10)
-    ax.set_ylabel("cost per unit of work,\nvs never compacting", color=t["muted"], fontsize=10)
+    ax.set_ylabel("cost per unit of progress,\nvs never compacting", color=t["muted"], fontsize=10)
     fig.savefig(path, transparent=True, bbox_inches="tight", metadata={"Date": None})
     plt.close(fig)
 
 
-def thresholds(cost, work, BT, BX, p, c, t, path):
+def thresholds(cost, progress, BT, BX, p, c, t, path):
     """The best compaction point against α: the steady-state model and the turn-end replay, with 90% bands."""
     ks = np.array(fit.CHART_ALPHAS)
     X = [fit.steady(p, c, k) for k in ks]
     # Never compacting short of Claude Code's own compaction is drawn at it.
-    T, BT = (np.minimum(v, fit.AUTO) for v in (fit.best(cost, work)[0], BT))
+    T, BT = (np.minimum(v, fit.AUTO) for v in (fit.best(cost, progress)[0], BT))
     fig, ax = plt.subplots(figsize=(9, 3.6))
     style(ax, t)
     ax.axvspan(0.8, 1.2, color=tint(t["mid"], t["page"], 0.10), lw=0)
@@ -143,11 +143,11 @@ def thresholds(cost, work, BT, BX, p, c, t, path):
     plt.close(fig)
 
 
-def draw(out, p, c, cost, work, BT, BX):
+def draw(out, p, c, cost, progress, BT, BX):
     plt.rcParams.update({"svg.fonttype": "none", "font.family": ["Helvetica", "Arial", "DejaVu Sans"],
                          "svg.hashsalt": "sparkjoy"})
     out.mkdir(parents=True, exist_ok=True)
     for theme, t in THEMES.items():
         sawtooth(p, c, t, out / f"model-sawtooth-{theme}.svg")
-        cost_curve(cost, work, p, c, t, out / f"model-cost-{theme}.svg")
-        thresholds(cost, work, BT, BX, p, c, t, out / f"model-threshold-{theme}.svg")
+        cost_curve(cost, progress, p, c, t, out / f"model-cost-{theme}.svg")
+        thresholds(cost, progress, BT, BX, p, c, t, out / f"model-threshold-{theme}.svg")
