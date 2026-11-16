@@ -13,7 +13,7 @@
 It reads the main thread of each interactive session (`claude -p` runs are
 left out), measures the model's parameters, and prints them with 90% intervals
 from resampling sessions. Then, for each value of the context efficiency
-coefficient κ, it prints the compaction point the steady-state model gives and
+coefficient α, it prints the compaction point the steady-state model gives and
 the turn-end threshold that a replay of the sessions finds cheapest per unit
 of work. Only transcripts modified since --since are opened, and the process
 lowers its own priority, since a full scan of ~/.claude/projects is heavy.
@@ -47,8 +47,8 @@ WINDOW = 1_000_000
 AUTO = 965_000  # where Claude Code compacts a 1M window on its own
 SUMMARY = 4_000  # output tokens of the summary request; assumed, as transcripts don't log that request
 SPAN = 20  # requests over which re-reads after a compaction are counted
-KAPPAS = (0.8, 0.9, 1.0, 1.1, 1.2)
-CHART_KAPPAS = tuple(round(k, 2) for k in np.arange(0.6, 2.01, 0.1))
+ALPHAS = (0.8, 0.9, 1.0, 1.1, 1.2)
+CHART_ALPHAS = tuple(round(k, 2) for k in np.arange(0.6, 2.01, 0.1))
 # From below K, where every turn end compacts, to just short of AUTO.
 THRESHOLDS = np.arange(50_000, 960_001, 10_000)
 DRAWS = 200  # bootstrap resamples of sessions
@@ -146,7 +146,9 @@ def load(root, since, until):
     lo, hi = (t.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S") for t in (since, until))
     title_lines = tuple(f'{{"type":"{t}"' for t in TITLES)
     sessions = []
-    for path in root.glob("*/*.jsonl"):  # a subagent's transcript sits a level deeper
+    # A subagent's transcript sits a level deeper. Sorted, so the resampling draws the same sessions
+    # whatever order the filesystem lists them in.
+    for path in sorted(root.glob("*/*.jsonl")):
         if path.stat().st_mtime < since.timestamp():
             continue
         reqs, comps, prompts, verdicts, entry, asked = {}, [], [], [], None, None
@@ -343,23 +345,23 @@ def terms(p, c):
     return h, c0, F0, p.K + p.E
 
 
-def curve(p, c, kappa):
+def curve(p, c, alpha):
     """J(X), the long-run cost per unit of work of compacting at X, on a grid of X from K' to AUTO."""
     h, c0, F0, K1 = terms(p, c)
     X = np.append(np.arange(K1 + 1_000, AUTO, 1_000.0), AUTO)
     cost = p.g * (X + F0) + h * (X**2 - K1**2) / 2 + c0 * (X - K1)
-    work = WINDOW / kappa * ((X / WINDOW) ** kappa - (K1 / WINDOW) ** kappa)
+    work = WINDOW / alpha * ((X / WINDOW) ** alpha - (K1 / WINDOW) ** alpha)
     return X, cost / work
 
 
-def steady(p, c, kappa):
+def steady(p, c, alpha):
     """The compaction point that minimises cost per unit of work; AUTO means not before Claude Code."""
-    X, J = curve(p, c, kappa)
+    X, J = curve(p, c, alpha)
     return float(X[J.argmin()])
 
 
 def closed_form(p, c):
-    """X* at κ = 1: K' + sqrt(2 g (F0 + K') / h)."""
+    """X* at α = 1: K' + sqrt(2 g (F0 + K') / h)."""
     h, _, F0, K1 = terms(p, c)
     return K1 + np.sqrt(2 * p.g * (F0 + K1) / h)
 
@@ -401,7 +403,10 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None):
         else:
             if pending or (idle is not None and ctx >= idle and s.idle[j] > IDLE * ttl):
                 cost += ctx + c.output * SUMMARY  # read from the cache, which the turn end left warm
-                ctx, written = K1 + grew, K1 - P + grew
+                # A compaction leaves K', or less where the context held less to begin with,
+                # which happens only below K', at a session's first turn ends.
+                left = min(K1, ctx)
+                ctx, written = left + grew, left - P + grew
             else:
                 ctx += grew
                 written = ctx - P if lapse[j] else grew
@@ -421,9 +426,9 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None):
 
 
 def grid(S, p, c, ttl, **kw):
-    """cost[s, t] and work[s, t, k] for each session, threshold and κ in CHART_KAPPAS, plus
+    """cost[s, t] and work[s, t, k] for each session, threshold and α in CHART_ALPHAS, plus
     the never-compacting arm as the last threshold."""
-    ks = np.array(CHART_KAPPAS)
+    ks = np.array(CHART_ALPHAS)
     cost = np.empty((len(S), len(THRESHOLDS) + 1))
     work = np.empty((len(S), len(THRESHOLDS) + 1, len(ks)))
     for i, s in enumerate(S):
@@ -434,7 +439,7 @@ def grid(S, p, c, ttl, **kw):
 
 
 def best(cost, work, rows=slice(None)):
-    """Per κ: the threshold with the least cost per unit of work (inf for never compacting short
+    """Per α: the threshold with the least cost per unit of work (inf for never compacting short
     of AUTO), and that cost against never compacting."""
     J = cost[rows].sum(0)[:, None] / work[rows].sum(0)
     t = J.argmin(0)
@@ -476,48 +481,48 @@ def main():
         f"{lo // 1000}-{lo // 1000 + 100}k {grew[(size >= lo) & (size < lo + 100_000)].mean():,.0f}"
         for lo in range(100_000, 800_000, 100_000)))
     print(f"\nh = {h:.3f}, c0 = {c0 / 1e3:,.0f}k, F0 = {F0 / 1e6:.2f}M (${F0 * c.read:.2f}), K' = {K1 / 1e3:.0f}k; "
-          f"closed form at κ=1: X* = {closed_form(p, c) / 1e3:.0f}k; idle break-even {idle_break_even(p, c) / 1e3:.0f}k")
-    print(f"X* at κ=1 without E: {closed_form(replace(p, E=0), c) / 1e3:.0f}k; without lapses: "
+          f"closed form at α=1: X* = {closed_form(p, c) / 1e3:.0f}k; idle break-even {idle_break_even(p, c) / 1e3:.0f}k")
+    print(f"X* at α=1 without E: {closed_form(replace(p, E=0), c) / 1e3:.0f}k; without lapses: "
           f"{closed_form(replace(p, lapse=0), c) / 1e3:.0f}k; with twice the summary: "
           f"{(K1 + np.sqrt(2 * p.g * (F0 + c.output * SUMMARY + K1) / h)) / 1e3:.0f}k")
 
     print("\nreplaying...", flush=True)
-    ks = list(CHART_KAPPAS)
+    ks = list(CHART_ALPHAS)
     one = ks.index(1.0)
     cost, work = grid(S, p, c, ttl)
     cost_r, work_r = grid(S, p, c, ttl, every=True)
     T, saved = best(cost, work)
     Tr, _ = best(cost_r, work_r)
     BT = np.array([best(cost, work, d)[0] for d in draws])
-    BX = np.array([[steady(b, c, k) for k in CHART_KAPPAS] for b in boot])
+    BX = np.array([[steady(b, c, k) for k in CHART_ALPHAS] for b in boot])
     at = {x: list(THRESHOLDS).index(x) for x in THRESHOLDS}
     J = cost.sum(0)[:, None] / work.sum(0)
     k = lambda x: "never" if x == np.inf else f"{x / 1e3:.0f}k"
-    print("\n  κ    steady X* (90%)   replay at any request   replay at turn ends (90%*)   saved   saved at 400k")
-    for kappa in KAPPAS:
-        i = ks.index(kappa)
+    print("\n  α    steady X* (90%)   replay at any request   replay at turn ends (90%*)   saved   saved at 400k")
+    for alpha in ALPHAS:
+        i = ks.index(alpha)
         lo, hi = np.percentile(BX[:, i], [5, 95])
         tlo, thi = np.percentile(BT[:, i], [5, 95], method="nearest")
-        print(f"  {kappa:.1f}  {k(steady(p, c, kappa)):>5} ({k(lo)}-{k(hi)})    {k(Tr[i]):>5}                  "
+        print(f"  {alpha:.1f}  {k(steady(p, c, alpha)):>5} ({k(lo)}-{k(hi)})    {k(Tr[i]):>5}                  "
               f"{k(T[i]):>5} ({k(tlo)}-{k(thi)})              {1 - saved[i]:.1%}   {1 - J[at[400_000], i] / J[-1, i]:.1%}")
     print("  * resampling sessions with K, P and E held at their fitted values")
     print("\n  the steady-state point reaches", end="")
     for level in (300_000, 400_000, 600_000, AUTO):
-        kappa = next((x for x in np.arange(0.5, 3.0, 0.01) if steady(p, c, x) >= level), None)
-        print(f" {level // 1000}k at κ = {kappa:.2f};" if kappa else f" {level // 1000}k at no κ below 3;", end="")
+        alpha = next((x for x in np.arange(0.5, 3.0, 0.01) if steady(p, c, x) >= level), None)
+        print(f" {level // 1000}k at α = {alpha:.2f};" if alpha else f" {level // 1000}k at no α below 3;", end="")
     h, _, F0, K1 = terms(p, c)
     D = (400_000 - K1) ** 2 * h / (2 * p.g) - K1 - F0
-    print(f"\n  at κ = 1 it reaches 400k if a compaction also costs {D / 1e6:.1f}M reads (${D * c.read:.2f}) more, "
+    print(f"\n  at α = 1 it reaches 400k if a compaction also costs {D / 1e6:.1f}M reads (${D * c.read:.2f}) more, "
           f"{D / (400_000 + F0):.1f} times its own cost there, the price of writing {D / (c.write - 1) / 1e3:.0f}k tokens again")
 
     X, Js = curve(p, c, 1.0)
     r = J[:-1, one] / J[-1, one]
     flat = THRESHOLDS[r <= r.min() + 0.01]
-    print(f"\n  at κ = 1, turn-end thresholds within a point of the best: {k(flat.min())} to {k(flat.max())}")
+    print(f"\n  at α = 1, turn-end thresholds within a point of the best: {k(flat.min())} to {k(flat.max())}")
     for x in (400_000, 600_000):
         print(f"  compacting at {k(x)} costs more per unit of work than the best by {Js[np.abs(X - x).argmin()] / Js.min() - 1:.1%} "
               f"in the steady state, {J[at[x], one] / J[:, one].min() - 1:.1%} in the replay at turn ends")
-    print("\n  context   pays back after   grows back in   (requests, κ = 1)")
+    print("\n  context   pays back after   grows back in   (requests, α = 1)")
     for x in (200_000, 250_000, 300_000, 400_000, 600_000):
         print(f"  {x / 1e3:5.0f}k   {(x + F0) / (h * (x - K1)):10.0f}   {(x - K1) / p.g:14.0f}")
 
@@ -528,7 +533,7 @@ def main():
     # Turn-end and idle thresholds chosen together.
     pairs = {(t, i): arm(t, i) for t in range(150_000, 450_001, 50_000) for i in (None, *range(150_000, 300_001, 25_000))}
     (bt, bi), low = min(pairs.items(), key=lambda kv: kv[1])
-    print(f"\n  policy at κ = 1, compacting wherever it allows      saved   (never compacting: ${never * c.read:,.0f})")
+    print(f"\n  policy at α = 1, compacting wherever it allows      saved   (never compacting: ${never * c.read:,.0f})")
     for label, threshold, idle in ((f"turn ends from {k(FLOOR)} (sparkjoy's FLOOR)", FLOOR, None),
                                    (f"  and idle sessions from {k(IDLE_FLOOR)} (its IDLE_FLOOR)", FLOOR, IDLE_FLOOR),
                                    (f"turn ends from {k(T[one])} (the replay's best alone)", T[one], None),
@@ -540,7 +545,7 @@ def main():
     for t in range(150_000, 450_001, 50_000):
         print(f"  {k(t):>5} " + " ".join(f"{1 - pairs[t, i] / never:6.1%}" for i in (None, *range(150_000, 300_001, 25_000))))
 
-    print("\n  prices             cache   lapses (at turn ends)   h      steady X*   replay at turn ends   saved   idle break-even   (κ = 1)")
+    print("\n  prices             cache   lapses (at turn ends)   h      steady X*   replay at turn ends   saved   idle break-even   (α = 1)")
     for model in ("claude-opus-5-5", "claude-fable-5-2"):
         for t in (3600, 300):
             q, cq = measure(S, t), prices(model, t)

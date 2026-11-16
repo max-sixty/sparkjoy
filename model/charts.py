@@ -8,7 +8,7 @@ import numpy as np
 
 import fit
 
-# "page" is GitHub's background in each theme. κ is drawn on a diverging
+# "page" is GitHub's background in each theme. α is drawn on a diverging
 # scale: below 1 in orange, 1 in a neutral grey, above 1 in blue.
 THEMES = {
     "light": {"low": "#eb6834", "mid": "#52514e", "high": "#2a78d6", "ink": "#0b0b0b", "muted": "#52514e",
@@ -37,7 +37,7 @@ def tokens(v, _=None):
     return "1M" if v >= 1_000_000 else f"{v / 1000:.0f}k" if v else "0"
 
 
-def kappa_color(t, k):
+def alpha_color(t, k):
     return t["low"] if k < 1 else t["high"] if k > 1 else t["mid"]
 
 
@@ -81,23 +81,23 @@ def sawtooth(p, c, t, path):
 
 
 def cost_curve(cost, work, p, c, t, path):
-    """Replayed cost per unit of work against the turn-end threshold, for three values of κ. Under
+    """Replayed cost per unit of work against the turn-end threshold, for three values of α. Under
     K' every turn end compacts, so the curves run flat there: a policy that compacts only at turn
     ends compacts at most once a turn."""
-    ks = list(fit.CHART_KAPPAS)
+    ks = list(fit.CHART_ALPHAS)
     J = cost.sum(0)[:, None] / work.sum(0)
     fig, ax = plt.subplots(figsize=(9, 3.4))
     style(ax, t)
     x = fit.THRESHOLDS
     K1 = fit.terms(p, c)[3]
     ax.axvspan(0, K1, color=tint(t["muted"], t["page"], 0.12), lw=0)
-    ax.text(K1 / 2, 0.99, f"under {K1 / 1000:.0f}k, what a\ncompaction leaves:\nevery turn end\ncompacts", ha="center",
+    ax.text(K1 / 2, 0.99, f"under {K1 / 1000:.0f}k, what a\ncompaction leaves,\nevery turn end\ncompacts, at the\nsize its turn\nreached", ha="center",
             va="top", fontsize=9, color=t["muted"])
     for k in (0.8, 1.0, 1.2):
         i = ks.index(k)
         y = J[:-1, i] / J[-1, i]
-        color = kappa_color(t, k)
-        ax.plot(x, y, color=color, lw=2, label=f"κ = {k:g}")
+        color = alpha_color(t, k)
+        ax.plot(x, y, color=color, lw=2, label=f"α = {k:g}")
         j = y.argmin()
         ax.plot([x[j]], [y[j]], "o", ms=7, mfc=color, mec=t["page"], mew=1.5, zorder=3)
         ax.text(x[j], y[j] - 0.014, f"{x[j] / 1000:.0f}k: {y[j]:.0%}", ha="center", va="top", fontsize=9, color=t["ink"])
@@ -107,22 +107,22 @@ def cost_curve(cost, work, p, c, t, path):
     ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
     ax.set_ylim(0.6, 1.0)
     ax.legend(frameon=False, fontsize=10, labelcolor=t["ink"], loc="lower right")
-    ax.set_xlabel("compact at the first turn end at or above this context", color=t["muted"], fontsize=10)
+    ax.set_xlabel("threshold: compact at the first turn end at or above this context", color=t["muted"], fontsize=10)
     ax.set_ylabel("cost per unit of work,\nvs never compacting", color=t["muted"], fontsize=10)
     fig.savefig(path, transparent=True, bbox_inches="tight", metadata={"Date": None})
     plt.close(fig)
 
 
 def thresholds(cost, work, BT, BX, p, c, t, path):
-    """The best compaction point against κ: the steady-state model and the turn-end replay, with 90% bands."""
-    ks = np.array(fit.CHART_KAPPAS)
+    """The best compaction point against α: the steady-state model and the turn-end replay, with 90% bands."""
+    ks = np.array(fit.CHART_ALPHAS)
     X = [fit.steady(p, c, k) for k in ks]
     # Never compacting short of Claude Code's own compaction is drawn at it.
     T, BT = (np.minimum(v, fit.AUTO) for v in (fit.best(cost, work)[0], BT))
     fig, ax = plt.subplots(figsize=(9, 3.6))
     style(ax, t)
     ax.axvspan(0.8, 1.2, color=tint(t["mid"], t["page"], 0.10), lw=0)
-    ax.text(1.0, 40_000, "κ from 0.8 to 1.2", ha="center", va="bottom", fontsize=9, color=t["muted"])
+    ax.text(1.0, 40_000, "α from 0.8 to 1.2", ha="center", va="bottom", fontsize=9, color=t["muted"])
     for level, label in ((fit.FLOOR, "sparkjoy asks from 400k"), (fit.AUTO, "Claude Code compacts")):
         ax.axhline(level, color=t["muted"], lw=0.8, ls=":")
         ax.text(ks[0], level + 12_000, label, fontsize=9, color=t["muted"])
@@ -135,7 +135,7 @@ def thresholds(cost, work, BT, BX, p, c, t, path):
     ax.set_ylim(0, 1_020_000)
     ax.yaxis.set_major_formatter(tokens)
     ax.set_yticks([0, 250_000, 500_000, 750_000, 1_000_000])
-    ax.set_xlabel("context efficiency coefficient κ", color=t["muted"], fontsize=10)
+    ax.set_xlabel("context efficiency coefficient α", color=t["muted"], fontsize=10)
     ax.set_ylabel("best compaction point", color=t["muted"], fontsize=10)
     ax.legend(frameon=False, fontsize=10, labelcolor=t["ink"], loc="lower right")
     fig.savefig(path, transparent=True, bbox_inches="tight", metadata={"Date": None})
