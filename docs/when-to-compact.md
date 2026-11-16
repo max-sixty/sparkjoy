@@ -96,13 +96,16 @@ F(x) = x + o\,S + (w-1)\,(K - P)
 
 - The summary request reads the context x from the cache and writes a summary
   of S output tokens.
-- The context then restarts from K tokens, and every one of them but the P
-  in the cache shared across sessions, the system prompt and tools, is written
-  to the cache again. K has two parts, measured separately: the first request
-  after the compaction (the system prompt, tools and instructions, the
-  summary, and the recent messages and files Claude Code attaches again), and
-  the E tokens the requests after it read again because the summary left them
-  out, such as a file read before. The model needs only their sum.
+- The context then restarts from K tokens, in three parts:
+  - P, the system prompt and tools (30k), which sit in a cache shared across
+    sessions, so a compaction never rewrites them;
+  - the rest of the first request after the compaction (92k): instructions,
+    the summary, and the recent messages and files Claude Code attaches again;
+  - E, the files and output the requests after it read again because the
+    summary left them out (20k).
+
+  The last two are written to the cache again, K − P tokens in all. The model
+  needs only K and P, not how the rest splits.
 
 F₀ = oS + (w−1)(K − P) is the part of F that doesn't depend on x.
 
