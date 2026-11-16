@@ -126,15 +126,16 @@ with context x make
 ```
 
 units of progress, its share of what it would make with unlimited context. s
-is the scale over which more context stops helping: a request makes 63% of its
-full progress at x = s, 86% at 2s and 95% at 3s, so each further s of context
-closes 63% of the gap that remains. At s = 150k, a request at 400k makes 93%
+is the scale over which more context stops helping, in the way a time constant
+is for a decay: each further s of context shrinks the gap to full progress by
+a factor of e. So a request makes half its full progress at x = s·ln 2 ≈ 0.69s,
+1 − 1/e ≈ 63% at s, 86% at 2s and 95% at 3s. At s = 150k, a request at 400k makes 93%
 and one at 900k nearly all of it; at s = 300k, 74% and 95%. At s = 0 every
 request makes the same progress, whatever its context.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-progress-dark.svg">
-  <img alt="A request's progress against its context, as a share of what unlimited context would give, for s of 0, 150k, 300k and 500k. At s = 0 the line is flat at 100%. Each other curve rises from 0, reaches 63% at x = s, marked with a dot, and levels off toward 100%. Below 142k, what a compaction leaves, is shaded." src="../assets/model-progress-light.svg">
+  <img alt="A request's progress against its context, as a share of what unlimited context would give, for s of 0, 150k, 300k and 500k. At s = 0 the line is flat at 100%. Each other curve rises from 0, reaches 1 − 1/e ≈ 63% at x = s, marked with a dot, and levels off toward 100%. Below 142k, what a compaction leaves, is shaded." src="../assets/model-progress-light.svg">
 </picture>
 
 ### The best compaction point
