@@ -115,8 +115,8 @@ Each later request then reads 120k instead of the whole context:
 | 400k          | 280k less                | about 19 requests     |
 | 700k          | 580k less                | about 9 requests      |
 
-A turn here averaged about 36 requests, so at 200k a compaction rarely pays,
-even at a good place to stop. The question gives the model this sum for its
+A turn here averaged about 36 requests, so at 200k a compaction rarely pays
+back within the turn, even at a good place to stop. The question gives the model this sum for its
 context.
 
 [When to compact](docs/when-to-compact.md) models this trade and fits it to

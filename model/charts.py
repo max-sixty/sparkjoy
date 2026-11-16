@@ -77,7 +77,7 @@ def sawtooth(p, c, t, path):
     ax.set_yticks([0, 250_000, 500_000, 750_000, 1_000_000])
     ax.set_xlabel("requests", color=t["muted"], fontsize=10)
     ax.set_ylabel("context (tokens)", color=t["muted"], fontsize=10)
-    fig.savefig(path, transparent=True, bbox_inches="tight")
+    fig.savefig(path, transparent=True, bbox_inches="tight", metadata={"Date": None})
     plt.close(fig)
 
 
@@ -106,7 +106,7 @@ def cost_curve(cost, work, t, path):
     ax.legend(frameon=False, fontsize=10, labelcolor=t["ink"], loc="lower right")
     ax.set_xlabel("compact at the first turn end at or above this context", color=t["muted"], fontsize=10)
     ax.set_ylabel("cost per unit of work,\nvs never compacting", color=t["muted"], fontsize=10)
-    fig.savefig(path, transparent=True, bbox_inches="tight")
+    fig.savefig(path, transparent=True, bbox_inches="tight", metadata={"Date": None})
     plt.close(fig)
 
 
@@ -135,7 +135,7 @@ def thresholds(cost, work, BT, BX, p, c, t, path):
     ax.set_xlabel("context efficiency coefficient κ", color=t["muted"], fontsize=10)
     ax.set_ylabel("best compaction point", color=t["muted"], fontsize=10)
     ax.legend(frameon=False, fontsize=10, labelcolor=t["ink"], loc="lower right")
-    fig.savefig(path, transparent=True, bbox_inches="tight")
+    fig.savefig(path, transparent=True, bbox_inches="tight", metadata={"Date": None})
     plt.close(fig)
 
 
