@@ -49,7 +49,8 @@ SUMMARY = 4_000  # output tokens of the summary request; assumed, as transcripts
 SPAN = 20  # requests over which re-reads after a compaction are counted
 KAPPAS = (0.8, 0.9, 1.0, 1.1, 1.2)
 CHART_KAPPAS = tuple(round(k, 2) for k in np.arange(0.6, 2.01, 0.1))
-THRESHOLDS = np.arange(130_000, 960_001, 10_000)
+# From below K, where every turn end compacts, to just short of AUTO.
+THRESHOLDS = np.arange(50_000, 960_001, 10_000)
 DRAWS = 200  # bootstrap resamples of sessions
 FLOOR, IDLE_FLOOR = 400_000, 200_000  # where sparkjoy asks, at a turn end and in an idle session (hooks/register.ts)
 IDLE = 11 / 12  # share of the cache's lifetime a session sits idle before it is asked (55 of 60 minutes)

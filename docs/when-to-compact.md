@@ -176,12 +176,12 @@ one-hour cache the sessions used:
 | g, growth per request                   | 1,706                    | 1,604–1,816  | mean, leaving out the 20 requests after each compaction                            |
 | ō, output per request                   | 746                      | 695–798      | mean                                                                               |
 | ℓ, requests that rewrite the context    | 0.56%                    | 0.50–0.62%   | 18% of turn ends are followed by a gap of over an hour                             |
-| S, summary output                       | 4,000                    | assumed      | the summary request isn't logged                                                   |
+| S, summary output                       | 4,000                    | 3,300–8,000  | the summary's text is a median 3,300 (chars/4); its thinking isn't logged, and the pass's median 58 s at this account's output speed allows up to about 8,000 |
 | h, c₀, F₀, K′                           | 1.22, 134k, 4.77M, 142k  |              | derived; F₀ is $0.95                                                               |
 
 At κ = 1, X\* is 260k by the closed form above (259k on the script's 1k grid).
-Without E it would be 229k; without the lapses in h, 272k; with twice the
-assumed S, 264k. E likely leans high, since the turns after a compaction more
+Without E it would be 229k; without the lapses in h, 272k; with S at 8,000,
+264k. E likely leans high, since the turns after a compaction more
 often start new work, which reads more files anyway.
 
 Two measurements bear on what the model assumes:
@@ -237,12 +237,19 @@ Compacting only at turn ends moves it to 200k.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-cost-dark.svg">
-  <img alt="Replayed cost per unit of work against the turn-end threshold, for κ of 0.8, 1 and 1.2. Each curve falls to a flat minimum (200k at 64%, 200k at 70%, 240k at 76% of the cost of never compacting) and rises steadily to 100% near 950k. sparkjoy asks from 400k." src="../assets/model-cost-light.svg">
+  <img alt="Replayed cost per unit of work against the turn-end threshold, for κ of 0.8, 1 and 1.2. Under 142k, what a compaction leaves, every turn end compacts and the curves run flat at 70% to 86%. Each falls to a flat minimum (200k at 64%, 200k at 70%, 240k at 76% of the cost of never compacting) and rises steadily to 100% near 950k." src="../assets/model-cost-light.svg">
 </picture>
 
 At κ = 1, any threshold from 170k to 280k comes within one percentage point of
 the best. A threshold of 400k costs 7% more per unit of work than the best,
 and 600k costs 24% more.
+
+Compacting too early can't run away at turn ends. Under K′, every turn end
+compacts, and that still costs about a fifth less than never compacting at κ = 1,
+because a turn grows the context by 68k on average. In the steady state, where
+a compaction could follow any request, compacting at 150k would cost 3.2 times
+as much per unit of work as compacting at X\*: a compaction every four
+requests or so.
 
 ### Lost detail
 
