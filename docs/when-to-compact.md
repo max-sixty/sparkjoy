@@ -239,8 +239,8 @@ has to be 1.55, where a request at 800k makes about twice the progress of one at
 200k. In the steady state, compacting before Claude Code does never pays above
 α = 1.82; the replay still finds a fraction of a percent to save at 850k–930k.
 
-The range 0.8 to 1.2 was an assumption; "Calibrating α" below measures 1.04
-(0.81–1.25) from what happens in the sessions. Long-context
+The range 0.8 to 1.2 was an assumption; "Calibrating α" below measures 1.06
+(0.82–1.27) from what happens in the sessions. Long-context
 retrieval benchmarks give a sense of scale: if progress tracked their scores, α
 would sit just under 1. Anthropic's system cards report MRCR v2 (8 needles)
 for [Opus 4.6](https://anthropic.com/claude-opus-4-6-system-card) falling from
@@ -286,7 +286,7 @@ of writing 481k tokens again, about 24 times the E measured. LangWatch's
 author [found](https://langwatch.ai/blog/context-tax-when-to-compact) that in
 their sessions, 42% of their messages in the five steps after a compaction
 carried a correction, matched by phrase, against 18% otherwise. In these
-sessions, "Calibrating α" below finds D near zero, at most $2.06.
+sessions, "Calibrating α" below finds D near zero where it could be measured.
 
 D varies from one turn end to the next, which a threshold can't see.
 sparkjoy's question asks the session's model whether the next turns will need
@@ -346,43 +346,46 @@ user corrects or interrupts. `model/calibrate.py` counts these as trouble and
 regresses it on the log of the context, with a fixed effect for each session
 and markers for the 20 requests and two turns after a compaction. If a share w
 of requests is wasted, progress per request is proportional to 1 − w, so
-α − 1 = −(dw/d ln x) / (1 − w̄). A corrected or interrupted turn counts as
-wholly wasted, the most it could mean. Corrections are matched by a phrase
-list in what the user typed; scored blind against 160 hand-labelled messages,
-it finds half of them, and a third of its matches aren't corrections, so its
-slopes are divided by J = sensitivity + specificity − 1 = 0.42.
+α − 1 = −(dw/d ln x) / (1 − w̄). That assumes a request that goes right makes
+the same progress at any context; a gain there would show in none of these
+signals. A corrected or interrupted turn counts as wholly wasted. Corrections
+are matched by a phrase list in what the user typed; scored blind against 160
+hand-labelled turns, it finds half of them, and a third of its matches aren't
+corrections, so its slopes are divided by J = sensitivity + specificity − 1 =
+0.42, whose own uncertainty the intervals carry.
 
-This page's window has only 199 turns the user answered by typing: α = 0.82
-(0.17–1.34). The 60 days to 16 November have 993 sessions, 311,386 requests
-and 3,411 answered turns (90% intervals from resampling sessions):
+This page's window has only 207 turns the user answered by typing: α = 0.98
+(0.10–1.46). The 60 days to 16 November have 993 sessions, 311,386 requests
+and 3,465 answered turns (90% intervals from resampling sessions):
 
 | trouble              | mean  | points per e-fold of context | points after a compaction |
 | -------------------- | ----- | ---------------------------- | ------------------------- |
 | failed tool call     | 2.8%  | −0.56 (−0.72 to −0.38)       | +1.0 (+0.8 to +1.3)       |
-| repeated lookup      | 0.26% | +0.10 (+0.03 to +0.16)       | −0.16 (−0.22 to −0.10)    |
-| correction (matches) | 21%   | −1.0 (−7.5 to +5.6)          | −2.5 (−11 to +6)          |
-| interruption         | 0.7%  | +0.04 (−0.64 to +0.73)       | −0.60 (−1.05 to −0.11)    |
+| repeated lookup      | 0.26% | +0.10 (+0.04 to +0.15)       | −0.16 (−0.22 to −0.11)    |
+| correction (matches) | 20%   | −1.5 (−7.9 to +5.5)          | −2.2 (−9.8 to +5.7)       |
+| interruption         | 0.7%  | +0.04 (−0.61 to +0.64)       | −0.59 (−1.00 to −0.14)    |
 
-Trouble doesn't rise with the context, so **α = 1.04 (0.81–1.25)**: X\* is
-263k (244–295k), and the best turn-end threshold 200k, or 250k at the top of
-the interval. A compaction resets the context but not the session's age, so
-the two separate; controlling for the age moves α by 0.01.
+Trouble doesn't rise with the context, so **α = 1.06 (0.82–1.27)**: X\* is
+265k (244–298k), and the best turn-end threshold 220k, from 200k to 250k across
+the interval. A compaction resets the context but not the session's age, so the
+two separate; controlling for the age moves α by 0.01. Counting corrections as
+wasting none of their turn gives 1.005, and twice their turn 1.16 (0.42–1.95).
 
 **A saturating form**, η ∝ 1 − e^(−x/s), would make a compaction to 142k cost
 progress until the context refills. At s = 150k (X\* 325k), requests below
-200k would see 30 points more trouble than those at 400k–600k; they see −11
-(−31 to +7). The best fit is s near 0, flat above K, and s above 110k (X\*
-300k) is outside the interval. The data bound the size of the effect but can't
-tell the shapes apart.
+200k would see 25 points more trouble than those at 400k–600k; they see −13
+(−37 to +5). The best fit is s near 0, flat above K, and the interval reaches
+146k (X\* 322k). The data bound the size of the effect but can't tell the
+shapes apart.
 
-**Lost detail.** The trouble after a compaction comes to −4.8 wasted requests
-(−21 to +11), D = −$0.28 (−$1.20 to +$0.65). It falls after sparkjoy's
-compactions, which come where a piece of work ends, and rises after the user's
-and Claude Code's: +14 requests (−5 to +35), $0.80 (−$0.29 to +$2.06). X\*
-reaches 400k only at D = $3.75, 65 wasted requests; at D's worst, $2.06, X\*
-is 356k and the best turn-end threshold 280k. An estimated 16% of first turns
-after a compaction drew a correction, against 24% of others, where LangWatch
-found 42% against 18%.
+**Lost detail.** The trouble after a compaction comes to −2.8 wasted requests
+(−19 to +13), D = −$0.16 (−$1.07 to +$0.73). It is lower after sparkjoy's
+compactions, which come where a piece of work ends: −34 requests (−85 to +5).
+After the user's and Claude Code's it is +6 requests (−3 to +20), $0.35
+(−$0.14 to +$1.12). X\* reaches 400k only at D = $3.75, 65 wasted requests; at
+$1.12, X\* is 322k and the best turn-end threshold 250k. An estimated 16% of
+first turns after a compaction drew a correction, against 23% of others, where
+LangWatch found 42% against 18%.
 
 **Where compactions happen.** The sessions do compact much later than the
 model says, the user's own `/compact` included:
@@ -396,21 +399,23 @@ model says, the user's own `/compact` included:
 
 The outcomes measured give no reason to wait that long. They miss progress
 lost without a failure, a lookup or a correction; corrections given on a Leaf
-page; the user's time; and D where a threshold would compact, since nearly
-every compaction measured came where sparkjoy or the user chose. The 35 idle
-compactions fall at arbitrary moments but are too few to measure alone.
+page; harm later than two turns after a compaction; the user's time; and D
+where a threshold would compact, since nearly every compaction measured came
+where sparkjoy or the user chose. The 35 idle compactions fall at arbitrary
+moments but are too few to measure alone. Comparing thresholds in use, a floor
+of 250k in some sessions against 400k in others, would measure D where it
+matters.
 
 ## What it implies for sparkjoy
 
-With α near 1 and D small, as measured above, the model supports asking at
-turn ends from 200k–250k rather than 400k, and in idle sessions from 150k–175k
-rather than 200k. The question's payback sum misleads when it is set beside
-the length of a turn. A compaction is repaid over every request until the
-context grows back, (x − K)/g of them, and at a turn end it pays even before
-its payback falls to half of that,
-because the next chance to compact may be hundreds of requests away. What a
-threshold can't see, whether the next turns need detail a summary drops, stays
-with the question.
+With α near 1, and D small where it could be measured, the model supports
+asking at turn ends from 200k–250k rather than 400k, and in idle sessions from
+150k–175k rather than 200k. The question's payback sum misleads when it is set
+beside the length of a turn. A compaction is repaid over every request until
+the context grows back, (x − K)/g of them, and at a turn end it pays even
+before its payback falls to half of that, because the next chance to compact
+may be hundreds of requests away. What a threshold can't see, whether the next
+turns need detail a summary drops, stays with the question.
 
 ## What the model leaves out
 
