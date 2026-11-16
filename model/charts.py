@@ -57,7 +57,7 @@ def sawtooth(p, c, t, path):
     ax.fill_between(req, model, color=tint(t["high"], t["page"], t["band"] + 0.08), lw=0)
     ax.plot(req, never, color=t["mid"], lw=2)
     ax.plot(req, model, color=t["high"], lw=2)
-    for level, label in ((K1, "K′"), (X, "X*")):
+    for level, label in ((K1, "K"), (X, "X*")):
         ax.axhline(level, color=t["muted"], lw=0.8, ls=":")
         ax.text(n * 1.008, level, label, va="center", fontsize=10, color=t["ink"])
     tooth = 3 * cycle  # the fourth tooth, clear of the never-compacting line
@@ -65,7 +65,7 @@ def sawtooth(p, c, t, path):
                 arrowprops={"arrowstyle": "<->", "color": t["ink"], "lw": 0.9, "shrinkA": 0, "shrinkB": 0})
     ax.text(tooth + cycle * 0.56, X + 25_000, f"Δ* ≈ {(X - K1) / 1000:.0f}k: {cycle:.0f} requests at g ≈ {g / 1000:.1f}k",
             fontsize=9, color=t["ink"], va="bottom")
-    ax.annotate("compaction: the summary reads X*,\nthe next request writes K′ again", (2 * cycle, X),
+    ax.annotate("compaction: the summary reads X*,\nthe next request writes K again", (2 * cycle, X),
                 (2 * cycle + 4, X + 175_000), fontsize=9, color=t["ink"], ha="left",
                 arrowprops={"arrowstyle": "-", "color": t["muted"], "lw": 0.8})
     ax.text(n * 0.30, 780_000, "never compacting, until Claude Code\ncompacts near the window", fontsize=9,
