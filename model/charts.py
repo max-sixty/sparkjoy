@@ -81,33 +81,31 @@ def sawtooth(p, c, t, path):
 
 
 def cost_curve(cost, work, p, c, t, path):
-    """Replayed cost per unit of work against the turn-end threshold, for three values of α. Under
-    K' every turn end compacts, so the curves run flat there: a policy that compacts only at turn
-    ends compacts at most once a turn."""
-    ks = list(fit.CHART_ALPHAS)
-    J = cost.sum(0)[:, None] / work.sum(0)
+    """The steady state's cost per unit of work against the compaction point, for three values of
+    α: a compaction can follow any request, and the context grows smoothly. Against never compacting,
+    where Claude Code compacts at AUTO."""
     fig, ax = plt.subplots(figsize=(9, 3.4))
     style(ax, t)
-    x = fit.THRESHOLDS
     K1 = fit.terms(p, c)[3]
     ax.axvspan(0, K1, color=tint(t["muted"], t["page"], 0.12), lw=0)
-    ax.text(K1 / 2, 0.99, f"under {K1 / 1000:.0f}k, what a\ncompaction leaves,\nevery turn end\ncompacts, at the\nsize its turn\nreached", ha="center",
-            va="top", fontsize=9, color=t["muted"])
+    ax.text(K1 / 2, 1.18, f"under {K1 / 1000:.0f}k,\nwhat a\ncompaction\nleaves", ha="center", va="top",
+            fontsize=9, color=t["muted"])
     for k in (0.8, 1.0, 1.2):
-        i = ks.index(k)
-        y = J[:-1, i] / J[-1, i]
+        X, J = fit.curve(p, c, k)
+        y = J / J[-1]
         color = alpha_color(t, k)
-        ax.plot(x, y, color=color, lw=2, label=f"α = {k:g}")
+        ax.plot(X, y, color=color, lw=2, label=f"α = {k:g}")
         j = y.argmin()
-        ax.plot([x[j]], [y[j]], "o", ms=7, mfc=color, mec=t["page"], mew=1.5, zorder=3)
-        ax.text(x[j], y[j] - 0.014, f"{x[j] / 1000:.0f}k: {y[j]:.0%}", ha="center", va="top", fontsize=9, color=t["ink"])
-    ax.set_xlim(0, x[-1])
+        ax.plot([X[j]], [y[j]], "o", ms=7, mfc=color, mec=t["page"], mew=1.5, zorder=3)
+        ax.text(X[j] + 14_000, y[j] - 0.012, f"{X[j] / 1000:.0f}k: {y[j]:.0%}", ha="left", va="top", fontsize=9,
+                color=t["ink"])
+    ax.set_xlim(0, fit.AUTO)
     ax.xaxis.set_major_formatter(tokens)
     ax.set_xticks([0, 200_000, 400_000, 600_000, 800_000])
     ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
-    ax.set_ylim(0.6, 1.0)
+    ax.set_ylim(0.4, 1.2)
     ax.legend(frameon=False, fontsize=10, labelcolor=t["ink"], loc="lower right")
-    ax.set_xlabel("threshold: compact at the first turn end at or above this context", color=t["muted"], fontsize=10)
+    ax.set_xlabel("compact when the context reaches", color=t["muted"], fontsize=10)
     ax.set_ylabel("cost per unit of work,\nvs never compacting", color=t["muted"], fontsize=10)
     fig.savefig(path, transparent=True, bbox_inches="tight", metadata={"Date": None})
     plt.close(fig)

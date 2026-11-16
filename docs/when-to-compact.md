@@ -175,6 +175,17 @@ work doesn't, so they weigh on the choice only when α ≠ 1.
   <img alt="Context per request under the fitted model. Compacting at X* = 259k gives a sawtooth between K' = 142k and 259k, each tooth 69 requests long; never compacting climbs in a straight line to 965k, where Claude Code compacts. The area under each line is what its requests read." src="../assets/model-sawtooth-light.svg">
 </picture>
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/model-cost-dark.svg">
+  <img alt="Steady-state cost per unit of work against the compaction point, for α of 0.8, 1 and 1.2, against never compacting. Each curve climbs steeply toward 142k, what a compaction leaves, reaches its minimum at 243k (46%), 259k (55%) and 285k (66%), and rises to 100% at 965k." src="../assets/model-cost-light.svg">
+</picture>
+
+The cost against the compaction point, at three values of α. It climbs
+steeply toward K′, where compactions come every few requests, and flattens
+around X\*. These savings are larger than the replay's below because the
+steady state's never-compacting arm climbs to 965k in every cycle, where real
+sessions end before many cycles.
+
 ## Fitted parameters
 
 From the author's 85 interactive sessions of more than one request, 7 to 15
@@ -247,11 +258,6 @@ removes. Compacting after any request, the replay's best point is 260k, beside
 the steady state's 259k: uneven growth, real lapses and sessions ending
 together move the optimum little, though they may offset one another.
 Compacting only at turn ends moves it to 200k.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="../assets/model-cost-dark.svg">
-  <img alt="Replayed cost per unit of work against the turn-end threshold, for α of 0.8, 1 and 1.2. Under 142k, what a compaction leaves, every turn end compacts and the curves run flat at 70% to 86%. Each falls to a flat minimum (200k at 64%, 200k at 70%, 240k at 76% of the cost of never compacting) and rises steadily to 100% near 950k." src="../assets/model-cost-light.svg">
-</picture>
 
 At α = 1, any threshold from 170k to 280k comes within one percentage point of
 the best. A threshold of 400k costs 7% more per unit of work than the best,
