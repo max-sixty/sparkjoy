@@ -13,20 +13,20 @@ typing `/compact`, can compact only at the end of a turn.
 
 For the author's sessions on Opus 5.5 with a one-hour cache, the model says to
 compact at the first turn end past about **200k tokens**. Compacting there
-every time costs 30.5% less than never compacting, where compacting at every
-turn end past 400k, sparkjoy's current floor, costs 25.4% less. Compacting idle
+every time costs 30.2% less than never compacting, where compacting at every
+turn end past 400k, sparkjoy's current floor, costs 25.1% less. Compacting idle
 sessions as well, from about 175k, raises the best turn-end threshold to 250k
-and the saving to 31.2%. The answer depends on how context size changes what
+and the saving to 30.9%. The answer depends on how context size changes what
 each request gets done, which the model carries as a coefficient κ. Across the
 range 0.8 to 1.2 it moves little:
 
 | κ   | best point, compacting after any request | best threshold at turn ends | saved there | saved at 400k |
 | --- | ---------------------------------------- | --------------------------- | ----------- | ------------- |
-| 0.8 | 243k (235–253k)                          | 200k (190–210k)             | 36.4%       | 29.9%         |
-| 0.9 | 250k (242–261k)                          | 200k (190–220k)             | 33.6%       | 27.7%         |
-| 1.0 | 259k (251–270k)                          | 200k (200–240k)             | 30.5%       | 25.4%         |
-| 1.1 | 271k (262–282k)                          | 240k (200–250k)             | 27.3%       | 22.9%         |
-| 1.2 | 285k (276–297k)                          | 240k (210–250k)             | 23.9%       | 20.3%         |
+| 0.8 | 243k (235–253k)                          | 200k (190–210k)             | 36.1%       | 29.5%         |
+| 0.9 | 250k (242–261k)                          | 200k (190–220k)             | 33.3%       | 27.4%         |
+| 1.0 | 259k (251–270k)                          | 200k (200–240k)             | 30.2%       | 25.1%         |
+| 1.1 | 271k (262–282k)                          | 240k (200–250k)             | 27.0%       | 22.6%         |
+| 1.2 | 285k (276–297k)                          | 240k (210–250k)             | 23.7%       | 20.0%         |
 
 The second column is the steady-state model's optimum, derived below. The
 third comes from replaying the sessions with compaction only at turn ends.
@@ -237,12 +237,12 @@ Compacting only at turn ends moves it to 200k.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-cost-dark.svg">
-  <img alt="Replayed cost per unit of work against the turn-end threshold, for κ of 0.8, 1 and 1.2. Each curve falls to a flat minimum (200k at 64%, 200k at 69%, 240k at 76% of the cost of never compacting) and rises steadily to 100% near 950k. sparkjoy asks from 400k." src="../assets/model-cost-light.svg">
+  <img alt="Replayed cost per unit of work against the turn-end threshold, for κ of 0.8, 1 and 1.2. Each curve falls to a flat minimum (200k at 64%, 200k at 70%, 240k at 76% of the cost of never compacting) and rises steadily to 100% near 950k. sparkjoy asks from 400k." src="../assets/model-cost-light.svg">
 </picture>
 
 At κ = 1, any threshold from 170k to 280k comes within one percentage point of
 the best. A threshold of 400k costs 7% more per unit of work than the best,
-and 600k costs 25% more.
+and 600k costs 24% more.
 
 ### Lost detail
 
@@ -280,10 +280,10 @@ Replayed at κ = 1, with every policy compacting wherever it allows:
 
 | policy                                                   | saved |
 | -------------------------------------------------------- | ----- |
-| turn ends from 400k, sparkjoy's current floor            | 25.4% |
-| and idle sessions from 200k, its idle floor              | 28.8% |
-| turn ends from 200k, the best without idle compaction    | 30.5% |
-| turn ends from 250k and idle sessions from 175k, the best pair | 31.2% |
+| turn ends from 400k, sparkjoy's current floor            | 25.1% |
+| and idle sessions from 200k, its idle floor              | 28.5% |
+| turn ends from 200k, the best without idle compaction    | 30.2% |
+| turn ends from 250k and idle sessions from 175k, the best pair | 30.9% |
 
 The pairs come from a grid of turn-end thresholds in steps of 50k and idle
 thresholds in steps of 25k; every pair of 200k–250k at turn ends and 150k–175k
@@ -297,10 +297,10 @@ The same sessions, priced again, at κ = 1:
 
 | prices               | cache     | ℓ     | h    | X\*  | best at turn ends | saved | idle break-even |
 | -------------------- | --------- | ----- | ---- | ---- | ----------------- | ----- | --------------- |
-| Opus 5.5, Sonnet 5.5 | 1 hour    | 0.56% | 1.22 | 259k | 200k              | 30.5% | 156k            |
-| Opus 5.5, Sonnet 5.5 | 5 minutes | 2.33% | 1.56 | 226k | 160k              | 37.6% | 165k            |
-| Fable 5.2            | 1 hour    | 0.56% | 1.44 | 294k | 250k              | 27.3% | 154k            |
-| Fable 5.2            | 5 minutes | 2.33% | 2.14 | 243k | 180k              | 37.0% | 162k            |
+| Opus 5.5, Sonnet 5.5 | 1 hour    | 0.56% | 1.22 | 259k | 200k              | 30.2% | 156k            |
+| Opus 5.5, Sonnet 5.5 | 5 minutes | 2.33% | 1.56 | 226k | 160k              | 37.3% | 165k            |
+| Fable 5.2            | 1 hour    | 0.56% | 1.44 | 294k | 250k              | 26.9% | 154k            |
+| Fable 5.2            | 5 minutes | 2.33% | 2.14 | 243k | 180k              | 36.7% | 162k            |
 
 A Fable 5.2 cache write costs twice as many cached reads, which raises F₀ and
 with it X\*. A five-minute cache lapses after 2.3% of requests, 57% of them at

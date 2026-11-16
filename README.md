@@ -118,7 +118,7 @@ Each later request then reads 120k instead of the whole context:
 A compaction repays over every request until the context grows back, not
 within one turn. [When to compact](docs/when-to-compact.md) models this and
 fits it to the same sessions: compacting at every turn end past about 200k
-costs least, saving 30.5% against 25.4% past 400k. A coefficient for how
+costs least, saving 30.2% against 25.1% past 400k. A coefficient for how
 context size changes the model's work, from 0.8 to 1.2, moves that by tens of
 thousands of tokens. The question gives the model the payback for its
 context.
@@ -128,6 +128,19 @@ after an hour or more wrote 27.6M tokens back to the cache, about $220.
 Compacting first would have cost about $110 less; the plugin asks first, so it
 will compact fewer of them. This part is new, so that figure is an estimate,
 and the replay above leaves it out.
+
+## Report
+
+`/sparkjoy:report` writes a page about your own sessions of the last 14 days
+and opens it: every verdict sparkjoy logged, what its compactions saved
+by the [replay](#how-the-numbers-were-measured), the sessions you came back to
+after an hour idle, and the thresholds the
+[cost model](docs/when-to-compact.md) fits to them. It needs
+[uv](https://docs.astral.sh/uv/).
+
+```
+/sparkjoy:report
+```
 
 ## How it decides
 
