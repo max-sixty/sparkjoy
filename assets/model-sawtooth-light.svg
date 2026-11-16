@@ -2621,7 +2621,7 @@ L 548.123438 184.879412
 " style="fill: none; stroke: #e4e3df; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
    <g id="text_15">
-    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="552.141038" y="163.000559" transform="rotate(-0 552.141038 163.000559)">K′</text>
+    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="552.141038" y="163.000559" transform="rotate(-0 552.141038 163.000559)">K</text>
    </g>
    <g id="text_16">
     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="552.141038" y="142.650818" transform="rotate(-0 552.141038 142.650818)">X*</text>
@@ -2649,7 +2649,7 @@ Q 186.665635 126.594002 162.133051 138.855284
    </g>
    <g id="text_18">
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(163.678912 100.365339)">compaction: the summary reads X*,</text>
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(163.678912 109.31278)">the next request writes K′ again</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(163.678912 109.31278)">the next request writes K again</text>
    </g>
    <g id="text_19">
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(122.795391 40.205154)">never compacting, until Claude Code</text>

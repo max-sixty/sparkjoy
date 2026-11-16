@@ -91,20 +91,20 @@ grow with the context. ī is the uncached input, a couple of tokens.
 ### What a compaction costs
 
 ```math
-F(x) = x + o\,S + (w-1)\,(K' - P)
+F(x) = x + o\,S + (w-1)\,(K - P)
 ```
 
 - The summary request reads the context x from the cache and writes a summary
   of S output tokens.
-- The context then restarts from K′ tokens, and every one of them but the P in
-  the shared cache is written to the cache again. K′ has two parts, measured
-  separately: the K tokens of the first request after the compaction (the
-  system prompt, tools and instructions, the summary, and the recent messages
-  and files Claude Code attaches again), and the E tokens the requests after
-  it read again because the summary left them out, such as a file read
-  before. The model needs only their sum.
+- The context then restarts from K tokens, and every one of them but the P
+  in the cache shared across sessions, the system prompt and tools, is written
+  to the cache again. K has two parts, measured separately: the first request
+  after the compaction (the system prompt, tools and instructions, the
+  summary, and the recent messages and files Claude Code attaches again), and
+  the E tokens the requests after it read again because the summary left them
+  out, such as a file read before. The model needs only their sum.
 
-F₀ = oS + (w−1)(K′ − P) is the part of F that doesn't depend on x.
+F₀ = oS + (w−1)(K − P) is the part of F that doesn't depend on x.
 
 ### Work and the context efficiency coefficient
 
@@ -127,13 +127,13 @@ out.
 ### The best compaction point
 
 Suppose a session compacts each time its context reaches X. Its context grows
-from K′ to X at g tokens per request, then starts again. By the renewal-reward
+from K to X at g tokens per request, then starts again. By the renewal-reward
 theorem ([Ross](https://shop.elsevier.com/books/introduction-to-probability-models/ross/978-0-443-18761-2),
 ch. 7), its long-run cost per unit of work is one cycle's cost over one
 cycle's work:
 
 ```math
-J(X) = \frac{g\,F(X) + \int_{K'}^{X} c(x)\,dx}{\int_{K'}^{X} \eta(x)\,dx}
+J(X) = \frac{g\,F(X) + \int_{K}^{X} c(x)\,dx}{\int_{K}^{X} \eta(x)\,dx}
 ```
 
 Setting dJ/dX to zero gives the condition for the best point X\*:
@@ -151,18 +151,18 @@ cost ([Kletke 1969](https://ageconsearch.umn.edu/record/29853/files/01010045.pdf
 At α = 1 the condition solves in closed form:
 
 ```math
-X^* = K' + \sqrt{\frac{2\,g\,(F_0 + K')}{h}}
+X^* = K + \sqrt{\frac{2\,g\,(F_0 + K)}{h}}
 ```
 
 This is Harris's
 [economic order quantity](https://doi.org/10.1287/opre.38.6.947) (1913): the
 context is stock that costs h cached reads per token per request to hold, and a
-compaction is an order with fixed cost F₀ + K′. Two properties follow.
+compaction is an order with fixed cost F₀ + K. Two properties follow.
 
 - At X\*, a compaction pays for itself in about half the requests the context
   takes to grow back to X\*, as the table at the top shows. The yardstick for
   payback is the regrowth time, not the length of a turn.
-- Cost is flat near X\*. Compacting at twice the optimal growth X\* − K′, near
+- Cost is flat near X\*. Compacting at twice the optimal growth X\* − K, near
   380k here, raises the part of the cost that depends on X by 25%, which is 8%
   of a request's whole cost.
 
@@ -172,7 +172,7 @@ work doesn't, so they weigh on the choice only when α ≠ 1.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-sawtooth-dark.svg">
-  <img alt="Context per request under the fitted model. Compacting at X* = 259k gives a sawtooth between K' = 142k and 259k, each tooth 69 requests long; never compacting climbs in a straight line to 965k, where Claude Code compacts. The area under each line is what its requests read." src="../assets/model-sawtooth-light.svg">
+  <img alt="Context per request under the fitted model. Compacting at X* = 259k gives a sawtooth between K = 142k and 259k, each tooth 69 requests long; never compacting climbs in a straight line to 965k, where Claude Code compacts. The area under each line is what its requests read." src="../assets/model-sawtooth-light.svg">
 </picture>
 
 <picture>
@@ -181,7 +181,7 @@ work doesn't, so they weigh on the choice only when α ≠ 1.
 </picture>
 
 The cost against the compaction point, at three values of α. It climbs
-steeply toward K′, where compactions come every few requests, and flattens
+steeply toward K, where compactions come every few requests, and flattens
 around X\*. These savings are larger than the replay's below because the
 steady state's never-compacting arm climbs to 965k in every cycle, where real
 sessions end before many cycles.
@@ -194,14 +194,14 @@ one-hour cache the sessions used:
 
 | parameter                               | value                    | 90% interval | how                                                                                |
 | --------------------------------------- | ------------------------ | ------------ | ---------------------------------------------------------------------------------- |
-| K, context after a compaction           | 122k                     | 120–125k     | median first request after 135 compactions                                         |
-| P, read from the shared cache           | 30k                      | 30–31k       | that request's cache reads                                                         |
-| E, extra tokens after a compaction      | 20k                      | 15–26k       | growth over the first 20 requests of a turn after a compaction, minus the same after another turn |
+| first request after a compaction        | 122k                     | 120–125k     | median over 135 compactions                                                        |
+| P, system prompt and tools, in the cache shared across sessions | 30k | 30–31k | that request's cache reads                                                  |
+| E, tokens read again after a compaction | 20k                      | 15–26k       | growth over the first 20 requests of a turn after a compaction, minus the same after another turn |
 | g, growth per request                   | 1,706                    | 1,615–1,805  | mean, leaving out the 20 requests after each compaction                            |
 | ō, output per request                   | 746                      | 699–792      | mean                                                                               |
 | ℓ, requests that rewrite the context    | 0.56%                    | 0.51–0.63%   | 18% of turn ends are followed by a gap of over an hour                             |
 | S, summary output                       | 4,000                    | 3,300–8,000  | the summary's text is a median 3,300 (chars/4); its thinking isn't logged, and the pass's median 58 s at this account's output speed allows up to about 8,000 |
-| h, c₀, F₀, K′                           | 1.22, 134k, 4.77M, 142k  |              | derived; F₀ is $0.95                                                               |
+| K, context a compaction leaves; h, c₀, F₀ | 142k; 1.22, 134k, 4.77M |            | derived: K is the first request plus E; F₀ is $0.95                                |
 
 At α = 1, X\* is 260k by the closed form above (259k on the script's 1k grid).
 Without E it would be 229k; without the lapses in h, 272k; with S at 8,000,
@@ -263,7 +263,7 @@ At α = 1, any threshold from 170k to 280k comes within one percentage point of
 the best. A threshold of 400k costs 7% more per unit of work than the best,
 and 600k costs 24% more.
 
-Compacting too early can't run away at turn ends. Under K′, every turn end
+Compacting too early can't run away at turn ends. Under K, every turn end
 compacts, and that still costs about a fifth less than never compacting at α = 1,
 because a turn grows the context by 68k on average. In the steady state, where
 a compaction could follow any request, compacting at 150k would cost 3.2 times
@@ -274,8 +274,8 @@ requests or so.
 
 The model prices a compaction in tokens. Its other cost is work the summary no
 longer supports: a mistake, a correction from the user, a step re-run. If that
-costs D cached reads on average, D adds to F₀, and X\* − K′ grows with
-√(F₀ + K′ + D). At α = 1, X\* reaches 400k when D is 18.8M cached reads, $3.75
+costs D cached reads on average, D adds to F₀, and X\* − K grows with
+√(F₀ + K + D). At α = 1, X\* reaches 400k when D is 18.8M cached reads, $3.75
 at Opus 5.5 prices: 3.6 times the compaction's own cost at 400k, or the price
 of writing 481k tokens again, about 24 times the E measured. LangWatch's
 author [found](https://langwatch.ai/blog/context-tax-when-to-compact) that in
@@ -292,10 +292,10 @@ hand.
 When a session sits idle until its cache lapses, the next request writes the
 whole context again, compacted or not. Keeping costs that request
 P + w(x − P). Compacting first, while the cache still holds the context, costs
-the summary, x + oS, and then P + w(K′ − P). Compacting is cheaper when
+the summary, x + oS, and then P + w(K − P). Compacting is cheaper when
 
 ```math
-x > \frac{o\,S + w\,K'}{w - 1} \approx 156\text{k}
+x > \frac{o\,S + w\,K}{w - 1} \approx 156\text{k}
 ```
 
 counting the next request alone; the cheaper requests after it only add to the
@@ -337,7 +337,7 @@ turn ends, which makes a large context dearer to hold and lowers X\*.
 At α near 1, the model supports asking at turn ends from 200k–250k rather than
 400k, and in idle sessions from 150k–175k rather than 200k. The question's
 payback sum misleads when it is set beside the length of a turn. A compaction
-is repaid over every request until the context grows back, (x − K′)/g of them,
+is repaid over every request until the context grows back, (x − K)/g of them,
 and at a turn end it pays even before its payback falls to half of that,
 because the next chance to compact may be hundreds of requests away. What a
 threshold can't see, whether the next turns need detail a summary drops, stays

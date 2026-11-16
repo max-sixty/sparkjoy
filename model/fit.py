@@ -338,7 +338,7 @@ def terms(p, c):
     """c(x) = h x + c0 and F(x) = x + F0, from what a request and a compaction write and read:
     a request reads x and writes the g new tokens, or after a lapse everything but the shared
     prefix, x - P; a compaction's next request writes K - P, and later ones E more.
-    Returns h, c0, F0 and K', where a compaction leaves the context."""
+    Returns h, c0, F0 and K, where a compaction leaves the context."""
     h = 1 + p.lapse * (c.write - 1)
     c0 = c.output * p.out + c.input * p.inp + (c.write - 1) * ((1 - p.lapse) * p.g - p.lapse * p.P)
     F0 = c.output * SUMMARY + (c.write - 1) * (p.K - p.P + p.E)
@@ -346,7 +346,7 @@ def terms(p, c):
 
 
 def curve(p, c, alpha):
-    """J(X), the long-run cost per unit of work of compacting at X, on a grid of X from K' to AUTO."""
+    """J(X), the long-run cost per unit of work of compacting at X, on a grid of X from K to AUTO."""
     h, c0, F0, K1 = terms(p, c)
     X = np.append(np.arange(K1 + 1_000, AUTO, 1_000.0), AUTO)
     cost = p.g * (X + F0) + h * (X**2 - K1**2) / 2 + c0 * (X - K1)
@@ -361,7 +361,7 @@ def steady(p, c, alpha):
 
 
 def closed_form(p, c):
-    """X* at α = 1: K' + sqrt(2 g (F0 + K') / h)."""
+    """X* at α = 1: K + sqrt(2 g (F0 + K) / h)."""
     h, _, F0, K1 = terms(p, c)
     return K1 + np.sqrt(2 * p.g * (F0 + K1) / h)
 
@@ -403,8 +403,8 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None):
         else:
             if pending or (idle is not None and ctx >= idle and s.idle[j] > IDLE * ttl):
                 cost += ctx + c.output * SUMMARY  # read from the cache, which the turn end left warm
-                # A compaction leaves K', or less where the context held less to begin with,
-                # which happens only below K', at a session's first turn ends.
+                # A compaction leaves K, or less where the context held less to begin with,
+                # which happens only below K, at a session's first turn ends.
                 left = min(K1, ctx)
                 ctx, written = left + grew, left - P + grew
             else:
@@ -480,7 +480,7 @@ def main():
     print("  growth per request by context:", ", ".join(
         f"{lo // 1000}-{lo // 1000 + 100}k {grew[(size >= lo) & (size < lo + 100_000)].mean():,.0f}"
         for lo in range(100_000, 800_000, 100_000)))
-    print(f"\nh = {h:.3f}, c0 = {c0 / 1e3:,.0f}k, F0 = {F0 / 1e6:.2f}M (${F0 * c.read:.2f}), K' = {K1 / 1e3:.0f}k; "
+    print(f"\nh = {h:.3f}, c0 = {c0 / 1e3:,.0f}k, F0 = {F0 / 1e6:.2f}M (${F0 * c.read:.2f}), K = {K1 / 1e3:.0f}k; "
           f"closed form at α=1: X* = {closed_form(p, c) / 1e3:.0f}k; idle break-even {idle_break_even(p, c) / 1e3:.0f}k")
     print(f"X* at α=1 without E: {closed_form(replace(p, E=0), c) / 1e3:.0f}k; without lapses: "
           f"{closed_form(replace(p, lapse=0), c) / 1e3:.0f}k; with twice the summary: "
