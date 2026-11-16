@@ -19,12 +19,17 @@ The fixture stops at the turn's reply, and the question repeats that reply, as
 the plugin's does. The plugin's fork instead replays the turn's last request,
 which ends before the reply, so here the model reads its reply twice.
 
-Runs of one case go in sequence from one directory, so a repeat of the same
-question reads the transcript from the prompt cache, at about a twentieth of
-the first run's cost. Another checkout's question writes it again: the cache
-breakpoint sits on the last message, which is the question.
-`FORCE_PROMPT_CACHING_5M` keeps those writes at the five-minute price. Cases
-run `--jobs` at a time.
+Runs of one case go in sequence from one directory and share one cache write
+of its transcript, so each run after the first costs about a twentieth of it.
+Claude Code puts the cache breakpoint on the last content block, so the
+questions' common opening (up to the quoted reply, when they agree that far)
+goes first in a request of its own, and every run then sends that opening and
+the rest of its question as two blocks, reading the transcript and the opening
+from the cache. `FORCE_PROMPT_CACHING_5M` keeps the write at the five-minute
+price, which the runs refresh as they read it. Cases run `--jobs` at a time.
+
+`--question-from` takes a checkout or a `register.ts` file, so a variant of the
+question can be tried from a scratch copy before it is committed.
 
 Credentials come from `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` when set,
 or else from the local Claude Code login's access token (never its refresh
@@ -121,8 +126,12 @@ def stage(entries: list[dict], case: dict, config: Path, cwd: Path) -> str:
     return session
 
 
-def render(checkout: Path, reply: str, case: dict) -> str:
-    args = ["bun", str(HERE / "question.ts"), str(checkout / "hooks/register.ts"), str(case["tokens"])]
+def register(source: Path) -> Path:
+    return source if source.is_file() else source / "hooks/register.ts"
+
+
+def render(source: Path, reply: str, case: dict) -> str:
+    args = ["bun", str(HERE / "question.ts"), str(register(source)), str(case["tokens"])]
     if case["kind"] == "idle":
         args.append(str(IDLE_MINUTES))
     return subprocess.run(args, input=reply, capture_output=True, text=True, check=True).stdout
@@ -138,80 +147,116 @@ def parse(text: str) -> dict | None:
     return value if ok else None
 
 
-def label(checkout: Path) -> str:
-    """The checkout's branch and commit, e.g. `main@02beed1`."""
+def label(source: Path) -> str:
+    """The checkout's branch and commit, e.g. `main@02beed1`, or a file's name."""
+    if source.is_file():
+        return source.stem
+    checkout = source
+
     def git(*args):
         return subprocess.run(["git", "-C", str(checkout), *args], capture_output=True, text=True).stdout.strip()
 
     return f"{git('rev-parse', '--abbrev-ref', 'HEAD')}@{git('rev-parse', '--short', 'HEAD')}"
 
 
-def ask(case: dict, checkout: Path, credential: dict[str, str]) -> dict:
-    """One run of one case against one checkout's question."""
-    entries = load(case)
-    question = render(checkout, reply_of(entries), case)
-    # One fixed directory per case, so that every run of it gets the same
-    # system prompt, which names the working directory, and reads the
-    # transcript from the cache. Resolved, since Claude Code files a session
-    # under its directory's real path (`/private/var/…` on macOS).
-    scratch = Path(tempfile.gettempdir()).resolve() / "sparkjoy-evals" / case["id"]
-    shutil.rmtree(scratch, ignore_errors=True)
-    try:
-        config, cwd = scratch / "config", scratch / "work"
-        cwd.mkdir(parents=True)
-        session = stage(entries, case, config, cwd)
-        proc = subprocess.run(
-            [
-                "claude", "-p", "--resume", session, "--fork-session", "--no-session-persistence",
-                "--model", MODEL, "--effort", EFFORT, "--tools", "", "--strict-mcp-config",
-                "--disable-slash-commands", "--output-format", "json",
-            ],
-            input=question,
-            cwd=cwd,
-            env=child_env(config, credential),
-            capture_output=True,
-            text=True,
-            timeout=900,
-        )
-    finally:
-        shutil.rmtree(scratch, ignore_errors=True)
-    out = json.loads(proc.stdout) if proc.stdout.strip().startswith("{") else {}
+def shared_opening(questions: list[str]) -> str:
+    """The paragraphs every question opens with, through the quoted reply at most."""
+    paragraphs = [q.split("\n\n") for q in questions]
+    common = []
+    for parts in zip(*paragraphs):
+        if len(set(parts)) > 1:
+            break
+        common.append(parts[0])
+        if parts[0].endswith("</reply>"):
+            break
+    # Every question keeps a part of its own after the opening.
+    while common and any(len(p) <= len(common) for p in paragraphs):
+        common.pop()
+    return "\n\n".join(common)
+
+
+def send(blocks: list[str], session: str, config: Path, cwd: Path, credential: dict[str, str]) -> dict:
+    """One request on the staged session, its last message made of `blocks`; returns Claude Code's result."""
+    message = {"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": b} for b in blocks]}}
+    proc = subprocess.run(
+        [
+            "claude", "-p", "--resume", session, "--fork-session", "--no-session-persistence",
+            "--model", MODEL, "--effort", EFFORT, "--tools", "", "--strict-mcp-config",
+            "--disable-slash-commands", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
+        ],
+        input=json.dumps(message) + "\n",
+        cwd=cwd,
+        env=child_env(config, credential),
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
+    events = [json.loads(line) for line in proc.stdout.splitlines() if line.startswith("{")]
+    # A resumed session can report a result for a notification it replays before
+    # taking the message, so the answer is the last result.
+    out = next((e for e in reversed(events) if e.get("type") == "result"), {})
     if out.get("is_error") or "result" not in out:
         raise RuntimeError((out.get("result") or proc.stderr or proc.stdout).strip()[:500])
+    return out
+
+
+def row_of(case: dict, source: Path, out: dict) -> dict:
     usage = out.get("usage") or {}
     verdict = parse(out.get("result") or "")
     got = None if verdict is None else ("compact" if verdict["compact"] else "keep")
     return {
         "case": case["id"],
-        "question": label(checkout),
+        "question": label(source),
         "at": datetime.now(UTC).isoformat(timespec="seconds"),
         "expected": case["expected"],
         "got": got,
-        "reason": verdict["reason"] if verdict else (out.get("result") or proc.stderr)[:300],
+        "reason": verdict["reason"] if verdict else (out.get("result") or "")[:300],
         "context": sum(usage.get(k, 0) for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")),
         "cache_read": usage.get("cache_read_input_tokens", 0),
         "cost": out.get("total_cost_usd"),
     }
 
 
-def run(cases: list[dict], checkouts: list[Path], repeat: int, jobs: int, results: Path) -> None:
+def run(cases: list[dict], sources: list[Path], repeat: int, jobs: int, results: Path) -> None:
     credential = access_token()
 
     def one_case(case: dict) -> list[dict]:
-        rows = []
-        for checkout in checkouts:
-            for _ in range(repeat):
-                try:
-                    row = ask(case, checkout, credential)
-                except (RuntimeError, subprocess.SubprocessError) as error:
-                    print(f"ERROR {case['id']} [{label(checkout)}]: {error}", flush=True)
-                    continue
-                with results.open("a") as f:
-                    f.write(json.dumps(row) + "\n")
-                mark = "PASS" if row["got"] == row["expected"] else "FAIL"
-                print(f"{mark} {row['case']} [{row['question']}] expected {row['expected']}, got {row['got']} "
-                      f"at {row['context'] // 1000}k (${row['cost'] or 0:.2f}): {row['reason']}", flush=True)
-                rows.append(row)
+        entries = load(case)
+        reply = reply_of(entries)
+        questions = {source: render(source, reply, case) for source in sources}
+        opening = shared_opening(list(questions.values()))
+        # One fixed directory per case, so that every run of it gets the same
+        # system prompt, which names the working directory. Resolved, since
+        # Claude Code files a session under its directory's real path
+        # (`/private/var/…` on macOS).
+        scratch = Path(tempfile.gettempdir()).resolve() / "sparkjoy-evals" / case["id"]
+        shutil.rmtree(scratch, ignore_errors=True)
+        rows, primed = [], 0.0
+        try:
+            config, cwd = scratch / "config", scratch / "work"
+            cwd.mkdir(parents=True)
+            session = stage(entries, case, config, cwd)
+            if opening and len(sources) * repeat > 1:
+                primed = send([opening], session, config, cwd, credential).get("total_cost_usd") or 0.0
+            for source, question in questions.items():
+                blocks = [opening, question[len(opening):].lstrip("\n")] if opening else [question]
+                for _ in range(repeat):
+                    try:
+                        row = row_of(case, source, send(blocks, session, config, cwd, credential))
+                    except (RuntimeError, subprocess.SubprocessError) as error:
+                        print(f"ERROR {case['id']} [{label(source)}]: {error}", flush=True)
+                        continue
+                    # The first run carries the cache write.
+                    if primed:
+                        row["cost"], primed = (row["cost"] or 0) + primed, 0.0
+                    with results.open("a") as f:
+                        f.write(json.dumps(row) + "\n")
+                    mark = "PASS" if row["got"] == row["expected"] else "FAIL"
+                    print(f"{mark} {row['case']} [{row['question']}] expected {row['expected']}, got {row['got']} "
+                          f"at {row['context'] // 1000}k (${row['cost'] or 0:.2f}): {row['reason']}", flush=True)
+                    rows.append(row)
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
         return rows
 
     with ThreadPoolExecutor(jobs) as pool:
@@ -241,7 +286,7 @@ def report(cases: list[dict], results: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--question-from", type=Path, action="append", help="checkout whose question to ask (default: this one)")
+    parser.add_argument("--question-from", type=Path, action="append", help="checkout, or register.ts file, whose question to ask (default: this checkout)")
     parser.add_argument("--case", action="append", help="case id to run (default: all)")
     parser.add_argument("--repeat", type=int, default=1, help="runs per case and question")
     parser.add_argument("--jobs", type=int, default=3, help="cases run at once")
@@ -256,8 +301,8 @@ def main() -> None:
         cases = [c for c in cases if c["id"] in args.case]
     if args.report:
         return report(cases, args.results)
-    checkouts = [p.expanduser().resolve() for p in args.question_from or [HERE.parent]]
-    run(cases, checkouts, args.repeat, args.jobs, args.results)
+    sources = [p.expanduser().resolve() for p in args.question_from or [HERE.parent]]
+    run(cases, sources, args.repeat, args.jobs, args.results)
 
 
 if __name__ == "__main__":
