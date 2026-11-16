@@ -105,18 +105,22 @@ all, and 122 of them compacted.
 **What a compaction costs and saves.** After my 141 compactions, the first
 request carried a median 122k tokens: an 85k opening prompt (system prompt,
 tools, instructions), a summary of about 3k, and 34k of recent messages and
-files. That request writes the ~120k to the cache, at 40 times the price of a
-cached read, so a compaction costs about what reading 5M cached tokens would.
-Each later request then reads 120k instead of the whole context:
+files. The requests after it read about 20k more again, mostly files the
+summary left out. Writing those 142k back to the cache, at 40 times the price
+of a cached read, plus the summary, costs about what reading 4.8M cached
+tokens would: $0.95 on Opus 5.5. Each later request then reads 142k plus what
+it has added since, instead of the whole context. The context grows about
+1.7k tokens a request, so it takes many requests to grow back:
 
-| compacting at | each later request reads | pays for itself after |
-| ------------- | ------------------------ | --------------------- |
-| 200k          | 80k less                 | about 65 requests     |
-| 400k          | 280k less                | about 19 requests     |
-| 700k          | 580k less                | about 9 requests      |
+| compacting at | each later request reads | pays for itself after | context grows back in |
+| ------------- | ------------------------ | --------------------- | --------------------- |
+| 200k          | 58k less                 | 71 requests           | 34 requests           |
+| 400k          | 258k less                | 16 requests           | 151 requests          |
+| 700k          | 558k less                | 8 requests            | 327 requests          |
 
 A compaction repays over every request until the context grows back, not
-within one turn. [When to compact](docs/when-to-compact.md) models this and
+within one turn. Compacting costs least where it pays for itself in about half
+the time the context takes to grow back. [When to compact](docs/when-to-compact.md) models this and
 fits it to the same sessions: compacting at every turn end past about 200k
 costs least, saving 30.2% against 25.1% past 400k. A coefficient for how
 context size changes the model's work, from 0.8 to 1.2, moves that by tens of
