@@ -105,6 +105,10 @@ class Session:
     ttl: int  # the cache lifetime the session's writes used, in seconds
     durations: list  # seconds each logged compaction took
     reads: list  # the files each request read with the Read tool
+    calls: list  # each request's tool calls, as (name, digest of the input, the file_path it names or None)
+    failed: list  # each request's tool calls whose result was an error, as the result's opening text
+    said: list  # what the user typed, as (seconds since the epoch, text, whether it came mid-turn)
+    compactions: list  # (seconds since the epoch, "sparkjoy", "idle", "auto" or "user", tokens before)
 
 
 @dataclass
@@ -141,6 +145,23 @@ def usual(values):
     return Counter(values).most_common(1)[0][0]
 
 
+def text_of(content):
+    """The text of a message's content, which is a string or a list of blocks."""
+    if isinstance(content, str):
+        return content
+    return "\n".join(b.get("text") or "" for b in content or [] if isinstance(b, dict) and b.get("type") == "text")
+
+
+def typed(e):
+    """The text of a user line the user typed, or None: a skill body, another agent's message, a
+    compaction's summary, a task notification and a slash command are not."""
+    if e.get("isMeta") or e.get("isCompactSummary"):
+        return None
+    text = text_of((e.get("message") or {}).get("content"))
+    # Some releases log another session's message without isMeta.
+    return text if text and not text.startswith(("<", "Another Claude session sent a message")) else None
+
+
 def load(root, since, until):
     """The main thread of each interactive session in [since, until)."""
     lo, hi = (t.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S") for t in (since, until))
@@ -152,11 +173,14 @@ def load(root, since, until):
         if path.stat().st_mtime < since.timestamp():
             continue
         reqs, comps, prompts, verdicts, entry, asked = {}, [], [], [], None, None
-        titles, first, models = {}, None, Counter()
+        titles, first, models, said, failed = {}, None, Counter(), [], {}
         for raw in path.open(errors="replace"):
             prompt = '"type":"user"' in raw and '"tool_result"' not in raw  # a message that starts a turn
             title = raw.startswith(title_lines)
-            if not (prompt or title or '"assistant"' in raw or "compact_boundary" in raw or '"informational"' in raw):
+            error = '"is_error":true' in raw
+            queued = '"queued_command"' in raw  # a message typed while the turn ran
+            if not (prompt or title or error or queued or '"assistant"' in raw or "compact_boundary" in raw
+                    or '"informational"' in raw):
                 continue
             try:
                 e = json.loads(raw)
@@ -166,15 +190,27 @@ def load(root, since, until):
             if title:
                 titles[e["type"]] = e.get(TITLES[e["type"]])
                 continue
-            if prompt and first is None and e.get("type") == "user" and not e.get("isMeta") and not e.get("isCompactSummary"):
-                c = (e.get("message") or {}).get("content")
-                text = c if isinstance(c, str) else next((b.get("text") for b in c or [] if b.get("type") == "text"), None)
-                first = text if text and not text.startswith("<") else None
+            if prompt and first is None and e.get("type") == "user":
+                first = typed(e)
             if not lo <= e.get("timestamp", "") < hi or e.get("isSidechain"):
                 continue
             t = datetime.fromisoformat(e["timestamp"].replace("Z", "+00:00")).timestamp()
             if prompt and e.get("type") == "user":
                 prompts.append(t)
+                if text := typed(e):
+                    said.append((t, text, False))
+            elif e.get("type") == "attachment":
+                # Plain text typed mid-turn is folded into the turn at its next tool result. Its
+                # timestamp is when it was typed; another agent's message carries isMeta.
+                a = e.get("attachment") or {}
+                if a.get("type") == "queued_command" and a.get("commandMode") == "prompt" and not a.get("isMeta"):
+                    if text := text_of(a.get("prompt")):
+                        said.append((t, text, True))
+            elif error and e.get("type") == "user":
+                for b in (e.get("message") or {}).get("content") or []:
+                    if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("is_error"):
+                        c = b.get("content")
+                        failed[b.get("tool_use_id")] = (c if isinstance(c, str) else text_of(c))[:200]
             elif e.get("type") == "assistant":
                 m = e.get("message") or {}
                 u = m.get("usage")
@@ -188,17 +224,26 @@ def load(root, since, until):
                 # each repeating the usage, which streaming grows.
                 if m["id"] not in reqs:
                     models[m.get("model")] += 1
-                q = reqs.setdefault(m["id"], [t, (0,) * 5, False, set(), t])
+                q = reqs.setdefault(m["id"], [t, (0,) * 5, False, set(), t, {}])
                 q[4] = t  # when its last block was logged
                 q[1] = tuple(map(max, q[1], v))
                 q[2] = q[2] or m.get("stop_reason") == "end_turn"
-                q[3] |= {b["input"]["file_path"] for b in m.get("content") or []
-                         if b.get("type") == "tool_use" and b.get("name") == "Read" and "file_path" in (b.get("input") or {})}
-            elif e.get("subtype") == "informational" and (line := VERDICT.fullmatch(str(e.get("content", "")))):
-                kind = KINDS[line["kind"]]
-                verdicts.append(Verdict(t, line["plugin"], kind, line["tokens"] and int(line["tokens"]) * 1000,
-                                        line["idle"] and int(line["idle"]), line["reason"]))
-                asked = t if kind == "compacted" else asked
+                for b in m.get("content") or []:
+                    if b.get("type") == "tool_use":
+                        i = b.get("input") or {}
+                        q[5][b.get("id")] = (b.get("name"), hash(json.dumps(i, sort_keys=True)), i.get("file_path"))
+                        if b.get("name") == "Read" and "file_path" in i:
+                            q[3].add(i["file_path"])
+            elif e.get("subtype") == "informational":
+                text = str(e.get("content", ""))
+                if line := VERDICT.fullmatch(text):
+                    kind = KINDS[line["kind"]]
+                    verdicts.append(Verdict(t, line["plugin"], kind, line["tokens"] and int(line["tokens"]) * 1000,
+                                            line["idle"] and int(line["idle"]), line["reason"]))
+                    asked = t if kind == "compacted" else asked
+                elif text.startswith("Compacted while idle") and comps and t - comps[-1][0] < 10:
+                    # Claude Code's idle compaction logs as an auto compaction, then says so.
+                    comps[-1][4] = "idle"
             elif e.get("subtype") == "compact_boundary":
                 md = e.get("compactMetadata") or {}
                 took = (md.get("durationMs") or 0) / 1000
@@ -207,16 +252,19 @@ def load(root, since, until):
                 # within 2 s of it; the other two were the user's, 20 minutes or more later, after
                 # a compaction of sparkjoy's that never ran.
                 mod = asked is not None and t - took - asked < 60
-                comps.append((t, mod or md.get("trigger") == "auto", took, mod))
+                auto = md.get("trigger") == "auto"
+                comps.append([t, mod or auto, took, mod, "sparkjoy" if mod else "auto" if auto else "user",
+                              md.get("preTokens")])
                 asked = None
         if entry == "cli" and len(reqs) > 1:
             name = next((titles[k] for k in TITLES if titles.get(k)), None) or first or "untitled"
-            sessions.append(session(sorted(reqs.values(), key=lambda q: q[0]), comps, sorted(prompts),
-                                    title=" ".join(name.split()), model=models.most_common(1)[0][0], verdicts=verdicts))
+            sessions.append(session(sorted(reqs.values(), key=lambda q: q[0]), comps, sorted(prompts), failed,
+                                    title=" ".join(name.split()), model=models.most_common(1)[0][0], verdicts=verdicts,
+                                    said=sorted(said)))
     return sessions
 
 
-def session(reqs, comps, prompts, **meta):
+def session(reqs, comps, prompts, failed, **meta):
     n = len(reqs)
     t = np.array([q[0] for q in reqs])
     # After a turn ends, the session sits idle until the next message arrives (the user's,
@@ -232,7 +280,7 @@ def session(reqs, comps, prompts, **meta):
     kind = np.full(n, NORMAL)
     kind[0] = FIRST
     sparkjoy = np.zeros(n, bool)
-    for ct, policy, _, mod in comps:
+    for ct, policy, _, mod, _, _ in comps:
         j = np.searchsorted(t, ct)  # the first request after the compaction
         if 0 < j < n:
             kind[j] = POLICY if policy else USER
@@ -250,7 +298,10 @@ def session(reqs, comps, prompts, **meta):
                    grew=grew, recent=recent, gap=np.diff(t, prepend=t[0]), idle=idle,
                    rewrote=(kind == NORMAL) & (write > 0.5 * size) & (size > 50_000),
                    end=np.array([q[2] for q in reqs]), ttl=300 if 2 * write5.sum() >= write.sum() else 3600,
-                   durations=[d for _, _, d, _ in comps if d], reads=[q[3] for q in reqs])
+                   durations=[c[2] for c in comps if c[2]], reads=[q[3] for q in reqs],
+                   calls=[list(q[5].values()) for q in reqs],
+                   failed=[[failed[i] for i in q[5] if i in failed] for q in reqs],
+                   compactions=[(c[0], c[4], c[5]) for c in comps])
 
 
 def lapsed(s, ttl):
@@ -345,18 +396,25 @@ def terms(p, c):
     return h, c0, F0, p.K + p.E
 
 
-def curve(p, c, alpha):
-    """J(X), the long-run cost per unit of progress of compacting at X, on a grid of X from K to AUTO."""
+def curve(p, c, alpha, lost=0.0, scale=None):
+    """J(X), the long-run cost per unit of progress of compacting at X, on a grid of X from K to AUTO.
+    `lost` is D, what the detail a compaction drops costs the requests after it, in cached reads.
+    With `scale`, s, a request's progress also saturates in its context, as 1 - exp(-x/s)."""
     h, c0, F0, K1 = terms(p, c)
     X = np.append(np.arange(K1 + 1_000, AUTO, 1_000.0), AUTO)
-    cost = p.g * (X + F0) + h * (X**2 - K1**2) / 2 + c0 * (X - K1)
-    progress = WINDOW / alpha * ((X / WINDOW) ** alpha - (K1 / WINDOW) ** alpha)
+    cost = p.g * (X + F0 + lost) + h * (X**2 - K1**2) / 2 + c0 * (X - K1)
+    if scale is None:
+        progress = WINDOW / alpha * ((X / WINDOW) ** alpha - (K1 / WINDOW) ** alpha)
+    else:
+        x = np.append(K1, X)
+        eta = (x / WINDOW) ** (alpha - 1) * -np.expm1(-x / scale)
+        progress = np.cumsum((eta[1:] + eta[:-1]) / 2 * np.diff(x))
     return X, cost / progress
 
 
-def steady(p, c, alpha):
+def steady(p, c, alpha, lost=0.0, scale=None):
     """The compaction point that minimises cost per unit of progress; AUTO means not before Claude Code."""
-    X, J = curve(p, c, alpha)
+    X, J = curve(p, c, alpha, lost, scale)
     return float(X[J.argmin()])
 
 
@@ -376,11 +434,12 @@ def idle_break_even(p, c):
 # The replay: every logged request stays, with its growth, output and timing,
 # and only the compactions move.
 
-def replay(s, p, c, threshold, ttl, every=False, idle=None):
+def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0):
     """One session's cost under a policy, with the context each request then carried.
     The policy compacts at the end of any turn (or with `every`, after any request) whose
     context reaches `threshold`, and with `idle`, at any turn end from that size after which
-    the session sits idle for IDLE of the cache's lifetime, as sparkjoy's timer does."""
+    the session sits idle for IDLE of the cache's lifetime, as sparkjoy's timer does. Each
+    compaction the policy or Claude Code makes also costs `lost`, D in cached reads."""
     K1, P = p.K + p.E, p.P
     lapse = lapsed(s, ttl)
     # Each arm charges E, all at once, at each compaction it makes, so the requests after a
@@ -402,7 +461,7 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None):
             cost += s.read[j] + c.write * s.write[j] + c.input * inp + c.output * out
         else:
             if pending or (idle is not None and ctx >= idle and s.idle[j] > IDLE * ttl):
-                cost += ctx + c.output * SUMMARY  # read from the cache, which the turn end left warm
+                cost += ctx + c.output * SUMMARY + lost  # read from the cache, which the turn end left warm
                 # A compaction leaves K, or less where the context held less to begin with,
                 # which happens only below K, at a session's first turn ends.
                 left = min(K1, ctx)
@@ -412,7 +471,7 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None):
                 written = ctx - P if lapse[j] else grew
             if ctx >= AUTO:
                 # Claude Code compacts before sending, so after a lapse its summary reads uncached input.
-                cost += (P + c.input * (ctx - P) if lapse[j] else ctx) + c.output * SUMMARY
+                cost += (P + c.input * (ctx - P) if lapse[j] else ctx) + c.output * SUMMARY + lost
                 ctx, written = K1 + grew, K1 - P + grew
             cost += max(ctx - written - inp, 0) + c.write * written + c.input * inp + c.output * out
         trace[j] = ctx
@@ -425,10 +484,10 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None):
     return cost, trace
 
 
-def grid(S, p, c, ttl, **kw):
-    """cost[s, t] and progress[s, t, k] for each session, threshold and α in CHART_ALPHAS, plus
+def grid(S, p, c, ttl, alphas=CHART_ALPHAS, **kw):
+    """cost[s, t] and progress[s, t, k] for each session, threshold and α in `alphas`, plus
     the never-compacting arm as the last threshold."""
-    ks = np.array(CHART_ALPHAS)
+    ks = np.array(alphas)
     cost = np.empty((len(S), len(THRESHOLDS) + 1))
     progress = np.empty((len(S), len(THRESHOLDS) + 1, len(ks)))
     for i, s in enumerate(S):
