@@ -253,8 +253,8 @@ costs D cached reads on average, D adds to F₀, and X\* − K′ grows with
 at Opus 5.5 prices: 3.6 times the compaction's own cost at 400k, or the price
 of writing 481k tokens again, about 24 times the E measured. LangWatch's
 author [found](https://langwatch.ai/blog/context-tax-when-to-compact) that in
-his sessions, 42% of his messages in the five steps after a compaction carried
-a correction, matched by phrase, against 18% otherwise.
+their sessions, 42% of their messages in the five steps after a compaction
+carried a correction, matched by phrase, against 18% otherwise.
 
 D varies from one turn end to the next, which a threshold can't see.
 sparkjoy's question asks the session's model whether the next turns will need
