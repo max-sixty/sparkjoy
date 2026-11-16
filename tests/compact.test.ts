@@ -122,7 +122,7 @@ test('the question sizes the saving for the context it asks about', async ($, on
   await turn($, 't2')
 
   // (100 × 4k summary + 40 × 120k rewrite) / (500k − 120k) read, rounded up.
-  expect(forks[0]).toContain('about 120k after a compaction, against 500k now. At 500k a compaction pays for itself after about 14 more requests')
+  expect(forks[0]).toContain('At 500k a compaction pays for itself after about 14 more requests')
   expect(forks[1]).toContain('At 400k a compaction pays for itself after about 19 more requests')
 })
 

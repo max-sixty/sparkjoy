@@ -15,6 +15,7 @@ middle of a task should keep at any size.
 ```
 uv run --script evals/run.py                                    # this checkout's question, each case once
 uv run --script evals/run.py --question-from ../other-checkout  # another checkout's question
+uv run --script evals/run.py --question-from a.ts --question-from b.ts  # two variants of register.ts
 uv run --script evals/run.py --case leaf-menu-design --repeat 3
 uv run --script evals/run.py --report                           # the results table, from results.jsonl
 uv run --script evals/check.py                                  # the publishing sweep over the fixtures
@@ -24,11 +25,13 @@ They need `claude` (tested on 2.1.325), `bun` and `uv`, and a Claude Code login
 or `ANTHROPIC_API_KEY`. `--question-from` can be given more than once, and
 every run appends a row to `results.jsonl`.
 
-A case's first run sends its whole transcript uncached, about $5 per million
-tokens on Opus 5.5, so $0.45 to $2.60 a case. Runs of a case go in sequence,
-so a repeat of the same question within five minutes reads the transcript
-from the cache for $0.02 to $0.11. A different question misses the cache,
-since the question is the last message.
+A case writes its whole transcript to the cache once, about $6 per million
+tokens on Opus 5.5, so $0.55 to $3.25 a case. Every run of it after that,
+whichever question it asks, reads the transcript from the cache for $0.02 to
+$0.25. Claude Code caches up to the last content block, so when there is more
+than one run, the runner first sends the questions' shared opening (through
+the quoted reply) alone, then each question as that opening and the rest of
+it in a second block.
 
 ## How a run works
 
@@ -45,7 +48,7 @@ checkout's `hooks/register.ts`, so the evals ask exactly what the plugin asks.
 It passes the case's recorded context size as `tokens`, for a question that
 takes one. The model's reply is parsed as the plugin parses it.
 
-A replay differs from the plugin's own fork in three ways:
+A replay differs from the plugin's own fork in these ways:
 
 - **The replayed context is smaller than the recorded one**, 43% to 70% of it
   (the results table's two size columns). The fixture leaves out the model's
@@ -56,6 +59,8 @@ A replay differs from the plugin's own fork in three ways:
 - **The model reads its reply twice.** The fixture ends with the reply and the
   question quotes it, where the plugin's fork ends before the reply.
 - **The model has no tools**, where the fork has the session's.
+- **The question comes in two blocks** when a case has more than one run: its
+  opening through the quoted reply, then the rest (`run.py` says why).
 
 ## Cases
 
