@@ -37,6 +37,47 @@ def tokens(v, _=None):
     return "1M" if v >= 1_000_000 else f"{v / 1000:.0f}k" if v else "0"
 
 
+def shades(t):
+    """The colour of each value of s the charts draw: deepening shades of the high colour as s grows,
+    so the order of the curves reads at a glance."""
+    return {0: t["mid"], 150_000: tint(t["high"], t["page"], 0.45), 300_000: tint(t["high"], t["page"], 0.72),
+            500_000: t["high"]}
+
+
+def compacted(ax, K1, t, y, va):
+    """Shade the contexts below K, with a label at height y."""
+    ax.axvspan(0, K1, color=tint(t["muted"], t["page"], 0.12), lw=0)
+    ax.text(K1 / 2, y, f"under {K1 / 1000:.0f}k,\nwhat a\ncompaction\nleaves", ha="center", va=va,
+            fontsize=9, color=t["muted"])
+
+
+def progress_curve(p, c, t, path):
+    """A request's progress against its context, 1 - exp(-x/s), as a share of what unlimited context
+    would give, for the values of s the cost chart draws. Each curve reaches 63% at x = s."""
+    fig, ax = plt.subplots(figsize=(9, 3.2))
+    style(ax, t)
+    compacted(ax, fit.terms(p, c)[3], t, 0.75, "center")
+    x = np.linspace(0, fit.AUTO, 1_000)
+    at_s = -np.expm1(-1)
+    for k, color in shades(t).items():
+        ax.plot(x, fit.eta(x, k), color=color, lw=2, label=f"s = {tokens(k)}")
+        if k:
+            ax.plot([k], [at_s], "o", ms=7, mfc=color, mec=t["page"], mew=1.5, zorder=3)
+    ax.axhline(at_s, color=t["muted"], lw=0.8, ls=":")
+    ax.text(fit.AUTO, at_s - 0.03, "each dot is at x = s, where progress reaches 63%", ha="right", va="top",
+            fontsize=9, color=t["muted"])
+    ax.set_xlim(0, fit.AUTO)
+    ax.xaxis.set_major_formatter(tokens)
+    ax.set_xticks([0, 200_000, 400_000, 600_000, 800_000])
+    ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
+    ax.set_ylim(0, 1.05)
+    ax.legend(frameon=False, fontsize=10, labelcolor=t["ink"], loc="lower right")
+    ax.set_xlabel("the request's context, x", color=t["muted"], fontsize=10)
+    ax.set_ylabel("progress, as a share of what\nunlimited context would give", color=t["muted"], fontsize=10)
+    fig.savefig(path, transparent=True, bbox_inches="tight", metadata={"Date": None})
+    plt.close(fig)
+
+
 def sawtooth(p, c, t, path):
     """Context per request: compacting at X* against letting Claude Code compact near the window.
     The area under each line is what its requests read."""
@@ -82,14 +123,8 @@ def cost_curve(cost, progress, p, c, t, path):
     where Claude Code compacts at AUTO."""
     fig, ax = plt.subplots(figsize=(9, 3.4))
     style(ax, t)
-    K1 = fit.terms(p, c)[3]
-    ax.axvspan(0, K1, color=tint(t["muted"], t["page"], 0.12), lw=0)
-    ax.text(K1 / 2, 1.28, f"under {K1 / 1000:.0f}k,\nwhat a\ncompaction\nleaves", ha="center", va="top",
-            fontsize=9, color=t["muted"])
-    # Deepening shades of the high colour as s grows, so the order of the curves reads at a glance.
-    shades = {0: t["mid"], 150_000: tint(t["high"], t["page"], 0.45), 300_000: tint(t["high"], t["page"], 0.72),
-              500_000: t["high"]}
-    for k, color in shades.items():
+    compacted(ax, fit.terms(p, c)[3], t, 1.28, "top")
+    for k, color in shades(t).items():
         X, J = fit.curve(p, c, k)
         y = J / J[-1]
         ax.plot(X, y, color=color, lw=2, label=f"s = {tokens(k)}")
@@ -132,7 +167,7 @@ def thresholds(cost, progress, BT, BX, p, c, t, path):
     ax.set_ylim(0, 1_020_000)
     ax.yaxis.set_major_formatter(tokens)
     ax.set_yticks([0, 250_000, 500_000, 750_000, 1_000_000])
-    ax.set_xlabel("s, the context past which more stops helping a request", color=t["muted"], fontsize=10)
+    ax.set_xlabel("s, the scale over which more context stops helping a request", color=t["muted"], fontsize=10)
     ax.set_ylabel("best compaction point", color=t["muted"], fontsize=10)
     ax.legend(frameon=False, fontsize=10, labelcolor=t["ink"], loc="lower right")
     fig.savefig(path, transparent=True, bbox_inches="tight", metadata={"Date": None})
@@ -144,6 +179,7 @@ def draw(out, p, c, cost, progress, BT, BX):
                          "svg.hashsalt": "sparkjoy"})
     out.mkdir(parents=True, exist_ok=True)
     for theme, t in THEMES.items():
+        progress_curve(p, c, t, out / f"model-progress-{theme}.svg")
         sawtooth(p, c, t, out / f"model-sawtooth-{theme}.svg")
         cost_curve(cost, progress, p, c, t, out / f"model-cost-{theme}.svg")
         thresholds(cost, progress, BT, BX, p, c, t, out / f"model-threshold-{theme}.svg")

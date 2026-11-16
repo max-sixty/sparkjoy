@@ -12,8 +12,8 @@
 
 It reads the main thread of each interactive session (`claude -p` runs are
 left out), measures the model's parameters, and prints them with 90% intervals
-from resampling sessions. Then, for each value of s, the context size past
-which more context stops helping a request, it prints the compaction point the
+from resampling sessions. Then, for each value of s, the scale over which
+more context stops helping a request, it prints the compaction point the
 steady-state model gives and the turn-end threshold that a replay of the
 sessions finds cheapest per unit of progress. Only transcripts modified since
 --since are opened, and the process lowers its own priority, since a full scan

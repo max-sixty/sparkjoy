@@ -76,7 +76,7 @@ z
      </g>
     </g>
     <g id="text_7">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="297.067188" y="230.983219" transform="rotate(-0 297.067188 230.983219)">s, the context past which more stops helping a request</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="297.067188" y="230.983219" transform="rotate(-0 297.067188 230.983219)">s, the scale over which more context stops helping a request</text>
     </g>
    </g>
    <g id="matplotlib.axis_2">
