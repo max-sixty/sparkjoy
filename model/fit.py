@@ -460,7 +460,8 @@ def main():
     for label, threshold, idle in (("turn ends from 400k (sparkjoy's FLOOR)", 400_000, None),
                                    ("  and idle sessions from 200k (its IDLE_FLOOR)", 400_000, 200_000),
                                    (f"turn ends from {k(T[one])} (the replay's best alone)", T[one], None),
-                                   (f"turn ends from {k(bt)}, idle sessions from {k(bi)} (best pair)", bt, bi)):
+                                   (f"turn ends from {k(bt)}, " + ("no idle compaction" if bi is None else
+                                    f"idle sessions from {k(bi)}") + " (best pair)", bt, bi)):
         print(f"  {label:50s} {1 - pairs.get((threshold, idle), arm(threshold, idle)) / never:6.1%}")
     print("  saved by pair (rows: turn-end threshold; columns: idle threshold, '-' for none):")
     print("        " + " ".join(f"{'-' if i is None else k(i):>6}" for i in (None, *range(150_000, 300_001, 25_000))))
