@@ -22,6 +22,8 @@ lowers its own priority, since a full scan of ~/.claude/projects is heavy.
 import argparse
 import json
 import os
+import re
+from collections import Counter
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -29,14 +31,18 @@ from pathlib import Path
 import numpy as np
 
 # $/MTok: input, output, 5-minute cache write, 1-hour cache write, cache read.
-# https://platform.claude.com/docs/en/about-claude/pricing (November 2026). None
-# of these has a long-context tier; Claude Haiku 5.5 does, from 100k, which is
-# below where a compaction leaves the context, so it changes no decision here.
+# https://platform.claude.com/docs/en/about-claude/pricing (November 2026). Of
+# these only Claude Haiku 5.5 has a long-context tier, from 100k, and its row is
+# that tier's: a compaction leaves the context above 100k, so nearly every request is.
 PRICES = {
     "claude-opus-5-5": (4, 20, 5, 8, 0.20),
     "claude-sonnet-5-5": (2, 10, 2.5, 4, 0.10),
     "claude-fable-5-2": (8, 40, 10, 16, 0.20),
+    "claude-fable-5-1": (10, 50, 12.5, 20, 0.25),
+    "claude-opus-5": (5, 25, 6.25, 10, 0.50),
+    "claude-haiku-5-5": (0.5, 2.5, 0.625, 1, 0.05),  # its long-context tier, above 100k
 }
+PROJECTS = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "projects"
 WINDOW = 1_000_000
 AUTO = 965_000  # where Claude Code compacts a 1M window on its own
 SUMMARY = 4_000  # output tokens of the summary request; assumed, as transcripts don't log that request
@@ -45,10 +51,18 @@ KAPPAS = (0.8, 0.9, 1.0, 1.1, 1.2)
 CHART_KAPPAS = tuple(round(k, 2) for k in np.arange(0.6, 2.01, 0.1))
 THRESHOLDS = np.arange(130_000, 960_001, 10_000)
 DRAWS = 200  # bootstrap resamples of sessions
+FLOOR, IDLE_FLOOR = 400_000, 200_000  # where sparkjoy asks, at a turn end and in an idle session (hooks/register.ts)
 IDLE = 11 / 12  # share of the cache's lifetime a session sits idle before it is asked (55 of 60 minutes)
-# The line sparkjoy writes before each compaction, under its current name and the
-# one it had before it was published.
-MOD_LINE = ("sparkjoy: Compacting at", "compact-when-done: Compacting at")
+# The line sparkjoy writes in the transcript for each verdict (`judge` and `afterTurn` in
+# hooks/register.ts), under its current name and the one it had before it was published.
+VERDICT = re.compile(r"(?P<plugin>sparkjoy|compact-when-done): (?:(?P<kind>Compacting|Kept|Unreadable verdict|No verdict|"
+                     r"Dropped the verdict) at (?P<tokens>\d+)k tokens(?:, idle (?P<idle>\d+) minutes)?|Failed): "
+                     r"(?P<reason>.*)", re.S)
+KINDS = {"Compacting": "compacted", "Kept": "kept", "Unreadable verdict": "unreadable", "No verdict": "no verdict",
+         "Dropped the verdict": "dropped", None: "failed"}
+# Where a session's name comes from, in order of preference: one the user gave it, then
+# the ones Claude Code generates. Failing all three, its first prompt names it.
+TITLES = {"custom-title": "customTitle", "ai-title": "aiTitle", "agent-name": "agentName"}
 
 # Request kinds. A FIRST request opens the session; a USER request is the first
 # after a compaction the user typed, which every replayed arm keeps; a POLICY
@@ -58,7 +72,23 @@ FIRST, USER, POLICY, NORMAL = range(4)
 
 
 @dataclass
+class Verdict:
+    """One line sparkjoy wrote in a session's transcript."""
+    t: float  # seconds since the epoch
+    plugin: str  # the name it was written under; as compact-when-done, it logged only compactions
+    kind: str  # one of KINDS' values
+    tokens: int | None  # the context it was asked at; a failure doesn't say
+    idle: int | None  # minutes the session had sat idle, when it was asked for that reason
+    reason: str
+
+
+@dataclass
 class Session:
+    title: str
+    model: str  # the model most of its requests used
+    verdicts: list  # what sparkjoy logged
+    t: np.ndarray  # when each request started, in seconds since the epoch
+    sparkjoy: np.ndarray  # the request is the first after a compaction sparkjoy made
     kind: np.ndarray  # one of the request kinds above
     size: np.ndarray  # prompt tokens: uncached input + cache read + cache write
     read: np.ndarray  # cache-read tokens
@@ -90,22 +120,53 @@ def prices(model, ttl):
     return Prices(i / r, o / r, (w5 if ttl == 300 else w1) / r, r * 1e-6)
 
 
+def window_args(ap):
+    """The arguments that choose which sessions to read."""
+    ap.add_argument("--since", help="ISO time; a bound with no offset is local (default: 14 days ago)")
+    ap.add_argument("--until", help="ISO time (default: now)")
+    ap.add_argument("--projects", type=Path, default=PROJECTS, help="where Claude Code keeps transcripts (default: %(default)s)")
+
+
+def read(a):
+    """The sessions `window_args` chose, and the window, read at low priority."""
+    os.nice(10)
+    since = datetime.fromisoformat(a.since).astimezone(UTC) if a.since else datetime.now(UTC) - timedelta(days=14)
+    until = datetime.fromisoformat(a.until).astimezone(UTC) if a.until else datetime.now(UTC)
+    return load(a.projects, since, until), since, until
+
+
+def usual(values):
+    """The most common of `values`."""
+    return Counter(values).most_common(1)[0][0]
+
+
 def load(root, since, until):
     """The main thread of each interactive session in [since, until)."""
     lo, hi = (t.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S") for t in (since, until))
+    title_lines = tuple(f'{{"type":"{t}"' for t in TITLES)
     sessions = []
     for path in root.glob("*/*.jsonl"):  # a subagent's transcript sits a level deeper
         if path.stat().st_mtime < since.timestamp():
             continue
-        reqs, comps, prompts, entry, mod = {}, [], [], None, False
+        reqs, comps, prompts, verdicts, entry, asked = {}, [], [], [], None, None
+        titles, first, models = {}, None, Counter()
         for raw in path.open(errors="replace"):
             prompt = '"type":"user"' in raw and '"tool_result"' not in raw  # a message that starts a turn
-            if not prompt and '"assistant"' not in raw and "compact_boundary" not in raw and "Compacting at" not in raw:
+            title = raw.startswith(title_lines)
+            if not (prompt or title or '"assistant"' in raw or "compact_boundary" in raw or '"informational"' in raw):
                 continue
             try:
                 e = json.loads(raw)
             except json.JSONDecodeError:
                 continue
+            # A session's name and first prompt carry no time, or come before the window.
+            if title:
+                titles[e["type"]] = e.get(TITLES[e["type"]])
+                continue
+            if prompt and first is None and e.get("type") == "user" and not e.get("isMeta") and not e.get("isCompactSummary"):
+                c = (e.get("message") or {}).get("content")
+                text = c if isinstance(c, str) else next((b.get("text") for b in c or [] if b.get("type") == "text"), None)
+                first = text if text and not text.startswith("<") else None
             if not lo <= e.get("timestamp", "") < hi or e.get("isSidechain"):
                 continue
             t = datetime.fromisoformat(e["timestamp"].replace("Z", "+00:00")).timestamp()
@@ -122,24 +183,37 @@ def load(root, since, until):
                      (u.get("cache_creation") or {}).get("ephemeral_5m_input_tokens") or 0, u.get("output_tokens") or 0)
                 # Claude Code logs each content block as an entry of its own,
                 # each repeating the usage, which streaming grows.
+                if m["id"] not in reqs:
+                    models[m.get("model")] += 1
                 q = reqs.setdefault(m["id"], [t, (0,) * 5, False, set(), t])
                 q[4] = t  # when its last block was logged
                 q[1] = tuple(map(max, q[1], v))
                 q[2] = q[2] or m.get("stop_reason") == "end_turn"
                 q[3] |= {b["input"]["file_path"] for b in m.get("content") or []
                          if b.get("type") == "tool_use" and b.get("name") == "Read" and "file_path" in (b.get("input") or {})}
-            elif e.get("subtype") == "informational" and str(e.get("content", "")).startswith(MOD_LINE):
-                mod = True
+            elif e.get("subtype") == "informational" and (line := VERDICT.fullmatch(str(e.get("content", "")))):
+                kind = KINDS[line["kind"]]
+                verdicts.append(Verdict(t, line["plugin"], kind, line["tokens"] and int(line["tokens"]) * 1000,
+                                        line["idle"] and int(line["idle"]), line["reason"]))
+                asked = t if kind == "compacted" else asked
             elif e.get("subtype") == "compact_boundary":
                 md = e.get("compactMetadata") or {}
-                comps.append((t, mod or md.get("trigger") == "auto", (md.get("durationMs") or 0) / 1000))
-                mod = False
+                took = (md.get("durationMs") or 0) / 1000
+                # sparkjoy starts compacting as soon as it writes its line. Of the 351 compactions
+                # that followed one in the author's sessions (16 Oct to 15 Nov 2026), 349 began
+                # within 2 s of it; the other two were the user's, 20 minutes or more later, after
+                # a compaction of sparkjoy's that never ran.
+                mod = asked is not None and t - took - asked < 60
+                comps.append((t, mod or md.get("trigger") == "auto", took, mod))
+                asked = None
         if entry == "cli" and len(reqs) > 1:
-            sessions.append(session(sorted(reqs.values(), key=lambda q: q[0]), comps, sorted(prompts)))
+            name = next((titles[k] for k in TITLES if titles.get(k)), None) or first or "untitled"
+            sessions.append(session(sorted(reqs.values(), key=lambda q: q[0]), comps, sorted(prompts),
+                                    title=" ".join(name.split()), model=models.most_common(1)[0][0], verdicts=verdicts))
     return sessions
 
 
-def session(reqs, comps, prompts):
+def session(reqs, comps, prompts, **meta):
     n = len(reqs)
     t = np.array([q[0] for q in reqs])
     # After a turn ends, the session sits idle until the next message arrives (the user's,
@@ -154,10 +228,12 @@ def session(reqs, comps, prompts):
     size = inp + read + write
     kind = np.full(n, NORMAL)
     kind[0] = FIRST
-    for ct, policy, _ in comps:
+    sparkjoy = np.zeros(n, bool)
+    for ct, policy, _, mod in comps:
         j = np.searchsorted(t, ct)  # the first request after the compaction
         if 0 < j < n:
             kind[j] = POLICY if policy else USER
+            sparkjoy[j] = mod
     grew = np.maximum(np.diff(size, prepend=0), 0)
     grew[kind != NORMAL] = 0
     # Across a compaction the request's growth can't be told from the compacted
@@ -167,10 +243,11 @@ def session(reqs, comps, prompts):
     recent = np.zeros(n, bool)
     for j in np.flatnonzero((kind == USER) | (kind == POLICY)):
         recent[j + 1:j + SPAN] = True
-    return Session(kind=kind, size=size, read=read, write=write, inp=inp, out=out, grew=grew, recent=recent,
-                   gap=np.diff(t, prepend=t[0]), idle=idle, rewrote=(kind == NORMAL) & (write > 0.5 * size) & (size > 50_000),
+    return Session(**meta, t=t, sparkjoy=sparkjoy, kind=kind, size=size, read=read, write=write, inp=inp, out=out,
+                   grew=grew, recent=recent, gap=np.diff(t, prepend=t[0]), idle=idle,
+                   rewrote=(kind == NORMAL) & (write > 0.5 * size) & (size > 50_000),
                    end=np.array([q[2] for q in reqs]), ttl=300 if 2 * write5.sum() >= write.sum() else 3600,
-                   durations=[d for _, _, d in comps if d], reads=[q[3] for q in reqs])
+                   durations=[d for _, _, d, _ in comps if d], reads=[q[3] for q in reqs])
 
 
 def lapsed(s, ttl):
@@ -365,19 +442,13 @@ def best(cost, work, rows=slice(None)):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--since", help="ISO time; a bound with no offset is local (default: 14 days ago)")
-    ap.add_argument("--until", help="ISO time (default: now)")
-    ap.add_argument("--projects", type=Path, default=Path.home() / ".claude/projects")
+    window_args(ap)
     ap.add_argument("--model", default="claude-opus-5-5", choices=PRICES, help="whose prices to fit")
-    ap.add_argument("--ttl", choices=("5m", "1h"), help="cache lifetime to price (default: each session's own)")
+    ap.add_argument("--ttl", choices=("5m", "1h"), help="cache lifetime to price (default: the one most sessions used)")
     ap.add_argument("--charts", type=Path, help="directory to draw the doc's charts into")
     a = ap.parse_args()
-    os.nice(10)
-    since = datetime.fromisoformat(a.since).astimezone(UTC) if a.since else datetime.now(UTC) - timedelta(days=14)
-    until = datetime.fromisoformat(a.until).astimezone(UTC) if a.until else datetime.now(UTC)
-    S = load(a.projects, since, until)
-    ttls = [s.ttl for s in S]
-    ttl = {"5m": 300, "1h": 3600}[a.ttl] if a.ttl else max(set(ttls), key=ttls.count)
+    S, since, until = read(a)
+    ttl = {"5m": 300, "1h": 3600}[a.ttl] if a.ttl else usual(s.ttl for s in S)
     c = prices(a.model, ttl)
     p = measure(S, ttl)
     rng = np.random.default_rng(0)
@@ -457,8 +528,8 @@ def main():
     pairs = {(t, i): arm(t, i) for t in range(150_000, 450_001, 50_000) for i in (None, *range(150_000, 300_001, 25_000))}
     (bt, bi), low = min(pairs.items(), key=lambda kv: kv[1])
     print(f"\n  policy at κ = 1, compacting wherever it allows      saved   (never compacting: ${never * c.read:,.0f})")
-    for label, threshold, idle in (("turn ends from 400k (sparkjoy's FLOOR)", 400_000, None),
-                                   ("  and idle sessions from 200k (its IDLE_FLOOR)", 400_000, 200_000),
+    for label, threshold, idle in ((f"turn ends from {k(FLOOR)} (sparkjoy's FLOOR)", FLOOR, None),
+                                   (f"  and idle sessions from {k(IDLE_FLOOR)} (its IDLE_FLOOR)", FLOOR, IDLE_FLOOR),
                                    (f"turn ends from {k(T[one])} (the replay's best alone)", T[one], None),
                                    (f"turn ends from {k(bt)}, " + ("no idle compaction" if bi is None else
                                     f"idle sessions from {k(bi)}") + " (best pair)", bt, bi)):

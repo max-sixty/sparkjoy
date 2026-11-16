@@ -16,7 +16,6 @@ THEMES = {
     "dark": {"low": "#d95926", "mid": "#9a998f", "high": "#3987e5", "ink": "#f0efec", "muted": "#c3c2b7",
              "grid": "#3a3936", "page": "#0d1117", "band": 0.28},
 }
-FLOOR = 400_000  # where sparkjoy starts asking
 
 
 def tint(color, page, share):
@@ -88,8 +87,8 @@ def cost_curve(cost, work, t, path):
     fig, ax = plt.subplots(figsize=(9, 3.4))
     style(ax, t)
     x = fit.THRESHOLDS
-    ax.axvline(FLOOR, color=t["muted"], lw=0.8, ls=":")
-    ax.text(FLOOR + 8_000, 0.995, "sparkjoy asks from here", fontsize=9, color=t["muted"], va="top")
+    ax.axvline(fit.FLOOR, color=t["muted"], lw=0.8, ls=":")
+    ax.text(fit.FLOOR + 8_000, 0.995, "sparkjoy asks from here", fontsize=9, color=t["muted"], va="top")
     for k in (0.8, 1.0, 1.2):
         i = ks.index(k)
         y = J[:-1, i] / J[-1, i]
@@ -120,7 +119,7 @@ def thresholds(cost, work, BT, BX, p, c, t, path):
     style(ax, t)
     ax.axvspan(0.8, 1.2, color=tint(t["mid"], t["page"], 0.10), lw=0)
     ax.text(1.0, 40_000, "κ from 0.8 to 1.2", ha="center", va="bottom", fontsize=9, color=t["muted"])
-    for level, label in ((FLOOR, "sparkjoy asks from 400k"), (fit.AUTO, "Claude Code compacts")):
+    for level, label in ((fit.FLOOR, "sparkjoy asks from 400k"), (fit.AUTO, "Claude Code compacts")):
         ax.axhline(level, color=t["muted"], lw=0.8, ls=":")
         ax.text(ks[0], level + 12_000, label, fontsize=9, color=t["muted"])
     for y, band, color, label in ((X, BX, t["mid"], "steady state, compacting at any request"),
