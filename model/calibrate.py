@@ -3,7 +3,7 @@
 # requires-python = ">=3.12"
 # dependencies = ["numpy>=2.1", "matplotlib>=3.9"]
 # ///
-"""Fits s, the context past which more context stops helping a request, and D, the cost of the
+"""Fits s, the scale over which more context stops helping a request, and D, the cost of the
 detail a compaction drops, to what happens in your sessions. See "Calibrating s" in
 docs/when-to-compact.md.
 

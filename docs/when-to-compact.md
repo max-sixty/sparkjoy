@@ -35,8 +35,8 @@ sessions as well, from about 175k, raises the best turn-end threshold to 250k
 and the saving to 30.9%.
 
 These figures take a request to get as much done at any context size. The
-model lets more context help a request, up to a scale s past which more stops
-helping; at s = 0, size doesn't matter. The sessions put s near 0 and at most
+model lets more context help a request, with returns that diminish over a scale
+s; at s = 0, size doesn't matter. The sessions put s near 0 and at most
 about 150k, where the best point is 325k and the best threshold at turn ends
 250k:
 
@@ -126,10 +126,16 @@ with context x make
 ```
 
 units of progress, its share of what it would make with unlimited context. s
-is the context past which more stops helping: a request makes 63% of its full
-progress at x = s, 86% at 2s and 95% at 3s. At s = 150k, a request at 400k
-makes 93% and one at 900k all of it; at s = 300k, 74% and 95%. At s = 0 every
+is the scale over which more context stops helping: a request makes 63% of its
+full progress at x = s, 86% at 2s and 95% at 3s, so each further s of context
+closes 63% of the gap that remains. At s = 150k, a request at 400k makes 93%
+and one at 900k nearly all of it; at s = 300k, 74% and 95%. At s = 0 every
 request makes the same progress, whatever its context.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/model-progress-dark.svg">
+  <img alt="A request's progress against its context, as a share of what unlimited context would give, for s of 0, 150k, 300k and 500k. At s = 0 the line is flat at 100%. Each other curve rises from 0, reaches 63% at x = s, marked with a dot, and levels off toward 100%. Below 142k, what a compaction leaves, is shaded." src="../assets/model-progress-light.svg">
+</picture>
 
 ### The best compaction point
 
