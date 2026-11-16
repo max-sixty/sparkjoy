@@ -15,7 +15,7 @@ left out), measures the model's parameters, and prints them with 90% intervals
 from resampling sessions. Then, for each value of the context efficiency
 coefficient α, it prints the compaction point the steady-state model gives and
 the turn-end threshold that a replay of the sessions finds cheapest per unit
-of work. Only transcripts modified since --since are opened, and the process
+of progress. Only transcripts modified since --since are opened, and the process
 lowers its own priority, since a full scan of ~/.claude/projects is heavy.
 """
 
@@ -346,16 +346,16 @@ def terms(p, c):
 
 
 def curve(p, c, alpha):
-    """J(X), the long-run cost per unit of work of compacting at X, on a grid of X from K to AUTO."""
+    """J(X), the long-run cost per unit of progress of compacting at X, on a grid of X from K to AUTO."""
     h, c0, F0, K1 = terms(p, c)
     X = np.append(np.arange(K1 + 1_000, AUTO, 1_000.0), AUTO)
     cost = p.g * (X + F0) + h * (X**2 - K1**2) / 2 + c0 * (X - K1)
-    work = WINDOW / alpha * ((X / WINDOW) ** alpha - (K1 / WINDOW) ** alpha)
-    return X, cost / work
+    progress = WINDOW / alpha * ((X / WINDOW) ** alpha - (K1 / WINDOW) ** alpha)
+    return X, cost / progress
 
 
 def steady(p, c, alpha):
-    """The compaction point that minimises cost per unit of work; AUTO means not before Claude Code."""
+    """The compaction point that minimises cost per unit of progress; AUTO means not before Claude Code."""
     X, J = curve(p, c, alpha)
     return float(X[J.argmin()])
 
@@ -426,22 +426,22 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None):
 
 
 def grid(S, p, c, ttl, **kw):
-    """cost[s, t] and work[s, t, k] for each session, threshold and α in CHART_ALPHAS, plus
+    """cost[s, t] and progress[s, t, k] for each session, threshold and α in CHART_ALPHAS, plus
     the never-compacting arm as the last threshold."""
     ks = np.array(CHART_ALPHAS)
     cost = np.empty((len(S), len(THRESHOLDS) + 1))
-    work = np.empty((len(S), len(THRESHOLDS) + 1, len(ks)))
+    progress = np.empty((len(S), len(THRESHOLDS) + 1, len(ks)))
     for i, s in enumerate(S):
         for t, threshold in enumerate([*THRESHOLDS, np.inf]):
             cost[i, t], trace = replay(s, p, c, threshold, ttl, **kw)
-            work[i, t] = ((trace[:, None] / WINDOW) ** (ks - 1)).sum(0)
-    return cost, work
+            progress[i, t] = ((trace[:, None] / WINDOW) ** (ks - 1)).sum(0)
+    return cost, progress
 
 
-def best(cost, work, rows=slice(None)):
-    """Per α: the threshold with the least cost per unit of work (inf for never compacting short
+def best(cost, progress, rows=slice(None)):
+    """Per α: the threshold with the least cost per unit of progress (inf for never compacting short
     of AUTO), and that cost against never compacting."""
-    J = cost[rows].sum(0)[:, None] / work[rows].sum(0)
+    J = cost[rows].sum(0)[:, None] / progress[rows].sum(0)
     t = J.argmin(0)
     return np.append(THRESHOLDS, np.inf)[t], J[t, np.arange(J.shape[1])] / J[-1]
 
@@ -489,14 +489,14 @@ def main():
     print("\nreplaying...", flush=True)
     ks = list(CHART_ALPHAS)
     one = ks.index(1.0)
-    cost, work = grid(S, p, c, ttl)
+    cost, progress = grid(S, p, c, ttl)
     cost_r, work_r = grid(S, p, c, ttl, every=True)
-    T, saved = best(cost, work)
+    T, saved = best(cost, progress)
     Tr, _ = best(cost_r, work_r)
-    BT = np.array([best(cost, work, d)[0] for d in draws])
+    BT = np.array([best(cost, progress, d)[0] for d in draws])
     BX = np.array([[steady(b, c, k) for k in CHART_ALPHAS] for b in boot])
     at = {x: list(THRESHOLDS).index(x) for x in THRESHOLDS}
-    J = cost.sum(0)[:, None] / work.sum(0)
+    J = cost.sum(0)[:, None] / progress.sum(0)
     k = lambda x: "never" if x == np.inf else f"{x / 1e3:.0f}k"
     print("\n  α    steady X* (90%)   replay at any request   replay at turn ends (90%*)   saved   saved at 400k")
     for alpha in ALPHAS:
@@ -520,7 +520,7 @@ def main():
     flat = THRESHOLDS[r <= r.min() + 0.01]
     print(f"\n  at α = 1, turn-end thresholds within a point of the best: {k(flat.min())} to {k(flat.max())}")
     for x in (400_000, 600_000):
-        print(f"  compacting at {k(x)} costs more per unit of work than the best by {Js[np.abs(X - x).argmin()] / Js.min() - 1:.1%} "
+        print(f"  compacting at {k(x)} costs more per unit of progress than the best by {Js[np.abs(X - x).argmin()] / Js.min() - 1:.1%} "
               f"in the steady state, {J[at[x], one] / J[:, one].min() - 1:.1%} in the replay at turn ends")
     print("\n  context   pays back after   grows back in   (requests, α = 1)")
     for x in (200_000, 250_000, 300_000, 400_000, 600_000):
@@ -556,7 +556,7 @@ def main():
 
     if a.charts:
         import charts
-        charts.draw(a.charts, p, c, cost, work, BT, BX)
+        charts.draw(a.charts, p, c, cost, progress, BT, BX)
 
 
 if __name__ == "__main__":
