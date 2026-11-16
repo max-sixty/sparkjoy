@@ -1,0 +1,178 @@
+# compact-when-done
+
+A Claude Code plugin that compacts the conversation when a piece of work is
+finished, rather than when the context window fills.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/session-dark.svg">
+  <img alt="Context per request across one session. With compact-when-done, the context drops back to about 120k tokens five times. Without it, the context climbs to about 960k before Claude Code compacts." src="assets/session-light.svg">
+</picture>
+
+This is one of my sessions, replayed without the plugin for comparison. Every
+request Claude makes re-reads the whole context, so the area under each line is
+what the session paid to read. With the plugin, the context fell back to about
+120k five times, each when the session's own model judged that the work ahead
+no longer needed most of the transcript. Three of the reasons it gave:
+
+> The work is finished (PR opened, CI green, page handed over); most of the
+> context is profiling, log dumps and review output that later turns won't
+> need.
+
+> Long transcript of finished experiments, diffs and query output; remaining
+> work is just a CI watch and pending merges, which the summary carries.
+
+> Implementation is committed and the review runs in the background; the large
+> file reads, diffs and test-debugging output are no longer needed and can be
+> re-read from disk if a finding needs them.
+
+The first drop comes at 500k because the session's first turn ran on past 400k
+before it ended. Where the orange line dips below the blue, the session without
+the plugin has just compacted near the 1M limit. I picked this session because
+it shows the pattern clearly: it cost 36% less with the plugin, against 23%
+across all my sessions.
+
+## Install
+
+At the prompt of a Claude Code session:
+
+```
+/plugin install compact-when-done --marketplace max-sixty/compact-when-done
+```
+
+Answer `y` to add the marketplace, then choose the user scope to have it in
+every session. It is tested on Claude Code 2.1.325, and
+`claude plugin disable compact-when-done` turns it off.
+
+## What it does
+
+A turn is everything Claude does between your message and its reply, often
+dozens of API requests.
+
+- **After each turn that ends with 400k tokens or more in context**, the plugin
+  asks the session's own model whether to compact now. The model reads the
+  conversation from the prompt cache and answers with one line of JSON. On yes,
+  the plugin compacts, which takes about a minute while you read the reply.
+- **When a session sits idle for 55 minutes with 200k tokens or more**, the
+  plugin compacts before the prompt cache lapses, since the next message would
+  otherwise write the whole context back to the cache. Claude Code has its own
+  [idle compaction](https://code.claude.com/docs/en/prompt-caching#compacting-the-conversation),
+  but in my sessions it fired only in terminal sessions, never in background
+  ones (`claude --bg`), which this covers. It runs on a Claude subscription
+  only, where the cache lasts an hour; with an API key it lasts five minutes.
+- **Each decision shows as a dim line in the transcript**, which the model never
+  reads:
+
+  ```
+  compact-when-done: Compacting at 401k tokens: Long transcript of finished experiments, diffs and query output; …
+  ```
+
+  A no shows as `Kept at …` with its reason, so a session that stays large says
+  why.
+
+Claude Code's own compaction near the end of the window still runs, and
+`claude -p` and the Agent SDK are left alone.
+
+## What it saves
+
+I replayed all 87 of my Claude Code sessions from 7 to 15 November 2026, 36,251
+requests, with and without the plugin:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/cost-dark.svg">
+  <img alt="Replayed cost: $5,214 without the plugin, $4,013 with it, of which the checks are $22." src="assets/cost-light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/context-dark.svg">
+  <img alt="Share of requests at each context size. With the plugin, most requests carry 100k to 450k tokens; without it, a long tail runs to 1M." src="assets/context-light.svg">
+</picture>
+
+|                                 | without | with          |
+| ------------------------------- | ------- | ------------- |
+| cost, at Opus 5.5 list prices   | $5,214  | $4,013 (−23%) |
+| mean context per request        | 462k    | 337k          |
+| requests at 400k tokens or more | 55%     | 30%           |
+
+On a subscription the same tokens count against your usage limits instead of
+your bill. Most of the requests still at 400k or more come from long turns that
+grew past it before they ended, where the plugin can't act. Of the 87 sessions,
+59 reached 400k; their savings ranged from 41% to one that cost 19% more, with
+half saving between 12% and 31%.
+
+**What a check costs.** A check is one request that re-reads the conversation
+from the prompt cache and writes about a hundred tokens. A cached read costs
+[0.05× the input price](https://platform.claude.com/docs/en/about-claude/pricing)
+on Opus 5.5 and Sonnet 5.5, so a check costs about as much as one ordinary
+request in the session. Only turns that end at 400k or more are checked: 198 of
+the 36,251 requests, which came to $22. The model said yes at 122 of them.
+
+**What a compaction costs and saves.** A compaction reads the conversation once
+to write a summary, and the next request writes the ~120k it keeps to the
+cache, about $1.20 in all at 400k. Each later request then reads ~120k instead
+of 400k or more, saving about 6 cents, so a compaction pays for itself within
+about 20 requests. A turn in these sessions averaged about 36 requests.
+
+**Idle sessions.** In my background sessions over the same days, 92 returns
+after an hour or more wrote 27.6M tokens back to the cache, about $220 at Opus
+5.5's one-hour cache write price. Compacting each first would have cost about
+$110 less. This part of the plugin is new, so that figure is an estimate, and
+the replay above leaves it out.
+
+## How it decides
+
+The session's own model makes the call, reading the whole transcript from the
+prompt cache. Which parts of the transcript the work ahead still needs depends
+on the work, and the session's model is the one that knows the work. The
+question gives it the costs and the saving to weigh rather than a rule, and
+never mentions the 400k threshold. An idle session compacts without asking.
+
+<details>
+<summary>The question, verbatim</summary>
+
+```
+This message comes from the compact-when-done plugin, not from the user, and a program reads your reply. Use no tools.
+
+Your turn just ended with this reply to the user:
+
+<reply>
+…the reply…
+</reply>
+
+Decide whether to compact the conversation now, while the user reads that reply.
+
+After a compaction the context holds the system prompt and instructions, a summary of the conversation, the latest messages verbatim (this reply among them), the files read most recently, the status of background agents and shells, and the transcript's path on disk, where exact output or wording can be looked up. What is lost is detail the summary leaves out, and the knowledge that it was there to look up.
+
+A compaction costs a summary of the conversation, which takes many output tokens and about a minute. The cache no longer holds what the compaction carries over, such as the files read most recently, so the next request writes it all again.
+
+It saves carrying the parts of the transcript the work ahead no longer needs, such as file reads, command output and diffs for finished work, and detours since resolved. Every later request reads whatever the context keeps.
+
+Reply with one JSON object and nothing else:
+{"compact": true or false, "reason": "one short line saying why"}
+```
+
+</details>
+
+## Limits
+
+- It acts between turns only. A long autonomous turn can grow well past 400k
+  before it ends; Claude Code's own compaction near the end of the window still
+  bounds it.
+- It is made for 1M-token context windows. On a 200k window, Claude Code
+  compacts before the context reaches 400k.
+- A compaction loses detail the summary leaves out. The replay below can't
+  count what that costs the work that follows, such as re-reading a file.
+
+## How the numbers were measured
+
+The replay keeps every logged request fixed and moves only the compactions.
+"With" uses the plugin's compactions where they happened; "without" removes them
+and lets Claude Code compact near 965k, as it does on its own. Both price each
+request at Opus 5.5 list prices with the session's own cache lifetime, and the
+"with" replay comes within 2% of the cost the transcripts log ($4,013 against
+$3,943). In these sessions the plugin also asked its question below 400k and
+ignored the answer there; it no longer asks below 400k, so the replay prices
+checks from 400k only.
+
+## License
+
+MIT

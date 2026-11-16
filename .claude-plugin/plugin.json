@@ -1,0 +1,10 @@
+{
+  "name": "compact-when-done",
+  "version": "0.1.0",
+  "description": "Compacts Claude Code's conversation when a piece of work is finished, rather than when the context fills: after each turn over 400k tokens the session's own model decides, and an idle session compacts before its prompt cache lapses.",
+  "author": { "name": "Maximilian Roos" },
+  "homepage": "https://github.com/max-sixty/compact-when-done",
+  "repository": "https://github.com/max-sixty/compact-when-done",
+  "license": "MIT",
+  "keywords": ["compaction", "context", "prompt-cache", "cost"]
+}
