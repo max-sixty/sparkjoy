@@ -80,15 +80,19 @@ def sawtooth(p, c, t, path):
     plt.close(fig)
 
 
-def cost_curve(cost, work, t, path):
-    """Replayed cost per unit of work against the turn-end threshold, for three values of κ."""
+def cost_curve(cost, work, p, c, t, path):
+    """Replayed cost per unit of work against the turn-end threshold, for three values of κ. Under
+    K' every turn end compacts, so the curves run flat there: a policy that compacts only at turn
+    ends compacts at most once a turn."""
     ks = list(fit.CHART_KAPPAS)
     J = cost.sum(0)[:, None] / work.sum(0)
     fig, ax = plt.subplots(figsize=(9, 3.4))
     style(ax, t)
     x = fit.THRESHOLDS
-    ax.axvline(fit.FLOOR, color=t["muted"], lw=0.8, ls=":")
-    ax.text(fit.FLOOR + 8_000, 0.995, "sparkjoy asks from here", fontsize=9, color=t["muted"], va="top")
+    K1 = fit.terms(p, c)[3]
+    ax.axvspan(0, K1, color=tint(t["muted"], t["page"], 0.12), lw=0)
+    ax.text(K1 / 2, 0.99, f"under {K1 / 1000:.0f}k, what a\ncompaction leaves:\nevery turn end\ncompacts", ha="center",
+            va="top", fontsize=9, color=t["muted"])
     for k in (0.8, 1.0, 1.2):
         i = ks.index(k)
         y = J[:-1, i] / J[-1, i]
@@ -97,9 +101,9 @@ def cost_curve(cost, work, t, path):
         j = y.argmin()
         ax.plot([x[j]], [y[j]], "o", ms=7, mfc=color, mec=t["page"], mew=1.5, zorder=3)
         ax.text(x[j], y[j] - 0.014, f"{x[j] / 1000:.0f}k: {y[j]:.0%}", ha="center", va="top", fontsize=9, color=t["ink"])
-    ax.set_xlim(x[0], x[-1])
+    ax.set_xlim(0, x[-1])
     ax.xaxis.set_major_formatter(tokens)
-    ax.set_xticks([200_000, 400_000, 600_000, 800_000])
+    ax.set_xticks([0, 200_000, 400_000, 600_000, 800_000])
     ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
     ax.set_ylim(0.6, 1.0)
     ax.legend(frameon=False, fontsize=10, labelcolor=t["ink"], loc="lower right")
@@ -144,5 +148,5 @@ def draw(out, p, c, cost, work, BT, BX):
     out.mkdir(parents=True, exist_ok=True)
     for theme, t in THEMES.items():
         sawtooth(p, c, t, out / f"model-sawtooth-{theme}.svg")
-        cost_curve(cost, work, t, out / f"model-cost-{theme}.svg")
+        cost_curve(cost, work, p, c, t, out / f"model-cost-{theme}.svg")
         thresholds(cost, work, BT, BX, p, c, t, out / f"model-threshold-{theme}.svg")
