@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
   "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="632.243304pt" height="114.288516pt" viewBox="0 0 632.243304 114.288516" xmlns="http://www.w3.org/2000/svg" version="1.1">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="578.879241pt" height="114.288516pt" viewBox="0 0 578.879241 114.288516" xmlns="http://www.w3.org/2000/svg" version="1.1">
  <metadata>
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
     <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
-    <dc:date>2026-11-15T19:34:41.171198</dc:date>
+    <dc:date>2026-11-15T20:08:57.167158</dc:date>
     <dc:format>image/svg+xml</dc:format>
     <dc:creator>
      <cc:Agent>
@@ -22,8 +22,8 @@
  <g id="figure_1">
   <g id="patch_1">
    <path d="M 0 114.288516 
-L 632.243304 114.288516 
-L 632.243304 0 
+L 578.879241 114.288516 
+L 578.879241 0 
 L 0 0 
 L 0 114.288516 
 z
@@ -31,68 +31,68 @@ z
   </g>
   <g id="axes_1">
    <g id="patch_2">
-    <path d="M 122.843304 90.36 
-L 625.043304 90.36 
-L 625.043304 7.2 
-L 122.843304 7.2 
-L 122.843304 90.36 
+    <path d="M 69.479241 90.36 
+L 571.679241 90.36 
+L 571.679241 7.2 
+L 69.479241 7.2 
+L 69.479241 90.36 
 z
 " style="fill: none"/>
    </g>
    <g id="matplotlib.axis_1"/>
    <g id="matplotlib.axis_2"/>
    <g id="patch_3">
-    <path d="M 122.843304 39.913333 
-L 571.236161 39.913333 
-L 571.236161 10.98 
-L 122.843304 10.98 
+    <path d="M 69.479241 39.913333 
+L 517.872098 39.913333 
+L 517.872098 10.98 
+L 69.479241 10.98 
 z
-" clip-path="url(#pd1d92c14b2)" style="fill: #eb6834"/>
+" clip-path="url(#paa3a7e0e5c)" style="fill: #eb6834"/>
    </g>
    <g id="patch_4">
-    <path d="M 122.843304 86.58 
-L 467.944705 86.58 
-L 467.944705 57.646667 
-L 122.843304 57.646667 
+    <path d="M 69.479241 86.58 
+L 414.580642 86.58 
+L 414.580642 57.646667 
+L 69.479241 57.646667 
 z
-" clip-path="url(#pd1d92c14b2)" style="fill: #2a78d6"/>
+" clip-path="url(#paa3a7e0e5c)" style="fill: #2a78d6"/>
    </g>
    <g id="patch_5">
-    <path d="M 466.021133 86.58 
-L 467.944705 86.58 
-L 467.944705 57.646667 
-L 466.021133 57.646667 
+    <path d="M 412.657071 86.58 
+L 414.580642 86.58 
+L 414.580642 57.646667 
+L 412.657071 57.646667 
 z
-" clip-path="url(#pd1d92c14b2)" style="fill: #0b0b0b"/>
+" clip-path="url(#paa3a7e0e5c)" style="fill: #0b0b0b"/>
    </g>
    <g id="text_1">
-    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="118.359375" y="28.347057" transform="rotate(-0 118.359375 28.347057)">without</text>
+    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="64.995313" y="28.347057" transform="rotate(-0 64.995313 28.347057)">without</text>
    </g>
    <g id="text_2">
-    <text style="font-weight: 700; font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="575.720089" y="28.474401" transform="rotate(-0 575.720089 28.474401)">$5,214</text>
+    <text style="font-weight: 700; font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="522.356027" y="28.474401" transform="rotate(-0 522.356027 28.474401)">$5,214</text>
    </g>
    <g id="text_3">
-    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="118.359375" y="74.821146" transform="rotate(-0 118.359375 74.821146)">with compact-when-done</text>
+    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="64.995313" y="74.791458" transform="rotate(-0 64.995313 74.791458)">with sparkjoy</text>
    </g>
    <g id="text_4">
-    <text style="font-weight: 700; font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="472.428633" y="75.141068" transform="rotate(-0 472.428633 75.141068)">$4,013</text>
+    <text style="font-weight: 700; font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="419.064571" y="75.141068" transform="rotate(-0 419.064571 75.141068)">$4,013</text>
    </g>
    <g id="text_5">
-    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="512.783991" y="75.013724" transform="rotate(-0 512.783991 75.013724)">−23%</text>
+    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="459.419928" y="75.013724" transform="rotate(-0 459.419928 75.013724)">−23%</text>
    </g>
    <g id="patch_6">
-    <path d="M 466.982919 94.579896 
-Q 466.982919 91.581888 466.982919 88.58388 
+    <path d="M 413.618856 94.579896 
+Q 413.618856 91.581888 413.618856 88.58388 
 " style="fill: none; stroke: #52514e; stroke-width: 0.8; stroke-linecap: round"/>
    </g>
    <g id="text_6">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="466.982919" y="105.559219" transform="rotate(-0 466.982919 105.559219)">checks $22</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="413.618856" y="105.559219" transform="rotate(-0 413.618856 105.559219)">checks $22</text>
    </g>
   </g>
  </g>
  <defs>
-  <clipPath id="pd1d92c14b2">
-   <rect x="122.843304" y="7.2" width="502.2" height="83.16"/>
+  <clipPath id="paa3a7e0e5c">
+   <rect x="69.479241" y="7.2" width="502.2" height="83.16"/>
   </clipPath>
  </defs>
 </svg>

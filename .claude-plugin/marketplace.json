@@ -1,9 +1,9 @@
 {
-  "name": "compact-when-done",
+  "name": "sparkjoy",
   "owner": { "name": "Maximilian Roos" },
   "plugins": [
     {
-      "name": "compact-when-done",
+      "name": "sparkjoy",
       "source": "./",
       "description": "Compacts Claude Code's conversation when a piece of work is finished, rather than when the context fills."
     }

@@ -10,15 +10,16 @@ const IDLE = 55 * 60_000
 
 // Stands for the engine beneath the mod: a context of `tokens` until `resize`
 // changes it or a compaction leaves it unmeasured, a subscription's rate
-// limits unless `apiKey`, a fork that answers `verdict` after `forkMs`
-// (`null`: an empty reply), compactions that fail `compactFailures` times
-// before one succeeds, a turn whose end settles after `endMs`, and a record of
-// what it was asked.
+// limits unless `apiKey`, a fork that answers `verdict` after a turn and
+// `idleVerdict` after an idle wait, each after `forkMs` (`null`: an empty
+// reply), compactions that fail `compactFailures` times before one succeeds, a
+// turn whose end settles after `endMs`, and a record of what it was asked.
 function engine(
   on: On,
   {
     tokens = 500_000,
     verdict = COMPACT as string | null,
+    idleVerdict = COMPACT as string | null,
     forkMs = 0,
     endMs = 0,
     compactFailures = 0,
@@ -55,8 +56,9 @@ function engine(
   on('model.fork', async (_, e) => {
     forks.push(e.prompt)
     await clock.sleep(forkMs)
-    if (verdict === null) return { value: { isAnswered: false, reason: 'empty-reply', usage: USAGE } }
-    return { value: { isAnswered: true, text: verdict, usage: USAGE } }
+    const answer = e.prompt.includes('minutes ago') ? idleVerdict : verdict
+    if (answer === null) return { value: { isAnswered: false, reason: 'empty-reply', usage: USAGE } }
+    return { value: { isAnswered: true, text: answer, usage: USAGE } }
   })
   // A plugin's `$.session.compact` reaches here as the plugin made it, with no
   // `trigger`; the engine stamps it `plugin`.
@@ -261,21 +263,36 @@ test('a session with nobody at the prompt asks no judge', async ($, on) => {
   expect(forks).toEqual([])
 })
 
-test('a session left idle compacts before its prompt cache lapses', async ($, on) => {
-  const { begin, clock, compactions, logs, turn } = engine(on, { tokens: 300_000 })
+test('a session left idle is asked again before its prompt cache lapses', async ($, on) => {
+  const { begin, clock, compactions, forks, logs, turn } = engine(on, { tokens: 300_000 })
   await begin($)
 
-  await turn($, 't1')
+  await turn($, 't1', 'Merged #13. ✅')
   await clock.advance(IDLE - 1)
-  expect(compactions).toEqual([])
+  expect(forks).toEqual([])
 
   await clock.advance(1)
   await clock.settle()
+  expect(forks.length).toBe(1)
+  expect(forks[0]).toContain('Merged #13. ✅')
+  expect(forks[0]).toContain('The prompt cache holding it lapses in a few minutes')
   expect(compactions).toEqual([''])
-  expect(logs).toEqual(['Compacting at 300k tokens: idle for 55 minutes, before the prompt cache lapses'])
+  expect(logs).toEqual(['Compacting at 300k tokens, idle 55 minutes: the PR merged'])
 })
 
-test('a verdict to keep still compacts once the session sits idle', async ($, on) => {
+test('an idle session the model keeps is left as it is', async ($, on) => {
+  const { begin, clock, compactions, logs, turn } = engine(on, { tokens: 300_000, idleVerdict: KEEP })
+  await begin($)
+
+  await turn($, 't1')
+  await clock.advance(IDLE)
+  await clock.settle()
+
+  expect(compactions).toEqual([])
+  expect(logs).toEqual(['Kept at 300k tokens, idle 55 minutes: mid-debug'])
+})
+
+test('a session kept at its turn’s end is asked again once it sits idle', async ($, on) => {
   const { begin, clock, compactions, logs, turn } = engine(on, { verdict: KEEP })
   await begin($)
 
@@ -284,10 +301,21 @@ test('a verdict to keep still compacts once the session sits idle', async ($, on
   await clock.settle()
 
   expect(compactions).toEqual([''])
-  expect(logs).toEqual([
-    'Kept at 500k tokens: mid-debug',
-    'Compacting at 500k tokens: idle for 55 minutes, before the prompt cache lapses',
-  ])
+  expect(logs).toEqual(['Kept at 500k tokens: mid-debug', 'Compacting at 500k tokens, idle 55 minutes: the PR merged'])
+})
+
+test('a compaction while the idle question runs drops its verdict', async ($, on) => {
+  const { begin, clock, compactions, logs, turn, resize } = engine(on, { tokens: 300_000, forkMs: 1_000 })
+  await begin($)
+
+  await turn($, 't1')
+  await clock.advance(IDLE + 500)
+  resize(undefined)
+  await clock.advance(500)
+  await clock.settle()
+
+  expect(compactions).toEqual([])
+  expect(logs).toEqual(['Dropped the verdict at 300k tokens, idle 55 minutes: the conversation moved on'])
 })
 
 test('a compaction at the turn’s end leaves nothing for idleness to do', async ($, on) => {
@@ -331,14 +359,16 @@ test('a turn still running at the deadline is left alone', async ($, on) => {
 })
 
 test('the idle wait runs from the turn’s end, however long the judge takes', async ($, on) => {
-  const { begin, clock, compactions, turn } = engine(on, { verdict: KEEP, forkMs: 10 * 60_000 })
+  const { begin, clock, forks, turn } = engine(on, { verdict: KEEP, forkMs: 10 * 60_000 })
   await begin($)
 
   await turn($, 't1')
-  await clock.advance(IDLE)
-  await clock.settle()
+  await clock.advance(IDLE - 1)
+  expect(forks.length).toBe(1)
 
-  expect(compactions).toEqual([''])
+  await clock.advance(1)
+  await clock.settle()
+  expect(forks.length).toBe(2)
 })
 
 test('a compaction meanwhile, such as Claude Code’s own idle one, is not repeated', async ($, on) => {

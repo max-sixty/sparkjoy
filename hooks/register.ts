@@ -5,9 +5,9 @@
 // the session's own model judges, over its prompt-cached transcript
 // (`$.model.fork`), whether to compact, weighing what a compaction costs
 // against the parts of the transcript the work ahead no longer needs; on yes,
-// the mod compacts. A session left idle at IDLE_FLOOR or more compacts before
-// its prompt cache lapses, since the next request would otherwise write the
-// whole context to the cache again. Each decision shows in the transcript as a
+// the mod compacts. A session left idle at IDLE_FLOOR or more is asked again
+// just before its prompt cache lapses, told that the next request would
+// otherwise write the whole context to the cache again. Each decision shows in the transcript as a
 // dim line the model never reads, so a session that stays large says why. The
 // engine's auto-compaction at its threshold still runs as before, and covers a
 // turn that grows past the floor before it ends.
@@ -32,14 +32,14 @@ import type { EngineInterface, Register } from 'claude-code'
 // replay can't see what a compaction costs the work after it.
 const FLOOR = 400_000
 
-// An idle session compacts from this many tokens, the size from which Claude
+// An idle session is asked from this many tokens, the size from which Claude
 // Code's own idle compaction acts. That one runs only in a terminal session,
 // so a background session (`claude --bg`, agent view) is left to this.
 const IDLE_FLOOR = 200_000
 
-// How long a session sits idle before it compacts: inside the hour a
-// subscription's prompt cache lives, so the summary still reads the context
-// from the cache.
+// How long a session sits idle before it is asked: inside the hour a
+// subscription's prompt cache lives, so the question and any summary still
+// read the context from the cache.
 const IDLE_MS = 55 * 60_000
 
 type Verdict = { compact: boolean; reason: string }
@@ -108,61 +108,81 @@ async function afterTurn($: EngineInterface, watch: Watch, changes: number, repl
     // window; an API key caches for five minutes, too short for this to pay.
     // The wait starts at the turn's end, whatever the judge does meanwhile.
     if (tokens >= IDLE_FLOOR && rateLimits.some(limit => limit.kind === 'five_hour')) {
-      $.clock.after(IDLE_MS, () => void idle($, isCurrent, say, tokens))
+      $.clock.after(IDLE_MS, () => void idle($, isCurrent, say, tokens, reply))
     }
     if (tokens < FLOOR) return
-
-    const at = thousands(tokens)
-    const answer = await $.model.fork({ prompt: question(reply) })
-    if (!isCurrent()) return say(`Dropped the verdict at ${at} tokens: the conversation moved on`)
-    const verdict = answer.isAnswered ? parse(answer.text) : undefined
-    if (verdict?.compact) {
-      // `$.session.compact` draws no `/compact` row, so neither the user nor
-      // the model reads the compaction as one the user typed. A hook's veto
-      // draws its own line. It rejects while a turn runs, which the check
-      // above rules out for any turn begun since this one ended.
-      say(`Compacting at ${at} tokens: ${verdict.reason}`)
-      await $.session.compact()
-    } else if (verdict) {
-      say(`Kept at ${at} tokens: ${verdict.reason}`)
-    } else if (answer.isAnswered) {
-      say(`Unreadable verdict at ${at} tokens: ${answer.text}`)
-    } else {
-      say(`No verdict at ${at} tokens: ${answer.reason}`)
-    }
+    await judge($, say, async () => isCurrent(), `${thousands(tokens)} tokens`, question(reply))
   } catch (error) {
     say(`Failed: ${error}`)
   }
 }
 
-// Compacts a session nobody has touched since the turn that set this timer: no
-// turn has begun since, and the context is the size it was then. After any
-// compaction, the judge's or Claude Code's own idle one, the context has no
-// size until the next request.
-async function idle($: EngineInterface, isCurrent: () => boolean, say: (text: string) => void, tokens: number) {
+// Asks a session nobody has touched since the turn that set this timer again,
+// now that its prompt cache is about to lapse: no turn has begun since, and
+// the context is the size it was then. After any compaction, the judge's or
+// Claude Code's own idle one, the context has no size until the next request.
+async function idle($: EngineInterface, isCurrent: () => boolean, say: (text: string) => void, tokens: number, reply: string) {
+  const isUntouched = async () => isCurrent() && (await $.session.usage()).context.tokens === tokens
   try {
-    const { context } = await $.session.usage()
-    if (!isCurrent() || context.tokens !== tokens) return
-    say(`Compacting at ${thousands(tokens)} tokens: idle for ${IDLE_MS / 60_000} minutes, before the prompt cache lapses`)
-    await $.session.compact()
+    if (!(await isUntouched())) return
+    const minutes = IDLE_MS / 60_000
+    await judge($, say, isUntouched, `${thousands(tokens)} tokens, idle ${minutes} minutes`, question(reply, minutes))
   } catch (error) {
     say(`Failed: ${error}`)
+  }
+}
+
+// Asks the session's model whether to compact, and compacts on yes. The
+// verdict stands only while `stands` holds once the model has answered; `at`
+// names the moment in each line.
+async function judge(
+  $: EngineInterface,
+  say: (text: string) => void,
+  stands: () => Promise<boolean>,
+  at: string,
+  prompt: string,
+) {
+  const answer = await $.model.fork({ prompt })
+  if (!(await stands())) return say(`Dropped the verdict at ${at}: the conversation moved on`)
+  const verdict = answer.isAnswered ? parse(answer.text) : undefined
+  if (verdict?.compact) {
+    // `$.session.compact` draws no `/compact` row, so neither the user nor
+    // the model reads the compaction as one the user typed. A hook's veto
+    // draws its own line. It rejects while a turn runs, which `stands` rules
+    // out for any turn begun since the one asked about ended.
+    say(`Compacting at ${at}: ${verdict.reason}`)
+    await $.session.compact()
+  } else if (verdict) {
+    say(`Kept at ${at}: ${verdict.reason}`)
+  } else if (answer.isAnswered) {
+    say(`Unreadable verdict at ${at}: ${answer.text}`)
+  } else {
+    say(`No verdict at ${at}: ${answer.reason}`)
   }
 }
 
 // The fork replays the turn's last request, which ends before the reply the
-// turn closed with, so the question carries the reply whole. README.md shows
-// the question verbatim.
-function question(reply: string) {
-  return `This message comes from the compact-when-done plugin, not from the user, and a program reads your reply. Use no tools.
+// turn closed with, so the question carries the reply whole. Asked of an idle
+// session, it says so and that the prompt cache is about to lapse. README.md
+// shows both versions verbatim.
+function question(reply: string, idleMinutes?: number) {
+  const opening =
+    idleMinutes === undefined
+      ? 'Your turn just ended with this reply to the user:'
+      : `Your turn ended ${idleMinutes} minutes ago with this reply to the user, and nothing has happened since:`
+  const ask =
+    idleMinutes === undefined
+      ? 'Decide whether to compact the conversation now, while the user reads that reply.'
+      : "Decide whether to compact the conversation now. The prompt cache holding it lapses in a few minutes, and the first request after that writes the whole context to the cache again, which costs more than compacting now. So compact unless the work is in the middle of something that needs the transcript's detail."
+  return `This message comes from the sparkjoy plugin, not from the user, and a program reads your reply. Use no tools.
 
-Your turn just ended with this reply to the user:
+${opening}
 
 <reply>
 ${reply}
 </reply>
 
-Decide whether to compact the conversation now, while the user reads that reply.
+${ask}
 
 After a compaction the context holds the system prompt and instructions, a summary of the conversation, the latest messages verbatim (this reply among them), the files read most recently, the status of background agents and shells, and the transcript's path on disk, where exact output or wording can be looked up. What is lost is detail the summary leaves out, and the knowledge that it was there to look up.
 
