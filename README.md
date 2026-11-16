@@ -49,8 +49,9 @@ A turn is everything Claude does between your message and its reply, often
 dozens of requests.
 
 - **After each turn**, the plugin asks the session's own model, which reads the
-  conversation from the prompt cache, whether to compact now. On yes it
-  compacts, which takes about a minute while you read the reply.
+  conversation from the prompt cache, whether to compact now
+  ([the prompt](#the-prompt)). On yes it compacts, which takes about a minute
+  while you read the reply.
 - **When a session sits idle for 55 minutes**, it asks again, adding that the
   prompt cache is about to lapse and the next message would write the whole
   context back to it. Claude Code's own
@@ -142,8 +143,13 @@ The question now says that settles nothing. In the evals it keeps at all four
 mid-task turn ends and compacts at all six finished ones, but still compacts at
 natural breaks at 210k and 296k, where a compaction repays slowly.
 
+## The prompt
+
+`question()` in [`hooks/register.ts`](hooks/register.ts) writes it, filled in
+for the session's context size and the reply the turn ended with.
+
 <details>
-<summary>The question, verbatim, for a 500k context</summary>
+<summary>At the end of a turn, for a 500k context</summary>
 
 ```
 This message comes from the sparkjoy plugin, not from the user, and a program reads your reply. Use no tools.
@@ -166,13 +172,30 @@ Reply with one JSON object and nothing else, filling its fields in order:
 {"next": "what most likely comes next, in a few words", "needs_detail": true or false, "compact": true or false, "reason": "one short line saying why"}
 ```
 
-Asked of an idle session, its second and fourth paragraphs read as below, and
-its sixth stops after "as much as 100.":
+</details>
+
+<details>
+<summary>In a session idle for 55 minutes, for a 500k context</summary>
 
 ```
+This message comes from the sparkjoy plugin, not from the user, and a program reads your reply. Use no tools.
+
 Your turn ended 55 minutes ago with this reply to the user, and nothing has happened since:
 
+<reply>
+…the reply…
+</reply>
+
 Decide whether to compact the conversation now. The prompt cache holding it lapses in a few minutes, and the first request after that writes all 500k tokens to the cache again, against about 120k after a compaction. So compact unless the next turn continues work that needs the transcript's detail.
+
+Nearly every long transcript is mostly finished work, so that alone is no reason to compact. What decides it is whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
+
+A compaction takes about a minute and writes a summary of about 4k output tokens. Afterwards the context holds about 120k tokens, which the next request writes to the cache again. A cache write costs as much as 40 cached reads, and an output token as much as 100.
+
+Compact only when the next turns won't need such detail and enough requests will follow to repay it. Otherwise keep it: a later turn end, once that work is finished, is the place to compact.
+
+Reply with one JSON object and nothing else, filling its fields in order:
+{"next": "what most likely comes next, in a few words", "needs_detail": true or false, "compact": true or false, "reason": "one short line saying why"}
 ```
 
 </details>
