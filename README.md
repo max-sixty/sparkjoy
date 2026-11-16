@@ -1,11 +1,17 @@
-# compact-when-done
+# sparkjoy
 
 A Claude Code plugin that compacts the conversation when a piece of work is
-finished, rather than when the context window fills.
+finished, rather than when the context window fills. At the end of each turn
+it puts Marie Kondo's question to the session's own model: does the work ahead
+still need this transcript, or can it go?
+
+> [!NOTE]
+> Not ready for general use yet. I run it in all my sessions, and the question
+> it asks is still being tuned; expect it to change.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/session-dark.svg">
-  <img alt="Context per request across one session. With compact-when-done, dots mark the 11 turn ends where the plugin asked whether to compact: at 5 the session kept going, and at 6 it compacted, at sizes from 417k to 728k tokens. Without it, the context climbs to about 960k before Claude Code compacts." src="assets/session-light.svg">
+  <img alt="Context per request across one session. With sparkjoy, dots mark the 11 turn ends where the plugin asked whether to compact: at 5 the session kept going, and at 6 it compacted, at sizes from 417k to 728k tokens. Without it, the context climbs to about 960k before Claude Code compacts." src="assets/session-light.svg">
 </picture>
 
 This is one of my sessions, replayed without the plugin for comparison. Every
@@ -26,44 +32,46 @@ had ended:
 > The hierarchy PR is open and handed over. The follow-up work needs only the
 > summary, not the transcript's diffs and logs. *(680k)*
 
-Where the line climbs past 400k with no dot, a single long turn is still
-running, and the plugin waits for it to end. I picked this session because it
-shows both answers; it cost 25% less with the plugin, against 23% across all my
-sessions.
+Where the line climbs with no dot, either a single long turn is still running,
+and the plugin waits for it to end, or the context is still under 400k, where
+the plugin doesn't ask yet ([Limits](#limits)). I picked this session because
+it shows both answers; it cost 25% less with the plugin, against 23% across all
+my sessions.
 
 ## Install
 
 At the prompt of a Claude Code session:
 
 ```
-/plugin install compact-when-done --marketplace max-sixty/compact-when-done
+/plugin install sparkjoy --marketplace max-sixty/sparkjoy
 ```
 
 Answer `y` to add the marketplace, then choose the user scope to have it in
 every session. It is tested on Claude Code 2.1.325, and
-`claude plugin disable compact-when-done` turns it off.
+`claude plugin disable sparkjoy` turns it off.
 
 ## What it does
 
 A turn is everything Claude does between your message and its reply, often
 dozens of API requests.
 
-- **After each turn that ends with 400k tokens or more in context**, the plugin
-  asks the session's own model whether to compact now. The model reads the
-  conversation from the prompt cache and answers with one line of JSON. On yes,
-  the plugin compacts, which takes about a minute while you read the reply.
-- **When a session sits idle for 55 minutes with 200k tokens or more**, the
-  plugin compacts before the prompt cache lapses, since the next message would
-  otherwise write the whole context back to the cache. Claude Code has its own
+- **After each turn**, the plugin asks the session's own model whether to
+  compact now. The model reads the conversation from the prompt cache and
+  answers with one line of JSON. On yes, the plugin compacts, which takes about
+  a minute while you read the reply.
+- **When a session sits idle for 55 minutes**, the plugin asks again, adding
+  that the prompt cache is about to lapse and the next message would write the
+  whole context back to it. The model then compacts unless the work is in the
+  middle of something. Claude Code has its own
   [idle compaction](https://code.claude.com/docs/en/prompt-caching#compacting-the-conversation),
   but in my sessions it fired only in terminal sessions, never in background
-  ones (`claude --bg`), which this covers. It runs on a Claude subscription
+  ones (`claude --bg`), which this covers. This runs on a Claude subscription
   only, where the cache lasts an hour; with an API key it lasts five minutes.
 - **Each decision shows as a dim line in the transcript**, which the model never
   reads:
 
   ```
-  compact-when-done: Compacting at 401k tokens: Long transcript of finished experiments, diffs and query output; …
+  sparkjoy: Compacting at 401k tokens: Long transcript of finished experiments, diffs and query output; …
   ```
 
   A no shows as `Kept at …` with its reason, so a session that stays large says
@@ -91,13 +99,13 @@ requests, with and without the plugin:
 | ------------------------------- | ------- | ------------- |
 | cost, at Opus 5.5 list prices   | $5,214  | $4,013 (−23%) |
 | mean context per request        | 462k    | 337k          |
-| requests at 400k tokens or more | 55%     | 30%           |
+| requests at 600k tokens or more | 28%     | 6%            |
 
 On a subscription the same tokens count against your usage limits instead of
-your bill. Most of the requests still at 400k or more come from long turns that
-grew past it before they ended, where the plugin can't act. Of the 87 sessions,
-59 reached 400k; their savings ranged from 41% to one that cost 19% more, with
-half saving between 12% and 31%.
+your bill. Most of the large contexts left come from long turns, where the
+plugin can't act until the turn ends. Of the 87 sessions, the 59 that reached
+400k saved from 41% down to one that cost 19% more, half of them between 12%
+and 31%.
 
 **What a check costs.** A check is one request that re-reads the conversation
 from the prompt cache and writes about a hundred tokens. A cached read costs
@@ -115,8 +123,9 @@ about 20 requests. A turn in these sessions averaged about 36 requests.
 **Idle sessions.** In my background sessions over the same days, 92 returns
 after an hour or more wrote 27.6M tokens back to the cache, about $220 at Opus
 5.5's one-hour cache write price. Compacting each first would have cost about
-$110 less. This part of the plugin is new, so that figure is an estimate, and
-the replay above leaves it out.
+$110 less, and the plugin asks first, so it will compact fewer of them. This
+part of the plugin is new, so that figure is an estimate, and the replay above
+leaves it out.
 
 ## How it decides
 
@@ -124,18 +133,19 @@ The session's own model makes the call, reading the whole transcript from the
 prompt cache. Which parts of the transcript the work ahead still needs depends
 on the work, and the session's model is the one that knows the work. The
 question gives it the costs and the saving to weigh rather than a rule, and
-never mentions the 400k threshold. An idle session compacts without asking.
+never mentions a size. An idle session gets the same question, told that the
+prompt cache is about to lapse.
 
-Across my sessions it asked at 198 turn ends and compacted at 122. The size of
-the context barely moved the answer: the model compacted at 60% of turn ends
-between 400k and 450k and at 54% of those past 600k. The compactions came at
-anything from 400k to 842k, half of them above 471k.
+Across my sessions it was asked at 198 turn ends and compacted at 122. The size
+of the context barely moved the answer: the model compacted at 60% of the turn
+ends it was asked about under 450k, and at 54% of those past 600k. Its
+compactions came at sizes up to 842k, half of them above 471k.
 
 <details>
 <summary>The question, verbatim</summary>
 
 ```
-This message comes from the compact-when-done plugin, not from the user, and a program reads your reply. Use no tools.
+This message comes from the sparkjoy plugin, not from the user, and a program reads your reply. Use no tools.
 
 Your turn just ended with this reply to the user:
 
@@ -155,13 +165,24 @@ Reply with one JSON object and nothing else:
 {"compact": true or false, "reason": "one short line saying why"}
 ```
 
+Asked of an idle session, its second and fourth paragraphs read:
+
+```
+Your turn ended 55 minutes ago with this reply to the user, and nothing has happened since:
+
+Decide whether to compact the conversation now. The prompt cache holding it lapses in a few minutes, and the first request after that writes the whole context to the cache again, which costs more than compacting now. So compact unless the work is in the middle of something that needs the transcript's detail.
+```
+
 </details>
 
 ## Limits
 
-- It acts between turns only. A long autonomous turn can grow well past 400k
-  before it ends; Claude Code's own compaction near the end of the window still
-  bounds it.
+- It asks only once the context reaches 400k, or 200k in an idle session. On
+  smaller contexts the current question says yes too readily; a question that
+  judged them well would let that floor go.
+- It acts between turns only. A long autonomous turn can grow large before it
+  ends; Claude Code's own compaction near the end of the window still bounds
+  it.
 - It is made for 1M-token context windows. On a 200k window, Claude Code
   compacts before the context reaches 400k.
 - A compaction loses detail the summary leaves out. The replay below can't

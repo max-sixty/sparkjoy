@@ -6,7 +6,7 @@
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
     <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
-    <dc:date>2026-11-15T19:34:40.968971</dc:date>
+    <dc:date>2026-11-15T20:08:57.137082</dc:date>
     <dc:format>image/svg+xml</dc:format>
     <dc:creator>
      <cc:Agent>
@@ -420,43 +420,29 @@ L 546.498438 161.687785
 L 546.498438 162.432 
 " clip-path="url(#pc753b08827)" style="fill: none; stroke: #2a78d6; stroke-width: 2; stroke-linejoin: miter"/>
    </g>
-   <g id="line2d_21">
-    <path d="M 245.178438 162.432 
-L 245.178438 7.2 
-" clip-path="url(#pc753b08827)" style="fill: none; stroke-dasharray: 3.2,2.4; stroke-dashoffset: 0; stroke: #52514e; stroke-width: 0.8"/>
-   </g>
    <g id="patch_7">
     <path d="M 44.298437 162.432 
 L 546.498438 162.432 
 " style="fill: none; stroke: #e4e3df; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
    <g id="legend_1">
-    <g id="line2d_22">
-     <path d="M 398.339063 20.2 
-L 408.339063 20.2 
-L 418.339063 20.2 
+    <g id="line2d_21">
+     <path d="M 430.021875 20.2 
+L 440.021875 20.2 
+L 450.021875 20.2 
 " style="fill: none; stroke: #2a78d6; stroke-width: 2; stroke-linecap: square"/>
     </g>
     <g id="text_16">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="426.339063" y="23.7" transform="rotate(-0 426.339063 23.7)">with compact-when-done</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="458.021875" y="23.7" transform="rotate(-0 458.021875 23.7)">with sparkjoy</text>
     </g>
-    <g id="line2d_23">
-     <path d="M 398.339063 34.784375 
-L 408.339063 34.784375 
-L 418.339063 34.784375 
+    <g id="line2d_22">
+     <path d="M 430.021875 34.84375 
+L 440.021875 34.84375 
+L 450.021875 34.84375 
 " style="fill: none; stroke: #eb6834; stroke-width: 2; stroke-linecap: square"/>
     </g>
     <g id="text_17">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="426.339063" y="38.284375" transform="rotate(-0 426.339063 38.284375)">without (replayed)</text>
-    </g>
-    <g id="line2d_24">
-     <path d="M 398.339063 49.428125 
-L 408.339063 49.428125 
-L 418.339063 49.428125 
-" style="fill: none; stroke-dasharray: 3.2,2.4; stroke-dashoffset: 0; stroke: #52514e; stroke-width: 0.8"/>
-    </g>
-    <g id="text_18">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="426.339063" y="52.928125" transform="rotate(-0 426.339063 52.928125)">asked from 400k</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="458.021875" y="38.34375" transform="rotate(-0 458.021875 38.34375)">without (replayed)</text>
     </g>
    </g>
   </g>
