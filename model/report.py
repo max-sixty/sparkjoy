@@ -74,7 +74,7 @@ def returns(S):
 
 
 def thresholds(S, p, ttl):
-    """The cost model's thresholds for these sessions at κ = 1, at the prices of the model most
+    """The cost model's thresholds for these sessions at α = 1, at the prices of the model most
     of their requests used (Opus 5.5's if none has a price here), and what compacting at them
     saves in the replay. The best turn-end threshold is None when none costs less than never
     compacting, as when no session reaches the thresholds that tie with it."""
@@ -85,11 +85,11 @@ def thresholds(S, p, ttl):
     model = use.most_common(1)[0][0] if use else "claude-opus-5-5"
     c = fit.prices(model, ttl)
     cost, work = fit.grid(S, p, c, ttl)
-    one = fit.CHART_KAPPAS.index(1.0)
+    one = fit.CHART_ALPHAS.index(1.0)
     best, ratio = fit.best(cost, work)
     never = cost[:, -1].sum()
     floors = sum(fit.replay(s, p, c, fit.FLOOR, ttl, idle=fit.IDLE_FLOOR)[0] for s in S)
-    # At κ = 1 every request does the same work, so cost per unit of work is cost.
+    # At α = 1 every request does the same work, so cost per unit of work is cost.
     return {"model": model, "ttl": ttl, "best": best[one] if ratio[one] < 1 else None, "saved_best": 1 - ratio[one],
             "saved_floor": 1 - cost[:, list(fit.THRESHOLDS).index(fit.FLOOR)].sum() / never,
             "saved_floors": 1 - floors / never, "steady": fit.steady(p, c, 1.0),
@@ -343,7 +343,7 @@ def page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit):
             f"be {tokens(f['steady'])}.</p>"
             f"<p class=note>Fitted to {len(S)} sessions and {f['compactions']} compactions, at {model_name(f['model'])} "
             f"prices with a {'5-minute' if f['ttl'] == 300 else '1-hour'} cache, taking a request to get as much "
-            f'done at any context size (κ = 1). <a href="{DOC}">When to compact</a> explains the model.</p>')
+            f'done at any context size (α = 1). <a href="{DOC}">When to compact</a> explains the model.</p>')
     else:
         parts.append(f"<p>{unfit}</p>")
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8">'

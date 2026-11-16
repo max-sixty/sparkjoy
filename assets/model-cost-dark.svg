@@ -70,7 +70,7 @@ z
      </g>
     </g>
     <g id="text_6">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #c3c2b7" x="311.267578" y="223.645219" transform="rotate(-0 311.267578 223.645219)">compact at the first turn end at or above this context</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #c3c2b7" x="311.267578" y="223.645219" transform="rotate(-0 311.267578 223.645219)">threshold: compact at the first turn end at or above this context</text>
     </g>
    </g>
    <g id="matplotlib.axis_2">
@@ -187,16 +187,16 @@ z
 " clip-path="url(#p92335eda85)" style="fill: #23262a"/>
    </g>
    <g id="line2d_24">
-    <path d="M 86.323828 150.79497 
-L 91.555078 151.751621 
-L 96.786328 151.842409 
-L 102.017578 151.842409 
-L 107.248828 151.842409 
-L 112.480078 151.903283 
-L 117.711328 151.961396 
-L 122.942578 152.375832 
-L 128.173828 153.046395 
-L 133.405078 153.287565 
+    <path d="M 86.323828 152.157454 
+L 91.555078 152.408989 
+L 96.786328 152.447267 
+L 102.017578 152.447267 
+L 107.248828 152.447267 
+L 112.480078 152.455424 
+L 117.711328 152.463668 
+L 122.942578 152.780176 
+L 128.173828 153.133114 
+L 133.405078 153.289051 
 L 138.636328 168.710604 
 L 143.867578 176.325876 
 L 149.098828 179.568766 
@@ -282,16 +282,16 @@ L 562.367578 11.598745
 " clip-path="url(#p92335eda85)" style="fill: none; stroke: #d95926; stroke-width: 2; stroke-linecap: square"/>
    </g>
    <g id="line2d_25">
-    <path d="M 86.323828 117.513843 
-L 91.555078 118.527553 
-L 96.786328 118.625635 
-L 102.017578 118.625635 
-L 107.248828 118.625635 
-L 112.480078 118.679558 
-L 117.711328 118.731382 
-L 122.942578 119.180398 
-L 128.173828 119.839259 
-L 133.405078 120.089309 
+    <path d="M 86.323828 118.845063 
+L 91.555078 119.121987 
+L 96.786328 119.164129 
+L 102.017578 119.164129 
+L 107.248828 119.164129 
+L 112.480078 119.173109 
+L 117.711328 119.182186 
+L 122.942578 119.530641 
+L 128.173828 119.919203 
+L 133.405078 120.09088 
 L 138.636328 137.254287 
 L 143.867578 146.022947 
 L 149.098828 150.02443 
@@ -377,16 +377,16 @@ L 562.367578 11.598745
 " clip-path="url(#p92335eda85)" style="fill: none; stroke: #9a998f; stroke-width: 2; stroke-linecap: square"/>
    </g>
    <g id="line2d_26">
-    <path d="M 86.323828 79.449704 
-L 91.555078 80.540962 
-L 96.786328 80.647899 
-L 102.017578 80.647899 
-L 107.248828 80.647899 
-L 112.480078 80.696223 
-L 117.711328 80.742367 
-L 122.942578 81.232245 
-L 128.173828 81.872438 
-L 133.405078 82.129465 
+    <path d="M 86.323828 80.754724 
+L 91.555078 81.060678 
+L 96.786328 81.107238 
+L 102.017578 81.107238 
+L 107.248828 81.107238 
+L 112.480078 81.11716 
+L 117.711328 81.127188 
+L 122.942578 81.512172 
+L 128.173828 81.941469 
+L 133.405078 82.131143 
 L 138.636328 101.281092 
 L 143.867578 111.356776 
 L 149.098828 116.209735 
@@ -478,9 +478,11 @@ L 562.367578 199.446
    </g>
    <g id="text_17">
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #c3c2b7" transform="translate(59.158463 22.546433)">under 142k, what a</text>
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #c3c2b7" transform="translate(58.913775 31.093796)">compaction leaves:</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #c3c2b7" transform="translate(58.913775 31.093796)">compaction leaves,</text>
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #c3c2b7" transform="translate(68.667525 39.9878)">every turn end</text>
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #c3c2b7" transform="translate(78.175885 48.935242)">compacts</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #c3c2b7" transform="translate(64.417838 48.935242)">compacts, at the</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #c3c2b7" transform="translate(74.675729 57.829246)">size its turn</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #c3c2b7" transform="translate(81.171197 66.376609)">reached</text>
    </g>
    <g id="line2d_27">
     <defs>
@@ -547,31 +549,31 @@ z
    </g>
    <g id="legend_1">
     <g id="line2d_30">
-     <path d="M 494.509766 156.848344 
-L 504.509766 156.848344 
-L 514.509766 156.848344 
+     <path d="M 493.962891 156.848344 
+L 503.962891 156.848344 
+L 513.962891 156.848344 
 " style="fill: none; stroke: #d95926; stroke-width: 2; stroke-linecap: square"/>
     </g>
     <g id="text_21">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="522.509766" y="160.348344" transform="rotate(-0 522.509766 160.348344)">κ = 0.8</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="521.962891" y="160.348344" transform="rotate(-0 521.962891 160.348344)">α = 0.8</text>
     </g>
     <g id="line2d_31">
-     <path d="M 494.509766 171.047562 
-L 504.509766 171.047562 
-L 514.509766 171.047562 
+     <path d="M 493.962891 171.047562 
+L 503.962891 171.047562 
+L 513.962891 171.047562 
 " style="fill: none; stroke: #9a998f; stroke-width: 2; stroke-linecap: square"/>
     </g>
     <g id="text_22">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="522.509766" y="174.547562" transform="rotate(-0 522.509766 174.547562)">κ = 1</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="521.962891" y="174.547562" transform="rotate(-0 521.962891 174.547562)">α = 1</text>
     </g>
     <g id="line2d_32">
-     <path d="M 494.509766 185.246781 
-L 504.509766 185.246781 
-L 514.509766 185.246781 
+     <path d="M 493.962891 185.246781 
+L 503.962891 185.246781 
+L 513.962891 185.246781 
 " style="fill: none; stroke: #3987e5; stroke-width: 2; stroke-linecap: square"/>
     </g>
     <g id="text_23">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="522.509766" y="188.746781" transform="rotate(-0 522.509766 188.746781)">κ = 1.2</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="521.962891" y="188.746781" transform="rotate(-0 521.962891 188.746781)">α = 1.2</text>
     </g>
    </g>
   </g>
