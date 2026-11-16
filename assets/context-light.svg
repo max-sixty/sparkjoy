@@ -6,7 +6,7 @@
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
     <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
-    <dc:date>2026-11-15T16:31:44.147456</dc:date>
+    <dc:date>2026-11-15T19:34:40.968971</dc:date>
     <dc:format>image/svg+xml</dc:format>
     <dc:creator>
      <cc:Agent>
@@ -456,7 +456,7 @@ L 418.339063 49.428125
 " style="fill: none; stroke-dasharray: 3.2,2.4; stroke-dashoffset: 0; stroke: #52514e; stroke-width: 0.8"/>
     </g>
     <g id="text_18">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="426.339063" y="52.928125" transform="rotate(-0 426.339063 52.928125)">checked from 400k</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="426.339063" y="52.928125" transform="rotate(-0 426.339063 52.928125)">asked from 400k</text>
     </g>
    </g>
   </g>
