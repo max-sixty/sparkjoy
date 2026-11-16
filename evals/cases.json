@@ -1,0 +1,122 @@
+[
+  {
+    "id": "leaf-scaling-closeout",
+    "kind": "turn",
+    "expected": "compact",
+    "tokens": 742000,
+    "repo": "leaf",
+    "reason": "A long batch of performance fixes has landed and been closed out; what remains are open items the summary carries by id.",
+    "evidence": "An hour later the user asked only to check the Leaf page, and the session answered a page comment from a 178k context.",
+    "source": { "session": "60d84c3a-7730-47d3-bdcd-1f48bda17713", "line": 14894 }
+  },
+  {
+    "id": "leaf-hover-closeout",
+    "kind": "turn",
+    "expected": "compact",
+    "tokens": 736000,
+    "repo": "leaf",
+    "reason": "Everything that cleared review has landed and the closeout is posted; the rest waits on the user's answers to listed decisions.",
+    "evidence": "The user answered the listed decisions (#19, #1, #22) five hours later, and the session carried them out after the compaction the plugin made here.",
+    "source": { "session": "a7a52e50-1877-470f-ae80-bad1591d1c79", "line": 30672 }
+  },
+  {
+    "id": "leaf-followups-merged",
+    "kind": "turn",
+    "expected": "compact",
+    "tokens": 643000,
+    "repo": "leaf",
+    "reason": "Both follow-ups merged and nothing from the round is open on GitHub.",
+    "evidence": "The next request was whether the Leaf page was current, which the session answered from a 184k context after the plugin compacted here.",
+    "source": { "session": "5c2890ee-43a3-4f34-8a33-4e7a34a2a788", "line": 36385 }
+  },
+  {
+    "id": "leaf-scroll-fix-merged",
+    "kind": "turn",
+    "expected": "compact",
+    "tokens": 608000,
+    "repo": "leaf",
+    "reason": "The Firefox scroll fix is merged and its deeper cause written up; the investigation behind it is finished.",
+    "evidence": "Seven hours later the user started a different item (#10: review and implement it).",
+    "source": { "session": "c113c8a1-9a50-413d-8e7f-65d6902f5b2a", "line": 16335 }
+  },
+  {
+    "id": "worktrunk-release-tagged",
+    "kind": "turn",
+    "expected": "compact",
+    "tokens": 479000,
+    "repo": "worktrunk",
+    "reason": "v0.81.0 is tagged and its release workflow running; the turn answered a question about what shipped.",
+    "evidence": "The session compacted two minutes later, then reported the published release and moved on to code signing from a 116k context.",
+    "source": { "session": "a275c1f5-327e-4517-8e7e-163e7271277e", "line": 3210 }
+  },
+  {
+    "id": "leaf-send-hover-fix",
+    "kind": "turn",
+    "expected": "keep",
+    "tokens": 570000,
+    "repo": "leaf",
+    "reason": "Mid-iteration on a UI fix the user keeps finding faults in; the next change builds on the states just probed.",
+    "evidence": "Twelve minutes later the user asked whether the highlight could be square, and the session reworked the same control through three more review rounds.",
+    "source": { "session": "75325ce7-e2b4-4053-8c00-c0743b1ba3b2", "line": 8383 }
+  },
+  {
+    "id": "leaf-menu-design",
+    "kind": "turn",
+    "expected": "keep",
+    "tokens": 551000,
+    "repo": "leaf",
+    "reason": "A design exploration has just been rebuilt as eight independent choices; the user has yet to react to it.",
+    "evidence": "When the user came back, eleven hours later, it was to report that the composed 'Today' preset didn't match the shipped menu because of its width; the session fixed the same page.",
+    "source": { "session": "241e3130-48ef-419a-8f00-99db324a07de", "line": 2190 }
+  },
+  {
+    "id": "tend-eval-rerun-wait",
+    "kind": "turn",
+    "expected": "keep",
+    "tokens": 519000,
+    "repo": "tend",
+    "reason": "Waiting on an eval rerun whose report the session will turn into a PR.",
+    "evidence": "The report arrived within ten minutes and the session opened the PR from it and from the run's earlier findings.",
+    "source": { "session": "b2d47b66-64e9-420a-bd8f-53faedc641d9", "line": 3018 }
+  },
+  {
+    "id": "leaf-ring-test-rewrite-wait",
+    "kind": "turn",
+    "expected": "keep",
+    "tokens": 681000,
+    "repo": "leaf",
+    "reason": "Two review rounds' fixes are committed and a background agent is still rewriting the tests; the final checks come next.",
+    "evidence": "The session integrated the rewrite, ran the checks and fixed two remaining costs over the next hour, on the same branch.",
+    "source": { "session": "2f52b443-3923-40a5-a8b8-66d9e257653a", "line": 19740 }
+  },
+  {
+    "id": "worktrunk-repairs-merged",
+    "kind": "turn",
+    "expected": "keep",
+    "tokens": 210000,
+    "repo": "worktrunk",
+    "reason": "A natural break like the compact cases: all four repair PRs merged. At 210k a compaction saves only about 90k per request.",
+    "evidence": "The user moved on to a new topic (the status of code signing) in the same minute.",
+    "source": { "session": "a275c1f5-327e-4517-8e7e-163e7271277e", "line": 4087 }
+  },
+  {
+    "id": "leaf-data-attrs-merged",
+    "kind": "turn",
+    "expected": "keep",
+    "tokens": 296000,
+    "repo": "leaf",
+    "reason": "A natural break like the compact cases: three changes landed. At 296k a compaction saves under 180k per request.",
+    "evidence": "Three hours later the user asked whether one attribute's name betrayed a bigger issue; the session traced it to the namespace rule it had just landed and extended that change.",
+    "source": { "session": "00c11dc0-331e-490e-b255-820ca9efbd9d", "line": 27517 }
+  },
+  {
+    "id": "leaf-ui-fixes-idle",
+    "kind": "idle",
+    "expected": "compact",
+    "tokens": 290000,
+    "repo": "leaf",
+    "reason": "Idle at a natural break: everything the session started has landed and no question is open, and the cache is about to lapse.",
+    "evidence": "The session sat idle for 15 hours; the user came back with an open-ended request for more fixes.",
+    "source": { "session": "00c11dc0-331e-490e-b255-820ca9efbd9d", "line": 17801 }
+  }
+]
