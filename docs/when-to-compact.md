@@ -75,20 +75,20 @@ grow with the context. ī is the uncached input, a couple of tokens.
 ### What a compaction costs
 
 ```math
-F(x) = x + o\,S + (w-1)\,(K - P + E)
+F(x) = x + o\,S + (w-1)\,(K' - P)
 ```
 
 - The summary request reads the context x from the cache and writes a summary
   of S output tokens.
-- The next request starts from K tokens: the system prompt, tools and
-  instructions, the summary, and the recent messages and files Claude Code
-  attaches again. It reads P of them from the shared cache and writes the
-  other K − P.
-- The requests after that read E tokens more than they would have without the
-  compaction, mostly files the summary left out.
+- The context then restarts from K′ tokens, and every one of them but the P in
+  the shared cache is written to the cache again. K′ has two parts, measured
+  separately: the K tokens of the first request after the compaction (the
+  system prompt, tools and instructions, the summary, and the recent messages
+  and files Claude Code attaches again), and the E tokens the requests after
+  it read again because the summary left them out, such as a file read
+  before. The model needs only their sum.
 
-The context then grows again from K′ = K + E. F₀ = oS + (w−1)(K − P + E) is
-the part of F that doesn't depend on x.
+F₀ = oS + (w−1)(K′ − P) is the part of F that doesn't depend on x.
 
 ### Work and the context efficiency coefficient
 
