@@ -93,23 +93,24 @@ cache lapses either way.
 From `run.py --report` on 16 November 2026; each cell counts the runs that
 matched the label. `main` is the question published at 02beed1;
 `sized-question` (cdfc871) adds the context's size, what a compaction leaves
-and how many requests it takes to pay back; `detail` (0915ee8, the question
-now) says what decides it.
+and how many requests it takes to pay back; `detail` (0915ee8) says what
+decides it; `measured` (1f004a4, the question now, 17 November) weighs what
+keeping costs against what a compaction loses ([Context size](#context-size)).
 
-| case | recorded | replayed | expected | main | sized-question | detail |
-|---|---|---|---|---|---|---|
-| leaf-scaling-closeout | 742k | 520k | compact | 4/4 | 3/3 | 3/3 |
-| leaf-hover-closeout | 736k | 488k | compact | 3/3 | 3/3 | 3/3 |
-| leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 | 3/3 |
-| leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 | 3/3 |
-| worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 | 4/4 |
-| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 |
-| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 |
-| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 |
-| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 |
-| leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 | 0/4 |
-| worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 | 0/4 |
-| leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 | 4/4 |
+| case | recorded | replayed | expected | main | sized-question | detail | measured |
+|---|---|---|---|---|---|---|---|
+| leaf-scaling-closeout | 742k | 520k | compact | 4/4 | 3/3 | 3/3 | 2/2 |
+| leaf-hover-closeout | 736k | 488k | compact | 3/3 | 3/3 | 3/3 | 2/2 |
+| leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 | 3/3 | 2/2 |
+| leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 | 3/3 | 2/2 |
+| worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 | 4/4 | 2/2 |
+| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 | 0/2 |
+| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 | 0/2 |
+| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 |
+| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 |
+| leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 | 0/4 | 0/2 |
+| worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 | 0/4 | 0/2 |
+| leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 | 4/4 | 2/2 |
 
 The first two questions said compact in all 73 runs. Their reasons agree: the
 context is mostly finished work, and what the next step needs is in the
@@ -147,6 +148,40 @@ is about 200k.
 The mid-task keep labels encode the rule that mid-task moments keep, not an
 observed cost: at leaf-ring-test-rewrite-wait the plugin compacted live, and
 the session finished the work within the hour.
+
+## Context size
+
+The `detail` question's verdict doesn't change with the size it states. On 17
+November each turn-end case ran twice with the question telling the model the
+context was 200k, where a compaction pays back after 65 requests, and twice
+telling it 950k, where it pays back after 7. Each arm was a copy of
+`register.ts` that sets `tokens` at the top of `question()`, passed with
+`--question-from`. The verdicts at the two sizes matched in 21 of 22 pairs, and
+the one that differed kept at 950k. The reasons mention size only in verdicts
+that compact, and at 200k one still called the context very large. Finished
+work compacts at every size, and work in progress keeps.
+
+The question's rule explains this. Size reaches the verdict only through its
+clause "enough requests will follow to repay it", and from the 400k floor a
+compaction pays back within 19 requests, about half an average turn. So whether
+the next turns need the detail decides the verdict on its own.
+
+Without the figures below, a version that also states what keeping costs
+through a turn, and asks the model to weigh the two, compacted the mid-task
+cases in 4 of 8 runs told 300k and in all 8 told 700k.
+
+`measured` is that version with figures from the author's sessions, as the
+[README's prompt](../README.md#the-prompt) shows: what keeping costs through a
+median turn of 9 requests and a mean one of 38, and what a compaction cost the
+requests after it, about 20k tokens read again and about 6 more wasted
+requests, with a note of what those counts miss. At the cases' recorded sizes
+it compacts at every turn end, the four mid-task ones at 519k–681k included,
+where `detail` kept at all of them. That matches the cost model in
+[When to compact](../docs/when-to-compact.md), where compacting at every turn
+end from about 250k costs least and the detail lost was small where it could be
+measured. Its response to size is noisy: on the mid-task cases it kept in 3 of
+8 runs told 450k and in 5 of 8 told 750k. A first wording, which said a
+compaction "cost the requests after it little", compacted in 46 of 48 runs.
 
 ## Against the live plugin
 
