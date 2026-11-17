@@ -462,9 +462,10 @@ turns need detail a summary drops, stays with the question.
 ### Why does no fit put the best point near 700k?
 
 In any model where 700k is best, compacting there barely beats never
-compacting. A request's cost rises in step with its context, from $0.06 at 142k
-to $0.20 at 700k, and a compaction costs $0.98, so at 700k one pays for itself
-within 9 requests, a median turn. Waiting longer pays only if the
+compacting. A request's cost rises in step with its context, from 310k cached
+reads at 142k to 990k at 700k ($0.06 to $0.20 on Opus 5.5), and a compaction
+there costs 5.5M ($1.09), so at 700k one pays for itself within 9 requests, a
+median turn. Waiting longer pays only if the
 requests after a compaction get much less done. For that to hold at 700k,
 efficacy must still be climbing steeply there, so it must be low at 142k, and
 each compaction then costs nearly as much progress as it saves in tokens:
