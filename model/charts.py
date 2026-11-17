@@ -154,9 +154,10 @@ def thresholds(cost, progress, BT, BX, p, c, t, path):
     T, BT = (np.minimum(v, fit.AUTO) for v in (fit.best(cost, progress)[0], BT))
     fig, ax = plt.subplots(figsize=(9, 3.6))
     style(ax, t)
-    for level, label in ((fit.FLOOR, "sparkjoy asks from 400k"), (fit.AUTO, "Claude Code compacts")):
+    for level, label in ((fit.FLOOR, f"sparkjoy asks from {tokens(fit.FLOOR)}"), (fit.AUTO, "Claude Code compacts")):
         ax.axhline(level, color=t["muted"], lw=0.8, ls=":")
-        ax.text(ks[0], level + 12_000, label, fontsize=9, color=t["muted"])
+        # At the right, where both curves have climbed past sparkjoy's floor.
+        ax.text(ks[-1], level + 12_000, label, ha="right", fontsize=9, color=t["muted"])
     for y, band, color, label in ((X, BX, t["mid"], "steady state, compacting at any request"),
                                   (T, BT, t["high"], "replay, compacting at turn ends")):
         lo, hi = np.percentile(band, [5, 95], axis=0)

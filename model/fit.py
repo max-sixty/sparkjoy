@@ -55,7 +55,7 @@ CHART_SCALES = tuple(range(0, 500_001, 25_000))
 # From below K, where every turn end compacts, to just short of AUTO.
 THRESHOLDS = np.arange(50_000, 960_001, 10_000)
 DRAWS = 200  # bootstrap resamples of sessions
-FLOOR, IDLE_FLOOR = 400_000, 200_000  # where sparkjoy asks, at a turn end and in an idle session (hooks/register.ts)
+FLOOR, IDLE_FLOOR = 250_000, 175_000  # where sparkjoy asks, at a turn end and in an idle session (hooks/register.ts)
 IDLE = 11 / 12  # share of the cache's lifetime a session sits idle before it is asked (55 of 60 minutes)
 # The line sparkjoy writes in the transcript for each verdict (`judge` and `afterTurn` in
 # hooks/register.ts), under its current name and the one it had before it was published.
@@ -589,7 +589,7 @@ def main():
               f"in the steady state, {J[at[x], zero] / J[:, zero].min() - 1:.1%} in the replay at turn ends")
     print("\n  context   pays back after   grows back in   (requests, s = 0)")
     for x in (200_000, 250_000, 300_000, 400_000, 600_000):
-        print(f"  {x / 1e3:5.0f}k   {(x + F0) / (h * (x - K1)):10.0f}   {(x - K1) / p.g:14.0f}")
+        print(f"  {x / 1e3:5.0f}k   {np.ceil((x + F0) / (h * (x - K1))):10.0f}   {(x - K1) / p.g:14.0f}")
 
     def arm(threshold, idle=None):
         return sum(replay(s, p, c, threshold, ttl, idle=idle)[0] for s in S)

@@ -75,7 +75,7 @@ def test_counts_verdicts_and_returns(tmp_path):
         request("17:00:10Z", 30_000, 90_000),
     ])
     assert summary[0] == "6 verdicts in 1 of 1 sessions: 3 compacted, 1 kept, 0 unreadable, 1 no verdict, 0 dropped, 1 failed"
-    assert "3 returns after an hour idle to sessions left at 200k or more, 2 compacted in between" in summary
+    assert "3 returns after an hour idle to sessions left at 175k or more, 2 compacted in between" in summary
     assert "1 by sparkjoy" in page and "1 by /compact" in page
     assert "Fix the parser" in page
     assert "hooks.json" not in page

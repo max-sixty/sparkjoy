@@ -375,7 +375,7 @@ def main():
         for lost, label in ((0.0, "D = 0"), (high, "D at the top of its interval")):
             cost, progress = fit.grid(C, p, c, ttl, scales=ks, lost=lost)
             T, saved = fit.best(cost, progress)
-            at = list(fit.THRESHOLDS).index(fit.FLOOR)
+            at = list(fit.THRESHOLDS).index(400_000)  # sparkjoy's first floor, which the doc compares against
             floor = cost[:, at].sum() / progress[:, at].sum(0) / (cost[:, -1].sum() / progress[:, -1].sum(0))
             print(f"best turn-end threshold, replayed, {label}: " + ", ".join(
                 f"s = {k(q)}: {k(T[i])}, saving {1 - saved[i]:.1%} (400k: {1 - floor[i]:.1%})" for i, q in enumerate(ks)))
