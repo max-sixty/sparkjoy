@@ -12,8 +12,8 @@
 
 It reads the main thread of each interactive session (`claude -p` runs are
 left out), measures the model's parameters, and prints them with 90% intervals
-from resampling sessions. Then, for each value of s, the context at which a request reaches 63% of full efficacy,
-it prints the compaction point the
+from resampling sessions. Then, for each value of s, the context at which a
+request reaches half of full efficacy, it prints the compaction point the
 steady-state model gives and the turn-end threshold that a replay of the
 sessions finds cheapest per unit of progress. Only transcripts modified since
 --since are opened, and the process lowers its own priority, since a full scan
@@ -48,8 +48,8 @@ WINDOW = 1_000_000
 AUTO = 965_000  # where Claude Code compacts a 1M window on its own
 SUMMARY = 4_000  # output tokens of the summary request; assumed, as transcripts don't log that request
 SPAN = 20  # requests over which re-reads after a compaction are counted
-# Values of s, the scale of a request's efficacy 1 - exp(-x/s) in its context x; at 0, every
-# request has the same efficacy. The table's, then the chart's.
+# Values of s, the context at which a request reaches half of full efficacy, 1 - 2^(-x/s) at
+# context x; at 0, every request has the same efficacy. The table's, then the chart's.
 SCALES = (0, 50_000, 100_000, 150_000, 200_000, 300_000)
 CHART_SCALES = tuple(range(0, 500_001, 25_000))
 # From below K, where every turn end compacts, to just short of AUTO.
@@ -400,9 +400,10 @@ def terms(p, c):
 
 
 def eta(x, scale):
-    """The efficacy of a request with context x: 1 - exp(-x/s), or 1 at any x where s is 0."""
+    """The efficacy of a request with context x: 1 - 2^(-x/s), half of full efficacy at x = s,
+    or 1 at any x where s is 0."""
     x = np.asarray(x, float)
-    return -np.expm1(-x / scale) if scale else np.ones_like(x)
+    return -np.expm1(-np.log(2) * x / scale) if scale else np.ones_like(x)
 
 
 def curve(p, c, scale=0, lost=0.0):
@@ -412,8 +413,8 @@ def curve(p, c, scale=0, lost=0.0):
     h, c0, F0, K1 = terms(p, c)
     X = np.append(np.arange(K1 + 1_000, AUTO, 1_000.0), AUTO)
     cost = p.g * (X + F0 + lost) + h * (X**2 - K1**2) / 2 + c0 * (X - K1)
-    # The integral of 1 - exp(-x/s) from K to X.
-    progress = X - K1 - (scale * (np.exp(-K1 / scale) - np.exp(-X / scale)) if scale else 0)
+    # The integral of 1 - 2^(-x/s) from K to X.
+    progress = X - K1 - (scale / np.log(2) * (np.exp2(-K1 / scale) - np.exp2(-X / scale)) if scale else 0)
     return X, cost / progress
 
 

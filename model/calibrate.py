@@ -3,7 +3,7 @@
 # requires-python = ">=3.12"
 # dependencies = ["numpy>=2.1", "matplotlib>=3.9"]
 # ///
-"""Fits s, the context at which a request reaches 63% of full efficacy, and D, the cost of the
+"""Fits s, the context at which a request reaches half of full efficacy, and D, the cost of the
 detail a compaction drops, to what happens in your sessions. See "Calibrating s" in
 docs/when-to-compact.md.
 
@@ -230,7 +230,7 @@ def shapes(b, weight):
     sse = lambda pred: (weight * (profile - pred) ** 2).sum()
     fits = []
     for s in SCALES:
-        eta = -np.expm1(-x / s)
+        eta = fit.eta(x, s)
         fits.append(sse((1 - w) * (1 - eta / eta[REFERENCE])))
     lnx = np.log(x / x[REFERENCE])
     # The power law's pred is linear in its coefficient, (1 - w)(1 - (x/x_ref)^(α-1)) ≈ -(1 - w)(α - 1) ln(x/x_ref).
@@ -342,8 +342,8 @@ def main():
     s_lo, s_hi = X["scale"]
     print(f"saturating form: s = {x['scale'] / 1e3:.0f}k (90%: {s_lo / 1e3:.0f}k to {s_hi / 1e3:.0f}k); squared error over the "
           f"bands, weighted: flat {x['sse flat']:.1f}, power {x['sse power']:.1f}, saturating {x['sse saturating']:.1f}")
-    for s in (100_000, 150_000, 300_000):
-        eta = -np.expm1(-m["band x"] / s)
+    for s in (50_000, 100_000, 200_000):
+        eta = fit.eta(m["band x"], s)
         print(f"  s = {s / 1e3:.0f}k would need {(1 - w) * (1 - eta[0] / eta[REFERENCE]):+.1%} trouble below 200k "
               f"against 400k to 600k")
 
