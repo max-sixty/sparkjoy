@@ -124,6 +124,9 @@ test('the question sizes the saving for the context it asks about', async ($, on
   // (100 × 4k summary + 40 × 120k rewrite) / (500k − 120k) read, rounded up.
   expect(forks[0]).toContain('At 500k a compaction pays for itself after about 14 more requests')
   expect(forks[1]).toContain('At 400k a compaction pays for itself after about 19 more requests')
+  // 9 and 38 requests × (500k − 120k) read, over the same 5.2M a compaction costs.
+  expect(forks[0]).toContain('keeping 500k through one more turn costs as much as about 0.7 compactions for a median turn and 3 for a mean one')
+  expect(forks[1]).toContain('keeping 400k through one more turn costs as much as about 0.5 compactions for a median turn and 2 for a mean one')
 })
 
 test('a verdict to keep leaves the conversation alone and says why', async ($, on) => {
