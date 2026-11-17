@@ -48,8 +48,8 @@ WINDOW = 1_000_000
 AUTO = 965_000  # where Claude Code compacts a 1M window on its own
 SUMMARY = 4_000  # output tokens of the summary request; assumed, as transcripts don't log that request
 SPAN = 20  # requests over which re-reads after a compaction are counted
-# Values of s, the scale of a request's progress 1 - exp(-x/s) in its context x; at 0, every
-# request makes the same progress. The table's, then the chart's.
+# Values of s, the scale of a request's efficacy 1 - exp(-x/s) in its context x; at 0, every
+# request has the same efficacy. The table's, then the chart's.
 SCALES = (0, 50_000, 100_000, 150_000, 200_000, 300_000)
 CHART_SCALES = tuple(range(0, 500_001, 25_000))
 # From below K, where every turn end compacts, to just short of AUTO.
@@ -400,14 +400,14 @@ def terms(p, c):
 
 
 def eta(x, scale):
-    """The progress of a request with context x: 1 - exp(-x/s), or 1 at any x where s is 0."""
+    """The efficacy of a request with context x: 1 - exp(-x/s), or 1 at any x where s is 0."""
     x = np.asarray(x, float)
     return -np.expm1(-x / scale) if scale else np.ones_like(x)
 
 
 def curve(p, c, scale=0, lost=0.0):
     """J(X), the long-run cost per unit of progress of compacting at X, on a grid of X from K to AUTO,
-    for progress with scale s. `lost` is D, what the detail a compaction drops costs the requests
+    for efficacy with scale s. `lost` is D, what the detail a compaction drops costs the requests
     after it, in cached reads."""
     h, c0, F0, K1 = terms(p, c)
     X = np.append(np.arange(K1 + 1_000, AUTO, 1_000.0), AUTO)
@@ -424,7 +424,7 @@ def steady(p, c, scale=0, lost=0.0):
 
 
 def closed_form(p, c):
-    """X* where every request makes the same progress (s = 0): K + sqrt(2 g (F0 + K) / h)."""
+    """X* where every request has the same efficacy (s = 0): K + sqrt(2 g (F0 + K) / h)."""
     h, _, F0, K1 = terms(p, c)
     return K1 + np.sqrt(2 * p.g * (F0 + K1) / h)
 
