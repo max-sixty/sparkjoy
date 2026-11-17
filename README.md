@@ -106,8 +106,8 @@ all, and 122 of them compacted.
 request carried a median 122k tokens: an 85k opening prompt (system prompt,
 tools, instructions), a summary of about 3k, and 34k of recent messages and
 files. The requests after it read about 20k more again, mostly files the
-summary left out. Writing those 142k back to the cache, at 40 times the price
-of a cached read, plus the summary, costs about what reading 4.8M cached
+summary left out. The cache write of those 142k, at 40 times the price of a
+cached read, plus the summary's output, costs about what reading 4.8M cached
 tokens would: $0.95 on Opus 5.5. Each later request then reads 142k plus what
 it has added since, instead of the whole context. The context grows about
 1.7k tokens a request, so it takes many requests to grow back:
@@ -129,7 +129,7 @@ best turn-end threshold rises to 250k. The question gives the model the payback 
 context.
 
 **Idle sessions.** In my background sessions over the same days, 92 returns
-after an hour or more wrote 27.6M tokens back to the cache, about $220.
+after an hour or more made cache writes of 27.6M tokens, about $220.
 Compacting first would have cost about $110 less; the plugin asks first, so it
 will compact fewer of them. This part is new, so that figure is an estimate,
 and the replay above leaves it out.
