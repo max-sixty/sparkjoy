@@ -9,11 +9,12 @@ const SUMMARY = { messages: [{ role: 'user' as const, text: 'summary', toolUses:
 const IDLE = 55 * 60_000
 
 // Stands for the engine beneath the mod: a context of `tokens` until `resize`
-// changes it or a compaction leaves it unmeasured, a subscription's rate
-// limits unless `apiKey`, a fork that answers `verdict` after a turn and
-// `idleVerdict` after an idle wait, each after `forkMs` (`null`: an empty
-// reply), compactions that fail `compactFailures` times before one succeeds, a
-// turn whose end settles after `endMs`, and a record of what it was asked.
+// changes it or a compaction leaves it unmeasured, the rate-limit windows
+// `rateLimits` (a subscription's five-hour and weekly ones unless told
+// otherwise), a fork that answers `verdict` after a turn and `idleVerdict`
+// after an idle wait, each after `forkMs` (`null`: an empty reply),
+// compactions that fail `compactFailures` times before one succeeds, a turn
+// whose end settles after `endMs`, and a record of what it was asked.
 function engine(
   on: On,
   {
@@ -23,7 +24,10 @@ function engine(
     forkMs = 0,
     endMs = 0,
     compactFailures = 0,
-    apiKey = false,
+    rateLimits = [
+      { kind: 'five_hour', percentUsed: 10 },
+      { kind: 'seven_day', percentUsed: 30 },
+    ],
   } = {},
 ) {
   const clock = mock.clock(on)
@@ -49,7 +53,6 @@ function engine(
     if (e.to !== 'debug') logs.push(e.text)
     return { value: undefined }
   })
-  const rateLimits = apiKey ? [] : [{ kind: 'five_hour', percentUsed: 10 }]
   on('session.usage', () => ({
     value: { startedAt: 0, rateLimits, context: { tokens: size, window: 1_000_000 } },
   }))
@@ -412,8 +415,20 @@ test('an idle session below 200k is left as it is', async ($, on) => {
   expect(compactions).toEqual([])
 })
 
+test('an idle session on a plan with only a weekly limit is asked too', async ($, on) => {
+  const rateLimits = [{ kind: 'seven_day', percentUsed: 85 }]
+  const { begin, clock, compactions, turn } = engine(on, { tokens: 300_000, rateLimits })
+  await begin($)
+
+  await turn($, 't1')
+  await clock.advance(IDLE)
+  await clock.settle()
+
+  expect(compactions).toEqual([''])
+})
+
 test('an idle session on an API key is left as it is', async ($, on) => {
-  const { begin, clock, compactions, turn } = engine(on, { tokens: 300_000, apiKey: true })
+  const { begin, clock, compactions, turn } = engine(on, { tokens: 300_000, rateLimits: [] })
   await begin($)
 
   await turn($, 't1')

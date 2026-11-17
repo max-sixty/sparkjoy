@@ -68,6 +68,13 @@ const IDLE_FLOOR = 200_000
 // read the context from the cache.
 const IDLE_MS = 55 * 60_000
 
+// A wait that ends later than this after it was due slept with the machine,
+// and the prompt cache lapsed meanwhile, so asking would pay to write the
+// whole context to the cache again. Claude Code's own idle compaction gives up
+// at the same point. A mock clock can't hold a wait while its time moves on, so
+// no test reaches this.
+const LATE_MS = 60_000
+
 type Verdict = { compact: boolean; reason: string }
 
 type Watch = {
@@ -130,11 +137,21 @@ async function afterTurn($: EngineInterface, watch: Watch, changes: number, repl
     const tokens = context.tokens
     if (tokens === undefined || !isCurrent()) return
 
-    // A subscription caches for an hour and reports a five-hour rate-limit
-    // window; an API key caches for five minutes, too short for this to pay.
-    // The wait starts at the turn's end, whatever the judge does meanwhile.
-    if (tokens >= IDLE_FLOOR && rateLimits.some(limit => limit.kind === 'five_hour')) {
-      $.clock.after(IDLE_MS, () => void idle($, isCurrent, say, tokens, reply))
+    // A subscription caches for an hour and reports at least one rate-limit
+    // window, though not always a five-hour one: some plans report only the
+    // weekly window. An API key reports none and caches for five minutes, too
+    // short for this to pay. The wait starts at the turn's end, whatever the
+    // judge does meanwhile.
+    // TODO: gate on the cache lifetime the main thread's requests asked for,
+    // as Claude Code's own idle compaction does, rather than on rate limits,
+    // which misread usage credits and gateways (both cache five minutes). The
+    // mod API gives it only for subagents (`$.agent.list()`'s
+    // `lastRequest.cacheTtl`). An `http.fetch` hook can read `"ttl":"1h"` from
+    // the engine's request bodies, but the test engine can't raise one, so the
+    // idle tests could no longer arm the timer.
+    if (tokens >= IDLE_FLOOR && rateLimits.length > 0) {
+      const due = (await $.clock.now()) + IDLE_MS
+      $.clock.after(IDLE_MS, () => void idle($, isCurrent, say, tokens, reply, due))
     }
     if (tokens < FLOOR) return
     await judge($, say, async () => isCurrent(), `${thousands(tokens)} tokens`, question(reply, tokens))
@@ -147,10 +164,10 @@ async function afterTurn($: EngineInterface, watch: Watch, changes: number, repl
 // now that its prompt cache is about to lapse: no turn has begun since, and
 // the context is the size it was then. After any compaction, the judge's or
 // Claude Code's own idle one, the context has no size until the next request.
-async function idle($: EngineInterface, isCurrent: () => boolean, say: (text: string) => void, tokens: number, reply: string) {
+async function idle($: EngineInterface, isCurrent: () => boolean, say: (text: string) => void, tokens: number, reply: string, due: number) {
   const isUntouched = async () => isCurrent() && (await $.session.usage()).context.tokens === tokens
   try {
-    if (!(await isUntouched())) return
+    if ((await $.clock.now()) > due + LATE_MS || !(await isUntouched())) return
     const minutes = IDLE_MS / 60_000
     await judge($, say, isUntouched, `${thousands(tokens)} tokens, idle ${minutes} minutes`, question(reply, tokens, minutes))
   } catch (error) {

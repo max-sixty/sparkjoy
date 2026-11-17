@@ -58,7 +58,8 @@ dozens of requests.
   [idle compaction](https://code.claude.com/docs/en/prompt-caching#compacting-the-conversation)
   skips background sessions (`claude --bg`): in mine it fired in none of 358
   idle gaps of 55 minutes or more. This needs a Claude subscription, where the
-  cache lasts an hour.
+  cache lasts an hour, and a computer that stays awake: a session the
+  computer slept through is left alone, its cache already gone.
 - **Each decision shows as a dim line in the transcript**, which the model never
   reads, with its reason:
 
