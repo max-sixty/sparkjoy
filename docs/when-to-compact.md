@@ -472,10 +472,27 @@ turns need detail a summary drops, stays with the question.
   fit the cost per productive step against the threshold on one engineer's
   sessions, with a rediscovery penalty for each compaction, and found 220k, or
   314k with twice the penalty; it recommends 250k to 450k by task.
+  [Satish et al.](https://arxiv.org/abs/2609.32961) vary when, what and how
+  much to compress over nearly 35,000 runs on SWE-bench Verified and
+  Terminal-Bench, and find that fewer tokens need not mean a cheaper or faster
+  run. [CliffCompaction](https://arxiv.org/abs/2609.26779) cuts cost by up to
+  50% on Terminal-Bench by compacting only by truncation, never summarizing a
+  summary. Neither fits a model of when to compact.
+  [Nadir](https://getnadir.com/blog/mask-dont-summarize-agent-context-cache-cost/)
+  compacts when the cache reads of stale tokens over the turns left exceed one
+  rewrite of what stays, in a simulation that leaves quality out.
   [Relace](https://relace.ai/blog/compact) argues for compacting on a cache
   miss, as for idle sessions above, and
   [exe.dev](https://blog.exe.dev/expensively-quadratic) shows cache reads come
   to dominate a long conversation's cost.
+- **What a compaction drops.** [Salle et al.](https://arxiv.org/abs/2610.31778)
+  find that the threshold doesn't measurably change task success for two
+  models with 1M windows, but the first summary drops about a third of a task's
+  anti-cheating rules, and in real sessions instructions on how to work are
+  dropped about six times as often as specifications of what to build.
+  [Liu](https://arxiv.org/abs/2608.16370) finds compression leaving completion
+  unchanged while retrieval calls triple, from 21 to 64 for GPT-5.5: the
+  re-reading E counts here.
 - **Other agents** compact at a fixed share of the window:
   [Codex CLI](https://github.com/openai/codex/blob/83a23c09366d82cd0cb469c64c3e55d04d71c87a/codex-rs/protocol/src/openai_models.rs#L579-L590)
   at 90%,
