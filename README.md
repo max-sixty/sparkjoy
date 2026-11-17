@@ -160,10 +160,17 @@ next turn began first or the plugin reloaded. In the
 ones included, reasoning that the transcript was mostly finished work, as
 nearly any long transcript is.
 
-The question now says that settles nothing. In the evals it keeps at all four
-mid-task turn ends and compacts at all six finished ones. It also compacts at
-natural breaks at 210k and 296k, which the evals label keep, though by the
-cost model compacting there pays.
+The second question said that settles nothing, and asked whether the next
+turns need detail a summary drops. In the evals it kept at all four mid-task
+turn ends and compacted at the finished ones, but its verdict didn't change
+with the context's size, and live it compacted at only 20 of its first 84
+turn ends, from 401k to 911k.
+
+The question now also says what keeping costs, which grows with the context,
+and what compactions cost the requests after them in my sessions, and asks the
+model to weigh the two. In the evals it compacts at every turn end, the
+mid-task ones at 519k–681k included, as the
+[cost model](docs/when-to-compact.md) recommends past about 250k.
 
 ## The prompt
 
@@ -180,6 +187,7 @@ Your turn just ended with this reply to the user:
 
 <reply>
 …the reply…
+
 </reply>
 
 Decide whether to compact the conversation now, while the user reads that reply.
@@ -188,7 +196,11 @@ Nearly every long transcript is mostly finished work, so that alone is no reason
 
 A compaction takes about a minute and writes a summary of about 4k output tokens. Afterwards the context holds about 120k tokens, which the next request writes to the cache again. A cache write costs as much as 40 cached reads, and an output token as much as 100. At 500k a compaction pays for itself after about 14 more requests that need nothing it dropped.
 
-Compact only when the next turns won't need such detail and enough requests will follow to repay it. Otherwise keep it: a later turn end, once that work is finished, is the place to compact.
+Keeping costs too, and more the larger the context: every later request reads all 500k tokens, against about 120k after a compaction, and keeping only puts the compaction off to a later turn end. A turn runs a median of 9 requests and a mean of 38, so keeping 500k through one more turn costs as much as about 0.7 compactions for a median turn and 3 for a mean one.
+
+After a compaction, past sessions read about 20k tokens of files again and had about 6 more wasted requests than usual: failed tool calls, repeated lookups and corrections. Those counts miss detail lost without such a failure, such as a design's rejected options or what the user likes.
+
+Weigh what keeping costs against what losing the detail would cost the next turns. The larger the context, the more detail a compaction can drop and still pay.
 
 Reply with one JSON object and nothing else, filling its fields in order:
 {"next": "what most likely comes next, in a few words", "needs_detail": true or false, "compact": true or false, "reason": "one short line saying why"}
@@ -206,6 +218,7 @@ Your turn ended 55 minutes ago with this reply to the user, and nothing has happ
 
 <reply>
 …the reply…
+
 </reply>
 
 Decide whether to compact the conversation now. The prompt cache holding it lapses in a few minutes, and the first request after that writes all 500k tokens to the cache again, against about 120k after a compaction. So compact unless the next turn continues work that needs the transcript's detail.
@@ -214,7 +227,9 @@ Nearly every long transcript is mostly finished work, so that alone is no reason
 
 A compaction takes about a minute and writes a summary of about 4k output tokens. Afterwards the context holds about 120k tokens, which the next request writes to the cache again. A cache write costs as much as 40 cached reads, and an output token as much as 100.
 
-Compact only when the next turns won't need such detail and enough requests will follow to repay it. Otherwise keep it: a later turn end, once that work is finished, is the place to compact.
+After a compaction, past sessions read about 20k tokens of files again and had about 6 more wasted requests than usual: failed tool calls, repeated lookups and corrections. Those counts miss detail lost without such a failure, such as a design's rejected options or what the user likes.
+
+Weigh what keeping costs against what losing the detail would cost the next turns. The larger the context, the more detail a compaction can drop and still pay.
 
 Reply with one JSON object and nothing else, filling its fields in order:
 {"next": "what most likely comes next, in a few words", "needs_detail": true or false, "compact": true or false, "reason": "one short line saying why"}
@@ -228,6 +243,8 @@ Reply with one JSON object and nothing else, filling its fields in order:
   thresholds are lower, about 200–250k at turn ends and 150–175k when idle
   ([When to compact](docs/when-to-compact.md)); the higher floors limit what a
   wrong verdict costs while the question is new.
+- The question's figures for a turn's length and for what a compaction costs
+  the requests after it come from my sessions, not yours.
 - It acts between turns only. Claude Code's own compaction near the end of the
   window still bounds a long turn.
 - It is made for 1M-token context windows; on a 200k window, Claude Code
