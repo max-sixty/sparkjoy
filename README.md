@@ -53,8 +53,8 @@ dozens of requests.
   ([the prompt](#the-prompt)). On yes it compacts, which takes about a minute
   while you read the reply.
 - **When a session sits idle for 55 minutes**, it asks again, adding that the
-  prompt cache is about to lapse and the next message would write the whole
-  context back to it. Claude Code's own
+  prompt cache is about to lapse and the next message would make a cache write
+  of the whole context. Claude Code's own
   [idle compaction](https://code.claude.com/docs/en/prompt-caching#compacting-the-conversation)
   skips background sessions (`claude --bg`): in mine it fired in none of 358
   idle gaps of 55 minutes or more. This needs a Claude subscription, where the
@@ -95,8 +95,8 @@ The large contexts left come mostly from long turns, which the plugin can't
 act on until they end. Of the 59 sessions that reached 400k, half saved between 12% and 31%, and
 one cost 19% more.
 
-**What a check costs.** A check is one request that reads the conversation from
-the cache and writes about a hundred tokens. A cached read costs
+**What a check costs.** A check is one request: a cache read of the conversation
+and about a hundred output tokens. A cached read costs
 [0.05× the input price](https://platform.claude.com/docs/en/about-claude/pricing)
 on Opus 5.5 and Sonnet 5.5, so a check costs about as much as an ordinary
 request. The 198 turns that ended at 400k or more were checked, for $22 in
