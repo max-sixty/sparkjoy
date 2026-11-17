@@ -114,29 +114,30 @@ F(x) = x + o\,S + (w-1)\,(K - P)
 
 F₀ = oS + (w−1)(K − P) is the part of F that doesn't depend on x.
 
-### Progress and its scale s
+### Efficacy and its scale s
 
 The size of the context can change how much a request gets done. A larger
 context helps when more of the work's history is at hand, and the help runs
-out once the context holds what the next steps need. The model has a request
-with context x make
+out once the context holds what the next steps need. The model gives a request
+with context x an efficacy of
 
 ```math
 \eta(x) = 1 - e^{-x/s}
 ```
 
-units of progress, as a share of its full progress, the most a request can
-make, which it approaches as its context grows. s
-is the scale over which more context stops helping, in the way a time constant
-is for a decay: each further s of context shrinks the gap to full progress by
-a factor of e. So a request makes half its full progress at x = s·ln 2 ≈ 0.69s,
-1 − 1/e ≈ 63% at s, 86% at 2s and 95% at 3s. At s = 150k, a request at 400k makes 93%
-and one at 900k nearly all of it; at s = 300k, 74% and 95%. At s = 0 every
-request makes the same progress, whatever its context.
+how much it gets done, as a share of the most a request can, which it
+approaches as its context grows. A session's progress is the sum of its
+requests' efficacies. s is the scale over which more context stops helping, in
+the way a time constant is for a decay: each further s of context shrinks the
+gap to full efficacy by a factor of e. So a request reaches half of full
+efficacy at x = s·ln 2 ≈ 0.69s, 1 − 1/e ≈ 63% at s, 86% at 2s and 95% at 3s. At
+s = 150k, a request at 400k has 93% and one at 900k nearly 100%; at s = 300k,
+74% and 95%. At s = 0 every request has the same efficacy, whatever its
+context.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-progress-dark.svg">
-  <img alt="A request's progress against its context, as a share of its full progress, for s of 0, 150k, 300k and 500k. At s = 0 the line is flat at 100%. Each other curve rises from 0, reaches 1 − 1/e ≈ 63% at x = s, marked with a dot, and levels off toward 100%. Below 142k, what a compaction leaves, is shaded." src="../assets/model-progress-light.svg">
+  <img alt="A request's efficacy against its context, for s of 0, 150k, 300k and 500k. At s = 0 the line is flat at 100%. Each other curve rises from 0, reaches 1 − 1/e ≈ 63% at x = s, marked with a dot, and levels off toward 100%. Below 142k, what a compaction leaves, is shaded." src="../assets/model-progress-light.svg">
 </picture>
 
 ### The best compaction point
@@ -183,7 +184,7 @@ compaction is an order with fixed cost F₀ + K. Two properties follow.
 
 For s > 0, `model/fit.py` solves the condition numerically. There c₀ matters:
 output and new tokens cost the same per request at any context, but a request's
-progress doesn't, so they weigh on the choice only when s > 0.
+efficacy doesn't, so they weigh on the choice only when s > 0.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-sawtooth-dark.svg">
@@ -248,8 +249,8 @@ Two measurements bear on what the model assumes:
 
 Across s from 0 to 150k, the range "Calibrating s" below allows, the best point
 moves from 259k to 325k and the best turn-end threshold from 200k to 250k. For
-the point to reach 400k, s has to be 275k, where a request at 200k makes 52% of
-its full progress and one at 400k 77%.
+the point to reach 400k, s has to be 275k, where a request at 200k has 52% efficacy
+and one at 400k 77%.
 
 ### Turn ends lower the threshold
 
@@ -348,9 +349,9 @@ fails, a lookup repeated while its result is still in the context, a turn the
 user corrects or interrupts. `model/calibrate.py` counts these as trouble and
 compares it across context sizes within each session, with a fixed effect for
 each session and markers for the 20 requests and two turns after a compaction.
-If a share w of requests is wasted, progress per request is proportional to
+If a share w of requests is wasted, efficacy is proportional to
 1 − w, so each value of s predicts how much more trouble requests at small
-contexts see. That assumes a request that goes right makes the same progress
+contexts see. That assumes a request that goes right gets as much done
 at any context; a gain there would show in none of these
 signals. A corrected or interrupted turn counts as wholly wasted. Corrections
 are matched by a phrase list in what the user typed; scored blind against 160
@@ -448,7 +449,7 @@ turns need detail a summary drops, stays with the question.
   needles) for [Opus 4.6](https://anthropic.com/claude-opus-4-6-system-card)
   falling from 91.9 at 256k to 78.3 at 1M, and GraphWalks BFS for
   [Opus 4.8](https://anthropic.com/claude-opus-4-8-system-card) from 85.9 to
-  68.1. If progress tracked them, compacting earlier would pay. Retrieval
+  68.1. If efficacy tracked them, compacting earlier would pay. Retrieval
   measures much less than getting work done, and "Calibrating s" finds no sign
   of harm in these sessions.
 - **Progress beyond s.** The replay keeps every logged request, so each arm

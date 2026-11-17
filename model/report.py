@@ -88,7 +88,7 @@ def thresholds(S, p, ttl):
     best, ratio = fit.best(cost, progress)
     never = cost[:, -1].sum()
     floors = sum(fit.replay(s, p, c, fit.FLOOR, ttl, idle=fit.IDLE_FLOOR)[0] for s in S)
-    # At s = 0 every request makes the same progress, so cost per unit of progress is cost.
+    # At s = 0 every request has the same efficacy, so cost per unit of progress is cost.
     return {"model": model, "ttl": ttl, "best": best[0] if ratio[0] < 1 else None, "saved_best": 1 - ratio[0],
             "saved_floor": 1 - cost[:, list(fit.THRESHOLDS).index(fit.FLOOR)].sum() / never,
             "saved_floors": 1 - floors / never, "steady": fit.steady(p, c),
