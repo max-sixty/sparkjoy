@@ -127,10 +127,11 @@ with context x an efficacy of
 
 how much it gets done, where 100% is the most a request can get done, the
 level it approaches as its context grows. A session's progress is the sum of its
-requests' efficacies. s is the scale over which more context stops helping, in
-the way a time constant is for a decay: each further s of context shrinks the
-gap to full efficacy by a factor of e. So a request reaches half of full
-efficacy at x = s·ln 2 ≈ 0.69s, 1 − 1/e ≈ 63% at s, 86% at 2s and 95% at 3s. At
+requests' efficacies. s, in tokens, is the context at which a request reaches
+1 − 1/e ≈ 63% of full efficacy. As with a time constant for a decay, each
+further s of context shrinks the gap to full efficacy by a factor of e, so a
+request reaches half of full efficacy at x = s·ln 2 ≈ 0.69s, 63% at s, 86% at
+2s and 95% at 3s. At
 s = 150k, a request at 400k has 93% and one at 900k nearly 100%; at s = 300k,
 74% and 95%. At s = 0 every request has the same efficacy, whatever its
 context.

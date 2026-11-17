@@ -167,7 +167,7 @@ def thresholds(cost, progress, BT, BX, p, c, t, path):
     ax.set_ylim(0, 1_020_000)
     ax.yaxis.set_major_formatter(tokens)
     ax.set_yticks([0, 250_000, 500_000, 750_000, 1_000_000])
-    ax.set_xlabel("s, the scale over which more context stops helping a request", color=t["muted"], fontsize=10)
+    ax.set_xlabel("s, the context at which a request reaches 63% of full efficacy", color=t["muted"], fontsize=10)
     ax.set_ylabel("best compaction point", color=t["muted"], fontsize=10)
     ax.legend(frameon=False, fontsize=10, labelcolor=t["ink"], loc="lower right")
     fig.savefig(path, transparent=True, bbox_inches="tight", metadata={"Date": None})
