@@ -199,7 +199,7 @@ def trouble(e, key="", j=J, f=F):
 
 
 def derived(e, m, j=J, f=F, cost=None):
-    """α, the trouble by band, the saturating scale s and D from one set of coefficients e; m holds
+    """α, the trouble by band, the saturating form's s and D from one set of coefficients e; m holds
     the sample's means, and cost(x) prices a request at context x for D."""
     w = m["wasted"] + f * (m["corrected"] / j + m["interrupted"])  # the mean share of requests wasted
     out = {"slope": trouble(e, j=j, f=f)}
