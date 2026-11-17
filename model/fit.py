@@ -408,7 +408,7 @@ def eta(x, scale):
 
 def curve(p, c, scale=0, lost=0.0):
     """J(X), the long-run cost per unit of progress of compacting at X, on a grid of X from K to AUTO,
-    for efficacy with scale s. `lost` is D, what the detail a compaction drops costs the requests
+    for efficacy with half point s. `lost` is D, what the detail a compaction drops costs the requests
     after it, in cached reads."""
     h, c0, F0, K1 = terms(p, c)
     X = np.append(np.arange(K1 + 1_000, AUTO, 1_000.0), AUTO)
