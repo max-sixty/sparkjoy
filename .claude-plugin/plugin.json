@@ -1,6 +1,5 @@
 {
   "name": "sparkjoy",
-  "version": "0.3.0",
   "description": "Compacts Claude Code's conversation when a piece of work is finished, rather than when the context fills: after each turn, and before an idle session's prompt cache lapses, the session's own model decides.",
   "author": { "name": "Maximilian Roos" },
   "homepage": "https://github.com/max-sixty/sparkjoy",
