@@ -125,8 +125,8 @@ with context x an efficacy of
 \eta(x) = 1 - e^{-x/s}
 ```
 
-how much it gets done, as a share of the most a request can, which it
-approaches as its context grows. A session's progress is the sum of its
+how much it gets done, where 100% is the most a request can get done, the
+level it approaches as its context grows. A session's progress is the sum of its
 requests' efficacies. s is the scale over which more context stops helping, in
 the way a time constant is for a decay: each further s of context shrinks the
 gap to full efficacy by a factor of e. So a request reaches half of full
