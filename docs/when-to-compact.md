@@ -2,8 +2,8 @@
 
 In a Claude Code session, every model request reads the whole conversation
 from the prompt cache, so a long context makes every request dearer. A
-compaction replaces the conversation with a summary. It costs a summary and a
-rewrite of the shorter context to the cache, and makes every later request
+compaction replaces the conversation with a summary. It costs the summary's
+output and a cache write of the shorter context, and makes every later request
 cheaper. This page models that trade, fits the model to the author's sessions,
 and gives the context size at which to compact.
 
@@ -79,10 +79,10 @@ Code caches for an hour on a subscription and for five minutes with an API key.
 
 ### What a request costs
 
-A request with context x reads the context from the cache, writes the g tokens
-added since the request before it, and produces ō output tokens. A share ℓ of
-requests find the cache lapsed or invalidated, and write the whole context
-again instead, except the system prompt and tools (P tokens), which Claude
+A request with context x is a cache read of the context, a cache write of the
+g tokens added since the request before it, and ō output tokens. A share ℓ of
+requests find the cache lapsed or invalidated, and make a cache write of the
+whole context instead, except the system prompt and tools (P tokens), which Claude
 Code keeps in a cache shared across sessions:
 
 ```math
@@ -99,17 +99,17 @@ grow with the context. ī is the uncached input, a couple of tokens.
 F(x) = x + o\,S + (w-1)\,(K - P)
 ```
 
-- The summary request reads the context x from the cache and writes a summary
-  of S output tokens.
+- The summary request is a cache read of the context x and S tokens of output,
+  the summary.
 - The context then restarts from K tokens, in three parts:
   - P, the system prompt and tools (30k), which sit in a cache shared across
-    sessions, so a compaction never rewrites them;
+    sessions, so a compaction never makes a cache write of them;
   - the rest of the first request after the compaction (92k): instructions,
     the summary, and the recent messages and files Claude Code attaches again;
   - E, the files and output the requests after it read again because the
     summary left them out (20k).
 
-  The last two are written to the cache again, K − P tokens in all. The model
+  The last two are a cache write again, K − P tokens in all. The model
   needs only K and P, not how the rest splits.
 
 F₀ = oS + (w−1)(K − P) is the part of F that doesn't depend on x.
@@ -216,7 +216,7 @@ one-hour cache the sessions used:
 | E, tokens read again after a compaction | 20k                      | 15–26k       | growth over the first 20 requests of a turn after a compaction, minus the same after another turn |
 | g, growth per request                   | 1,706                    | 1,615–1,805  | mean, leaving out the 20 requests after each compaction                            |
 | ō, output per request                   | 746                      | 699–792      | mean                                                                               |
-| ℓ, requests that rewrite the context    | 0.56%                    | 0.51–0.63%   | 18% of turn ends are followed by a gap of over an hour                             |
+| ℓ, requests that cache-write the context | 0.56%                    | 0.51–0.63%   | 18% of turn ends are followed by a gap of over an hour                             |
 | S, summary output                       | 4,000                    | 3,300–8,000  | the summary's text is a median 3,300 (chars/4); its thinking isn't logged, and the pass's median 58 s at this account's output speed allows up to about 8,000 |
 | K, context a compaction leaves; h, c₀, F₀ | 142k; 1.22, 134k, 4.77M |            | derived: K is the first request plus E; F₀ is $0.95                                |
 
@@ -284,7 +284,7 @@ longer supports: a mistake, a correction from the user, a step re-run. If that
 costs D cached reads on average, D adds to F₀, and X\* − K grows with
 √(F₀ + K + D). At s = 0, X\* reaches 400k when D is 18.8M cached reads, $3.75
 at Opus 5.5 prices: 3.6 times the compaction's own cost at 400k, or the price
-of writing 481k tokens again, about 24 times the E measured. LangWatch's
+of a cache write of 481k tokens, about 24 times the E measured. LangWatch's
 author [found](https://langwatch.ai/blog/context-tax-when-to-compact) that in
 their sessions, 42% of their messages in the five steps after a compaction
 carried a correction, matched by phrase, against 18% otherwise. In these
@@ -297,8 +297,8 @@ hand.
 
 ### Idle sessions
 
-When a session sits idle until its cache lapses, the next request writes the
-whole context again, compacted or not. Keeping costs that request
+When a session sits idle until its cache lapses, the next request makes a cache
+write of the whole context, compacted or not. Keeping costs that request
 P + w(x − P). Compacting first, while the cache still holds the context, costs
 the summary, x + oS, and then P + w(K − P). Compacting is cheaper when
 
@@ -527,7 +527,7 @@ Every token is worth the same only at β = 1, or with s far past the window.
   summary. Neither fits a model of when to compact.
   [Nadir](https://getnadir.com/blog/mask-dont-summarize-agent-context-cache-cost/)
   compacts when the cache reads of stale tokens over the turns left exceed one
-  rewrite of what stays, in a simulation that leaves quality out.
+  cache write of what stays, in a simulation that leaves quality out.
   [Relace](https://relace.ai/blog/compact) argues for compacting on a cache
   miss, as for idle sessions above, and
   [exe.dev](https://blog.exe.dev/expensively-quadratic) shows cache reads come
