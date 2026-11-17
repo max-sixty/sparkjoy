@@ -140,9 +140,15 @@ async function afterTurn($: EngineInterface, watch: Watch, changes: number, repl
     // A subscription caches for an hour and reports at least one rate-limit
     // window, though not always a five-hour one: some plans report only the
     // weekly window. An API key reports none and caches for five minutes, too
-    // short for this to pay. Claude Code's own idle compaction reads the
-    // cache's lifetime from its requests, which a mod can't. The wait starts at
-    // the turn's end, whatever the judge does meanwhile.
+    // short for this to pay. The wait starts at the turn's end, whatever the
+    // judge does meanwhile.
+    // TODO: gate on the cache lifetime the main thread's requests asked for,
+    // as Claude Code's own idle compaction does, rather than on rate limits,
+    // which misread usage credits and gateways (both cache five minutes). The
+    // mod API gives it only for subagents (`$.agent.list()`'s
+    // `lastRequest.cacheTtl`). An `http.fetch` hook can read `"ttl":"1h"` from
+    // the engine's request bodies, but the test engine can't raise one, so the
+    // idle tests could no longer arm the timer.
     if (tokens >= IDLE_FLOOR && rateLimits.length > 0) {
       const due = (await $.clock.now()) + IDLE_MS
       $.clock.after(IDLE_MS, () => void idle($, isCurrent, say, tokens, reply, due))
