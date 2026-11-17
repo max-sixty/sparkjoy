@@ -52,8 +52,8 @@ def compacted(ax, K1, t, y, va):
 
 
 def progress_curve(p, c, t, path):
-    """A request's progress against its context, 1 - exp(-x/s), as a share of what unlimited context
-    would give, for the values of s the cost chart draws. Each curve reaches 1 - 1/e at x = s."""
+    """A request's progress against its context, 1 - exp(-x/s), as a share of full progress, the level it
+    approaches as the context grows, for the values of s the cost chart draws. Each curve reaches 1 - 1/e at x = s."""
     fig, ax = plt.subplots(figsize=(9, 3.2))
     style(ax, t)
     compacted(ax, fit.terms(p, c)[3], t, 0.75, "center")
@@ -73,7 +73,7 @@ def progress_curve(p, c, t, path):
     ax.set_ylim(0, 1.05)
     ax.legend(frameon=False, fontsize=10, labelcolor=t["ink"], loc="lower right")
     ax.set_xlabel("the request's context, x", color=t["muted"], fontsize=10)
-    ax.set_ylabel("progress, as a share of what\nunlimited context would give", color=t["muted"], fontsize=10)
+    ax.set_ylabel("progress, as a share\nof full progress", color=t["muted"], fontsize=10)
     fig.savefig(path, transparent=True, bbox_inches="tight", metadata={"Date": None})
     plt.close(fig)
 
