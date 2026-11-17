@@ -125,7 +125,8 @@ with context x make
 \eta(x) = 1 - e^{-x/s}
 ```
 
-units of progress, its share of what it would make with unlimited context. s
+units of progress, as a share of its full progress, the most a request can
+make, which it approaches as its context grows. s
 is the scale over which more context stops helping, in the way a time constant
 is for a decay: each further s of context shrinks the gap to full progress by
 a factor of e. So a request makes half its full progress at x = s·ln 2 ≈ 0.69s,
@@ -135,7 +136,7 @@ request makes the same progress, whatever its context.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-progress-dark.svg">
-  <img alt="A request's progress against its context, as a share of what unlimited context would give, for s of 0, 150k, 300k and 500k. At s = 0 the line is flat at 100%. Each other curve rises from 0, reaches 1 − 1/e ≈ 63% at x = s, marked with a dot, and levels off toward 100%. Below 142k, what a compaction leaves, is shaded." src="../assets/model-progress-light.svg">
+  <img alt="A request's progress against its context, as a share of its full progress, for s of 0, 150k, 300k and 500k. At s = 0 the line is flat at 100%. Each other curve rises from 0, reaches 1 − 1/e ≈ 63% at x = s, marked with a dot, and levels off toward 100%. Below 142k, what a compaction leaves, is shaded." src="../assets/model-progress-light.svg">
 </picture>
 
 ### The best compaction point
