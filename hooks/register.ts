@@ -130,10 +130,12 @@ async function afterTurn($: EngineInterface, watch: Watch, changes: number, repl
     const tokens = context.tokens
     if (tokens === undefined || !isCurrent()) return
 
-    // A subscription caches for an hour and reports a five-hour rate-limit
-    // window; an API key caches for five minutes, too short for this to pay.
-    // The wait starts at the turn's end, whatever the judge does meanwhile.
-    if (tokens >= IDLE_FLOOR && rateLimits.some(limit => limit.kind === 'five_hour')) {
+    // A subscription caches for an hour and reports at least one rate-limit
+    // window, though not always a five-hour one: some plans report only the
+    // weekly window. An API key reports none and caches for five minutes, too
+    // short for this to pay. The wait starts at the turn's end, whatever the
+    // judge does meanwhile.
+    if (tokens >= IDLE_FLOOR && rateLimits.length > 0) {
       $.clock.after(IDLE_MS, () => void idle($, isCurrent, say, tokens, reply))
     }
     if (tokens < FLOOR) return
