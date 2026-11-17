@@ -83,9 +83,9 @@ next) are in `cases.json`.
 | leaf-ui-fixes-idle | idle | 290k | compact | idle 55 minutes after everything landed |
 
 The two small natural breaks are the same kind of moment as the compact cases
-above them. They are labelled keep because a compaction leaves about 120k, so
-at 210k it saves each later request about 90k while writing 120k to the cache
-again and losing detail. The idle case is labelled compact at 290k because its
+above them. They are labelled keep because a compaction leaves about 142k, so
+at 210k it saves each later request about 68k while making a cache write of
+about 110k and losing detail. The idle case is labelled compact at 290k because its
 cache lapses either way.
 
 ## Results
@@ -94,23 +94,24 @@ From `run.py --report` on 16 November 2026; each cell counts the runs that
 matched the label. `main` is the question published at 02beed1;
 `sized-question` (cdfc871) adds the context's size, what a compaction leaves
 and how many requests it takes to pay back; `detail` (0915ee8) says what
-decides it; `measured` (1f004a4, the question now, 17 November) weighs what
-keeping costs against what a compaction loses ([Context size](#context-size)).
+decides it; `measured` (1f004a4, 17 November) weighs what keeping costs
+against what a compaction loses ([Context size](#context-size)); `now` (75fa52f,
+the question now) is `measured` with its costs from the cost model.
 
-| case | recorded | replayed | expected | main | sized-question | detail | measured |
-|---|---|---|---|---|---|---|---|
-| leaf-scaling-closeout | 742k | 520k | compact | 4/4 | 3/3 | 3/3 | 2/2 |
-| leaf-hover-closeout | 736k | 488k | compact | 3/3 | 3/3 | 3/3 | 2/2 |
-| leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 | 3/3 | 2/2 |
-| leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 | 3/3 | 2/2 |
-| worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 | 4/4 | 2/2 |
-| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 | 0/2 |
-| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 | 0/2 |
-| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 |
-| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 |
-| leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 | 0/4 | 0/2 |
-| worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 | 0/4 | 0/2 |
-| leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 | 4/4 | 2/2 |
+| case | recorded | replayed | expected | main | sized-question | detail | measured | now |
+|---|---|---|---|---|---|---|---|---|
+| leaf-scaling-closeout | 742k | 520k | compact | 4/4 | 3/3 | 3/3 | 2/2 | 2/2 |
+| leaf-hover-closeout | 736k | 488k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 |
+| leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 |
+| leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 |
+| worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 |
+| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 | 0/2 | 1/2 |
+| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 |
+| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 2/2 |
+| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 |
+| leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 |
+| worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 |
+| leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 |
 
 The first two questions said compact in all 73 runs. Their reasons agree: the
 context is mostly finished work, and what the next step needs is in the
@@ -182,6 +183,15 @@ end from about 250k costs least and the detail lost was small where it could be
 measured. Its response to size is noisy: on the mid-task cases it kept in 3 of
 8 runs told 450k and in 5 of 8 told 750k. A first wording, which said a
 compaction "cost the requests after it little", compacted in 46 of 48 runs.
+
+`now` is `measured` with the costs it states from the cost model
+([e36d81d](https://github.com/max-sixty/sparkjoy/commit/e36d81d)): what a
+compaction leaves, 122k, of which all but 30k takes a cache write, against 142k
+for the requests after it, and a payback rounded up, such as 13 requests at
+500k where `measured` said 14. It compacts at the same cases, and keeps in 3 of
+the 8 mid-task runs (both at leaf-menu-design, one at
+leaf-ring-test-rewrite-wait), against none for `measured`. With two runs a
+case, that difference is within the noise above (Fisher's exact test, p = 0.2).
 
 ## Against the live plugin
 
