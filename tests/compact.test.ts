@@ -121,15 +121,16 @@ test('the question sizes the saving for the context it asks about', async ($, on
   await begin($)
 
   await turn($, 't1')
-  resize(400_000)
+  resize(250_000)
   await turn($, 't2')
 
-  // (100 × 4k summary + 40 × 120k rewrite) / (500k − 120k) read, rounded up.
-  expect(forks[0]).toContain('At 500k a compaction pays for itself after about 14 more requests')
-  expect(forks[1]).toContain('At 400k a compaction pays for itself after about 19 more requests')
-  // 9 and 38 requests × (500k − 120k) read, over the same 5.2M a compaction costs.
+  // (500k read + 100 × 4k summary + 39 × (122k − 30k + 20k) cache write) over
+  // the 1.22 × (500k − 142k) each later request saves, rounded up.
+  expect(forks[0]).toContain('At 500k a compaction pays for itself after about 13 more requests')
+  expect(forks[1]).toContain('At 250k a compaction pays for itself after about 39 more requests')
+  // 9 and 38 requests × that saving, over what a compaction costs.
   expect(forks[0]).toContain('keeping 500k through one more turn costs as much as about 0.7 compactions for a median turn and 3 for a mean one')
-  expect(forks[1]).toContain('keeping 400k through one more turn costs as much as about 0.5 compactions for a median turn and 2 for a mean one')
+  expect(forks[1]).toContain('keeping 250k through one more turn costs as much as about 0.2 compactions for a median turn and 1.0 for a mean one')
 })
 
 test('a verdict to keep leaves the conversation alone and says why', async ($, on) => {
@@ -143,16 +144,16 @@ test('a verdict to keep leaves the conversation alone and says why', async ($, o
   expect(logs).toEqual(['Kept at 500k tokens: mid-debug'])
 })
 
-test('below 400k the mod asks no judge and prints nothing', async ($, on) => {
+test('below 250k the mod asks no judge and prints nothing', async ($, on) => {
   const { begin, forks, compactions, logs, turn, resize } = engine(on)
   await begin($)
 
-  resize(399_000)
+  resize(249_000)
   await turn($, 't1')
   expect(forks).toEqual([])
   expect(logs).toEqual([])
 
-  resize(400_000)
+  resize(250_000)
   await turn($, 't2')
   expect(forks.length).toBe(1)
   expect(compactions).toEqual([''])
@@ -283,7 +284,7 @@ test('a session with nobody at the prompt asks no judge', async ($, on) => {
 })
 
 test('a session left idle is asked again before its prompt cache lapses', async ($, on) => {
-  const { begin, clock, compactions, forks, logs, turn } = engine(on, { tokens: 300_000 })
+  const { begin, clock, compactions, forks, logs, turn } = engine(on, { tokens: 200_000 })
   await begin($)
 
   await turn($, 't1', 'Merged #13. ✅')
@@ -294,14 +295,14 @@ test('a session left idle is asked again before its prompt cache lapses', async 
   await clock.settle()
   expect(forks.length).toBe(1)
   expect(forks[0]).toContain('Merged #13. ✅')
-  expect(forks[0]).toContain('writes all 300k tokens to the cache again, against about 120k after a compaction')
+  expect(forks[0]).toContain('writes all but 30k of its 200k tokens to the cache again, against about 92k after a compaction')
   expect(forks[0]).not.toContain('pays for itself')
   expect(compactions).toEqual([''])
-  expect(logs).toEqual(['Compacting at 300k tokens, idle 55 minutes: the PR merged'])
+  expect(logs).toEqual(['Compacting at 200k tokens, idle 55 minutes: the PR merged'])
 })
 
 test('an idle session the model keeps is left as it is', async ($, on) => {
-  const { begin, clock, compactions, logs, turn } = engine(on, { tokens: 300_000, idleVerdict: KEEP })
+  const { begin, clock, compactions, logs, turn } = engine(on, { tokens: 200_000, idleVerdict: KEEP })
   await begin($)
 
   await turn($, 't1')
@@ -309,7 +310,7 @@ test('an idle session the model keeps is left as it is', async ($, on) => {
   await clock.settle()
 
   expect(compactions).toEqual([])
-  expect(logs).toEqual(['Kept at 300k tokens, idle 55 minutes: mid-debug'])
+  expect(logs).toEqual(['Kept at 200k tokens, idle 55 minutes: mid-debug'])
 })
 
 test('a session kept at its turn’s end is asked again once it sits idle', async ($, on) => {
@@ -325,7 +326,7 @@ test('a session kept at its turn’s end is asked again once it sits idle', asyn
 })
 
 test('a compaction while the idle question runs drops its verdict', async ($, on) => {
-  const { begin, clock, compactions, logs, turn, resize } = engine(on, { tokens: 300_000, forkMs: 1_000 })
+  const { begin, clock, compactions, logs, turn, resize } = engine(on, { tokens: 200_000, forkMs: 1_000 })
   await begin($)
 
   await turn($, 't1')
@@ -335,7 +336,7 @@ test('a compaction while the idle question runs drops its verdict', async ($, on
   await clock.settle()
 
   expect(compactions).toEqual([])
-  expect(logs).toEqual(['Dropped the verdict at 300k tokens, idle 55 minutes: the conversation moved on'])
+  expect(logs).toEqual(['Dropped the verdict at 200k tokens, idle 55 minutes: the conversation moved on'])
 })
 
 test('a compaction at the turn’s end leaves nothing for idleness to do', async ($, on) => {
@@ -350,7 +351,7 @@ test('a compaction at the turn’s end leaves nothing for idleness to do', async
 })
 
 test('a turn begun meanwhile restarts the wait', async ($, on) => {
-  const { begin, clock, compactions, turn } = engine(on, { tokens: 300_000 })
+  const { begin, clock, compactions, turn } = engine(on, { tokens: 200_000 })
   await begin($)
 
   await turn($, 't1')
@@ -365,7 +366,7 @@ test('a turn begun meanwhile restarts the wait', async ($, on) => {
 })
 
 test('a turn still running at the deadline is left alone', async ($, on) => {
-  const { begin, clock, compactions, logs, turn } = engine(on, { tokens: 300_000 })
+  const { begin, clock, compactions, logs, turn } = engine(on, { tokens: 200_000 })
   await begin($)
 
   await turn($, 't1')
@@ -392,7 +393,7 @@ test('the idle wait runs from the turn’s end, however long the judge takes', a
 })
 
 test('a compaction meanwhile, such as Claude Code’s own idle one, is not repeated', async ($, on) => {
-  const { begin, clock, compactions, turn, resize } = engine(on, { tokens: 300_000 })
+  const { begin, clock, compactions, turn, resize } = engine(on, { tokens: 200_000 })
   await begin($)
 
   await turn($, 't1')
@@ -404,20 +405,25 @@ test('a compaction meanwhile, such as Claude Code’s own idle one, is not repea
   expect(compactions).toEqual([])
 })
 
-test('an idle session below 200k is left as it is', async ($, on) => {
-  const { begin, clock, compactions, turn } = engine(on, { tokens: 150_000 })
+test('an idle session below 175k is left as it is', async ($, on) => {
+  const { begin, clock, compactions, turn, resize } = engine(on, { tokens: 174_000 })
   await begin($)
 
   await turn($, 't1')
   await clock.advance(IDLE)
   await clock.settle()
-
   expect(compactions).toEqual([])
+
+  resize(175_000)
+  await turn($, 't2')
+  await clock.advance(IDLE)
+  await clock.settle()
+  expect(compactions).toEqual([''])
 })
 
 test('an idle session on a plan with only a weekly limit is asked too', async ($, on) => {
   const rateLimits = [{ kind: 'seven_day', percentUsed: 85 }]
-  const { begin, clock, compactions, turn } = engine(on, { tokens: 300_000, rateLimits })
+  const { begin, clock, compactions, turn } = engine(on, { tokens: 200_000, rateLimits })
   await begin($)
 
   await turn($, 't1')
@@ -428,7 +434,7 @@ test('an idle session on a plan with only a weekly limit is asked too', async ($
 })
 
 test('an idle session on an API key is left as it is', async ($, on) => {
-  const { begin, clock, compactions, turn } = engine(on, { tokens: 300_000, rateLimits: [] })
+  const { begin, clock, compactions, turn } = engine(on, { tokens: 200_000, rateLimits: [] })
   await begin($)
 
   await turn($, 't1')

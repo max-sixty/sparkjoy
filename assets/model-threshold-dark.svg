@@ -246,8 +246,8 @@ z
     </g>
    </g>
    <g id="line2d_17">
-    <path d="M 45.967188 128.515765 
-L 548.167188 128.515765 
+    <path d="M 45.967188 157.866353 
+L 548.167188 157.866353 
 " clip-path="url(#pe589eab913)" style="fill: none; stroke-dasharray: 0.8,1.32; stroke-dashoffset: 0; stroke: #c3c2b7; stroke-width: 0.8"/>
    </g>
    <g id="line2d_18">
@@ -381,10 +381,10 @@ L 548.167188 206.784
 " style="fill: none; stroke: #3a3936; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
    <g id="text_14">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #c3c2b7" x="45.967188" y="126.167718" transform="rotate(-0 45.967188 126.167718)">sparkjoy asks from 400k</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #c3c2b7" x="548.167188" y="155.518306" transform="rotate(-0 548.167188 155.518306)">sparkjoy asks from 250k</text>
    </g>
    <g id="text_15">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #c3c2b7" x="45.967188" y="15.613835" transform="rotate(-0 45.967188 15.613835)">Claude Code compacts</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #c3c2b7" x="548.167188" y="15.613835" transform="rotate(-0 548.167188 15.613835)">Claude Code compacts</text>
    </g>
    <g id="legend_1">
     <g id="line2d_21">

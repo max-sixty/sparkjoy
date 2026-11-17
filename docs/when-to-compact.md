@@ -17,8 +17,8 @@ grows back about 1.7k tokens a request.
 | ------------- | ------------------------ | --------------------- | --------------------- |
 | 200k          | 58k less                 | 71 requests           | 34 requests           |
 | 260k          | 118k less                | 35 requests           | 69 requests           |
-| 400k          | 258k less                | 16 requests           | 151 requests          |
-| 700k          | 558k less                | 8 requests            | 327 requests          |
+| 400k          | 258k less                | 17 requests           | 151 requests          |
+| 700k          | 558k less                | 9 requests            | 327 requests          |
 
 Compacting costs least where a compaction pays for itself in about half the
 time the context takes to grow back. At 200k it hasn't paid by the time the
@@ -30,9 +30,9 @@ would interrupt work in progress, so sparkjoy, like a person typing
 `/compact`, compacts only at the end of a turn. Turns are uneven, a median 9
 requests and a mean 38, so a policy limited to turn ends does best compacting
 earlier, from about **200k**: 30.2% less than never compacting, where every
-turn end past 400k, sparkjoy's current floor, saves 25.1%. Compacting idle
+turn end past 400k, sparkjoy's first floor, saves 25.1%. Compacting idle
 sessions as well, from about 175k, raises the best turn-end threshold to 250k
-and the saving to 30.9%.
+and the saving to 30.9%. sparkjoy asks from these two.
 
 These figures take a request to get as much done at any context size. The
 model lets more context help a request, up to a limit: s is the context at
@@ -314,16 +314,17 @@ Replayed at s = 0, with every policy compacting wherever it allows:
 
 | policy                                                   | saved |
 | -------------------------------------------------------- | ----- |
-| turn ends from 400k, sparkjoy's current floor            | 25.1% |
-| and idle sessions from 200k, its idle floor              | 28.5% |
+| turn ends from 400k, sparkjoy's first floor              | 25.1% |
+| and idle sessions from 200k, its first idle floor        | 28.5% |
 | turn ends from 200k, the best without idle compaction    | 30.2% |
-| turn ends from 250k and idle sessions from 175k, the best pair | 30.9% |
+| turn ends from 250k and idle sessions from 175k: the best pair, and sparkjoy's floors | 30.9% |
 
 The pairs come from a grid of turn-end thresholds in steps of 50k and idle
 thresholds in steps of 25k; every pair of 200k–250k at turn ends and 150k–175k
 idle comes within 0.3 points of the best. 18% of turn ends here are followed by
 an hour's gap, so idle compaction does much of what a lower turn-end threshold
-would: sparkjoy's two floors together save 2.4 points less than the best pair.
+would: sparkjoy's first two floors together saved 2.4 points less than the
+best pair.
 
 ### Other prices and cache lifetimes
 
@@ -418,9 +419,12 @@ matters.
 ## What it implies for sparkjoy
 
 With s at most 100k, and D small where it could be measured, the model
-supports asking at turn ends from 250k rather than 400k. 250k doesn't depend on
-the fit of s: it comes within 0.2 points of the best threshold for any s up to
-200k, where 400k gives up 5 points if s is near 0. In idle sessions it supports asking from 150k–175k rather than 200k.
+supports asking at turn ends from 250k rather than 400k, where sparkjoy first
+asked. 250k doesn't depend on the fit of s: it comes within 0.2 points of the
+best threshold for any s up to 200k, where 400k gives up 5 points if s is near
+0. In idle sessions it supports asking from 150k–175k rather than 200k.
+sparkjoy asks from 250k and 175k, and its question's payback and turn-cost
+figures come from F(x) and h above, with the fitted parameters rounded.
 The question's payback sum misleads when it is set beside the length of a
 turn. A compaction is repaid over every request until
 the context grows back, (x − K)/g of them, and at a turn end it pays even
@@ -460,7 +464,7 @@ turns need detail a summary drops, stays with the question.
 In any model where 700k is best, compacting there barely beats never
 compacting. A request's cost rises in step with its context, from $0.06 at 142k
 to $0.20 at 700k, and a compaction costs $0.98, so at 700k one pays for itself
-within 8 requests, fewer than a median turn. Waiting longer pays only if the
+within 9 requests, a median turn. Waiting longer pays only if the
 requests after a compaction get much less done. For that to hold at 700k,
 efficacy must still be climbing steeply there, so it must be low at 142k, and
 each compaction then costs nearly as much progress as it saves in tokens:

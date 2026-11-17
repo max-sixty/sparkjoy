@@ -31,11 +31,11 @@ Reply with the summary it printed and the page's path. The page shows:
   with the context size, whether a turn end or an idle session prompted it,
   and the model's reason. Under its old name, compact-when-done, it logged
   only the checks that compacted.
-- **Idle returns**: each time a session left with 200k or more in context took
+- **Idle returns**: each time a session left with 175k or more in context took
   a new message after an hour or more, and whether a compaction came in
   between.
 - **Thresholds**: the turn-end threshold the cost model fits to these sessions,
-  beside the 400k and 200k sparkjoy asks from.
+  beside the 250k and 175k sparkjoy asks from.
 
 The savings come from replaying each session's logged requests with sparkjoy's
 compactions where it made them and without them, at list prices for the
