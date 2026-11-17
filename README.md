@@ -175,9 +175,9 @@ turn ends, from 401k to 911k.
 
 The question now also says what keeping costs, which grows with the context,
 and what compactions cost the requests after them in my sessions, and asks the
-model to weigh the two. In the evals it compacts at every turn end, the
-mid-task ones at 519k–681k included, as the
-[cost model](docs/when-to-compact.md) recommends past about 250k.
+model to weigh the two. In the evals it compacts at every finished turn end,
+as the [cost model](docs/when-to-compact.md) recommends past about 250k, and
+in 5 of 8 runs at the mid-task ones, 519k–681k.
 
 ## The prompt
 
