@@ -40,8 +40,8 @@ def tokens(v, _=None):
 def shades(t):
     """The colour of each value of s the charts draw: deepening shades of the high colour as s grows,
     so the order of the curves reads at a glance."""
-    return {0: t["mid"], 150_000: tint(t["high"], t["page"], 0.45), 300_000: tint(t["high"], t["page"], 0.72),
-            500_000: t["high"]}
+    return {0: t["mid"], 100_000: tint(t["high"], t["page"], 0.45), 200_000: tint(t["high"], t["page"], 0.72),
+            400_000: t["high"]}
 
 
 def compacted(ax, K1, t, y, va):
@@ -52,19 +52,19 @@ def compacted(ax, K1, t, y, va):
 
 
 def progress_curve(p, c, t, path):
-    """A request's efficacy against its context, 1 - exp(-x/s): how much it gets done, where 1 is the
-    most a request can get done, for the values of s the cost chart draws. Each curve reaches 1 - 1/e at x = s."""
+    """A request's efficacy against its context, 1 - 2^(-x/s): how much it gets done, where 1 is the
+    most a request can get done, for the values of s the cost chart draws. Each curve reaches half at x = s."""
     fig, ax = plt.subplots(figsize=(9, 3.2))
     style(ax, t)
     compacted(ax, fit.terms(p, c)[3], t, 0.75, "center")
     x = np.linspace(0, fit.AUTO, 1_000)
-    at_s = -np.expm1(-1)
+    at_s = 0.5
     for k, color in shades(t).items():
         ax.plot(x, fit.eta(x, k), color=color, lw=2, label=f"s = {tokens(k)}")
         if k:
             ax.plot([k], [at_s], "o", ms=7, mfc=color, mec=t["page"], mew=1.5, zorder=3)
     ax.axhline(at_s, color=t["muted"], lw=0.8, ls=":")
-    ax.text(fit.AUTO, at_s - 0.03, "each dot is at x = s, where efficacy reaches 1 − 1/e ≈ 63%", ha="right", va="top",
+    ax.text(fit.AUTO, at_s - 0.03, "each dot is at x = s, where efficacy reaches half", ha="right", va="top",
             fontsize=9, color=t["muted"])
     ax.set_xlim(0, fit.AUTO)
     ax.xaxis.set_major_formatter(tokens)
@@ -118,7 +118,7 @@ def sawtooth(p, c, t, path):
 
 
 def cost_curve(cost, progress, p, c, t, path):
-    """The steady state's cost per unit of progress against the compaction point, for s from 0 to 500k:
+    """The steady state's cost per unit of progress against the compaction point, for s from 0 to 400k:
     a compaction can follow any request, and the context grows smoothly. Against never compacting,
     where Claude Code compacts at AUTO."""
     fig, ax = plt.subplots(figsize=(9, 3.4))
@@ -167,7 +167,7 @@ def thresholds(cost, progress, BT, BX, p, c, t, path):
     ax.set_ylim(0, 1_020_000)
     ax.yaxis.set_major_formatter(tokens)
     ax.set_yticks([0, 250_000, 500_000, 750_000, 1_000_000])
-    ax.set_xlabel("s, the context at which a request reaches 63% of full efficacy", color=t["muted"], fontsize=10)
+    ax.set_xlabel("s, the context at which a request reaches half of full efficacy", color=t["muted"], fontsize=10)
     ax.set_ylabel("best compaction point", color=t["muted"], fontsize=10)
     ax.legend(frameon=False, fontsize=10, labelcolor=t["ink"], loc="lower right")
     fig.savefig(path, transparent=True, bbox_inches="tight", metadata={"Date": None})

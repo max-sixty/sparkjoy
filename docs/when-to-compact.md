@@ -35,19 +35,19 @@ sessions as well, from about 175k, raises the best turn-end threshold to 250k
 and the saving to 30.9%.
 
 These figures take a request to get as much done at any context size. The
-model lets more context help a request, with returns that diminish over a scale
-s; at s = 0, size doesn't matter. The sessions put s near 0 and at most
-about 150k, where the best point is 325k and the best threshold at turn ends
-250k:
+model lets more context help a request, up to a limit: s is the context at
+which a request gets half as much done as it could, and at s = 0 size doesn't
+matter. The sessions put s near 0 and at most about 100k, where the best point
+is 321k and the best threshold at turn ends 250k:
 
 | s    | best point, compacting after any request | best threshold at turn ends | saved there | saved at 250k | saved at 400k |
 | ---- | ---------------------------------------- | --------------------------- | ----------- | ------------- | ------------- |
 | 0    | 259k (251–269k)                          | 200k (200–240k)             | 30.2%       | 30.0%         | 25.1%         |
-| 50k  | 266k (258–275k)                          | 220k (200–240k)             | 29.6%       | 29.5%         | 24.8%         |
-| 100k | 294k (286–303k)                          | 250k (240–260k)             | 26.5%       | 26.5%         | 22.8%         |
-| 150k | 325k (318–334k)                          | 250k (240–290k)             | 22.7%       | 22.7%         | 20.1%         |
-| 200k | 356k (348–366k)                          | 250k (250–290k)             | 19.3%       | 19.3%         | 17.5%         |
-| 300k | 414k (405–425k)                          | 290k (270–340k)             | 13.9%       | 13.7%         | 13.2%         |
+| 50k  | 277k (270–286k)                          | 240k (200–250k)             | 28.4%       | 28.4%         | 24.1%         |
+| 100k | 321k (314–331k)                          | 250k (240–280k)             | 23.1%       | 23.1%         | 20.4%         |
+| 150k | 366k (358–376k)                          | 280k (250–290k)             | 18.2%       | 18.2%         | 16.7%         |
+| 200k | 408k (399–419k)                          | 290k (260–340k)             | 14.4%       | 14.3%         | 13.6%         |
+| 300k | 485k (473–500k)                          | 340k (290–440k)             | 9.3%        | 8.7%          | 9.1%          |
 
 The second column is the steady-state model's optimum, derived below. The
 third comes from replaying the sessions with compaction only at turn ends.
@@ -114,7 +114,7 @@ F(x) = x + o\,S + (w-1)\,(K - P)
 
 F₀ = oS + (w−1)(K − P) is the part of F that doesn't depend on x.
 
-### Efficacy and its scale s
+### Efficacy and its half point s
 
 The size of the context can change how much a request gets done. A larger
 context helps when more of the work's history is at hand, and the help runs
@@ -122,23 +122,20 @@ out once the context holds what the next steps need. The model gives a request
 with context x an efficacy of
 
 ```math
-\eta(x) = 1 - e^{-x/s}
+\eta(x) = 1 - 2^{-x/s}
 ```
 
 how much it gets done, where 100% is the most a request can get done, the
 level it approaches as its context grows. A session's progress is the sum of its
 requests' efficacies. s, in tokens, is the context at which a request reaches
-1 − 1/e ≈ 63% of full efficacy. As with a time constant for a decay, each
-further s of context shrinks the gap to full efficacy by a factor of e, so a
-request reaches half of full efficacy at x = s·ln 2 ≈ 0.69s, 63% at s, 86% at
-2s and 95% at 3s. At
-s = 150k, a request at 400k has 93% and one at 900k nearly 100%; at s = 300k,
-74% and 95%. At s = 0 every request has the same efficacy, whatever its
-context.
+half of full efficacy. Like a half-life, each further s of context halves the
+gap that remains, so a request reaches 75% at 2s and 88% at 3s. At s = 100k, a
+request at 400k has 94% and one at 900k nearly 100%; at s = 200k, 75% and 96%.
+At s = 0 every request has the same efficacy, whatever its context.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-progress-dark.svg">
-  <img alt="A request's efficacy against its context, for s of 0, 150k, 300k and 500k. At s = 0 the line is flat at 100%. Each other curve rises from 0, reaches 1 − 1/e ≈ 63% at x = s, marked with a dot, and levels off toward 100%. Below 142k, what a compaction leaves, is shaded." src="../assets/model-progress-light.svg">
+  <img alt="A request's efficacy against its context, for s of 0, 100k, 200k and 400k. At s = 0 the line is flat at 100%. Each other curve rises from 0, reaches 50% at x = s, marked with a dot, and levels off toward 100%. Below 142k, what a compaction leaves, is shaded." src="../assets/model-progress-light.svg">
 </picture>
 
 ### The best compaction point
@@ -194,15 +191,15 @@ efficacy doesn't, so they weigh on the choice only when s > 0.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-cost-dark.svg">
-  <img alt="Steady-state cost per unit of progress against the compaction point, for s of 0, 150k, 300k and 500k, against never compacting. Each curve climbs steeply toward 142k, what a compaction leaves. The minima are at 259k (55%), 325k (68%), 414k (82%) and 519k (91%)." src="../assets/model-cost-light.svg">
+  <img alt="Steady-state cost per unit of progress against the compaction point, for s of 0, 100k, 200k and 400k, against never compacting. Each curve climbs steeply toward 142k, what a compaction leaves. The minima are at 259k (55%), 321k (67%), 408k (81%) and 556k (94%)." src="../assets/model-cost-light.svg">
 </picture>
 
-The cost against the compaction point, for s from 0 to 500k. It climbs
+The cost against the compaction point, for s from 0 to 400k. It climbs
 steeply toward K, where compactions come every few requests, and flattens
 around X\*. With s above 0, a compaction costs progress as well as tokens,
 since the requests after it work with less context until it refills, so X\*
 moves later and the saving shrinks. No compaction short of Claude Code's own
-pays above s ≈ 1.7M. These savings are larger than the replay's below because
+pays above s ≈ 1.2M. These savings are larger than the replay's below because
 the steady state's never-compacting arm climbs to 965k in every cycle, where
 real sessions end before many cycles.
 
@@ -245,12 +242,12 @@ Two measurements bear on what the model assumes:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-threshold-dark.svg">
-  <img alt="Best compaction point against s from 0 to 500k. The steady-state point rises from 259k at s = 0 to 325k at 150k, crosses 400k at 275k and reaches 519k at 500k. The replay's best turn-end threshold stays lower: 200k at s = 0, 250k from 100k to 200k, and 280k to 430k beyond." src="../assets/model-threshold-light.svg">
+  <img alt="Best compaction point against s from 0 to 500k. The steady-state point rises from 259k at s = 0 to 321k at 100k, crosses 400k at 190k and reaches 620k at 500k. The replay's best turn-end threshold stays lower: 200k at s = 0, 250k from 75k to 125k, and 280k to 490k beyond." src="../assets/model-threshold-light.svg">
 </picture>
 
-Across s from 0 to 150k, the range "Calibrating s" below allows, the best point
-moves from 259k to 325k and the best turn-end threshold from 200k to 250k. For
-the point to reach 400k, s has to be 275k, where a request at 200k has 52% efficacy
+Across s from 0 to 100k, the range "Calibrating s" below allows, the best point
+moves from 259k to 321k and the best turn-end threshold from 200k to 250k. For
+the point to reach 400k, s has to be 190k, where a request at 200k has 52% efficacy
 and one at 400k 77%.
 
 ### Turn ends lower the threshold
@@ -370,10 +367,10 @@ turns the user answered by typing (90% intervals from resampling sessions):
 | correction (matches) | 20%   | −1.5 (−7.9 to +5.5)          | −2.2 (−9.8 to +5.7)       |
 | interruption         | 0.7%  | +0.04 (−0.61 to +0.64)       | −0.59 (−1.00 to −0.14)    |
 
-At s = 150k, requests below 200k would see 25 points more trouble than those
-at 400k–600k, and at s = 100k 16 points more; the measured difference is −13
+At s = 100k, requests below 200k would see 24 points more trouble than those
+at 400k–600k, and at s = 50k 9 points more; the measured difference is −13
 (−37 to +5).
-The best fit is **s near 0, at most 146k**: X\* is 259k, or 322k at the top of
+The best fit is **s near 0, at most 100k**: X\* is 259k, or 322k at the top of
 the interval, and the best turn-end threshold 200k, or 250k. It is weak
 evidence. Within a session the context grows as a piece of work goes on, and
 compactions come where work ends, so trouble by context is partly trouble by
@@ -394,7 +391,7 @@ well: the data bound the size of the effect but can't tell the shapes apart.
 compactions, which come where a piece of work ends: −34 requests (−85 to +5).
 After the user's and Claude Code's it is +6 requests (−3 to +20), $0.35
 (−$0.14 to +$1.12). X\* reaches 400k only at D = $3.75, 65 wasted requests; at
-$1.12, X\* is 314k and the best turn-end threshold 250k. With s at 146k as
+$1.12, X\* is 314k and the best turn-end threshold 250k. With s at 100k as
 well, the best turn-end threshold is 290k, and 400k saves one point less. An
 estimated 16% of first turns after a compaction drew a correction, against 23%
 of others, where LangWatch found 42% against 18%.
@@ -420,10 +417,10 @@ matters.
 
 ## What it implies for sparkjoy
 
-With s at most 150k, and D small where it could be measured, the model
+With s at most 100k, and D small where it could be measured, the model
 supports asking at turn ends from 250k rather than 400k. 250k doesn't depend on
 the fit of s: it comes within 0.2 points of the best threshold for any s up to
-300k, where 400k gives up 5 points if s is near 0. In idle sessions it supports asking from 150k–175k rather than 200k.
+200k, where 400k gives up 5 points if s is near 0. In idle sessions it supports asking from 150k–175k rather than 200k.
 The question's payback sum misleads when it is set beside the length of a
 turn. A compaction is repaid over every request until
 the context grows back, (x − K)/g of them, and at a turn end it pays even
