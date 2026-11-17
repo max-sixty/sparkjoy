@@ -9,9 +9,9 @@ and gives the context size at which to compact.
 
 For the author's sessions on Opus 5.5 with a one-hour cache, the model says to
 compact when the context reaches about **260k tokens**. In plain numbers: a
-compaction costs about as much as reading 4.8M cached tokens, $0.95; it leaves
-about 142k; each later request reads the difference less; and the context
-grows back about 1.7k tokens a request.
+compaction costs about as much as reading 4.8M cached tokens, $0.95, besides
+one read of the context; it leaves about 142k; each later request reads the
+difference less; and the context grows back about 1.7k tokens a request.
 
 | compacting at | each later request reads | pays for itself after | context grows back in |
 | ------------- | ------------------------ | --------------------- | --------------------- |
