@@ -453,6 +453,53 @@ turns need detail a summary drops, stays with the question.
 - **Progress beyond s.** The replay keeps every logged request, so each arm
   makes the same progress by construction, and only s lets context size change it.
 
+## Questions
+
+### Why does no fit put the best point near 700k?
+
+In any model where 700k is best, compacting there barely beats never
+compacting. A request's cost rises in step with its context, from $0.06 at 142k
+to $0.20 at 700k, and a compaction costs $0.98, so at 700k one pays for itself
+within 8 requests, fewer than a median turn. Waiting longer pays only if the
+requests after a compaction get much less done. For that to hold at 700k,
+efficacy must still be climbing steeply there, so it must be low at 142k, and
+each compaction then costs nearly as much progress as it saves in tokens:
+
+| what puts the best point at 700k                                    | efficacy at 142k | progress per dollar against never compacting |
+| ------------------------------------------------------------------- | ---------------- | -------------------------------------------- |
+| s = 635k                                                            | 14%              | +1.9%                                        |
+| β = 0.75 (best point 685k)                                          | 23% of 1M's      | +1.1%                                        |
+| s = 0, and each compaction loses $21 of detail, 370 requests' worth | 100%             | +5.3%                                        |
+
+The sessions show no such world. Requests at 142k would get about a quarter of
+what those at 700k do, yet requests below 200k see no more trouble than those
+at 400k–600k ("Calibrating s"). A late compaction can still be right where the
+next turns need detail a summary drops, and that is a call for each turn end,
+which sparkjoy's question makes.
+
+### Why a saturating form rather than a power law?
+
+A power law, η ∝ x^β, gives every doubling of the context the same gain, a
+factor of 2^β, wherever it starts. So it can't hold at small contexts: at
+β = 0.1, a request with 1k tokens would get half as much done as one at 1M. The
+saturating form gets almost nothing done with almost no context and levels off
+once the context holds what the work needs. The cost depends only on the curve
+from 142k to 965k, under three doublings, where the two fit the sessions about
+equally well. At the sessions' β of 0.06 (−0.18 to +0.27), the power law puts
+the best point at 266k, or 298k at the top of that range, against 259k–321k for
+the saturating form. A question for anyone who runs agents tells them apart:
+does doubling an agent's context from 400k to 800k improve its next steps by
+about as much as doubling from 100k to 200k, or by much less? Much less is the
+saturating form.
+
+### Does more context have diminishing returns under both forms?
+
+Per token, yes. With β below 1 or s above 0, a token at 400k adds less than one
+at 100k: half as much under a power law with β = 0.5, 29% with β = 0.1, and
+13–77% for s from 100k to 800k. Per doubling, only the saturating form
+diminishes, since a power law gains the same from each doubling at any size.
+Every token is worth the same only at β = 1, or with s far past the window.
+
 ## Prior work
 
 - **Long contexts degrade.**
