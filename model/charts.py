@@ -73,7 +73,7 @@ def progress_curve(p, c, t, path):
     ax.set_ylim(0, 1.05)
     ax.legend(frameon=False, fontsize=10, labelcolor=t["ink"], loc="lower right")
     ax.set_xlabel("the request's context, x", color=t["muted"], fontsize=10)
-    ax.set_ylabel("progress, as a share\nof full progress", color=t["muted"], fontsize=10)
+    ax.set_ylabel("η(x), progress as a\nshare of full progress", color=t["muted"], fontsize=10)
     fig.savefig(path, transparent=True, bbox_inches="tight", metadata={"Date": None})
     plt.close(fig)
 
