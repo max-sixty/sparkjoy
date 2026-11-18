@@ -13,8 +13,11 @@ const IDLE = 55 * 60_000
 // `rateLimits` (a subscription's five-hour and weekly ones unless told
 // otherwise), a fork that answers `verdict` after a turn and `idleVerdict`
 // after an idle wait, each after `forkMs` (`null`: an empty reply),
-// compactions that fail `compactFailures` times before one succeeds, a turn
-// whose end settles after `endMs`, and a record of what it was asked.
+// compactions that take `compactMs` and fail `compactFailures` times before
+// one succeeds, a turn whose end settles after `endMs`, a store holding
+// `stored` (what an earlier process left), a conversation whose newest message
+// is `m0` until a turn or a compaction changes it, and a record of what it was
+// asked.
 function engine(
   on: On,
   {
@@ -23,7 +26,9 @@ function engine(
     idleVerdict = COMPACT as string | null,
     forkMs = 0,
     endMs = 0,
+    compactMs = 0,
     compactFailures = 0,
+    stored = {} as Record<string, unknown>,
     rateLimits = [
       { kind: 'five_hour', percentUsed: 10 },
       { kind: 'seven_day', percentUsed: 30 },
@@ -33,6 +38,7 @@ function engine(
   const clock = mock.clock(on)
   let size: number | undefined = tokens
   let failures = compactFailures
+  let last = 'm0'
   const forks: string[] = []
   // The instructions of each compaction the mod made, `''` for none.
   const compactions: string[] = []
@@ -40,8 +46,14 @@ function engine(
   const commands: string[] = []
   const logs: string[] = []
 
+  mock.store(on, stored)
+  on('session.id', () => ({ value: 's1' }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+  on('turn.start', (_, e) => {
+    last = e.turnId
+    return { turnId: e.turnId }
+  })
+  on('session.messages', () => ({ value: [{ role: 'assistant', text: '', toolUses: [], uuid: last }] }))
   on('turn.complete', async (_, e) => {
     // A held wait resolves only on an advance, so a turn the test awaits
     // whole takes none.
@@ -65,11 +77,13 @@ function engine(
   })
   // A plugin's `$.session.compact` reaches here as the plugin made it, with no
   // `trigger`; the engine stamps it `plugin`.
-  on('session.compact', (_, e) => {
+  on('session.compact', async (_, e) => {
+    if (compactMs > 0) await clock.sleep(compactMs)
     if (failures-- > 0) throw new Error('summary unavailable')
     if (e.trigger === undefined || e.trigger === 'plugin') compactions.push(e.instructions ?? '')
     // Claude Code measures the context again only at the next request.
     size = undefined
+    last = 'summary'
     return SUMMARY
   })
   on('command.run', (_, e) => {
@@ -226,6 +240,61 @@ test('a compaction that fails says so, and is tried again once the session sits 
   await clock.advance(IDLE)
   await clock.settle()
   expect(compactions).toEqual([''])
+})
+
+test('a compaction whose process ended first is finished when the next process starts', async ($, on) => {
+  // What a process left that ended mid-compaction, as one does when Claude
+  // Code's background daemon restarts it after an update.
+  const stored = { 'compacting:s1': { at: '489k tokens', last: 'm0' } }
+  const { begin, clock, compactions, forks, logs } = engine(on, { stored })
+
+  await begin($)
+  await clock.settle()
+
+  expect(forks).toEqual([])
+  expect(compactions).toEqual([''])
+  expect(logs).toEqual(['Finishing the compaction at 489k tokens: Claude Code restarted before it landed'])
+
+  // Settled, it leaves nothing for a later start to finish.
+  await begin($)
+  await clock.settle()
+  expect(compactions).toEqual([''])
+})
+
+test('an announcement the conversation has moved past is dropped', async ($, on) => {
+  // Announced before a turn, or before a compaction that landed: either
+  // changes the newest message.
+  const stored = { 'compacting:s1': { at: '489k tokens', last: 'older' } }
+  const { begin, clock, compactions, logs } = engine(on, { stored })
+
+  await begin($)
+  await clock.settle()
+
+  expect(compactions).toEqual([])
+  expect(logs).toEqual([])
+})
+
+test('a start while the mod compacts, as a reload of the mod raises, starts no second compaction', async ($, on) => {
+  const { begin, clock, compactions, turn } = engine(on, { compactMs: 1_000 })
+  await begin($)
+
+  // The kit reruns the same registration rather than reloading it; across a
+  // real reload only `$.state` carries the flag.
+  await turn($, 't1')
+  await begin($)
+  await clock.advance(1_000)
+  await clock.settle()
+
+  expect(compactions).toEqual([''])
+})
+
+test('a session with nobody at the prompt leaves an unfinished compaction alone', async ($, on) => {
+  const { begin, clock, compactions } = engine(on, { stored: { 'compacting:s1': { at: '489k tokens', last: 'm0' } } })
+
+  await begin($, false)
+  await clock.settle()
+
+  expect(compactions).toEqual([])
 })
 
 test('a /compact typed while the judge runs drops its verdict', async ($, on) => {
