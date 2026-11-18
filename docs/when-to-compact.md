@@ -490,12 +490,10 @@ factor of 2^β, wherever it starts. So it can't hold at small contexts: at
 saturating form gets almost nothing done with almost no context and levels off
 once the context holds what the work needs. The cost depends only on the curve
 from 142k to 965k, under three doublings, where the two fit the sessions about
-equally well. At the sessions' β of 0.06 (−0.18 to +0.27), the power law puts
-the best point at 268k, or 300k at the top of that range, against 261k–324k for
-the saturating form. A question for anyone who runs agents tells them apart:
-does doubling an agent's context from 400k to 800k improve its next steps by
-about as much as doubling from 100k to 200k, or by much less? Much less is the
-saturating form.
+equally well. A question for anyone who runs agents tells them apart: does
+doubling an agent's context from 400k to 800k improve its next steps by about as
+much as doubling from 100k to 200k, or by much less? Much less is the saturating
+form.
 
 ### Does more context have diminishing returns under both forms?
 
