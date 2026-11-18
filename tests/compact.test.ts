@@ -1,10 +1,15 @@
 import type { On } from 'claude-code'
 import { type Engine, expect, mock, test } from 'claude-code/testing'
+import { messageKey } from '../hooks/register'
 
 const USAGE = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }
 const COMPACT = '{"compact": true, "reason": "the PR merged"}'
 const KEEP = '{"compact": false, "reason": "mid-debug"}'
-const SUMMARY = { messages: [{ role: 'user' as const, text: 'summary', toolUses: [] }] }
+const said = (text: string) => ({ role: 'user' as const, text, toolUses: [] })
+const SUMMARY = { messages: [said('summary')] }
+// The announcement of a compaction made while the conversation was the one
+// message `m0`.
+const ANNOUNCED = { 'compacting:s1': { at: '489k tokens', messages: [messageKey(said('m0'))] } }
 
 const IDLE = 55 * 60_000
 
@@ -15,9 +20,9 @@ const IDLE = 55 * 60_000
 // after an idle wait, each after `forkMs` (`null`: an empty reply),
 // compactions that take `compactMs` and fail `compactFailures` times before
 // one succeeds, a turn whose end settles after `endMs`, a store holding
-// `stored` (what an earlier process left), a conversation of the message ids
-// `conversation`, which a turn adds a message to and a compaction its summary,
-// and a record of what it was asked.
+// `stored` (what an earlier process left), a conversation of user messages
+// with the texts `conversation`, which a turn adds a message to and a
+// compaction its summary, and a record of what it was asked.
 function engine(
   on: On,
   {
@@ -54,9 +59,7 @@ function engine(
     messages.push(e.turnId)
     return { turnId: e.turnId }
   })
-  on('session.messages', (_, e) => ({
-    value: messages.slice(-(e.last ?? 4096)).map(uuid => ({ role: 'user' as const, text: '', toolUses: [], uuid })),
-  }))
+  on('session.messages', () => ({ value: messages.map(said) }))
   on('turn.complete', async (_, e) => {
     // A held wait resolves only on an advance, so a turn the test awaits
     // whole takes none.
@@ -248,8 +251,7 @@ test('a compaction that fails says so, and is tried again once the session sits 
 test('a compaction whose process ended first is finished when the next process starts', async ($, on) => {
   // What a process left that ended mid-compaction, as one does when Claude
   // Code's background daemon restarts it after an update.
-  const stored = { 'compacting:s1': { at: '489k tokens', messages: ['m0'] } }
-  const { begin, clock, compactions, forks, logs } = engine(on, { stored })
+  const { begin, clock, compactions, forks, logs } = engine(on, { stored: ANNOUNCED })
 
   await begin($)
   await clock.settle()
@@ -265,8 +267,7 @@ test('a compaction whose process ended first is finished when the next process s
 })
 
 test('an announcement a turn has moved past is dropped', async ($, on) => {
-  const stored = { 'compacting:s1': { at: '489k tokens', messages: ['m0'] } }
-  const { begin, clock, compactions, logs } = engine(on, { stored, conversation: ['m0', 't1'] })
+  const { begin, clock, compactions, logs } = engine(on, { stored: ANNOUNCED, conversation: ['m0', 't1'] })
 
   await begin($)
   await clock.settle()
@@ -278,8 +279,7 @@ test('an announcement a turn has moved past is dropped', async ($, on) => {
 test('an announcement whose compaction landed is dropped, though it kept the newest message', async ($, on) => {
   // As a reload of the mod during a compaction leaves it: the next process
   // reads the compaction's summary and the message it kept.
-  const stored = { 'compacting:s1': { at: '489k tokens', messages: ['m0'] } }
-  const { begin, clock, compactions, logs } = engine(on, { stored, conversation: ['summary', 'm0'] })
+  const { begin, clock, compactions, logs } = engine(on, { stored: ANNOUNCED, conversation: ['summary', 'm0'] })
 
   await begin($)
   await clock.settle()
@@ -303,7 +303,7 @@ test('a start while the mod compacts, as a reload of the mod raises, starts no s
 })
 
 test('a session with nobody at the prompt leaves an unfinished compaction alone', async ($, on) => {
-  const { begin, clock, compactions } = engine(on, { stored: { 'compacting:s1': { at: '489k tokens', messages: ['m0'] } } })
+  const { begin, clock, compactions } = engine(on, { stored: ANNOUNCED })
 
   await begin($, false)
   await clock.settle()
