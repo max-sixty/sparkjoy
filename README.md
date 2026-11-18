@@ -110,9 +110,9 @@ tools, instructions), a summary of about 3k, and 34k of recent messages and
 files. The requests after it read about 20k more again, mostly files the
 summary left out. Of those 142k, all but the 30k system prompt and tools,
 which stay in a cache shared across sessions, take a cache write, at 39 cached
-reads a token more than reading them. With the summary's output, that costs
-about what reading 4.8M cached tokens would, $0.95 on Opus 5.5, besides the
-summary's read of the context. Each later request then reads 142k plus what it
+reads a token more than reading them. With the compaction request's output,
+about 5.6k tokens with its thinking, that costs about what reading 4.9M cached
+tokens would, $0.99 on Opus 5.5, besides that request's read of the context. Each later request then reads 142k plus what it
 has added since, instead of the whole context. A token held costs 1.22 cached
 reads a request, counting the 0.56% of requests that find the cache lapsed and
 make a cache write of it again. The context grows about 1.7k tokens a request,
@@ -120,7 +120,7 @@ so it takes many requests to grow back:
 
 | compacting at | each later request reads | pays for itself after | context grows back in |
 | ------------- | ------------------------ | --------------------- | --------------------- |
-| 200k          | 58k less                 | 71 requests           | 34 requests           |
+| 200k          | 58k less                 | 74 requests           | 34 requests           |
 | 400k          | 258k less                | 17 requests           | 151 requests          |
 | 700k          | 558k less                | 9 requests            | 327 requests          |
 
@@ -128,7 +128,7 @@ A compaction repays over every request until the context grows back, not
 within one turn. Compacting costs least where it pays for itself in about half
 the time the context takes to grow back. [When to compact](docs/when-to-compact.md) models this and
 fits it to the same sessions: compacting at every turn end past about 200k
-costs least, saving 30.2% against 25.1% past 400k. If more context helps a
+costs least, saving 30.0% against 25.0% past 400k. If more context helps a
 request, up to a limit set by s, the context at which a request gets half as
 much done as it could, and the sessions put s at no more than about 100k, the
 best turn-end threshold rises to 250k. The question gives the model the payback for its
@@ -201,11 +201,11 @@ Decide whether to compact the conversation now, while the user reads that reply.
 
 Nearly every long transcript is mostly finished work, so that alone is no reason to compact. What decides it is whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
 
-A compaction takes about a minute and writes a summary of about 4k output tokens. Afterwards the context holds about 122k tokens, which the next request writes to the cache again, all but the 30k of system prompt and tools, which stay cached. A cache write costs as much as 40 cached reads, and an output token as much as 100. At 500k a compaction pays for itself after about 13 more requests that need nothing it dropped.
+A compaction takes about a minute, and the request that writes its summary outputs about 6k tokens, thinking included. Afterwards the context holds about 142k tokens, counting the files the next requests read again, and those requests write it to the cache again, all but the 30k of system prompt and tools, which stay cached. A cache write costs as much as 40 cached reads, and an output token as much as 100. At 500k a compaction pays for itself after about 13 more requests that need nothing it dropped.
 
 Keeping costs too, and more the larger the context: every later request reads all 500k tokens, against about 142k after a compaction, and keeping only puts the compaction off to a later turn end. A turn runs a median of 9 requests and a mean of 38, so keeping 500k through one more turn costs as much as about 0.7 compactions for a median turn and 3 for a mean one.
 
-After a compaction, past sessions read about 20k tokens of files again and had about 6 more wasted requests than usual: failed tool calls, repeated lookups and corrections. Those counts miss detail lost without such a failure, such as a design's rejected options or what the user likes.
+After a compaction, past sessions had about 6 more wasted requests than usual: failed tool calls, repeated lookups and corrections. That count misses detail lost without such a failure, such as a design's rejected options or what the user likes.
 
 Weigh what keeping costs against what losing the detail would cost the next turns. The larger the context, the more detail a compaction can drop and still pay.
 
@@ -228,13 +228,13 @@ Your turn ended 55 minutes ago with this reply to the user, and nothing has happ
 
 </reply>
 
-Decide whether to compact the conversation now. The prompt cache holding it lapses in a few minutes, and the first request after that writes all but 30k of its 500k tokens to the cache again, against about 92k after a compaction. So compact unless the next turn continues work that needs the transcript's detail.
+Decide whether to compact the conversation now. The prompt cache holding it lapses in a few minutes, and the first request after that writes all but 30k of its 500k tokens to the cache again, against about 112k after a compaction. So compact unless the next turn continues work that needs the transcript's detail.
 
 Nearly every long transcript is mostly finished work, so that alone is no reason to compact. What decides it is whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
 
-A compaction takes about a minute and writes a summary of about 4k output tokens. Afterwards the context holds about 122k tokens, which the next request writes to the cache again, all but the 30k of system prompt and tools, which stay cached. A cache write costs as much as 40 cached reads, and an output token as much as 100.
+A compaction takes about a minute, and the request that writes its summary outputs about 6k tokens, thinking included. Afterwards the context holds about 142k tokens, counting the files the next requests read again, and those requests write it to the cache again, all but the 30k of system prompt and tools, which stay cached. A cache write costs as much as 40 cached reads, and an output token as much as 100.
 
-After a compaction, past sessions read about 20k tokens of files again and had about 6 more wasted requests than usual: failed tool calls, repeated lookups and corrections. Those counts miss detail lost without such a failure, such as a design's rejected options or what the user likes.
+After a compaction, past sessions had about 6 more wasted requests than usual: failed tool calls, repeated lookups and corrections. That count misses detail lost without such a failure, such as a design's rejected options or what the user likes.
 
 Weigh what keeping costs against what losing the detail would cost the next turns. The larger the context, the more detail a compaction can drop and still pay.
 

@@ -95,8 +95,8 @@ matched the label. `main` is the question published at 02beed1;
 `sized-question` (cdfc871) adds the context's size, what a compaction leaves
 and how many requests it takes to pay back; `detail` (0915ee8) says what
 decides it; `measured` (1f004a4, 17 November) weighs what keeping costs
-against what a compaction loses ([Context size](#context-size)); `now` (75fa52f,
-the question now) is `measured` with its costs from the cost model.
+against what a compaction loses ([Context size](#context-size)); `now`
+(75fa52f) is `measured` with its costs from the cost model.
 
 | case | recorded | replayed | expected | main | sized-question | detail | measured | now |
 |---|---|---|---|---|---|---|---|---|
@@ -192,6 +192,12 @@ for the requests after it, and a payback rounded up, such as 13 requests at
 the 8 mid-task runs (both at leaf-menu-design, one at
 leaf-ring-test-rewrite-wait), against none for `measured`. With two runs a
 case, that difference is within the noise above (Fisher's exact test, p = 0.2).
+
+The question since then hasn't been run on the cases. It states the
+compaction request's output as measured, about 6k tokens with its thinking,
+where `now` gave a 4k summary, and gives one figure for what a compaction
+leaves, 142k, the files read again after it included. Its paybacks run about
+3% longer, still 13 requests at 500k.
 
 ## Against the live plugin
 

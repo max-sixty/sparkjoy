@@ -44,10 +44,10 @@ def shades(t):
             400_000: t["high"]}
 
 
-def compacted(ax, K1, t, y, va):
+def compacted(ax, K, t, y, va):
     """Shade the contexts below K, with a label at height y."""
-    ax.axvspan(0, K1, color=tint(t["muted"], t["page"], 0.12), lw=0)
-    ax.text(K1 / 2, y, f"under {K1 / 1000:.0f}k,\nwhat a\ncompaction\nleaves", ha="center", va=va,
+    ax.axvspan(0, K, color=tint(t["muted"], t["page"], 0.12), lw=0)
+    ax.text(K / 2, y, f"under {K / 1000:.0f}k,\nwhat a\ncompaction\nleaves", ha="center", va=va,
             fontsize=9, color=t["muted"])
 
 
@@ -56,7 +56,7 @@ def progress_curve(p, c, t, path):
     most a request can get done, for the values of s the cost chart draws. Each curve reaches half at x = s."""
     fig, ax = plt.subplots(figsize=(9, 3.2))
     style(ax, t)
-    compacted(ax, fit.terms(p, c)[3], t, 0.75, "center")
+    compacted(ax, p.K, t, 0.75, "center")
     x = np.linspace(0, fit.AUTO, 1_000)
     at_s = 0.5
     for k, color in shades(t).items():
@@ -82,25 +82,25 @@ def sawtooth(p, c, t, path):
     """Context per request: compacting at X* against letting Claude Code compact near the window.
     The area under each line is what its requests read."""
     X = fit.steady(p, c)
-    K1, g = p.K + p.E, p.g
-    n = int((fit.AUTO - K1) / g) + 120
+    K, g = p.K, p.g
+    n = int((fit.AUTO - K) / g) + 120
     req = np.arange(n)
-    never = K1 + (req % ((fit.AUTO - K1) / g)) * g
-    cycle = (X - K1) / g
-    model = K1 + (req % cycle) * g
+    never = K + (req % ((fit.AUTO - K) / g)) * g
+    cycle = (X - K) / g
+    model = K + (req % cycle) * g
     fig, ax = plt.subplots(figsize=(9, 3.2))
     style(ax, t)
     ax.fill_between(req, never, color=tint(t["mid"], t["page"], t["band"]), lw=0)
     ax.fill_between(req, model, color=tint(t["high"], t["page"], t["band"] + 0.08), lw=0)
     ax.plot(req, never, color=t["mid"], lw=2)
     ax.plot(req, model, color=t["high"], lw=2)
-    for level, label in ((K1, "K"), (X, "X*")):
+    for level, label in ((K, "K"), (X, "X*")):
         ax.axhline(level, color=t["muted"], lw=0.8, ls=":")
         ax.text(n * 1.008, level, label, va="center", fontsize=10, color=t["ink"])
     tooth = 3 * cycle  # the fourth tooth, clear of the never-compacting line
-    ax.annotate("", (tooth + cycle * 0.5, X), (tooth + cycle * 0.5, K1),
+    ax.annotate("", (tooth + cycle * 0.5, X), (tooth + cycle * 0.5, K),
                 arrowprops={"arrowstyle": "<->", "color": t["ink"], "lw": 0.9, "shrinkA": 0, "shrinkB": 0})
-    ax.text(tooth + cycle * 0.56, X + 25_000, f"Δ* ≈ {(X - K1) / 1000:.0f}k: {cycle:.0f} requests at g ≈ {g / 1000:.1f}k",
+    ax.text(tooth + cycle * 0.56, X + 25_000, f"Δ* ≈ {(X - K) / 1000:.0f}k: {cycle:.0f} requests at g ≈ {g / 1000:.1f}k",
             fontsize=9, color=t["ink"], va="bottom")
     ax.annotate("compaction: the summary reads X*,\nthe next request writes K again", (2 * cycle, X),
                 (2 * cycle + 4, X + 175_000), fontsize=9, color=t["ink"], ha="left",
@@ -123,7 +123,7 @@ def cost_curve(cost, progress, p, c, t, path):
     where Claude Code compacts at AUTO."""
     fig, ax = plt.subplots(figsize=(9, 3.4))
     style(ax, t)
-    compacted(ax, fit.terms(p, c)[3], t, 1.28, "top")
+    compacted(ax, p.K, t, 1.28, "top")
     for k, color in shades(t).items():
         X, J = fit.curve(p, c, k)
         y = J / J[-1]

@@ -25,9 +25,8 @@ import type { EngineInterface, Register } from 'claude-code'
 // What the author's sessions measured (docs/when-to-compact.md, 7-15 Nov
 // 2026), which the question gives every user as a guide to what keeping costs
 // and what a compaction loses. The costs follow that page's model ("The
-// model") and fitted parameters ("Fitted parameters"), with the symbols of
-// `terms()` in model/fit.py: K is the first request after a compaction, and
-// K + E, what the page calls K, is what the requests after it hold.
+// model") and fitted parameters ("Fitted parameters"), with its symbols and
+// those of `terms()` in model/fit.py.
 // TODO: fit these to the user's own sessions, as model/fit.py and
 // model/calibrate.py do for the author's, and state those instead.
 
@@ -35,22 +34,26 @@ import type { EngineInterface, Register } from 'claude-code'
 // the input price, a one-hour cache write 2x (w) and an output token 5x (o).
 const WRITE = 40
 const OUTPUT = 100
-// The summary's output (S), with some allowance for the pass around it.
-const SUMMARY = 4_000
-// What a compaction leaves, whatever it starts from (K): across 141
-// compactions in the author's sessions (7-16 Nov 2026) the first request after
-// one carried a median 122k tokens (quartiles 111k-128k): the opening prompt
-// (system prompt, tools, instructions; 85k), a summary of about 3k, and the
-// recent messages and files re-attached (34k).
-const K = 122_000
-// Of those, the system prompt and tools (P), which Claude Code keeps in a
-// cache shared across sessions, so the next request makes a cache write of
-// only the rest.
+// The output tokens of the compaction request (N): the summary's text plus
+// its thinking. Transcripts log the summary's text, a median 3.5k tokens at 4
+// characters each, but not the request that wrote it. The main-thread
+// requests whose visible output (text, and tool input as JSON) is half to 1.5
+// times that log a median 1.61 times as many output tokens as they show,
+// thinking included, which makes about 5.6k.
+const SUMMARY = 5_600
+// The context after a compaction (K): the first request after it, plus the
+// files the next few requests read again. Across 141 compactions in the
+// author's sessions (7-16 Nov 2026) the first request carried a median 122k
+// tokens (quartiles 111k-128k): the opening prompt (system prompt, tools,
+// instructions; 85k), the summary, and the recent messages and files
+// re-attached (34k). The next few requests read about 20k more again than
+// after another turn end. Every later request reads K, and the requests after
+// the compaction make a cache write of all of it but P.
+const K = 142_000
+// The system prompt and tools (P), which Claude Code keeps in a cache shared
+// across sessions, so no request after a compaction makes a cache write of
+// them.
 const P = 30_000
-// What the requests after a compaction read again (E), mostly files the
-// summary left out: a cache write of its own, and part of what each later
-// request reads.
-const E = 20_000
 // The share of requests that find the prompt cache lapsed and make a cache
 // write of the whole context but P (ℓ), mostly after a gap of over an hour.
 const LAPSE = 0.0056
@@ -68,12 +71,12 @@ const WASTED = 6
 // docs/when-to-compact.md replays the author's sessions ("Idle sessions").
 // 250k also comes within 0.2 points of the best turn-end threshold for any s
 // up to 200k ("What it implies for sparkjoy"). A compaction there pays for
-// itself after about 39 requests (`payback`); the question tells the judge
+// itself after about 40 requests (`payback`); the question tells the judge
 // that figure for the context it holds.
 const FLOOR = 250_000
 
 // An idle session is asked from this many tokens. Compacting just before the
-// cache lapses pays from about 156k, counting only the next request, whose
+// cache lapses pays from about 160k, counting only the next request, whose
 // cache write it shrinks. Claude Code's own idle compaction acts only from
 // 200k, and only in a terminal session, so a background session
 // (`claude --bg`, agent view) is left to this.
@@ -238,7 +241,7 @@ function question(reply: string, tokens: number, idleMinutes?: number) {
   const sum = isIdle ? '' : ` At ${now} a compaction pays for itself after about ${payback(tokens)} more requests that need nothing it dropped.`
   const keeping = isIdle
     ? ''
-    : `\n\nKeeping costs too, and more the larger the context: every later request reads all ${now} tokens, against about ${thousands(K + E)} after a compaction, and keeping only puts the compaction off to a later turn end. A turn runs a median of ${TURN_MEDIAN} requests and a mean of ${TURN_MEAN}, so keeping ${now} through one more turn costs as much as about ${turnCost(tokens, TURN_MEDIAN)} compactions for a median turn and ${turnCost(tokens, TURN_MEAN)} for a mean one.`
+    : `\n\nKeeping costs too, and more the larger the context: every later request reads all ${now} tokens, against about ${thousands(K)} after a compaction, and keeping only puts the compaction off to a later turn end. A turn runs a median of ${TURN_MEDIAN} requests and a mean of ${TURN_MEAN}, so keeping ${now} through one more turn costs as much as about ${turnCost(tokens, TURN_MEDIAN)} compactions for a median turn and ${turnCost(tokens, TURN_MEAN)} for a mean one.`
   return `This message comes from the sparkjoy plugin, not from the user, and a program reads your reply. Use no tools.
 
 ${opening}
@@ -251,9 +254,9 @@ ${ask}
 
 Nearly every long transcript is mostly finished work, so that alone is no reason to compact. What decides it is whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
 
-A compaction takes about a minute and writes a summary of about ${thousands(SUMMARY)} output tokens. Afterwards the context holds about ${thousands(K)} tokens, which the next request writes to the cache again, all but the ${thousands(P)} of system prompt and tools, which stay cached. A cache write costs as much as ${WRITE} cached reads, and an output token as much as ${OUTPUT}.${sum}${keeping}
+A compaction takes about a minute, and the request that writes its summary outputs about ${thousands(SUMMARY)} tokens, thinking included. Afterwards the context holds about ${thousands(K)} tokens, counting the files the next requests read again, and those requests write it to the cache again, all but the ${thousands(P)} of system prompt and tools, which stay cached. A cache write costs as much as ${WRITE} cached reads, and an output token as much as ${OUTPUT}.${sum}${keeping}
 
-After a compaction, past sessions read about ${thousands(E)} tokens of files again and had about ${WASTED} more wasted requests than usual: failed tool calls, repeated lookups and corrections. Those counts miss detail lost without such a failure, such as a design's rejected options or what the user likes.
+After a compaction, past sessions had about ${WASTED} more wasted requests than usual: failed tool calls, repeated lookups and corrections. That count misses detail lost without such a failure, such as a design's rejected options or what the user likes.
 
 Weigh what keeping costs against what losing the detail would cost the next turns. The larger the context, the more detail a compaction can drop and still pay.
 
@@ -275,19 +278,18 @@ function turnCost(tokens: number, requests: number) {
 }
 
 // What a compaction at `tokens` costs, in cached reads, F(x) = x + F0: the
-// summary request reads the context and outputs the summary, then the
-// requests after it make a cache write of what they hold but P, the E tokens
-// read again included. A cache write costs WRITE - 1 more than the read it
-// stands in for.
+// compaction request reads the context and outputs the summary, then the
+// requests after it make a cache write of K but P. A cache write costs
+// WRITE - 1 more than the read it stands in for.
 function compaction(tokens: number) {
-  return tokens + OUTPUT * SUMMARY + (WRITE - 1) * (K - P + E)
+  return tokens + OUTPUT * SUMMARY + (WRITE - 1) * (K - P)
 }
 
 // What each request after a compaction at `tokens` saves, in cached reads: it
-// reads tokens - (K + E) less, and a token held costs h = 1 + ℓ(w - 1) reads
-// a request, counting the lapses after which it takes a cache write again.
+// reads tokens - K less, and a token held costs h = 1 + ℓ(w - 1) reads a
+// request, counting the lapses after which it takes a cache write again.
 function saving(tokens: number) {
-  return (1 + LAPSE * (WRITE - 1)) * (tokens - K - E)
+  return (1 + LAPSE * (WRITE - 1)) * (tokens - K)
 }
 
 function parse(text: string): Verdict | undefined {

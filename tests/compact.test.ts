@@ -124,10 +124,10 @@ test('the question sizes the saving for the context it asks about', async ($, on
   resize(250_000)
   await turn($, 't2')
 
-  // (500k read + 100 × 4k summary + 39 × (122k − 30k + 20k) cache write) over
-  // the 1.22 × (500k − 142k) each later request saves, rounded up.
+  // (500k read + 100 × 5.6k output + 39 × (142k − 30k) cache write) over the
+  // 1.22 × (500k − 142k) each later request saves, rounded up.
   expect(forks[0]).toContain('At 500k a compaction pays for itself after about 13 more requests')
-  expect(forks[1]).toContain('At 250k a compaction pays for itself after about 39 more requests')
+  expect(forks[1]).toContain('At 250k a compaction pays for itself after about 40 more requests')
   // 9 and 38 requests × that saving, over what a compaction costs.
   expect(forks[0]).toContain('keeping 500k through one more turn costs as much as about 0.7 compactions for a median turn and 3 for a mean one')
   expect(forks[1]).toContain('keeping 250k through one more turn costs as much as about 0.2 compactions for a median turn and 1.0 for a mean one')
@@ -295,7 +295,7 @@ test('a session left idle is asked again before its prompt cache lapses', async 
   await clock.settle()
   expect(forks.length).toBe(1)
   expect(forks[0]).toContain('Merged #13. ✅')
-  expect(forks[0]).toContain('writes all but 30k of its 200k tokens to the cache again, against about 92k after a compaction')
+  expect(forks[0]).toContain('writes all but 30k of its 200k tokens to the cache again, against about 112k after a compaction')
   expect(forks[0]).not.toContain('pays for itself')
   expect(compactions).toEqual([''])
   expect(logs).toEqual(['Compacting at 200k tokens, idle 55 minutes: the PR merged'])
