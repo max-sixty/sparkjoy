@@ -474,7 +474,7 @@ each compaction then costs nearly as much progress as it saves in tokens:
 | ------------------------------------------------------------------- | ---------------- | -------------------------------------------- |
 | s = 630k                                                            | 15%              | +1.9%                                        |
 | β = 0.75 (best point 690k)                                          | 23% of 1M's      | +1.1%                                        |
-| s = 0, and each compaction loses $21 of detail, 370 requests' worth | 100%             | +5.3%                                        |
+| s = 0, and each compaction loses $21 of detail, 365 requests' worth | 100%             | +5.3%                                        |
 
 The sessions show no such world. Requests at 142k would get about a quarter of
 what those at 700k do, yet requests below 200k see no more trouble than those
