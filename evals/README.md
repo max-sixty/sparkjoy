@@ -228,6 +228,20 @@ compacted in 11 of 12 runs. Either it leans toward compacting, or the live
 checks there failed. sparkjoy writes every verdict into the transcript, so a
 few days of use will give live verdicts to compare the harness against.
 
+## Where this leaves them
+
+The question as it stands compacts at every finished case and both small
+breaks, and keeps in 3 of the 8 mid-task runs. These cases can't say whether
+that is too few. Their mid-task keep labels encode a rule, that work in progress
+keeps, rather than a measured cost, while the cost model in
+[When to compact](../docs/when-to-compact.md) finds compacting at any turn end
+from about 250k cheapest, with the detail a compaction loses measured near zero.
+
+Live verdicts graded by what followed each one can settle it, since they would
+measure the detail lost at each kind of turn end. By 17 November sparkjoy had
+logged 127 in 65 sessions, most under `detail` and the old 400k floor. The
+comparison waits until there are more under the question as it stands.
+
 ## Fixtures
 
 The 12 fixtures take 3.5 MB, gzipped. Before publishing, `build.py` removed:
