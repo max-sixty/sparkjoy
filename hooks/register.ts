@@ -19,8 +19,21 @@
 // rather than a rule, and never names the floor. The mod runs only where a person is at the prompt: a `-p` run or
 // an SDK host keeps the engine's own compaction, so no script pays for a judge
 // or finds its conversation changed.
+//
+// A compaction the mod announces still happens if the process ends before it
+// finishes. Claude Code's background daemon restarts a session's process when
+// the session looks idle and runs an older version than the daemon, as every
+// background session does after an update. A busy session first looks idle at
+// the end of a turn, which is when the mod compacts. So the mod keeps the
+// announcement in `$.store` until the compaction settles, and the next process
+// finishes it if the conversation hasn't moved on.
 
 import type { EngineInterface, Register } from 'claude-code'
+
+// Set while this process compacts. `$.state` outlives a reload of the mod but
+// not the process, so a reload that finds a compaction announced leaves it to
+// the copy already making it.
+const COMPACTING = { plugin: 'sparkjoy', key: 'compacting' } as const
 
 // What the author's sessions measured (docs/when-to-compact.md, 7-15 Nov
 // 2026), which the question gives every user as a guide to what keeping costs
@@ -107,9 +120,11 @@ type Watch = {
 export const register: Register = on => {
   const watch: Watch = { isInteractive: false, changes: 0 }
 
-  on('session.start', ($, e, next) => {
+  on('session.start', async ($, e, next) => {
     watch.isInteractive = e.isInteractive
-    return next(e)
+    const result = await next(e)
+    if (watch.isInteractive) $.clock.after(0, () => void resume($))
+    return result
   })
 
   on('turn.start', ($, e, next) => {
@@ -213,7 +228,7 @@ async function judge(
     // draws its own line. It rejects while a turn runs, which `stands` rules
     // out for any turn begun since the one asked about ended.
     say(`Compacting at ${at}: ${verdict.reason}`)
-    await $.session.compact()
+    await compact($, at)
   } else if (verdict) {
     say(`Kept at ${at}: ${verdict.reason}`)
   } else if (answer.isAnswered) {
@@ -221,6 +236,61 @@ async function judge(
   } else {
     say(`No verdict at ${at}: ${answer.reason}`)
   }
+}
+
+// A compaction under way, as `$.store` keeps it for the next process: `at`
+// names the moment, and `messages` the ids of the conversation's messages then.
+type Announcement = { at: string; messages: string[] }
+
+// Compacts, keeping the announcement in `$.store` under the session's id until
+// the compaction settles, for `resume` to finish if the process ends first.
+// The flag goes up before the announcement and down after it, so a reload in
+// between never finds an announcement unflagged. A reload during the
+// compaction stops this copy before it clears either, so the flag stays up
+// until the process ends, and the announcement until `resume` clears it.
+async function compact($: EngineInterface, at: string) {
+  const key = `compacting:${await $.session.id()}`
+  await $.state.set(COMPACTING, true)
+  try {
+    const announcement: Announcement = { at, messages: await messageIds($) }
+    await $.store.set(key, announcement)
+    await $.session.compact()
+  } finally {
+    await $.store.delete(key)
+    await $.state.set(COMPACTING, false)
+  }
+}
+
+// Finishes a compaction announced in a process that ended before it settled,
+// while every message of the conversation is one it held then. A turn adds
+// messages, and so does a compaction, whose summary is a message even where it
+// keeps the newest ones. An announcement the conversation has moved past, such
+// as one a reload left, is only cleared.
+async function resume($: EngineInterface) {
+  try {
+    const key = `compacting:${await $.session.id()}`
+    const announced = (await $.store.get(key)) as Announcement | undefined
+    if (announced === undefined || (await $.state.get(COMPACTING)).value) return
+    const held = new Set(announced.messages)
+    const now = await messageIds($)
+    if (now.length === 0 || !now.every(id => held.has(id))) return await $.store.delete(key)
+    $.ui.log(`Finishing the compaction at ${announced.at}: Claude Code restarted before it landed`)
+    await compact($, announced.at)
+  } catch (error) {
+    $.ui.log(`Failed: ${error}`)
+  }
+}
+
+// The ids of the conversation's messages, of the most `$.session.messages`
+// returns. A process reads the conversation from the latest compaction before
+// it started, and keeps what it read through its own compactions. So until a
+// message is added, the messages a new process reads are among those the
+// process before it read.
+async function messageIds($: EngineInterface) {
+  // A read that names `last` gives each message's id; 4096 is the most a read
+  // returns.
+  const messages = await $.session.messages({ last: 4096 })
+  return 'deny' in messages ? [] : messages.flatMap(m => (m.uuid === undefined ? [] : [m.uuid]))
 }
 
 // The fork replays the turn's last request, which ends before the reply the
