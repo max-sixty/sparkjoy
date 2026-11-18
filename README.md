@@ -52,7 +52,9 @@ dozens of requests.
 - **After each turn**, the plugin asks the session's own model, which reads the
   conversation from the prompt cache, whether to compact now
   ([the prompt](#the-prompt)). On yes it compacts, which takes about a minute
-  while you read the reply.
+  while you read the reply. If Claude Code restarts the session before the
+  compaction finishes, as it does to each background session after an update,
+  the plugin compacts when the session starts again.
 - **When a session sits idle for 55 minutes**, it asks again, adding that the
   prompt cache is about to lapse and the next message would make a cache write
   of the whole context. Claude Code's own
