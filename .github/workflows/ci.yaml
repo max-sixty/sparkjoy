@@ -1,0 +1,49 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Daily, so each Claude Code release is tested the day it ships.
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  releases:
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.list.outputs.versions }}
+    steps:
+      # Every Claude Code release published in the past two weeks, and the
+      # latest one in any case.
+      - id: list
+        run: |
+          since=$(date -u -d '14 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          versions=$(npm view @anthropic-ai/claude-code versions time dist-tags --json |
+            jq -c --arg since "$since" '.time as $time | [.versions[] | select($time[.] >= $since)] + [."dist-tags".latest] | unique')
+          echo "versions=$versions" >> "$GITHUB_OUTPUT"
+          echo "Claude Code releases: $versions" >> "$GITHUB_STEP_SUMMARY"
+
+  mod:
+    needs: releases
+    name: mod (Claude Code ${{ matrix.version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ${{ fromJSON(needs.releases.outputs.versions) }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: npm install --global @anthropic-ai/claude-code@${{ matrix.version }}
+      - run: claude plugin test
+
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - run: uvx pytest tests

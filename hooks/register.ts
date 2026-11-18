@@ -28,7 +28,7 @@
 // announcement in `$.store` until the compaction settles, and the next process
 // finishes it if the conversation hasn't moved on.
 
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, SessionMessage } from 'claude-code'
 
 // Set while this process compacts. `$.state` outlives a reload of the mod but
 // not the process, so a reload that finds a compaction announced leaves it to
@@ -239,7 +239,8 @@ async function judge(
 }
 
 // A compaction under way, as `$.store` keeps it for the next process: `at`
-// names the moment, and `messages` the ids of the conversation's messages then.
+// names the moment, and `messages` the keys of the conversation's messages
+// then (`messageKey`).
 type Announcement = { at: string; messages: string[] }
 
 // Compacts, keeping the announcement in `$.store` under the session's id until
@@ -252,7 +253,7 @@ async function compact($: EngineInterface, at: string) {
   const key = `compacting:${await $.session.id()}`
   await $.state.set(COMPACTING, true)
   try {
-    const announcement: Announcement = { at, messages: await messageIds($) }
+    const announcement: Announcement = { at, messages: await messageKeys($) }
     await $.store.set(key, announcement)
     await $.session.compact()
   } finally {
@@ -272,8 +273,8 @@ async function resume($: EngineInterface) {
     const announced = (await $.store.get(key)) as Announcement | undefined
     if (announced === undefined || (await $.state.get(COMPACTING)).value) return
     const held = new Set(announced.messages)
-    const now = await messageIds($)
-    if (now.length === 0 || !now.every(id => held.has(id))) return await $.store.delete(key)
+    const now = await messageKeys($)
+    if (now.length === 0 || !now.every(message => held.has(message))) return await $.store.delete(key)
     $.ui.log(`Finishing the compaction at ${announced.at}: Claude Code restarted before it landed`)
     await compact($, announced.at)
   } catch (error) {
@@ -281,16 +282,36 @@ async function resume($: EngineInterface) {
   }
 }
 
-// The ids of the conversation's messages, of the most `$.session.messages`
-// returns. A process reads the conversation from the latest compaction before
-// it started, and keeps what it read through its own compactions. So until a
-// message is added, the messages a new process reads are among those the
-// process before it read.
-async function messageIds($: EngineInterface) {
-  // A read that names `last` gives each message's id; 4096 is the most a read
-  // returns.
-  const messages = await $.session.messages({ last: 4096 })
-  return 'deny' in messages ? [] : messages.flatMap(m => (m.uuid === undefined ? [] : [m.uuid]))
+// The keys of the conversation's messages, of the newest 4096, the most
+// `$.session.messages` returns. A process reads the conversation from the
+// latest compaction before it started, and keeps what it read through its own
+// compactions. So until a message is added, the messages a new process reads
+// are among those the process before it read.
+async function messageKeys($: EngineInterface) {
+  return (await $.session.messages()).map(messageKey)
+}
+
+// A message's key, the same in each process that reads it, whichever release
+// it runs. Claude Code before 2.1.326 gives no message its id, and refuses the
+// `last` argument that makes a later release give it. So a message with tool
+// calls or their results is keyed by the ids the Messages API gave the calls,
+// and any other by a hash of its role and text. A turn whose messages all
+// match earlier ones in role and text, such as a second "ok" answered word for
+// word as the first was, leaves the announcement standing, and the next
+// process finishes the compaction.
+// TODO: key by the id a read naming `last` gives, once every release CI tests
+// takes `last`.
+export function messageKey(message: SessionMessage) {
+  const calls = [...message.toolUses, ...(message.toolResults ?? [])].map(call => call.tool_use_id)
+  return calls.length > 0 ? `${message.role} ${calls.join(' ')}` : hash(`${message.role} ${message.text}`)
+}
+
+// FNV-1a. At 32 bits, a new message takes the key of one of 4096 held about
+// once in a million.
+function hash(text: string) {
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193)
+  return (h >>> 0).toString(36)
 }
 
 // The fork replays the turn's last request, which ends before the reply the
