@@ -95,23 +95,25 @@ matched the label. `main` is the question published at 02beed1;
 `sized-question` (cdfc871) adds the context's size, what a compaction leaves
 and how many requests it takes to pay back; `detail` (0915ee8) says what
 decides it; `measured` (1f004a4, 17 November) weighs what keeping costs
-against what a compaction loses ([Context size](#context-size)); `now`
-(75fa52f) is `measured` with its costs from the cost model.
+against what a compaction loses ([Context size](#context-size));
+`model-costs` (75fa52f) is `measured` with its costs from the cost model; `now`
+(88ca497, the question now) states the compaction request's output as
+measured and one figure for what a compaction leaves.
 
-| case | recorded | replayed | expected | main | sized-question | detail | measured | now |
-|---|---|---|---|---|---|---|---|---|
-| leaf-scaling-closeout | 742k | 520k | compact | 4/4 | 3/3 | 3/3 | 2/2 | 2/2 |
-| leaf-hover-closeout | 736k | 488k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 |
-| leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 |
-| leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 |
-| worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 |
-| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 | 0/2 | 1/2 |
-| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 |
-| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 2/2 |
-| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 |
-| leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 |
-| worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 |
-| leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 |
+| case | recorded | replayed | expected | main | sized-question | detail | measured | model-costs | now |
+|---|---|---|---|---|---|---|---|---|---|
+| leaf-scaling-closeout | 742k | 520k | compact | 4/4 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 |
+| leaf-hover-closeout | 736k | 488k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 |
+| leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 |
+| leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 |
+| worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 |
+| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 | 0/2 | 1/2 | 0/2 |
+| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 1/2 |
+| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 2/2 | 2/2 |
+| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 0/2 |
+| leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 |
+| worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 |
+| leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 |
 
 The first two questions said compact in all 73 runs. Their reasons agree: the
 context is mostly finished work, and what the next step needs is in the
@@ -184,7 +186,7 @@ measured. Its response to size is noisy: on the mid-task cases it kept in 3 of
 8 runs told 450k and in 5 of 8 told 750k. A first wording, which said a
 compaction "cost the requests after it little", compacted in 46 of 48 runs.
 
-`now` is `measured` with the costs it states from the cost model
+`model-costs` is `measured` with the costs it states from the cost model
 ([e36d81d](https://github.com/max-sixty/sparkjoy/commit/e36d81d)): what a
 compaction leaves, 122k, of which all but 30k takes a cache write, against 142k
 for the requests after it, and a payback rounded up, such as 13 requests at
@@ -193,11 +195,12 @@ the 8 mid-task runs (both at leaf-menu-design, one at
 leaf-ring-test-rewrite-wait), against none for `measured`. With two runs a
 case, that difference is within the noise above (Fisher's exact test, p = 0.2).
 
-The question since then hasn't been run on the cases. It states the
-compaction request's output as measured, about 6k tokens with its thinking,
-where `now` gave a 4k summary, and gives one figure for what a compaction
-leaves, 142k, the files read again after it included. Its paybacks run about
-3% longer, still 13 requests at 500k.
+`now` states the compaction request's output as measured, about 6k tokens
+with its thinking, where `model-costs` gave a 4k summary, and gives one figure
+for what a compaction leaves, 142k, the files read again after it included. Its
+paybacks run about 3% longer, still 13 requests at 500k. It compacts at the
+same cases, and also keeps in 3 of the 8 mid-task runs, though not all at the
+same cases: both at leaf-menu-design and one at leaf-send-hover-fix.
 
 ## Against the live plugin
 
