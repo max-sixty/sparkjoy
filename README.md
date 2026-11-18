@@ -41,8 +41,8 @@ At the prompt of a Claude Code session:
 ```
 
 Answer `y` to add the marketplace, and choose the user scope to have it in
-every session. It is tested daily on every Claude Code release of the past two
-weeks; `claude plugin disable sparkjoy` turns it off.
+every session. It is tested daily on the latest and stable Claude Code
+releases; `claude plugin disable sparkjoy` turns it off.
 
 ## What it does
 
