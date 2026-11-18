@@ -9,14 +9,14 @@ and gives the context size at which to compact.
 
 For the author's sessions on Opus 5.5 with a one-hour cache, the model says to
 compact when the context reaches about **260k tokens**. In plain numbers: a
-compaction costs about as much as reading 4.8M cached tokens, $0.95, besides
+compaction costs about as much as reading 4.9M cached tokens, $0.99, besides
 one read of the context; it leaves about 142k; each later request reads the
 difference less; and the context grows back about 1.7k tokens a request.
 
 | compacting at | each later request reads | pays for itself after | context grows back in |
 | ------------- | ------------------------ | --------------------- | --------------------- |
-| 200k          | 58k less                 | 71 requests           | 34 requests           |
-| 260k          | 118k less                | 35 requests           | 69 requests           |
+| 200k          | 58k less                 | 74 requests           | 34 requests           |
+| 260k          | 118k less                | 37 requests           | 69 requests           |
 | 400k          | 258k less                | 17 requests           | 151 requests          |
 | 700k          | 558k less                | 9 requests            | 327 requests          |
 
@@ -29,25 +29,25 @@ run of model requests, typically one per tool call. A compaction inside a turn
 would interrupt work in progress, so sparkjoy, like a person typing
 `/compact`, compacts only at the end of a turn. Turns are uneven, a median 9
 requests and a mean 38, so a policy limited to turn ends does best compacting
-earlier, from about **200k**: 30.2% less than never compacting, where every
-turn end past 400k, sparkjoy's first floor, saves 25.1%. Compacting idle
+earlier, from about **200k**: 30.0% less than never compacting, where every
+turn end past 400k, sparkjoy's first floor, saves 25.0%. Compacting idle
 sessions as well, from about 175k, raises the best turn-end threshold to 250k
-and the saving to 30.9%. sparkjoy asks from these two.
+and the saving to 30.7%. sparkjoy asks from these two.
 
 These figures take a request to get as much done at any context size. The
 model lets more context help a request, up to a limit: s is the context at
 which a request gets half as much done as it could, and at s = 0 size doesn't
 matter. The sessions put s near 0 and at most about 100k, where the best point
-is 321k and the best threshold at turn ends 250k:
+is 324k and the best threshold at turn ends 250k:
 
 | s    | best point, compacting after any request | best threshold at turn ends | saved there | saved at 250k | saved at 400k |
 | ---- | ---------------------------------------- | --------------------------- | ----------- | ------------- | ------------- |
-| 0    | 259k (251–269k)                          | 200k (200–240k)             | 30.2%       | 30.0%         | 25.1%         |
-| 50k  | 277k (270–286k)                          | 240k (200–250k)             | 28.4%       | 28.4%         | 24.1%         |
-| 100k | 321k (314–331k)                          | 250k (240–280k)             | 23.1%       | 23.1%         | 20.4%         |
-| 150k | 366k (358–376k)                          | 280k (250–290k)             | 18.2%       | 18.2%         | 16.7%         |
-| 200k | 408k (399–419k)                          | 290k (260–340k)             | 14.4%       | 14.3%         | 13.6%         |
-| 300k | 485k (473–500k)                          | 340k (290–440k)             | 9.3%        | 8.7%          | 9.1%          |
+| 0    | 261k (253–271k)                          | 200k (200–240k)             | 30.0%       | 29.8%         | 25.0%         |
+| 50k  | 279k (272–288k)                          | 240k (200–250k)             | 28.3%       | 28.2%         | 24.0%         |
+| 100k | 324k (316–333k)                          | 250k (240–290k)             | 23.0%       | 23.0%         | 20.4%         |
+| 150k | 368k (360–378k)                          | 280k (250–290k)             | 18.1%       | 18.1%         | 16.6%         |
+| 200k | 410k (401–421k)                          | 290k (270–340k)             | 14.3%       | 14.1%         | 13.5%         |
+| 300k | 488k (476–502k)                          | 340k (300–440k)             | 9.2%        | 8.6%          | 9.0%          |
 
 The second column is the steady-state model's optimum, derived below. The
 third comes from replaying the sessions with compaction only at turn ends.
@@ -65,13 +65,13 @@ prompt cache. Every other kind of token is a multiple of it
 ([pricing](https://platform.claude.com/docs/en/about-claude/pricing),
 November 2026):
 
-| one token of           | symbol | Opus 5.5, Sonnet 5.5 | Fable 5.2 |
-| ---------------------- | ------ | -------------------- | --------- |
-| cache read             |        | 1                    | 1         |
-| uncached input         | u      | 20                   | 40        |
-| output                 | o      | 100                  | 200       |
-| cache write, 5 minutes | w      | 25                   | 50        |
-| cache write, 1 hour    | w      | 40                   | 80        |
+| cached reads per token of | symbol | Opus 5.5, Sonnet 5.5 | Fable 5.2 |
+| ------------------------- | ------ | -------------------- | --------- |
+| cache read                |        | 1                    | 1         |
+| uncached input            | u      | 20                   | 40        |
+| output                    | o      | 100                  | 200       |
+| cache write, 5 minutes    | w      | 25                   | 50        |
+| cache write, 1 hour       | w      | 40                   | 80        |
 
 A cached read costs $0.20 per million tokens on Opus 5.5 and Fable 5.2, and
 $0.10 on Sonnet 5.5. None of the three charges more for long prompts. Claude
@@ -89,30 +89,29 @@ Code keeps in a cache shared across sessions:
 c(x) = x + (w-1)\big[(1-\ell)\,g + \ell\,(x-P)\big] + o\,\bar{o} + u\,\bar{\imath} \;=\; h\,x + c_0
 ```
 
-with h = 1 + ℓ(w−1), the cost of holding a token for a request, and
-c₀ = oō + uī + (w−1)[(1−ℓ)g − ℓP], the part of a request's cost that doesn't
-grow with the context. ī is the uncached input, a couple of tokens.
+with h = 1 + ℓ(w−1), the cached reads it costs to hold a token for a request,
+and c₀ = oō + uī + (w−1)[(1−ℓ)g − ℓP], the cached reads of a request's cost
+that don't grow with the context. ī is the uncached input, a couple of tokens.
 
 ### What a compaction costs
 
 ```math
-F(x) = x + o\,S + (w-1)\,(K - P)
+F(x) = x + o\,N + (w-1)\,(K - P)
 ```
 
-- The summary request is a cache read of the context x and S tokens of output,
-  the summary.
-- The context then restarts from K tokens, in three parts:
-  - P, the system prompt and tools (30k), which sit in a cache shared across
-    sessions, so a compaction never makes a cache write of them;
-  - the rest of the first request after the compaction (92k): instructions,
-    the summary, and the recent messages and files Claude Code attaches again;
-  - E, the files and output the requests after it read again because the
-    summary left them out (20k).
+- The compaction request is a cache read of the context x and N tokens of
+  output: the summary's text plus its thinking.
+- The context then restarts from K tokens: the first request after the
+  compaction (122k: the system prompt and tools, instructions, the summary,
+  and recent messages and files), plus the files the next few requests read
+  again because the summary left them out (20k).
+- Of those, P, the system prompt and tools (30k), sit in a cache shared across
+  sessions, so a compaction never makes a cache write of them. The rest is a
+  cache write again, K − P tokens in all. The model needs only K and P, not
+  how the rest splits.
 
-  The last two are a cache write again, K − P tokens in all. The model
-  needs only K and P, not how the rest splits.
-
-F₀ = oS + (w−1)(K − P) is the part of F that doesn't depend on x.
+F₀ = oN + (w−1)(K − P), in cached reads, is the part of F that doesn't depend
+on x.
 
 ### Efficacy and its half point s
 
@@ -186,12 +185,12 @@ efficacy doesn't, so they weigh on the choice only when s > 0.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-sawtooth-dark.svg">
-  <img alt="Context per request under the fitted model. Compacting at X* = 259k gives a sawtooth between K = 142k and 259k, each tooth 69 requests long; never compacting climbs in a straight line to 965k, where Claude Code compacts. The area under each line is what its requests read." src="../assets/model-sawtooth-light.svg">
+  <img alt="Context per request under the fitted model. Compacting at X* = 261k gives a sawtooth between K = 142k and 261k, each tooth 70 requests long; never compacting climbs in a straight line to 965k, where Claude Code compacts. The area under each line is what its requests read." src="../assets/model-sawtooth-light.svg">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-cost-dark.svg">
-  <img alt="Steady-state cost per unit of progress against the compaction point, for s of 0, 100k, 200k and 400k, against never compacting. Each curve climbs steeply toward 142k, what a compaction leaves. The minima are at 259k (55%), 321k (67%), 408k (81%) and 556k (94%)." src="../assets/model-cost-light.svg">
+  <img alt="Steady-state cost per unit of progress against the compaction point, for s of 0, 100k, 200k and 400k, against never compacting. Each curve climbs steeply toward 142k, what a compaction leaves. The minima are at 261k (55%), 324k (68%), 410k (82%) and 558k (94%)." src="../assets/model-cost-light.svg">
 </picture>
 
 The cost against the compaction point, for s from 0 to 400k. It climbs
@@ -209,21 +208,20 @@ From the author's 85 interactive sessions of more than one request, 7 to 15
 November 2026, 36,249 main-thread requests, priced at Opus 5.5 with the
 one-hour cache the sessions used:
 
-| parameter                               | value                    | 90% interval | how                                                                                |
-| --------------------------------------- | ------------------------ | ------------ | ---------------------------------------------------------------------------------- |
-| first request after a compaction        | 122k                     | 120–125k     | median over 135 compactions                                                        |
-| P, system prompt and tools, in the cache shared across sessions | 30k | 30–31k | that request's cache reads                                                  |
-| E, tokens read again after a compaction | 20k                      | 15–26k       | growth over the first 20 requests of a turn after a compaction, minus the same after another turn |
-| g, growth per request                   | 1,706                    | 1,615–1,805  | mean, leaving out the 20 requests after each compaction                            |
-| ō, output per request                   | 746                      | 699–792      | mean                                                                               |
-| ℓ, requests that cache-write the context | 0.56%                    | 0.51–0.63%   | 18% of turn ends are followed by a gap of over an hour                             |
-| S, summary output                       | 4,000                    | 3,300–8,000  | the summary's text is a median 3,300 (chars/4); its thinking isn't logged, and the pass's median 58 s at this account's output speed allows up to about 8,000 |
-| K, context a compaction leaves; h, c₀, F₀ | 142k; 1.22, 134k, 4.77M |            | derived: K is the first request plus E; F₀ is $0.95                                |
+| parameter | value | 90% interval | how |
+| --------- | ----- | ------------ | --- |
+| K, tokens of context after a compaction: the first request after it (122k: the system prompt and tools, instructions, the summary, and recent messages and files), plus the files the next few requests read again (20k) | 142k | 137–147k | the first request's median over 135 compactions, plus how much more the first 20 requests of a turn grow after a compaction than after another turn end |
+| P, tokens of the system prompt and tools, in the cache shared across sessions | 30k | 30–31k | the first request's cache reads |
+| N, output tokens of the compaction request: the summary's text plus its thinking | 5,608 | 5,247–5,885 | the summary's text, a median 3,474 tokens at 4 characters each over 143 summaries, times 1.61, the median ratio of output tokens to visible output (text, and tool input as JSON) of the 243 requests whose visible output is half to 1.5 times the summary's, on their session's model |
+| g, tokens the context grows per request | 1,706 | 1,615–1,805 | mean, leaving out the 20 requests after each compaction |
+| ō, output tokens per request | 746 | 699–792 | mean |
+| ℓ, share of requests that make a cache write of the context | 0.56% | 0.51–0.63% | 18% of turn ends are followed by a gap of over an hour |
+| h, c₀, F₀, in cached reads | 1.22, 134k, 4.93M | | derived; F₀ is $0.99 |
 
-At s = 0, X\* is 260k by the closed form above (259k on the script's 1k grid).
-Without E it would be 229k; without the lapses in h, 272k; with S at 8,000,
-264k. E likely leans high, since the turns after a compaction more
-often start new work, which reads more files anyway.
+At s = 0, X\* is 262k by the closed form above (261k on the script's 1k grid).
+Without the lapses in h it would be 274k, and with N twice as large, 268k.
+K's 20k of files read again likely leans high, since the turns after a
+compaction more often start new work, which reads more files anyway.
 
 Two measurements bear on what the model assumes:
 
@@ -242,11 +240,11 @@ Two measurements bear on what the model assumes:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-threshold-dark.svg">
-  <img alt="Best compaction point against s from 0 to 500k. The steady-state point rises from 259k at s = 0 to 321k at 100k, crosses 400k at 190k and reaches 620k at 500k. The replay's best turn-end threshold stays lower: 200k at s = 0, 250k from 75k to 125k, and 280k to 490k beyond." src="../assets/model-threshold-light.svg">
+  <img alt="Best compaction point against s from 0 to 500k. The steady-state point rises from 261k at s = 0 to 324k at 100k, crosses 400k at 190k and reaches 623k at 500k. The replay's best turn-end threshold stays lower: 200k at s = 0, 250k from 75k to 125k, and 280k to 490k beyond." src="../assets/model-threshold-light.svg">
 </picture>
 
 Across s from 0 to 100k, the range "Calibrating s" below allows, the best point
-moves from 259k to 321k and the best turn-end threshold from 200k to 250k. For
+moves from 261k to 324k and the best turn-end threshold from 200k to 250k. For
 the point to reach 400k, s has to be 190k, where a request at 200k has 52% efficacy
 and one at 400k 77%.
 
@@ -259,10 +257,10 @@ chance to compact. The best threshold at turn ends therefore sits below X\*.
 The replay measures how far. It keeps every logged request, with its growth,
 output and timing, and moves only the compactions: those sparkjoy or Claude
 Code's auto-compaction made are removed, those the user typed stay, and each
-arm compacts by its own rule. It charges E at once at each compaction an arm
-makes, and takes E out of the growth of the requests after each one it
-removes. Compacting after any request, the replay's best point is 260k, beside
-the steady state's 259k: uneven growth, real lapses and sessions ending
+arm compacts by its own rule. Each compaction an arm makes leaves K at once,
+the 20k of files read again included, and each one it removes takes those 20k
+out of the growth of the requests after it. Compacting after any request, the
+replay's best point is 260k, beside the steady state's 261k: uneven growth, real lapses and sessions ending
 together move the optimum little, though they may offset one another.
 Compacting only at turn ends moves it to 200k.
 
@@ -282,9 +280,10 @@ requests or so.
 The model prices a compaction in tokens. Its other cost is work the summary no
 longer supports: a mistake, a correction from the user, a step re-run. If that
 costs D cached reads on average, D adds to F₀, and X\* − K grows with
-√(F₀ + K + D). At s = 0, X\* reaches 400k when D is 18.8M cached reads, $3.75
-at Opus 5.5 prices: 3.6 times the compaction's own cost at 400k, or the price
-of a cache write of 481k tokens, about 24 times the E measured. LangWatch's
+√(F₀ + K + D). At s = 0, X\* reaches 400k when D is 18.6M cached reads, $3.72
+at Opus 5.5 prices: 3.5 times the compaction's own cost at 400k, or the price
+of a cache write of 477k tokens, about 24 times the 20k of files read again
+after a compaction. LangWatch's
 author [found](https://langwatch.ai/blog/context-tax-when-to-compact) that in
 their sessions, 42% of their messages in the five steps after a compaction
 carried a correction, matched by phrase, against 18% otherwise. In these
@@ -300,10 +299,11 @@ hand.
 When a session sits idle until its cache lapses, the next request makes a cache
 write of the whole context, compacted or not. Keeping costs that request
 P + w(x − P). Compacting first, while the cache still holds the context, costs
-the summary, x + oS, and then P + w(K − P). Compacting is cheaper when
+the compaction request, x + oN, and then P + w(K − P). Compacting is cheaper
+when
 
 ```math
-x > \frac{o\,S + w\,K}{w - 1} \approx 156\text{k}
+x > \frac{o\,N + w\,K}{w - 1} \approx 160\text{k}
 ```
 
 counting the next request alone; the cheaper requests after it only add to the
@@ -314,16 +314,16 @@ Replayed at s = 0, with every policy compacting wherever it allows:
 
 | policy                                                   | saved |
 | -------------------------------------------------------- | ----- |
-| turn ends from 400k, sparkjoy's first floor              | 25.1% |
-| and idle sessions from 200k, its first idle floor        | 28.5% |
-| turn ends from 200k, the best without idle compaction    | 30.2% |
-| turn ends from 250k and idle sessions from 175k: the best pair, and sparkjoy's floors | 30.9% |
+| turn ends from 400k, sparkjoy's first floor              | 25.0% |
+| and idle sessions from 200k, its first idle floor        | 28.4% |
+| turn ends from 200k, the best without idle compaction    | 30.0% |
+| turn ends from 250k and idle sessions from 175k: the best pair, and sparkjoy's floors | 30.7% |
 
 The pairs come from a grid of turn-end thresholds in steps of 50k and idle
 thresholds in steps of 25k; every pair of 200k–250k at turn ends and 150k–175k
 idle comes within 0.3 points of the best. 18% of turn ends here are followed by
 an hour's gap, so idle compaction does much of what a lower turn-end threshold
-would: sparkjoy's first two floors together saved 2.4 points less than the
+would: sparkjoy's first two floors together saved 2.3 points less than the
 best pair.
 
 ### Other prices and cache lifetimes
@@ -332,10 +332,10 @@ The same sessions, priced again, at s = 0:
 
 | prices               | cache     | ℓ     | h    | X\*  | best at turn ends | saved | idle break-even |
 | -------------------- | --------- | ----- | ---- | ---- | ----------------- | ----- | --------------- |
-| Opus 5.5, Sonnet 5.5 | 1 hour    | 0.56% | 1.22 | 259k | 200k              | 30.2% | 156k            |
-| Opus 5.5, Sonnet 5.5 | 5 minutes | 2.33% | 1.56 | 226k | 160k              | 37.3% | 165k            |
-| Fable 5.2            | 1 hour    | 0.56% | 1.44 | 294k | 250k              | 26.9% | 154k            |
-| Fable 5.2            | 5 minutes | 2.33% | 2.14 | 243k | 180k              | 36.7% | 162k            |
+| Opus 5.5, Sonnet 5.5 | 1 hour    | 0.56% | 1.22 | 261k | 200k              | 30.0% | 160k            |
+| Opus 5.5, Sonnet 5.5 | 5 minutes | 2.33% | 1.56 | 228k | 160k              | 37.0% | 172k            |
+| Fable 5.2            | 1 hour    | 0.56% | 1.44 | 297k | 250k              | 26.8% | 158k            |
+| Fable 5.2            | 5 minutes | 2.33% | 2.14 | 246k | 180k              | 36.4% | 168k            |
 
 A Fable 5.2 cache write costs twice as many cached reads, which raises F₀ and
 with it X\*. A five-minute cache lapses after 2.3% of requests, 57% of them at
@@ -371,7 +371,7 @@ turns the user answered by typing (90% intervals from resampling sessions):
 At s = 100k, requests below 200k would see 24 points more trouble than those
 at 400k–600k, and at s = 50k 9 points more; the measured difference is −13
 (−37 to +5).
-The best fit is **s near 0, at most 100k**: X\* is 259k, or 322k at the top of
+The best fit is **s near 0, at most 100k**: X\* is 261k, or 324k at the top of
 the interval, and the best turn-end threshold 200k, or 250k. It is weak
 evidence. Within a session the context grows as a piece of work goes on, and
 compactions come where work ends, so trouble by context is partly trouble by
@@ -391,8 +391,8 @@ well: the data bound the size of the effect but can't tell the shapes apart.
 (−19 to +13), D = −$0.16 (−$1.07 to +$0.73). It is lower after sparkjoy's
 compactions, which come where a piece of work ends: −34 requests (−85 to +5).
 After the user's and Claude Code's it is +6 requests (−3 to +20), $0.35
-(−$0.14 to +$1.12). X\* reaches 400k only at D = $3.75, 65 wasted requests; at
-$1.12, X\* is 314k and the best turn-end threshold 250k. With s at 100k as
+(−$0.14 to +$1.12). X\* reaches 400k only at D = $3.72, 64 wasted requests; at
+$1.12, X\* is 315k and the best turn-end threshold 250k. With s at 100k as
 well, the best turn-end threshold is 290k, and 400k saves one point less. An
 estimated 16% of first turns after a compaction drew a correction, against 23%
 of others, where LangWatch found 42% against 18%.
@@ -464,7 +464,7 @@ turns need detail a summary drops, stays with the question.
 In any model where 700k is best, compacting there barely beats never
 compacting. A request's cost rises in step with its context, from 310k cached
 reads at 142k to 990k at 700k ($0.06 to $0.20 on Opus 5.5), and a compaction
-there costs 5.5M ($1.09), so at 700k one pays for itself within 9 requests, a
+there costs 5.6M ($1.13), so at 700k one pays for itself within 9 requests, a
 median turn. Waiting longer pays only if the
 requests after a compaction get much less done. For that to hold at 700k,
 efficacy must still be climbing steeply there, so it must be low at 142k, and
@@ -472,8 +472,8 @@ each compaction then costs nearly as much progress as it saves in tokens:
 
 | what puts the best point at 700k                                    | efficacy at 142k | progress per dollar against never compacting |
 | ------------------------------------------------------------------- | ---------------- | -------------------------------------------- |
-| s = 635k                                                            | 14%              | +1.9%                                        |
-| β = 0.75 (best point 685k)                                          | 23% of 1M's      | +1.1%                                        |
+| s = 630k                                                            | 15%              | +1.9%                                        |
+| β = 0.75 (best point 690k)                                          | 23% of 1M's      | +1.1%                                        |
 | s = 0, and each compaction loses $21 of detail, 370 requests' worth | 100%             | +5.3%                                        |
 
 The sessions show no such world. Requests at 142k would get about a quarter of
@@ -491,7 +491,7 @@ saturating form gets almost nothing done with almost no context and levels off
 once the context holds what the work needs. The cost depends only on the curve
 from 142k to 965k, under three doublings, where the two fit the sessions about
 equally well. At the sessions' β of 0.06 (−0.18 to +0.27), the power law puts
-the best point at 266k, or 298k at the top of that range, against 259k–321k for
+the best point at 268k, or 300k at the top of that range, against 261k–324k for
 the saturating form. A question for anyone who runs agents tells them apart:
 does doubling an agent's context from 400k to 800k improve its next steps by
 about as much as doubling from 100k to 200k, or by much less? Much less is the
@@ -544,7 +544,7 @@ Every token is worth the same only at β = 1, or with s far past the window.
   dropped about six times as often as specifications of what to build.
   [Liu](https://arxiv.org/abs/2608.16370) finds compression leaving completion
   unchanged while retrieval calls triple, from 21 to 64 for GPT-5.5: the
-  re-reading E counts here.
+  re-reading that K's 20k counts here.
 - **Other agents** compact at a fixed share of the window:
   [Codex CLI](https://github.com/openai/codex/blob/83a23c09366d82cd0cb469c64c3e55d04d71c87a/codex-rs/protocol/src/openai_models.rs#L579-L590)
   at 90%,
@@ -572,4 +572,4 @@ The script reads the main thread of each interactive session in
 `~/.claude/projects`, measures the parameters above, resamples sessions for the
 intervals, and prints the figures on this page. It opens only transcripts
 modified since `--since`, at low priority. A fit needs some compactions in the
-window, to measure K and E.
+window, to measure K and N.

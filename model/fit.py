@@ -46,7 +46,6 @@ PRICES = {
 PROJECTS = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "projects"
 WINDOW = 1_000_000
 AUTO = 965_000  # where Claude Code compacts a 1M window on its own
-SUMMARY = 4_000  # output tokens of the summary request; assumed, as transcripts don't log that request
 SPAN = 20  # requests over which re-reads after a compaction are counted
 # Values of s, the context at which a request reaches half of full efficacy, 1 - 2^(-x/s) at
 # context x; at 0, every request has the same efficacy. The table's, then the chart's.
@@ -112,6 +111,10 @@ class Session:
     failed: list  # each request's tool calls whose result was an error, as the result's opening text
     said: list  # what the user typed, as (seconds since the epoch, text, whether it came mid-turn)
     compactions: list  # (seconds since the epoch, "sparkjoy", "idle", "auto" or "user", tokens before)
+    summaries: list  # the text of each compaction's summary, in tokens at 4 characters each
+    # Each request's visible output, its text and tool calls' input as JSON, in tokens at 4
+    # characters each; NaN for a request on a model other than the session's.
+    visible: np.ndarray
 
 
 @dataclass
@@ -176,13 +179,14 @@ def load(root, since, until):
         if path.stat().st_mtime < since.timestamp():
             continue
         reqs, comps, prompts, verdicts, entry, asked = {}, [], [], [], None, None
-        titles, first, models, said, failed = {}, None, Counter(), [], {}
+        titles, first, models, said, failed, summaries = {}, None, Counter(), [], {}, []
         for raw in path.open(errors="replace"):
             prompt = '"type":"user"' in raw and '"tool_result"' not in raw  # a message that starts a turn
             title = raw.startswith(title_lines)
             error = '"is_error":true' in raw
             queued = '"queued_command"' in raw  # a message typed while the turn ran
-            if not (prompt or title or error or queued or '"assistant"' in raw or "compact_boundary" in raw
+            summary = '"isCompactSummary":true' in raw  # its text may quote a tool result
+            if not (prompt or title or error or queued or summary or '"assistant"' in raw or "compact_boundary" in raw
                     or '"informational"' in raw):
                 continue
             try:
@@ -198,6 +202,8 @@ def load(root, since, until):
             if not lo <= e.get("timestamp", "") < hi or e.get("isSidechain"):
                 continue
             t = datetime.fromisoformat(e["timestamp"].replace("Z", "+00:00")).timestamp()
+            if e.get("isCompactSummary"):
+                summaries.append(len(text_of((e.get("message") or {}).get("content"))) / 4)
             if prompt and e.get("type") == "user":
                 prompts.append(t)
                 if text := typed(e):
@@ -227,14 +233,18 @@ def load(root, since, until):
                 # each repeating the usage, which streaming grows.
                 if m["id"] not in reqs:
                     models[m.get("model")] += 1
-                q = reqs.setdefault(m["id"], [t, (0,) * 5, False, set(), t, {}])
+                q = reqs.setdefault(m["id"], [t, (0,) * 5, False, set(), t, {}, {}, m.get("model")])
                 q[4] = t  # when its last block was logged
                 q[1] = tuple(map(max, q[1], v))
                 q[2] = q[2] or m.get("stop_reason") == "end_turn"
-                for b in m.get("content") or []:
-                    if b.get("type") == "tool_use":
+                for n, b in enumerate(m.get("content") or []):
+                    # Its visible characters, each block counted once however often it is logged.
+                    if b.get("type") == "text":
+                        q[6][e.get("uuid"), n] = len(b.get("text") or "")
+                    elif b.get("type") == "tool_use":
                         i = b.get("input") or {}
                         q[5][b.get("id")] = (b.get("name"), hash(json.dumps(i, sort_keys=True)), i.get("file_path"))
+                        q[6][b.get("id")] = len(json.dumps(i))
                         if b.get("name") == "Read" and "file_path" in i:
                             q[3].add(i["file_path"])
             elif e.get("subtype") == "informational":
@@ -263,7 +273,7 @@ def load(root, since, until):
             name = next((titles[k] for k in TITLES if titles.get(k)), None) or first or "untitled"
             sessions.append(session(sorted(reqs.values(), key=lambda q: q[0]), comps, sorted(prompts), failed,
                                     title=" ".join(name.split()), model=models.most_common(1)[0][0], verdicts=verdicts,
-                                    said=sorted(said)))
+                                    said=sorted(said), summaries=summaries))
     return sessions
 
 
@@ -304,7 +314,8 @@ def session(reqs, comps, prompts, failed, **meta):
                    durations=[c[2] for c in comps if c[2]], reads=[q[3] for q in reqs],
                    calls=[list(q[5].values()) for q in reqs],
                    failed=[[failed[i] for i in q[5] if i in failed] for q in reqs],
-                   compactions=[(c[0], c[4], c[5]) for c in comps])
+                   compactions=[(c[0], c[4], c[5]) for c in comps],
+                   visible=np.array([sum(q[6].values()) / 4 if q[7] == meta["model"] else np.nan for q in reqs]))
 
 
 def lapsed(s, ttl):
@@ -316,9 +327,12 @@ def lapsed(s, ttl):
 
 @dataclass
 class Params:
-    K: float  # context right after a compaction
-    P: float  # the part of it read from a cache shared across sessions (system prompt, tools)
-    E: float  # extra tokens re-read in the requests after a compaction
+    K: float  # tokens of context after a compaction: the first request after it, plus E
+    # The extra tokens the next few requests read again, part of K, which the replay takes out
+    # of the growth after each compaction it drops.
+    E: float
+    P: float  # tokens of the first request read from a cache shared across sessions (system prompt, tools)
+    N: float  # output tokens of the compaction request: the summary's text plus its thinking
     rereads: float  # extra requests, of the SPAN after a compaction, that read a file it dropped
     g: float  # tokens the context gains per request
     out: float  # output tokens per request
@@ -332,6 +346,11 @@ class Params:
     compactions: int
     duration: float  # median seconds a compaction took
 
+    @property
+    def first_request(self):
+        """The first request's context after a compaction: K but E."""
+        return self.K - self.E
+
 
 def measure(S, ttl):
     first = [(s.size[j], s.read[j]) for s in S for j in np.flatnonzero((s.kind == USER) | (s.kind == POLICY))]
@@ -341,16 +360,32 @@ def measure(S, ttl):
     m = np.array([len(t[1]) for t in turns])
     gaps = cat(lambda s: np.append(s.gap[1:], 0)[s.end])
     outlived = cat(lambda s: np.isin(s.kind, (POLICY, NORMAL)) & (s.gap > ttl))
+    E = excess(turns)
     return Params(
-        K=float(np.median([a for a, _ in first])), P=float(np.median([b for _, b in first])),
+        K=float(np.median([a for a, _ in first])) + E, E=E, P=float(np.median([b for _, b in first])),
+        N=summary_output(S)[0],
         # g leaves out the requests just after a compaction, whose extra reading E counts.
-        E=excess(turns), rereads=rereads(S), g=float(cat(lambda s: s.grew)[normal & ~cat(lambda s: s.recent)].mean()),
+        rereads=rereads(S), g=float(cat(lambda s: s.grew)[normal & ~cat(lambda s: s.recent)].mean()),
         out=float(cat(lambda s: s.out).mean()), inp=float(cat(lambda s: s.inp).mean()),
         lapse=float(cat(lambda s: lapsed(s, ttl))[cat(lambda s: np.isin(s.kind, (POLICY, NORMAL)))].mean()),
         lapse_turn_end=float(cat(lambda s: np.roll(s.end, 1))[outlived].mean()),
         turn=float(m.mean()), turn_median=float(np.median(m)),
         turn_growth=float(np.mean([sum(t[1]) for t in turns])), idle_turns=float((gaps > ttl).mean()),
         compactions=len(first), duration=float(np.median([d for s in S for d in s.durations])))
+
+
+def summary_output(S):
+    """N, the output tokens of the request that writes a compaction's summary. Transcripts log the
+    summary's text but not that request, so its thinking is unknown. The requests of about the
+    summary's size stand in for it: those on their session's model whose visible output is half to
+    1.5 times the median summary text. N is that median times their median ratio of output tokens,
+    thinking included, to visible output. Returns N, the text's median, the ratio, and how many
+    summaries and requests they come from."""
+    text = np.median([n for s in S for n in s.summaries])
+    vis, out = (np.concatenate([getattr(s, f) for s in S]) for f in ("visible", "out"))
+    near = (vis >= text / 2) & (vis <= 1.5 * text)
+    ratio = np.median(out[near] / vis[near])
+    return float(text * ratio), float(text), float(ratio), sum(len(s.summaries) for s in S), int(near.sum())
 
 
 def turn_list(s):
@@ -391,12 +426,12 @@ def rereads(S):
 def terms(p, c):
     """c(x) = h x + c0 and F(x) = x + F0, from what a request and a compaction write and read:
     a request reads x and writes the g new tokens, or after a lapse everything but the shared
-    prefix, x - P; a compaction's next request writes K - P, and later ones E more.
-    Returns h, c0, F0 and K, where a compaction leaves the context."""
+    prefix, x - P; the requests after a compaction write what it leaves but the shared prefix,
+    K - P. Returns h, c0 and F0."""
     h = 1 + p.lapse * (c.write - 1)
     c0 = c.output * p.out + c.input * p.inp + (c.write - 1) * ((1 - p.lapse) * p.g - p.lapse * p.P)
-    F0 = c.output * SUMMARY + (c.write - 1) * (p.K - p.P + p.E)
-    return h, c0, F0, p.K + p.E
+    F0 = c.output * p.N + (c.write - 1) * (p.K - p.P)
+    return h, c0, F0
 
 
 def eta(x, scale):
@@ -410,11 +445,12 @@ def curve(p, c, scale=0, lost=0.0):
     """J(X), the long-run cost per unit of progress of compacting at X, on a grid of X from K to AUTO,
     for efficacy with half point s. `lost` is D, what the detail a compaction drops costs the requests
     after it, in cached reads."""
-    h, c0, F0, K1 = terms(p, c)
-    X = np.append(np.arange(K1 + 1_000, AUTO, 1_000.0), AUTO)
-    cost = p.g * (X + F0 + lost) + h * (X**2 - K1**2) / 2 + c0 * (X - K1)
+    h, c0, F0 = terms(p, c)
+    K = p.K
+    X = np.append(np.arange(K + 1_000, AUTO, 1_000.0), AUTO)
+    cost = p.g * (X + F0 + lost) + h * (X**2 - K**2) / 2 + c0 * (X - K)
     # The integral of 1 - 2^(-x/s) from K to X.
-    progress = X - K1 - (scale / np.log(2) * (np.exp2(-K1 / scale) - np.exp2(-X / scale)) if scale else 0)
+    progress = X - K - (scale / np.log(2) * (np.exp2(-K / scale) - np.exp2(-X / scale)) if scale else 0)
     return X, cost / progress
 
 
@@ -426,15 +462,14 @@ def steady(p, c, scale=0, lost=0.0):
 
 def closed_form(p, c):
     """X* where every request has the same efficacy (s = 0): K + sqrt(2 g (F0 + K) / h)."""
-    h, _, F0, K1 = terms(p, c)
-    return K1 + np.sqrt(2 * p.g * (F0 + K1) / h)
+    h, _, F0 = terms(p, c)
+    return p.K + np.sqrt(2 * p.g * (F0 + p.K) / h)
 
 
 def idle_break_even(p, c):
-    """The context above which compacting just before the cache lapses costs less than
-    writing the context again, counting only the next request."""
-    _, _, _, K1 = terms(p, c)
-    return (c.output * SUMMARY + c.write * K1) / (c.write - 1)
+    """The context above which compacting just before the cache lapses costs less than a
+    cache write of the context, counting only the next request."""
+    return (c.output * p.N + c.write * p.K) / (c.write - 1)
 
 
 # The replay: every logged request stays, with its growth, output and timing,
@@ -446,10 +481,11 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0):
     context reaches `threshold`, and with `idle`, at any turn end from that size after which
     the session sits idle for IDLE of the cache's lifetime, as sparkjoy's timer does. Each
     compaction the policy or Claude Code makes also costs `lost`, D in cached reads."""
-    K1, P = p.K + p.E, p.P
+    K, P = p.K, p.P
     lapse = lapsed(s, ttl)
-    # Each arm charges E, all at once, at each compaction it makes, so the requests after a
-    # dropped one give up E of their growth, the earliest first, where the re-reading falls.
+    # Each compaction an arm makes leaves K, the E tokens read again included, all at once, so
+    # the requests after a dropped one give up E of their growth, the earliest first, where the
+    # re-reading falls.
     growth = s.grew.astype(float)
     for j in np.flatnonzero(s.kind == POLICY):
         left = p.E
@@ -462,23 +498,23 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0):
         kind, grew, inp, out = s.kind[j], growth[j], s.inp[j], s.out[j]
         if kind in (FIRST, USER):
             if kind == USER:
-                cost += ctx + c.output * SUMMARY
+                cost += ctx + c.output * p.N
             ctx = s.size[j]
             cost += s.read[j] + c.write * s.write[j] + c.input * inp + c.output * out
         else:
             if pending or (idle is not None and ctx >= idle and s.idle[j] > IDLE * ttl):
-                cost += ctx + c.output * SUMMARY + lost  # read from the cache, which the turn end left warm
+                cost += ctx + c.output * p.N + lost  # read from the cache, which the turn end left warm
                 # A compaction leaves K, or less where the context held less to begin with,
                 # which happens only below K, at a session's first turn ends.
-                left = min(K1, ctx)
+                left = min(K, ctx)
                 ctx, written = left + grew, left - P + grew
             else:
                 ctx += grew
                 written = ctx - P if lapse[j] else grew
             if ctx >= AUTO:
                 # Claude Code compacts before sending, so after a lapse its summary reads uncached input.
-                cost += (P + c.input * (ctx - P) if lapse[j] else ctx) + c.output * SUMMARY + lost
-                ctx, written = K1 + grew, K1 - P + grew
+                cost += (P + c.input * (ctx - P) if lapse[j] else ctx) + c.output * p.N + lost
+                ctx, written = K + grew, K - P + grew
             cost += max(ctx - written - inp, 0) + c.write * written + c.input * inp + c.output * out
         trace[j] = ctx
         ended = bool(s.end[j])
@@ -486,7 +522,7 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0):
     # A compaction after the session's last turn still runs its summary, and so does an idle
     # one: the policy can't know the session is over, and takes it to have sat idle.
     if pending or (idle is not None and ended and ctx >= idle):
-        cost += ctx + c.output * SUMMARY
+        cost += ctx + c.output * p.N
     return cost, trace
 
 
@@ -528,8 +564,10 @@ def main():
     print(f"{len(S)} sessions, {sum(len(s.size) for s in S):,} requests, {since:%Y-%m-%d %H:%M}Z to {until:%Y-%m-%d %H:%M}Z; "
           f"{a.model} prices, {ttl // 60}-minute cache: a write is {c.write:.0f} reads, an output token {c.output:.0f}")
     print("\nparameter                                                    value   90% interval")
-    for name, label, scale in (("K", "context after a compaction (tokens)", 1), ("P", "  of it read from the shared cache", 1),
-                               ("E", f"extra tokens re-read in the {SPAN} requests after one", 1),
+    for name, label, scale in (("K", "context after a compaction (tokens)", 1),
+                               ("first_request", "  the first request after one", 1), ("P", "    of it read from the shared cache", 1),
+                               ("E", f"  extra tokens read again in the {SPAN} requests after one", 1),
+                               ("N", "output of the compaction request, thinking included", 1),
                                ("rereads", f"extra requests of those {SPAN} re-reading a dropped file", 1),
                                ("g", "growth per request", 1), ("out", "output per request", 1),
                                ("lapse", "requests that rewrite the context (%)", 100),
@@ -538,17 +576,19 @@ def main():
         v, (lo, hi) = getattr(p, name) * scale, np.percentile([getattr(b, name) for b in boot], [5, 95]) * scale
         f = ",.0f" if abs(v) >= 100 else ".2f"
         print(f"  {label:54s} {v:9{f}}   {lo:{f}} to {hi:{f}}")
-    h, c0, F0, K1 = terms(p, c)
-    print(f"  compactions {p.compactions}, median {p.duration:.0f} s each; summary output {SUMMARY:,} (assumed)")
+    h, c0, F0 = terms(p, c)
+    _, text, ratio, summaries, near = summary_output(S)
+    print(f"  compactions {p.compactions}, median {p.duration:.0f} s each; N is the summary's text, a median {text:,.0f} "
+          f"of {summaries}, times {ratio:.2f},\n    the median output over visible output of {near:,} requests with "
+          f"{text / 2:,.0f} to {1.5 * text:,.0f} visible")
     size, grew = (np.concatenate([getattr(s, f)[s.kind == NORMAL] for s in S]) for f in ("size", "grew"))
     print("  growth per request by context:", ", ".join(
         f"{lo // 1000}-{lo // 1000 + 100}k {grew[(size >= lo) & (size < lo + 100_000)].mean():,.0f}"
         for lo in range(100_000, 800_000, 100_000)))
-    print(f"\nh = {h:.3f}, c0 = {c0 / 1e3:,.0f}k, F0 = {F0 / 1e6:.2f}M (${F0 * c.read:.2f}), K = {K1 / 1e3:.0f}k; "
+    print(f"\nh = {h:.3f}, c0 = {c0 / 1e3:,.0f}k, F0 = {F0 / 1e6:.2f}M (${F0 * c.read:.2f}); "
           f"closed form at s = 0: X* = {closed_form(p, c) / 1e3:.0f}k; idle break-even {idle_break_even(p, c) / 1e3:.0f}k")
-    print(f"X* at s = 0 without E: {closed_form(replace(p, E=0), c) / 1e3:.0f}k; without lapses: "
-          f"{closed_form(replace(p, lapse=0), c) / 1e3:.0f}k; with twice the summary: "
-          f"{(K1 + np.sqrt(2 * p.g * (F0 + c.output * SUMMARY + K1) / h)) / 1e3:.0f}k")
+    print(f"X* at s = 0 without lapses: {closed_form(replace(p, lapse=0), c) / 1e3:.0f}k; with twice the summary: "
+          f"{closed_form(replace(p, N=2 * p.N), c) / 1e3:.0f}k")
 
     print("\nreplaying...", flush=True)
     ks = list(CHART_SCALES)
@@ -569,16 +609,15 @@ def main():
         tlo, thi = np.percentile(BT[:, i], [5, 95], method="nearest")
         print(f"  {k(scale):>5}  {k(steady(p, c, scale)):>5} ({k(lo)}-{k(hi)})    {k(Tr[i]):>5}                  "
               f"{k(T[i]):>5} ({k(tlo)}-{k(thi)})              {1 - saved[i]:.1%}   {1 - J[at[250_000], i] / J[-1, i]:.1%}   {1 - J[at[400_000], i] / J[-1, i]:.1%}")
-    print("  * resampling sessions with K, P and E held at their fitted values")
+    print("  * resampling sessions with K, P and N held at their fitted values")
     print("\n  the steady-state point reaches", end="")
     for level in (300_000, 400_000, 600_000, AUTO):
         scale = next((x for x in range(0, 3_000_001, 5_000) if steady(p, c, x) >= level), None)
         print(f" {level // 1000}k at s = {k(scale)};" if scale is not None else f" {level // 1000}k at no s below 3M;",
               end="")
-    h, _, F0, K1 = terms(p, c)
-    D = (400_000 - K1) ** 2 * h / (2 * p.g) - K1 - F0
+    D = (400_000 - p.K) ** 2 * h / (2 * p.g) - p.K - F0
     print(f"\n  at s = 0 it reaches 400k if a compaction also costs {D / 1e6:.1f}M reads (${D * c.read:.2f}) more, "
-          f"{D / (400_000 + F0):.1f} times its own cost there, the price of writing {D / (c.write - 1) / 1e3:.0f}k tokens again")
+          f"{D / (400_000 + F0):.1f} times its own cost there, the price of a cache write of {D / (c.write - 1) / 1e3:.0f}k tokens")
 
     X, Js = curve(p, c)
     r = J[:-1, zero] / J[-1, zero]
@@ -589,7 +628,7 @@ def main():
               f"in the steady state, {J[at[x], zero] / J[:, zero].min() - 1:.1%} in the replay at turn ends")
     print("\n  context   pays back after   grows back in   (requests, s = 0)")
     for x in (200_000, 250_000, 300_000, 400_000, 600_000):
-        print(f"  {x / 1e3:5.0f}k   {np.ceil((x + F0) / (h * (x - K1))):10.0f}   {(x - K1) / p.g:14.0f}")
+        print(f"  {x / 1e3:5.0f}k   {np.ceil((x + F0) / (h * (x - p.K))):10.0f}   {(x - p.K) / p.g:14.0f}")
 
     def arm(threshold, idle=None):
         return sum(replay(s, p, c, threshold, ttl, idle=idle)[0] for s in S)

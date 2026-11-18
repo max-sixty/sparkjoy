@@ -59,8 +59,8 @@ def replayed(s, p):
 
 def returns(S):
     """Each request that took up a context of IDLE_FLOOR or more after RETURN seconds idle, with
-    that context, who compacted it in between, if anyone, and what writing the request's prompt
-    to the cache cost in dollars (None for a model with no price here)."""
+    that context, who compacted it in between, if anyone, and what the request's cache write of
+    its prompt cost in dollars (None for a model with no price here)."""
     rows = []
     for s in S:
         c = fit.prices(s.model, s.ttl) if s.model in fit.PRICES else None
@@ -364,10 +364,12 @@ def main():
         with warnings.catch_warnings():  # a short window leaves some parameters without data
             warnings.simplefilter("ignore", RuntimeWarning)
             p = fit.measure(S, ttl)
-        if np.isfinite([p.K, p.P, p.g, p.out, p.lapse]).all():
+        if np.isfinite([p.K, p.P, p.N, p.g, p.out, p.lapse]).all():
             fitted = thresholds(S, p, ttl)
         unfit = "The window holds too few requests to fit the cost model."
-    sessions = [(s, replayed(s, p)) for s in S] if p is not None else [(s, (None, s.size, s.size)) for s in S]
+    # The replay prices each compaction from K, P and N.
+    replays = p is not None and np.isfinite([p.K, p.P, p.N]).all()
+    sessions = [(s, replayed(s, p)) for s in S] if replays else [(s, (None, s.size, s.size)) for s in S]
     priced = [r[0] for _, r in sessions if r[0]]
     # With, without and the checks, summed over the sessions with a price.
     saving = tuple(map(sum, zip(*priced))) if priced and any(s.sparkjoy.any() for s in S) else None

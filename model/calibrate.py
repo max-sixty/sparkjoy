@@ -275,7 +275,7 @@ def main():
     ttl = fit.usual(s.ttl for s in C)
     c = fit.prices(a.model, ttl)
     p = fit.measure(C, ttl)
-    h, c0, F0, K1 = fit.terms(p, c)
+    h, c0, F0 = fit.terms(p, c)
     R = [rows(s) for s in S]
     d = frame(R)
     m = means(d)
@@ -357,7 +357,7 @@ def main():
     # of work ends. A threshold compacts anywhere, so the results take D as 0 or at the top of its
     # interval, where the user's and Claude Code's compactions reach.
     high = max(X["D"][1], X["D other"][1])
-    need = (400_000 - K1) ** 2 * h / (2 * p.g) - K1 - F0
+    need = (400_000 - p.K) ** 2 * h / (2 * p.g) - p.K - F0
     print(f"  X* reaches 400k at s = 0 with D = {need / 1e6:.1f}M reads (${need * c.read:.2f}), "
           f"{need / price(m['post x']):.0f} wasted requests per compaction")
     # A LangWatch-style comparison, without the session effects or the context.
