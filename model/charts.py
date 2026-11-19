@@ -337,6 +337,10 @@ def average(out, p, c):
           f"the marginal cost crosses it at {X[cross] / 1e3:.0f}k")
     best = columns(p, c)[1]
     least = cycle(p, c, best)[1]  # exactly, as the cycles chart computes it, rather than off the 1k grid
+    # The two points the text sets against the least: 400k, and never compacting.
+    others = [(x, cycle(p, c, x)[1]) for x in (400_000, fit.AUTO)]
+    print("model-average: against the least, " + ", ".join(
+        f"{x / 1e3:.0f}k costs {y / least - 1:.1%} more" for x, y in others))
 
     for theme, t in THEMES.items():
         fig, ax = plt.subplots(figsize=(9, 3.4))
@@ -346,9 +350,14 @@ def average(out, p, c):
         label_ends(ax, [(M[-1], "marginal cost per request", t["ink"]),
                         (A[-1], "average cost per request", t["ink"])], gap=80_000)
         ax.plot([best], [least], "o", ms=7, mfc=t["cost"], mec=t["page"], mew=1.5, zorder=3)
-        ax.text(best + 15_000, least - 50_000,
+        ax.text(best + 15_000, least - 170_000,
                 f"the average is lowest at {best / 1000:.0f}k,\n{tokens(round(least, -4))} CRTs per request",
                 ha="left", va="top", fontsize=9, color=t["ink"])
+        for (x, y), name, ha, dx, dy in zip(others, ("at 400k", "never compacting"), ("center", "right"),
+                                            (0, -10_000), (-60_000, -150_000)):
+            ax.plot([x], [y], "o", ms=6, mfc=t["page"], mec=t["cost"], mew=1.5, zorder=3)
+            ax.text(x + dx, y + dy, f"{name},\n{y / least - 1:.0%} more", ha=ha, va="top", fontsize=9,
+                    color=t["ink"])
         ax.set_xlim(0, fit.AUTO)
         ax.set_xticks([0, 200_000, 400_000, 600_000, 800_000])
         ax.xaxis.set_major_formatter(tokens)

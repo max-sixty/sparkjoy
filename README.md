@@ -10,9 +10,9 @@ transcript spark joy? That is, does the work ahead still need it, or can it go?
   <img alt="Context per request across one session. With sparkjoy, dots mark the 11 turn ends where the plugin asked whether to compact: at 5 the session kept going, and at 6 it compacted, at sizes from 417k to 728k tokens. Without it, the context climbs to about 960k before Claude Code compacts." src="assets/session-light.svg">
 </picture>
 
-A session replayed without the plugin for comparison. Every request
-re-reads the whole context, so the area under each line is what the session
-paid to read. At each dot the plugin asked the session's model whether to
+One session with the plugin, and the same session replayed without it. Every
+request reads the whole context again, so the area under each line counts the
+tokens the session read. At each dot the plugin asked the session's model whether to
 compact, and at the six filled ones it did, when a piece of work had ended:
 
 > Long transcript of finished exploration, reverted attempts and diffs;
@@ -22,10 +22,11 @@ compact, and at the six filled ones it did, when a piece of work had ended:
 > The hierarchy PR is open and handed over. The follow-up work needs only the
 > summary, not the transcript's diffs and logs. *(680k)*
 
-At the hollow dots the session kept going. Where the line climbs with no dot, a
-long turn is still running or the context is under 400k, the plugin's floor
-that week ([Limits](#limits)). This session cost 25% less with the plugin, and the 87 sessions under
-[What it saves](#what-it-saves) 23% less.
+At the hollow dots the session kept going. Where the line climbs with no dot, either
+a long turn was still running or the context was under 400k, the plugin's floor
+when this session ran, since lowered to 250k ([Limits](#limits)). In the
+replay, this session cost 25% less with the plugin than without it, and the 87
+sessions under [What it saves](#what-it-saves) cost 23% less.
 
 ## Install
 
@@ -36,8 +37,8 @@ At the prompt of a Claude Code session:
 ```
 
 Answer `y` to add the marketplace, and choose the user scope to have it in
-every session. It is tested daily on the latest and stable Claude Code
-releases; `claude plugin disable sparkjoy` turns it off.
+every session. It is tested daily on the latest and stable Claude Code releases, and
+`claude plugin disable sparkjoy` turns it off.
 
 ## What it does
 
@@ -48,22 +49,23 @@ releases; `claude plugin disable sparkjoy` turns it off.
   cache write of the whole context. It asks this only where the prompt cache
   lasts an hour: on a Claude subscription, or on an API key or Bedrock with the
   one-hour cache turned on.
-- **Each decision shows as a dim line in the transcript**, which the model never
-  reads, with its reason:
+- **Each verdict shows in the transcript** as a dim line with its reason.
+  Claude Code shows these lines to you and never sends them to the model:
 
   ```
   sparkjoy: Compacting at 401k tokens: Long transcript of finished experiments, diffs and query output; …
   ```
 
-- **`/sparkjoy:report`** writes a page about your own sessions of the last 14
-  days and opens it: every verdict, what the compactions saved, and the
-  thresholds the [cost model](#cost-model) fits to them. From then on the
-  question states the figures it fitted in place of its defaults. It needs
-  [uv](https://docs.astral.sh/uv/).
+- **`/sparkjoy:report`** reads your transcripts of the last 14 days, writes a
+  page about them on your computer and opens it: every verdict, what the
+  compactions saved, and the thresholds the [cost model](#cost-model) fits to
+  your sessions. It also saves the figures it fitted, which the question states
+  from then on. It needs [uv](https://docs.astral.sh/uv/), which downloads
+  Python and numpy the first time.
 
-sparkjoy's only requests are these checks, which Claude Code sends to the
-session's model on the session's account. The report reads your transcripts
-and writes its page on your computer.
+Claude Code sends these questions to the session's model on the session's
+account, as it does the session's own requests. They are the only requests
+sparkjoy makes with your conversation.
 
 <details>
 <summary>Sample report</summary>
@@ -82,7 +84,7 @@ requests, replayed with and without the plugin[^replay]:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/cost-dark.svg">
-  <img alt="Replayed cost: $5,214 without the plugin, $4,013 with it, of which sparkjoy's checks, ordinary requests to the session's model, are $22." src="assets/cost-light.svg">
+  <img alt="Replayed cost: $5,214 without the plugin, $4,013 with it, of which sparkjoy's questions to the session's model are $22." src="assets/cost-light.svg">
 </picture>
 
 <picture>
@@ -99,11 +101,12 @@ requests, replayed with and without the plugin[^replay]:
 Of the 59 sessions that reached 400k, half saved between 12% and 31%, and one
 cost 19% more.
 
-Each check is one request to the session's model, which reads the conversation
-from the cache and writes about a hundred tokens. The 198 checks, at turn ends of 400k or more,
-cost $22 in all, and 122 of them compacted.
+Each question is one request to the session's model, which reads the
+conversation from the cache and outputs about a hundred tokens. The 198
+questions, at turn ends of 400k or more, cost $22 in all, and 122 of them led
+to a compaction.
 
-A compaction costs about $0.99 on Opus 5.5, mostly to write to the cache the
+A compaction costs about $0.99 on Opus 5.5, mostly the cache write of the
 142k tokens it leaves. Every later request then reads less:
 
 | compacting at | each later request reads | pays for itself after | context grows back in |
@@ -114,24 +117,25 @@ A compaction costs about $0.99 on Opus 5.5, mostly to write to the cache the
 
 ## How it decides
 
-sparkjoy asks only between turns: when a turn ends, and again if the session
-then sits idle. A turn's end is where a piece of work most likely ends, while
-inside a turn the work is still under way.
+sparkjoy asks only when a turn ends, and again if the session then sits idle,
+because a piece of work most likely ends where a turn does.
 
 The session's own model makes the call, reading the whole transcript from the
-prompt cache, since which parts the work ahead needs depends on the work. The
-question tells it that a transcript of mostly finished work is no reason by
-itself to compact, since nearly every long transcript is one. What decides it
-is whether the next turns will need detail a summary drops, such as exact
-output, failed attempts or a design still taking shape.
+prompt cache, because the parts of it the next turns need differ from one piece
+of work to the next. The question tells the model that mostly finished work is
+no reason by itself to compact, since nearly every long transcript holds mostly
+finished work. It asks instead whether the next turns will need detail a
+summary drops, such as exact output, failed attempts or a design still taking
+shape.
 
 The question also gives both costs, sized for the context: what a compaction
 costs and how many requests it takes to pay for itself, and what keeping the
 context through another turn costs, which grows with the context. The model
 weighs the two and answers with its verdict and a one-line reason. In the
-[evals](evals/README.md) it compacts at every finished turn end, as the
-[cost model](#cost-model) recommends past about 250k, and at the
-mid-task ones, from 519k to 681k, in 5 of 8 runs.
+[evals](evals/README.md), it compacts at every turn end where the work had
+finished, as the [cost model](#cost-model) recommends past about 250k. At the
+four turn ends in the middle of a task, from 519k to 681k, it compacts in 5 of
+8 runs.
 
 ### The prompt
 
@@ -197,12 +201,14 @@ Reply with one JSON object and nothing else, filling its fields in order:
 
 ## Limits
 
-- It asks only from 250k, or 175k in an idle session: the pair of floors that
-  costs least in the replay ([Cost model](#cost-model)), taking every check to say yes.
+- It asks only once the context reaches 250k at a turn end, or 175k in an
+  idle session. In the replay under [Cost model](#cost-model), that pair of
+  floors costs least when every question leads to a compaction.
 - Until you run `/sparkjoy:report`, the question's figures for a turn's length
-  and for what a compaction costs are defaults measured on the author's sessions. The report fits them
-  to yours, all but the wasted requests after a compaction, which take months
-  of sessions to measure.
+  and for what a compaction costs are defaults measured on the author's sessions. The report replaces
+  them with figures fitted to your sessions, except the count of wasted
+  requests after a compaction, which needs months of sessions to measure. The
+  floors stay at 250k and 175k.
 - It leaves Claude Code's own compaction on, which still compacts a turn that
   fills the window before it ends.
 - It acts only in sessions with a 1M-token context window, the size its floors
@@ -234,16 +240,17 @@ replay of the same sessions tests them.
 It has two parts:
 
 - **[One compaction threshold](docs/cost-model.md#one-compaction-threshold).** Every compaction
-  comes at the same context size, whatever the work. If a request gets as much
-  done at any context size, a compaction loses nothing the next turns need, and
-  a session can compact after any request, the best size is about 260k<sup>1</sup>.
+  comes at the same context size, whatever the work. The best size is about 260k<sup>1</sup>
+  if three things hold: a request gets as much done at any context size, a
+  compaction loses nothing the next turns need, and a session can compact after
+  any request.
   The replay, which compacts only at turn ends, gives sparkjoy's floors: 250k
   at turn ends and 175k in an idle session.
 - **[Value of information](docs/cost-model.md#value-of-information).** A check at each turn end
-  compacts sooner or later than that threshold, by how much the work ahead needs
-  what the context holds. sparkjoy's question is such a check. This part finds
-  what a check could save over the best single threshold, and how often it must
-  be right to pay.
+  compacts before or after that threshold, depending on how much the work ahead
+  needs the context's detail. sparkjoy's question is such a check. This part
+  finds what a check could save over the best single threshold, and how often it
+  must be right to pay for itself.
 
 Costs are in CRTs, cached-read tokens. One CRT is the price of reading one token
 from the prompt cache, which [Prices by model](docs/cost-model.md#prices-by-model) gives for each
@@ -327,7 +334,7 @@ intervals from resampling sessions.
 | c(x) | Cost of a request with context x, in CRTs: $`c(x) = h\,x + c_0`$. |
 | F(X) | Cost of a compaction at context X, in CRTs: $`F(X) = F_0 + X`$, since the compaction request reads the whole context. |
 | η(x) | Effectiveness of a request with context x, relative to a request with the full 1M window: $`\eta(x) = (x / 1\text{M})^\beta`$. A request's effectiveness is how much it gets done. |
-| J(X) | Cost per unit of effectiveness when the session compacts at X, in CRTs, a cost-effectiveness ratio as health economics uses the term. It is a cycle's cost, its requests' and its compaction's, divided by the cycle's effectiveness, the sum of its requests'. |
+| J(X) | Cost per unit of effectiveness when the session compacts at X, in CRTs, a cost-effectiveness ratio. It is the cost of a cycle's requests and its compaction, divided by the sum of its requests' effectiveness. |
 
 **Parameters**
 
@@ -353,21 +360,25 @@ intervals from resampling sessions.
 
 </details>
 
-### Best compaction point
+### Average cost
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-average-dark.svg">
-  <img alt="Cost per request, in CRTs, against the compaction point X, from 142k to 965k. The average cost per request, its share of the compaction included, falls steeply from 142k to its minimum, about 450k at 260k, then rises to 820k at 965k; a dot marks the minimum. The marginal cost per request, a straight grey line, rises from 310k at 142k to 1.3M at 965k and crosses the average at its minimum." src="assets/model-average-light.svg">
+  <img alt="Cost per request, in CRTs, against the compaction point X, from 142k to 965k. The average cost per request, its share of the compaction included, falls steeply from 142k to its minimum, about 450k at 260k, then rises to 500k at 400k, 10% more, and to 820k at 965k, 81% more; dots mark the three. The marginal cost per request, a straight grey line, rises from 310k at 142k to 1.3M at 965k and crosses the average at its minimum." src="assets/model-average-light.svg">
 </picture>
 
 A request's cost averaged over a cycle, its share of the compaction included,
-against the compaction point. The average is lowest where the marginal cost, the
-straight line, crosses it.
+against the compaction point, with a request getting as much done at any
+context size. Never compacting costs 81% more per request than compacting at
+the cheapest point, about 260k, and compacting at 400k costs 10% more.
 
-The marginal cost is what one more request before compacting costs. Waiting for
+### Best compaction point
+
+The average is lowest where the marginal cost, the straight line in the chart,
+crosses it. The marginal cost is what one more request before compacting costs. Waiting for
 that request lowers the average while it costs less than the average, as in
 Harris's economic order quantity. If a request gets as much done at any context,
-the best point has a closed form, in the symbols tabled under [Request and
+the best point has a closed form, in the symbols defined under [Request and
 compaction costs](docs/cost-model.md#request-and-compaction-costs):
 
 ```math
@@ -388,8 +399,8 @@ context.
 
 At larger β, a compaction also costs effectiveness, since the requests after it
 work with less. The best point then minimizes J, a cycle's cost per unit of its
-effectiveness, which at β = 0 is the average cost under [Best compaction
-point](docs/cost-model.md#best-compaction-point):
+effectiveness, which at β = 0 is the average cost under [Average
+cost](docs/cost-model.md#average-cost):
 
 ```math
 J(X) = \frac{g\,F(X) + \int_K^X c(x)\,dx}{\int_K^X \eta(x)\,dx}
@@ -438,8 +449,8 @@ The best point against β, in the model, which compacts after any request, and
 in a replay of the sessions from 7 to 15 November, which compacts only at turn
 ends, with 90% bands. Turn ends move the best point earlier.
 
-The replay keeps every logged request and moves only the compactions. Allowed
-to compact after any request, its best point is 260k, against the model's 261k,
+The replay keeps every logged request and moves only the compactions. When the
+replay may compact after any request, its best point is 260k, against the model's 261k,
 so uneven growth, cache lapses and sessions ending move it little. Turns run a
 median of 9 requests but a mean of 38, so one turn can carry the context far
 past the best point before the next chance to compact.
@@ -477,9 +488,10 @@ floors, is the best pair on a grid of 50k steps at turn ends and 25k steps idle.
 Once the cache lapses, an idle session's next request makes a cache write of the
 whole context, compacted or not. Keeping costs that request P + w(x − P).
 Compacting first, while the cache still holds the context, costs x + oN for the
-compaction request and then P + w(K − P), in the symbols tabled under [Request
-and compaction costs](docs/cost-model.md#request-and-compaction-costs). Counting the next request
-alone, which understates the saving, compacting is cheaper when
+compaction request and then P + w(K − P), in the symbols defined under [Request
+and compaction costs](docs/cost-model.md#request-and-compaction-costs). If only the next
+request is counted, which understates the saving, compacting first is cheaper
+when
 
 ```math
 x > \frac{o\,N + w\,K}{w - 1} \approx 160\text{k}
@@ -500,11 +512,11 @@ the expected value of perfect information.
   <img alt="The expected value of a check's information, the cost it saves against the best single threshold, by the mutual information between the check's verdict and whether the context helps the work, as a share of a perfect check's, for 60% of the work at β = 1, 30% at β = 2 and 12% at β = 5, the rest at β = 0. A perfect check saves 11%, 20% and 24%. The β = 1 line climbs fastest at first, the β = 2 line is nearly straight, and the β = 5 line stays at 0 until about 30% of the information and reaches half its saving only at 90%. A thin band along 0 marks what the checks cost, 0.3%." src="assets/model-voi-light.svg">
 </picture>
 
-What a check saves on three mixes of work with mean β 0.6, each a share of the
-work at one β and the rest at β = 0, by how much its verdict tells about whether
-the context helps the work. Across these mixes, the steeper the share, the more a
-perfect check saves, and the closer to perfect a check must be to get half of
-that.
+What a check saves, against how much its verdict tells about whether the
+context helps the work. Each line is a mix of work with mean β 0.6, with one
+share at a single β and the rest at β = 0. The higher that share's β, the more
+a perfect check saves, and the closer to perfect a check must be to get half of
+that saving.
 
 | mix | best single threshold | a perfect check saves | half that saving needs | right 9 times in 10, a check saves | a check pays once right |
 |----|----|----|----|----|----|
@@ -538,10 +550,11 @@ when never compacting, and no check lowers that part of the cost.
 ### Turn ends that differ in lost detail
 
 A replay of the sessions marks 30% of turn ends mid-task, where a compaction
-loses detail, and the rest finished, where it loses none. A check right at a
-share a of turn ends compacts at a turn end it calls finished once the context
-passes a floor, and at any turn end past a higher ceiling, with the floor and
-ceiling that cost least.
+loses detail, and the rest finished, where it loses none. The replay's check is
+right at some share of turn ends. Once the context passes a floor, it compacts
+at each turn end it calls finished, and once the context passes a higher
+ceiling, at every turn end. The floor and ceiling are set where they cost
+least.
 
 | with 1.8M CRTs lost per compaction, as measured, about 6 wasted requests | share of the cost under the best threshold without a check |
 |----|----|
@@ -550,15 +563,16 @@ ceiling that cost least.
 | what the checks cost | 0.3% |
 | what the lost detail costs in all, the most any check can save | 2% |
 
-On the evals, sparkjoy's question compacted at every finished turn end and kept
-the context in 3 of 8 mid-task runs, over two runs of each of a handful of cases
-not yet compared with live verdicts. The lost detail costs little in all because
+On the evals, sparkjoy's question compacted at every finished turn end, and
+kept the context in 3 of 8 runs at the four mid-task turn ends, two runs each.
+The evals' verdicts have not yet been compared with the live plugin's. The lost detail costs little in all because
 real sessions end, and so compact less often than the steady state does.
 
 The replay's check doesn't see the context's size, so it needs the ceiling.
-sparkjoy's question states what keeping the context costs, so sparkjoy can
-compact mid-task once that cost exceeds the detail a compaction would lose,
-though on the evals its response to size is still noisy.
+sparkjoy's question states what keeping the context costs, so the model can
+compact at a mid-task turn end once keeping costs more than the detail a
+compaction would lose. On the evals, its verdicts still respond noisily to
+context size.
 
 ### Where a check pays
 
@@ -637,7 +651,7 @@ worth the same only at β = 1.
 <details>
 <summary>Has anyone modelled this before?</summary>
 
-No one has published a model of when to compact. This autumn's studies sweep the
+The closest published studies, from August to October 2026, sweep the
 threshold on benchmarks ([Satish et al.](https://arxiv.org/abs/2609.32961),
 [CliffCompaction](https://arxiv.org/abs/2609.26779)) or measure what a
 compaction drops ([Salle et al.](https://arxiv.org/abs/2610.31778),
