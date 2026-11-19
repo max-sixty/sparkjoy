@@ -38,10 +38,10 @@ At the prompt of a Claude Code session:
   sparkjoy: Compacting at 680k tokens: The hierarchy PR is open and handed over. The follow-up work needs only the summary, not the transcript's diffs and logs.
   ```
 
-- **`/sparkjoy:report`** opens a page on your sessions of the last 14 days:
-  every verdict, what the compactions saved, and the floors and figures the
-  [cost model](#cost-model) fits to them, which sparkjoy uses from then on. It
-  needs [uv](https://docs.astral.sh/uv/).
+- **`/sparkjoy:report`** opens a page on your sessions of the last 14 days,
+  with every verdict and what the compactions saved. It fits the [cost
+  model](#cost-model) to those sessions, and sparkjoy uses the fit from then on.
+  It needs [uv](https://docs.astral.sh/uv/).
 
 <details>
 <summary>Sample report</summary>
@@ -77,13 +77,12 @@ requests, replayed with and without the plugin[^replay]:
 Of the 59 sessions that reached 400k, half saved between 12% and 31%, and one
 cost 19% more.
 
-Each question is one request to the session's model, which reads the
-conversation from the cache and outputs about a hundred tokens. The 198
-questions, at turn ends of 400k or more, cost $22 in all, and 122 of them led
-to a compaction.
+Each question is one request, which reads the conversation from the cache and
+outputs about a hundred tokens. The 198 questions, at turn ends of 400k or more,
+cost $22 in all, and 122 led to a compaction.
 
-A compaction costs about $0.99 on Opus 5.5, mostly the cache write of the
-142k tokens it leaves. Every later request then reads less:
+A compaction costs about $1 on Opus 5.5, mostly the cache write of the 142k
+tokens left after it. Every later request then reads less:
 
 | compacting at | each later request reads | pays for itself after | context grows back in |
 | ------------- | ------------------------ | --------------------- | --------------------- |
@@ -96,22 +95,19 @@ A compaction costs about $0.99 on Opus 5.5, mostly the cache write of the
 sparkjoy asks only when a turn ends, because a piece of work most likely
 finishes with a turn. It asks again if the session then sits idle.
 
-The session's own model makes the call, reading the whole transcript from the
-prompt cache, because the parts of it the next turns need differ from one piece
-of work to the next. The question tells the model that mostly finished work is
-no reason by itself to compact, since nearly every long transcript holds mostly
-finished work. It asks instead whether the next turns will need detail a
-summary drops, such as exact output, failed attempts or a design still taking
-shape.
+The question goes to the session's own model, which reads the whole transcript
+from the prompt cache. It asks whether the next turns will need detail a summary
+drops, such as exact output, failed attempts or a design still taking shape. It
+also tells the model that nearly every long transcript is mostly finished work,
+so that alone is no reason to compact.
 
-The question also gives both costs, sized for the context: what a compaction
-costs and how many requests it takes to pay for itself, and what keeping the
-context through another turn costs, which grows with the context. The model
-weighs the two and answers with its verdict and a one-line reason. In the
-[evals](evals/README.md), it compacts at every turn end where the work had
-finished, as the [cost model](#cost-model) recommends past about 250k. At the
-four turn ends in the middle of a task, from 519k to 681k, it compacts in 6 of
-8 runs.
+The question gives both costs for the context's size: what a compaction costs
+and how many requests it takes to pay for itself, and what keeping the context
+through another turn costs. The model answers with its verdict and a one-line
+reason. In the [evals](evals/README.md), the model compacts at every turn end
+that finishes a piece of work, as the [cost model](#cost-model) recommends past
+about 250k. At the four turn ends in the middle of a task, from 519k to 681k, it
+compacts in 6 of 8 runs.
 
 ### The prompt
 
@@ -178,15 +174,15 @@ Reply with one JSON object and nothing else, filling its fields in order:
 ## Limits
 
 - Until you run `/sparkjoy:report`, it asks only once the context reaches 250k
-  at a turn end, or 175k in an idle session. That pair of floors costs least in
-  a replay of my sessions ([Cost model](#cost-model)) when every question
-  leads to a compaction. My sessions hold about 142k after a compaction, much of
-  it my own instructions and skills, and sessions that hold less pay from lower
+  at a turn end, or 175k in an idle session. These floors cost least in a replay
+  of my sessions ([Cost model](#cost-model)) if every question leads to a
+  compaction. My sessions hold about 142k after a compaction, much of it my own
+  instructions and skills. Sessions that hold less would cost least with lower
   floors.
-- The report fits all of the question's figures but one, the count of wasted
-  requests after a compaction, which needs months of sessions to measure.
-- It leaves Claude Code's own compaction on. Claude Code still compacts a turn
-  that fills the window before it ends. In a session you have open, it also
+- The report fits every figure the question states except the count of wasted
+  requests after a compaction, which takes months of sessions to measure.
+- It leaves Claude Code's own compaction on, so Claude Code still compacts when
+  a turn fills the window. In a session you have open, Claude Code also
   compacts an idle context of 200k or more without asking, a minute or more
   before sparkjoy would ask. So sparkjoy's idle question comes mainly in
   background sessions, below 200k, or with
@@ -197,7 +193,7 @@ Reply with one JSON object and nothing else, filling its fields in order:
 
 [^replay]: The replay keeps every logged request fixed and moves only the
     compactions: "with sparkjoy" keeps the plugin's, and "without sparkjoy"
-    removes them and lets Claude Code compact near 965k, as it does on its own.
+    removes them and lets Claude Code compact at its own threshold, near 965k.
     Both price each request at Opus 5.5 list prices with the session's own cache
     lifetime, and "with sparkjoy" comes within 2% of the cost the transcripts log
     ($4,013 against $3,943).
