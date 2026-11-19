@@ -143,7 +143,7 @@ The labels at those two cases deserve a second look:
 - **At 210k it pays back after about 58 requests**, under two average turns,
   so the keep label holds only if the next stretch of work is short.
 
-The cost model in [When to compact](../docs/when-to-compact.md) goes further:
+The [cost model](../docs/cost-model.md) goes further:
 a compaction repays over every request until the context grows back, so at a
 natural break both cases should compact, and the best threshold at turn ends
 is about 200k.
@@ -179,8 +179,8 @@ median turn of 9 requests and a mean one of 38, and what a compaction cost the
 requests after it, about 20k tokens read again and about 6 more wasted
 requests, with a note of what those counts miss. At the cases' recorded sizes
 it compacts at every turn end, the four mid-task ones at 519k–681k included,
-where `detail` kept at all of them. That matches the cost model in
-[When to compact](../docs/when-to-compact.md), where compacting at every turn
+where `detail` kept at all of them. That matches the
+[cost model](../docs/cost-model.md), where compacting at every turn
 end from about 250k costs least and the detail lost was small where it could be
 measured. Its response to size is noisy: on the mid-task cases it kept in 3 of
 8 runs told 450k and in 5 of 8 told 750k. A first wording, which said a
@@ -233,8 +233,8 @@ few days of use will give live verdicts to compare the harness against.
 The question as it stands compacts at every finished case and both small
 breaks, and keeps in 3 of the 8 mid-task runs. These cases can't say whether
 that is too few. Their mid-task keep labels encode a rule, that work in progress
-keeps, rather than a measured cost, while the cost model in
-[When to compact](../docs/when-to-compact.md) finds compacting at any turn end
+keeps, rather than a measured cost, while the
+[cost model](../docs/cost-model.md) finds compacting at any turn end
 from about 250k cheapest, with the detail a compaction loses measured near zero.
 
 Live verdicts graded by what followed each one can settle it, since they would

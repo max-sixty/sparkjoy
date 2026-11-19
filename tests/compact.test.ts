@@ -27,6 +27,7 @@ function engine(
   on: On,
   {
     tokens = 500_000,
+    window = 1_000_000,
     verdict = COMPACT as string | null,
     idleVerdict = COMPACT as string | null,
     forkMs = 0,
@@ -72,7 +73,7 @@ function engine(
     return { value: undefined }
   })
   on('session.usage', () => ({
-    value: { startedAt: 0, rateLimits, context: { tokens: size, window: 1_000_000 } },
+    value: { startedAt: 0, rateLimits, context: { tokens: size, window } },
   }))
   on('model.fork', async (_, e) => {
     forks.push(e.prompt)
@@ -514,6 +515,18 @@ test('an idle session on a plan with only a weekly limit is asked too', async ($
   await clock.settle()
 
   expect(compactions).toEqual([''])
+})
+
+test('a session with a 200k context window is left as it is, idle or not', async ($, on) => {
+  const { begin, clock, forks, logs, turn } = engine(on, { tokens: 180_000, window: 200_000 })
+  await begin($)
+
+  await turn($, 't1')
+  await clock.advance(IDLE)
+  await clock.settle()
+
+  expect(forks).toEqual([])
+  expect(logs).toEqual([])
 })
 
 test('an idle session on an API key is left as it is', async ($, on) => {
