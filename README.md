@@ -71,7 +71,7 @@ requests, replayed with and without the plugin[^replay]:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/cost-dark.svg">
-  <img alt="Replayed cost: $5,214 without the plugin, $4,013 with it, of which sparkjoy's questions to the session's model are $22." src="assets/cost-light.svg">
+  <img alt="Replayed cost: $5,214 without the plugin, $4,013 with it, of which sparkjoy's questions are $22." src="assets/cost-light.svg">
 </picture>
 
 <picture>
@@ -356,13 +356,14 @@ intervals from resampling sessions.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-average-dark.svg">
-  <img alt="Cost per request, in CRTs, against the compaction point X, from 142k to 965k. The average cost per request, its share of the compaction included, falls steeply from 142k to its minimum, about 450k at 260k, then rises to 500k at 400k, 10% more, and to 820k at 965k, 81% more; dots mark the three. The marginal cost per request, a straight grey line, rises from 310k at 142k to 1.3M at 965k and crosses the average at its minimum." src="assets/model-average-light.svg">
+  <img alt="Cost per request, in CRTs, against the compaction point X, from 142k to 965k. The average, a request's cost with its share of the compaction included, falls steeply from 142k to its minimum, about 450k at 260k, then rises to 500k at 400k and to 820k at 965k, Claude Code's default, where a hollow dot marks it; a filled dot marks the minimum, labelled 45% less than the default. The marginal cost, a straight grey line, rises from 310k at 142k to 1.3M at 965k and crosses the average at its minimum." src="assets/model-average-light.svg">
 </picture>
 
 A request's cost averaged over a cycle, its share of the compaction included,
 against the compaction point, with a request getting as much done at any
-context size. Never compacting costs 81% more per request than compacting at
-the cheapest point, about 260k, and compacting at 400k costs 10% more.
+context size. Against Claude Code's default of compacting at 965k, compacting
+at the cheapest point, about 260k, saves 45% per request, and compacting at
+400k saves 39%.
 
 ### Best compaction point
 

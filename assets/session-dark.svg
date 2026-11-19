@@ -148,7 +148,7 @@ L 535.22 28.63725
      </g>
     </g>
     <g id="text_15">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #c3c2b7" x="7.2" y="15.317035" transform="rotate(-0 7.2 15.317035)">Context per request (tokens)</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #c3c2b7" x="7.2" y="15.360785" transform="rotate(-0 7.2 15.360785)">Context (tokens)</text>
     </g>
    </g>
    <g id="patch_3">

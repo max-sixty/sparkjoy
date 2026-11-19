@@ -194,10 +194,10 @@ def cycles(out, p, c):
                           fontsize=10, loc="left", pad=24, fontweight="bold")
             each = h * ctx + c0
             share = (x + F0) / n
-            low.fill_between(at, 0, each, color=grey, lw=0, label="the request's own cost, which grows with its context")
+            low.fill_between(at, 0, each, color=grey, lw=0, label="the request's own cost")
             low.fill_between(at, each, each + share, color=share_col, lw=0,
-                             label="its share of the compaction that ends its cycle")
-            low.axhline(cost, color=t["muted"], lw=0.9, label="mean cost per request over a cycle")
+                             label="its share of the compaction ending its cycle")
+            low.axhline(cost, color=t["muted"], lw=0.9, label="mean over a cycle")
             low.text(R - 10, max(cost, h * x + c0 + share) + 50_000, f"mean {tokens(round(cost, -4))}", **label)
             if x == fit.AUTO:
                 top.text(10, 1_000_000, f"Claude Code compacts\nat {tokens(x)}", fontsize=9, color=t["muted"],
@@ -208,7 +208,7 @@ def cycles(out, p, c):
         axes[1, 0].set_ylim(0, 1_600_000)
         axes[1, 0].set_yticks([0, 500_000, 1_000_000, 1_500_000])
         axes[1, 0].yaxis.set_major_formatter(tokens)
-        for row, text in enumerate(("Context per request (tokens)", "Cost per request (CRTs)")):
+        for row, text in enumerate(("Context (tokens)", "Cost per request (CRTs)")):
             axis_name(axes[row, 0], text, t)
         fig.supxlabel("Requests", color=t["muted"], fontsize=10, y=0.02)
         handles, labels = axes[1, 0].get_legend_handles_labels()
@@ -337,27 +337,26 @@ def average(out, p, c):
           f"the marginal cost crosses it at {X[cross] / 1e3:.0f}k")
     best = columns(p, c)[1]
     least = cycle(p, c, best)[1]  # exactly, as the cycles chart computes it, rather than off the 1k grid
-    # The two points the text sets against the least: 400k, and never compacting.
-    others = [(x, cycle(p, c, x)[1]) for x in (400_000, fit.AUTO)]
-    print("model-average: against the least, " + ", ".join(
-        f"{x / 1e3:.0f}k costs {y / least - 1:.1%} more" for x, y in others))
+    # Savings are against Claude Code's default, compacting near the window's end.
+    default = cycle(p, c, fit.AUTO)[1]
+    print("model-average: against compacting at 965k, " + ", ".join(
+        f"{x / 1e3:.0f}k saves {1 - cycle(p, c, x)[1] / default:.1%}" for x in (best, 400_000)))
 
     for theme, t in THEMES.items():
         fig, ax = plt.subplots(figsize=(9, 3.4))
         style(ax, t)
         ax.plot(X, A, color=t["cost"], lw=2.2)
         ax.plot(X, M, color=t["muted"], lw=1.6)
-        label_ends(ax, [(M[-1], "marginal cost per request", t["ink"]),
-                        (A[-1], "average cost per request", t["ink"])], gap=80_000)
+        label_ends(ax, [(M[-1], "marginal", t["ink"]), (A[-1], "average", t["ink"])], gap=80_000)
         ax.plot([best], [least], "o", ms=7, mfc=t["cost"], mec=t["page"], mew=1.5, zorder=3)
         ax.text(best + 15_000, least - 170_000,
-                f"the average is lowest at {best / 1000:.0f}k,\n{tokens(round(least, -4))} CRTs per request",
+                f"lowest at {best / 1000:.0f}k,\n{1 - least / default:.0%} less than the default",
                 ha="left", va="top", fontsize=9, color=t["ink"])
-        for (x, y), name, ha, dx, dy in zip(others, ("at 400k", "never compacting"), ("center", "right"),
-                                            (0, -10_000), (-60_000, -150_000)):
-            ax.plot([x], [y], "o", ms=6, mfc=t["page"], mec=t["cost"], mew=1.5, zorder=3)
-            ax.text(x + dx, y + dy, f"{name},\n{y / least - 1:.0%} more", ha=ha, va="top", fontsize=9,
-                    color=t["ink"])
+        # Unclipped, so the dot on the plot's right edge draws whole.
+        ax.plot([fit.AUTO], [default], "o", ms=6, mfc=t["page"], mec=t["cost"], mew=1.5, zorder=3,
+                clip_on=False)
+        ax.text(fit.AUTO - 10_000, default - 150_000, f"Claude Code's default,\ncompacting at {tokens(fit.AUTO)}",
+                ha="right", va="top", fontsize=9, color=t["ink"])
         ax.set_xlim(0, fit.AUTO)
         ax.set_xticks([0, 200_000, 400_000, 600_000, 800_000])
         ax.xaxis.set_major_formatter(tokens)

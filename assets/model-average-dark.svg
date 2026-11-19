@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
   "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="656.516094pt" height="249.803809pt" viewBox="0 0 656.516094 249.803809" xmlns="http://www.w3.org/2000/svg" version="1.1">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="589.487187pt" height="249.803809pt" viewBox="0 0 589.487187 249.803809" xmlns="http://www.w3.org/2000/svg" version="1.1">
  <metadata>
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
@@ -21,8 +21,8 @@
  <g id="figure_1">
   <g id="patch_1">
    <path d="M 0 249.803809 
-L 656.516094 249.803809 
-L 656.516094 -0 
+L 589.487187 249.803809 
+L 589.487187 -0 
 L 0 -0 
 L 0 249.803809 
 z
@@ -169,10 +169,10 @@ L 535.22 212.820215
 " style="fill: none; stroke: #c3c2b7; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
    <g id="text_11">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="547.775" y="104.688333" transform="rotate(-0 547.775 104.688333)">average cost per request</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="547.775" y="104.688333" transform="rotate(-0 547.775 104.688333)">average</text>
    </g>
    <g id="text_12">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="547.775" y="38.665144" transform="rotate(-0 547.775 38.665144)">marginal cost per request</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="547.775" y="38.665144" transform="rotate(-0 547.775 38.665144)">marginal</text>
    </g>
    <g id="line2d_14">
     <defs>
@@ -193,8 +193,8 @@ z
     </g>
    </g>
    <g id="text_13">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #f0efec" transform="translate(176.13399 181.3881)">the average is lowest at 260k,</text>
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #f0efec" transform="translate(176.13399 190.397416)">450k CRTs per request</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #f0efec" transform="translate(176.13399 181.3881)">lowest at 260k,</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #f0efec" transform="translate(176.13399 189.935463)">45% less than the default</text>
    </g>
    <g id="line2d_15">
     <defs>
@@ -210,22 +210,13 @@ C -1.55874 2.683901 -0.795609 3 0 3
 z
 " style="stroke: #199e70; stroke-width: 1.5"/>
     </defs>
-    <g clip-path="url(#p1271b63b29)">
-     <use xlink:href="#m46b5d92334" x="241.185803" y="145.525751" style="fill: #0d1117; stroke: #199e70; stroke-width: 1.5"/>
-    </g>
-   </g>
-   <g id="text_14">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #f0efec" transform="translate(225.175647 160.488184)">at 400k,</text>
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #f0efec" transform="translate(220.677756 169.035548)">10% more</text>
-   </g>
-   <g id="line2d_16">
-    <g clip-path="url(#p1271b63b29)">
+    <g>
      <use xlink:href="#m46b5d92334" x="535.22" y="102.308958" style="fill: #0d1117; stroke: #199e70; stroke-width: 1.5"/>
     </g>
    </g>
-   <g id="text_15">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #f0efec" transform="translate(456.483042 129.388991)">never compacting,</text>
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #f0efec" transform="translate(488.999761 138.398307)">81% more</text>
+   <g id="text_14">
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #f0efec" transform="translate(439.243824 129.388991)">Claude Code's default,</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #f0efec" transform="translate(451.974605 137.936354)">compacting at 965k</text>
    </g>
   </g>
  </g>
