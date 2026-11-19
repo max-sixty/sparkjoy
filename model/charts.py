@@ -2,10 +2,12 @@
 the doc quotes from them. fit.py's --charts draws each of these as model-<name>-{light,dark}.svg,
 from one read of the sessions:
 
-  cycles         the context and each request's cost over 600 requests, at four compaction points
+  cycles         the context and each request's cost over 600 requests, at four compaction points, as a
+                 schematic: axes in the model's symbols
   inputs         a request's cost and a compaction's cost by part, against the context
   bill           the sessions' bill by kind of token
-  average        a request's mean cost over a cycle against the compaction point, with the marginal cost
+  average        a request's mean cost over a cycle against the compaction point, with the marginal cost,
+                 as a schematic
   effectiveness  a request's effectiveness against its context, for each β in BETAS
   cost           cost per unit of effectiveness against the compaction point, for each β in BETAS
   sensitivity    how far the best compaction point moves with each measured parameter
@@ -158,7 +160,9 @@ def columns(p, c):
 def cycles(out, p, c):
     """The trade a compaction makes, request by request: the context, and a request's cost with its
     share of the compaction that ends its cycle, at each of `columns`. It assumes nothing about
-    effectiveness."""
+    effectiveness. The doc draws it under The model, so its axes carry the model's symbols, K and each
+    column's X, and no figures; the shapes come from the fitted values, and the numbers stay in the
+    printed lines that the doc's Trade-off table quotes."""
     h, c0, F0 = fit.terms(p, c)
     R = 600  # requests drawn
     X = columns(p, c)
@@ -169,13 +173,13 @@ def cycles(out, p, c):
               f"{(x + F0) / n / 1e3:.0f}k of it the compaction's share; {cost / never:.0%} of never compacting")
 
     r = np.arange(R + 1)
+    titles = ("Compact early", "Compact at X*", "Compact late", "Never compact")
+    marks = ("X", "X*", "X", "Claude Code compacts at X")
     for theme, t in THEMES.items():
         fig, axes = plt.subplots(2, len(X), figsize=(9.6, 4.8), sharex=True, sharey="row",
                                  gridspec_kw={"hspace": 0.55, "wspace": 0.08})
         grey = tint(t["cost"], t["page"], 0.36)
         share_col = tint(t["cost"], t["page"], 0.75)
-        label = {"fontsize": 9, "color": t["ink"], "ha": "right", "va": "bottom",
-                 "bbox": {"boxstyle": "square,pad=0.15", "fc": t["page"], "ec": "none"}}
         for col, (x, (n, cost)) in enumerate(zip(X, rows)):
             # Everything drawn is linear in the request between the context's drops, so the first and
             # last requests and those either side of each drop draw the same lines as all R + 1.
@@ -186,26 +190,24 @@ def cycles(out, p, c):
             for ax in (top, low):
                 style(ax, t)
                 ax.set_xlim(0, R)
-                ax.set_xticks([0, 200, 400])
+                ax.set_xticks([])
             top.plot(at, ctx, color=t["ink"], lw=1.2)
-            top.set_title("Never compact" if x == fit.AUTO else f"Compact at {tokens(x)}", color=t["ink"],
-                          fontsize=10, loc="left", pad=24, fontweight="bold")
+            top.set_title(titles[col], color=t["ink"], fontsize=10, loc="left", pad=24, fontweight="bold")
+            # Each column's compaction point, named above the first peak of its sawtooth: centred on it,
+            # or ending at it where the name is long.
+            long = x == fit.AUTO
+            top.text(n + (10 if long else 0), x + 30_000, marks[col], fontsize=9, color=t["ink"], va="bottom",
+                     ha="right" if long else "center")
             each = h * ctx + c0
             share = (x + F0) / n
             low.fill_between(at, 0, each, color=grey, lw=0, label="the request's own cost")
             low.fill_between(at, each, each + share, color=share_col, lw=0,
                              label="its share of the compaction ending its cycle")
             low.axhline(cost, color=t["muted"], lw=0.9, label="mean over a cycle")
-            low.text(R - 10, max(cost, h * x + c0 + share) + 50_000, f"mean {tokens(round(cost, -4))}", **label)
-            if x == fit.AUTO:
-                top.text(10, 1_000_000, f"Claude Code compacts\nat {tokens(x)}", fontsize=9, color=t["muted"],
-                         va="top")
-        axes[0, 0].set_ylim(0, 1_000_000)
-        axes[0, 0].set_yticks([0, 500_000, 1_000_000])
-        axes[0, 0].yaxis.set_major_formatter(tokens)
+        axes[0, 0].set_ylim(0, 1_100_000)
+        axes[0, 0].set_yticks([0, p.K], ["0", "K"])
         axes[1, 0].set_ylim(0, 1_600_000)
-        axes[1, 0].set_yticks([0, 500_000, 1_000_000, 1_500_000])
-        axes[1, 0].yaxis.set_major_formatter(tokens)
+        axes[1, 0].set_yticks([0], ["0"])
         for row, text in enumerate(("Context (tokens)", "Cost per request, in CRTs")):
             axis_name(axes[row, 0], text, t)
         fig.supxlabel("Requests", color=t["muted"], fontsize=10, y=0.02)
@@ -323,7 +325,8 @@ def average(out, p, c):
     """Why the best compaction point sits where it does when context size doesn't matter: against the
     compaction point X, a request's cost averaged over the cycle, its share of the compaction included,
     and the marginal cost, what one more request before compacting costs. The average is least where
-    they cross, which a dot marks."""
+    they cross, which a dot marks. The doc draws it under The model, so its axes carry K and X* and
+    no figures; the printed lines give the numbers the doc's Average cost section quotes."""
     h, c0, _ = fit.terms(p, c)
     X, A = fit.curve(p, c, 0)  # with every request alike, cost per unit of effectiveness is cost per request
     # d/dX of the cycle's cost, g (X + F0) + h (X² - K²)/2 + c0 (X - K), over d/dX of its requests: the
@@ -347,20 +350,17 @@ def average(out, p, c):
         ax.plot(X, M, color=t["muted"], lw=1.6)
         label_ends(ax, [(M[-1], "marginal", t["ink"]), (A[-1], "average", t["ink"])], gap=80_000)
         ax.plot([best], [least], "o", ms=7, mfc=t["cost"], mec=t["page"], mew=1.5, zorder=3)
-        ax.text(best + 20_000, least - 45_000,
-                f"min(cost) at {best / 1000:.0f}k,\n{1 - least / default:.0%} less than the default",
-                ha="left", va="top", fontsize=9, color=t["ink"])
+        ax.text(best + 20_000, least - 45_000, "min(cost) at X*", ha="left", va="top", fontsize=9,
+                color=t["ink"])
         # Unclipped, so the dot on the plot's right edge draws whole.
         ax.plot([fit.AUTO], [default], "o", ms=6, mfc=t["page"], mec=t["cost"], mew=1.5, zorder=3,
                 clip_on=False)
-        ax.text(fit.AUTO - 10_000, default - 150_000, f"Claude Code's default,\ncompacting at {tokens(fit.AUTO)}",
+        ax.text(fit.AUTO - 10_000, default - 150_000, "Claude Code's default,\nnear the window's end",
                 ha="right", va="top", fontsize=9, color=t["ink"])
         ax.set_xlim(0, fit.AUTO)
-        ax.set_xticks([0, 200_000, 400_000, 600_000, 800_000])
-        ax.xaxis.set_major_formatter(tokens)
+        ax.set_xticks([0, p.K, best], ["0", "K", "X*"])
         ax.set_ylim(0, 1_400_000)
-        ax.set_yticks([0, 500_000, 1_000_000])
-        ax.yaxis.set_major_formatter(tokens)
+        ax.set_yticks([0], ["0"])
         ax.set_xlabel("Compaction point X (tokens)", color=t["muted"], fontsize=10)
         axis_name(ax, "Cost per request, in CRTs", t)
         save(fig, out / f"model-average-{theme}.svg")
