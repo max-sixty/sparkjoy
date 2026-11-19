@@ -572,7 +572,7 @@ def voi(out, p, c):
         ax.set_yticks([0, 0.1, 0.2, 0.3])
         ax.xaxis.set_major_formatter(percent)
         ax.yaxis.set_major_formatter(percent)
-        ax.set_xlabel("Mutual information between verdict and whether context helps (% of a perfect classifier's)",
+        ax.set_xlabel("Accuracy (% of a perfect classifier's information)",
                       color=t["muted"], fontsize=10)
         axis_name(ax, "Expected value of information (% of cost saved)", t)
         save(fig, out / f"model-voi-{theme}.svg")
