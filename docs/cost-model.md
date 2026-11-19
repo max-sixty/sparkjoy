@@ -4,9 +4,9 @@ This is an analytical model of when compacting costs least. It simplifies a
 session to a context that grows by the same number of tokens with each request
 and drops back to the same size at each compaction, which gives the best
 compaction point in closed form. [The model](#the-model) states it in symbols.
-[Fitted to the author's sessions](#fitted-to-the-authors-sessions) puts in
-values measured from the author's sessions on Opus 5.5 with the one-hour cache,
-and tests the simplifications with a replay of the same sessions.
+[Fitted to my sessions](#fitted-to-my-sessions) puts in values measured from
+the author's sessions on Opus 5.5 with the one-hour cache, and tests the
+simplifications with a replay of the same sessions.
 
 It answers two questions:
 
@@ -165,10 +165,10 @@ Work can differ in two ways that a check could tell apart:
   finished, and once the context passes a higher ceiling, at every turn end. The
   floor and ceiling are set where they cost least.
 
-## Fitted to the author's sessions
+## Fitted to my sessions
 
-Measured parameters come from the author's sessions of 7 to 15 November, with 90%
-intervals from resampling sessions.
+Measured parameters come from my sessions of 7 to 15 November, with 90% intervals
+from resampling sessions.
 
 ### Parameter values
 
@@ -294,8 +294,7 @@ after a compaction, moves it most, from 150k to 459k when halved or doubled, but
 only from 254k to 269k across its interval, and each other parameter moves it
 less than 10k across its own.
 
-That interval covers only the author's sessions, and K differs more between
-users. About two-thirds of what K holds beyond the shared system prompt is the
+That interval covers only my sessions, and K differs more between users. About two-thirds of what K holds beyond the shared system prompt is the
 user's own instructions and skills, which Claude Code attaches again after a
 compaction. One published session with few of them held 37k right after a
 compaction, on a 200k window
