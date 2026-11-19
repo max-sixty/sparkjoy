@@ -81,6 +81,22 @@ const AUTHOR = {
   // re-attached (34k). The next few requests read about 20k more again than
   // after another turn end. Every later request reads K, and the requests
   // after the compaction make a cache write of all of it but P.
+  //
+  // Most of K beyond P is the user's own instructions and skills, so K varies
+  // more between users than across these sessions, and the report fits it.
+  // Published sizes of the first request after a compaction:
+  // - 37k with little memory and few skills, on a 200k window
+  //   (https://github.com/anthropics/claude-code/issues/87602);
+  // - 99k with five skills attached again in full, on 200k
+  //   (https://github.com/anthropics/claude-code/issues/82851);
+  // - about 320k with a 248 KB rules directory, on 1M
+  //   (https://github.com/anthropics/claude-code/issues/85489).
+  // Of what Claude Code attaches again, only the skill listing scales with the
+  // window, at 1% of it (https://code.claude.com/docs/en/skills), so a figure
+  // from a 200k window carries over to 1M with about 8k more. Before Claude
+  // Code 2.1.304 a compaction dropped the listing
+  // (https://github.com/anthropics/claude-code/issues/82017), and the author's
+  // first request after one carried a median 92k.
   K: 142_000,
   // The system prompt and tools (P), which Claude Code keeps in a cache
   // shared across sessions, so no request after a compaction makes a cache
