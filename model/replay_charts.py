@@ -124,12 +124,12 @@ def cost_chart(S, t, path):
     ax.spines["bottom"].set_visible(False)
     ax.barh([1, 0], [without, with_], color=[t["without"], t["with"]], height=0.62)
     ax.barh([0], [judge], left=[with_ - judge], color=t["ink"], height=0.62)
-    for y, v, label in ((1, without, "without"), (0, with_, f"with {PLUGIN}")):
+    for y, v, label in ((1, without, f"without {PLUGIN}"), (0, with_, f"with {PLUGIN}")):
         ax.text(-without * 0.01, y, label, ha="right", va="center", fontsize=10, color=t["ink"])
         ax.text(v + without * 0.01, y, f"${v:,.0f}", ha="left", va="center", fontsize=10, color=t["ink"])
     ax.text(with_ + without * 0.09, 0, charts.percent(with_ / without - 1), ha="left", va="center", fontsize=10,
             color=t["muted"])
-    ax.annotate(f"checks ${judge:,.0f}", (with_ - judge / 2, -0.31), xytext=(0, -12), textcoords="offset points",
+    ax.annotate(f"{PLUGIN}'s checks, ordinary requests to the session's model, ${judge:,.0f}",(with_ - judge / 2, -0.31), xytext=(0, -12), textcoords="offset points",
                 ha="center", va="top", fontsize=9, color=t["muted"],
                 arrowprops={"arrowstyle": "-", "color": t["muted"], "lw": 0.8})
     ax.set_xlim(0, without * 1.12)
