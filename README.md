@@ -13,7 +13,7 @@ transcript spark joy? That is, does the work ahead still need it, or can it go?
 One session with the plugin, and the same session replayed without it. Every
 request reads the whole context, so the area under each line counts the tokens
 the session read. At each dot the plugin asked the session's model whether to
-compact, and at the filled dots the session compacted. In the replay, this
+compact, and at the larger dots the session compacted. In the replay, this
 session cost 30% less with the plugin than without it.
 
 ## Install
