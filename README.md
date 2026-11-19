@@ -508,16 +508,12 @@ the sessions is halved or doubled, and across its 90% interval. K moves it
 most, but only from 254k to 269k across its interval, and each other parameter
 moves it by less than 10k across its own.
 
-That interval covers only my sessions, and K differs more between users. About
-two-thirds of K's tokens outside the shared system prompt are the user's own
-instructions and skills, which Claude Code attaches again after a compaction.
-One published session with few of them held 37k right after a compaction, on a
-200k window
-([anthropics/claude-code#87602](https://github.com/anthropics/claude-code/issues/87602)).
-A 1M window carries a larger skill listing. With that listing and the files the
-next few requests read again, that session would have a K of roughly 60–70k,
-which puts the best point near 140k. So `/sparkjoy:report` fits K and the floors
-to each user's sessions.
+That interval covers only my sessions, and K differs more between users, since
+most of it beyond the shared system prompt is the user's own instructions and
+skills. A published session with few of them
+([anthropics/claude-code#87602](https://github.com/anthropics/claude-code/issues/87602))
+would have a K of roughly 60–70k on a 1M window, which puts the best point near
+140k. So `/sparkjoy:report` fits K and the floors to each user's sessions.
 
 The assumptions about the work move the best point more. It reaches 400k only
 at β = 0.55, where a request at 200k gets 68% as much done as one at 400k, or if
@@ -563,14 +559,12 @@ which turn ends past the floor to compact.
 | turn ends from 200k, the best without idle compaction | 30.0% |
 | turn ends from 250k and idle sessions from 175k, sparkjoy's default floors | 30.7% |
 
-Savings in the replay, counting only cost, with each policy compacting wherever
-it allows. Compacting idle sessions gets much of the saving of a lower turn-end
-threshold, since 18% of turn ends are followed by an hour's gap. sparkjoy asks
-in an idle session 55 minutes after its last reply. The default floors are the
-cheapest pair the replay tried, and every pair from 200k–250k at turn ends and
-150k–175k idle comes within 0.3 points of them. Counting only the next request,
-compacting before the cache lapses is cheaper from about 160k ([Compacting
-before the cache lapses](docs/cost-model.md#compacting-before-the-cache-lapses)).
+Savings in the replay, counting only cost. Compacting idle sessions gets much of
+the saving of a lower turn-end threshold, since 18% of turn ends are followed by
+an hour's gap. Every pair of floors from 200k–250k at turn ends and 150k–175k
+idle comes within 0.3 points of the default. Counting only the next request,
+compacting before the cache lapses pays from about 160k ([Compacting before the
+cache lapses](docs/cost-model.md#compacting-before-the-cache-lapses)).
 
 ### What a classifier saves
 
@@ -599,20 +593,21 @@ mean β 0.6, with one share at the β shown and the rest at β = 0. The band alo
 
 The compaction point of the work a classifier says to compact, against its
 accuracy. The work it says to keep compacts at 965k at all but the lowest
-accuracies. At β = 1, 2 and 5, a unit of work compacted at 261k costs 1.5, 4.8
-and 208 times as much as when the session never compacts. So the higher the
-mix's β, the more accurate a classifier must be before compacting any of the
-work pays. At β = 5, it needs 29% of a perfect classifier's information.
+accuracies. At β = 5, a unit of work compacted at 261k costs 208 times as much
+as when the session never compacts, so compacting any of that mix pays only once
+a classifier has 29% of a perfect classifier's information.
 
-A perfect classifier saves at most 15% on any mix of β = 0 and 1, 31% on any mix
-of 0 and 2, and 40% on any mix of 0 and 5. On any mix it saves at most 45%, the
-saving β = 0 work gets at its best point against never compacting, since never
-compacting is one of the single thresholds. At a given mean β, a perfect
-classifier saves most when a small share of the work has β around 5 to 10. When
-that share is smaller and its β higher, it saves less: 17% with 2% of the work
-at β = 30. A unit of that work's effectiveness costs 77 times one at β = 0 even
-when the session never compacts, and no classifier lowers that part of the
-cost.
+| work mixed with β = 0, in any share | the most a perfect classifier saves |
+|----|----|
+| at β = 1 | 15% |
+| at β = 2 | 31% |
+| at β = 5 | 40% |
+| at any β | 45%, what β = 0 work saves at its best point against never compacting |
+
+At a given mean β, a perfect classifier saves most when a small share of the
+work has β around 5 to 10. With 2% of the work at β = 30 it saves 17%, since a
+unit of that work's effectiveness costs 77 times one at β = 0 even when the
+session never compacts.
 
 #### Turn ends that differ in lost detail
 
