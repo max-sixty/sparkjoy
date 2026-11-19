@@ -2,14 +2,14 @@
 # /// script
 # requires-python = ">=3.12"
 # ///
-"""Builds each case's fixture from the author's Claude Code transcripts.
+"""Builds each case's fixture from my Claude Code transcripts.
 
     uv run --script evals/build.py [case-id ...]
 
 Reads `cases.json`, finds each case's session under `~/.claude/projects/`, and
 writes `fixtures/<id>.jsonl.gz`: the conversation Claude Code would resume at
-the case's turn end, sanitized for publishing. Only the author can rerun it,
-since the transcripts are his; it is here to show what the fixtures hold and
+the case's turn end, sanitized for publishing. Only I can rerun it, since
+the transcripts are mine; it is here to show what the fixtures hold and
 to add cases. `check.py` then sweeps the result.
 
 A fixture is the chain of entries from the turn's last reply back to the last
@@ -186,8 +186,8 @@ def sanitize(entries: list[dict]) -> list[dict]:
 def omit_private(entry: dict) -> dict:
     """`entry` with any tool output that names private work omitted.
 
-    Words of the conversation itself are left for the author to settle by
-    hand: this stops the build on one.
+    Words of the conversation itself are left for me to settle by hand: this
+    stops the build on one.
     """
     content = (entry.get("message") or {}).get("content")
     if isinstance(content, list):

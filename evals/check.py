@@ -10,7 +10,7 @@ With no arguments it checks every fixture in `evals/fixtures/`. It prints each
 hit with the fixture, the line and the text around it, and exits 1 on any.
 
 It looks for home paths, email addresses, credentials and private hostnames by
-pattern, and for words from the author's work outside open source by hash, so
+pattern, and for words from my work outside open source by hash, so
 this file doesn't name them: every run of one to three words in the text is
 hashed and compared against `PRIVATE`.
 """

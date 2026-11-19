@@ -7,7 +7,8 @@
 // exports it. It passes each parameter by name: `reply`, `tokens` (the
 // context's size), `idleMinutes` and `figures`, so a checkout whose question
 // takes fewer of them is called with just those. `figures` is left out, so
-// the question states the author's: the cases come from his sessions.
+// the question states the figures in `AUTHOR`, which come from my sessions, as
+// the cases do.
 
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

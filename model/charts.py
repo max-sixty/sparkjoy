@@ -30,7 +30,7 @@ import fit
 plt.rcParams.update({"svg.fonttype": "none", "font.family": ["Helvetica", "Arial", "DejaVu Sans"],
                      "svg.hashsalt": "sparkjoy"})
 
-# "page" is GitHub's background in each theme. Text in "fit" names what is measured in the author's
+# "page" is GitHub's background in each theme. Text in "fit" names what is measured in my
 # sessions; its marks stay neutral, so the colour says where a number comes from without drawing the
 # eye. "cost" colours what the charts count in CRTs. Two ordinal ramps run from faint to strong
 # against the page: "beta" for β, an assumption, and "costs" for magnitudes of a cost. "beta" is the
