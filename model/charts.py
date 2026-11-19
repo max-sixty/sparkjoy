@@ -208,7 +208,7 @@ def cycles(out, p, c):
         axes[1, 0].set_ylim(0, 1_600_000)
         axes[1, 0].set_yticks([0, 500_000, 1_000_000, 1_500_000])
         axes[1, 0].yaxis.set_major_formatter(tokens)
-        for row, text in enumerate(("Context (tokens)", "Cost per request (CRTs)")):
+        for row, text in enumerate(("Context (tokens)", "Cost per request, in CRTs")):
             axis_name(axes[row, 0], text, t)
         fig.supxlabel("Requests", color=t["muted"], fontsize=10, y=0.02)
         handles, labels = axes[1, 0].get_legend_handles_labels()
@@ -274,8 +274,8 @@ def inputs(out, p, c):
         low.xaxis.set_major_formatter(tokens)
         low.set_xticks([0, 200_000, 400_000, 600_000, 800_000])
         low.set_xlabel("Context x (tokens) before the request or the compaction", color=t["muted"], fontsize=10)
-        axis_name(mid, "Cost per request c(x), by part (CRTs)", t)
-        axis_name(low, "Cost per compaction F(x), by part (CRTs)", t)
+        axis_name(mid, "Cost per request c(x) by part, in CRTs", t)
+        axis_name(low, "Cost per compaction F(x) by part, in CRTs", t)
         mid.text(1, 1.04, "parts named in orange are fitted to the sessions", transform=mid.transAxes, ha="right",
                  va="bottom", fontsize=9, color=fit_c)
         save(fig, out / f"model-inputs-{theme}.svg")
@@ -349,8 +349,8 @@ def average(out, p, c):
         ax.plot(X, M, color=t["muted"], lw=1.6)
         label_ends(ax, [(M[-1], "marginal", t["ink"]), (A[-1], "average", t["ink"])], gap=80_000)
         ax.plot([best], [least], "o", ms=7, mfc=t["cost"], mec=t["page"], mew=1.5, zorder=3)
-        ax.text(best + 15_000, least - 170_000,
-                f"lowest at {best / 1000:.0f}k,\n{1 - least / default:.0%} less than the default",
+        ax.text(best + 20_000, least - 45_000,
+                f"min(cost) at {best / 1000:.0f}k,\n{1 - least / default:.0%} less than the default",
                 ha="left", va="top", fontsize=9, color=t["ink"])
         # Unclipped, so the dot on the plot's right edge draws whole.
         ax.plot([fit.AUTO], [default], "o", ms=6, mfc=t["page"], mec=t["cost"], mew=1.5, zorder=3,
@@ -364,7 +364,7 @@ def average(out, p, c):
         ax.set_yticks([0, 500_000, 1_000_000])
         ax.yaxis.set_major_formatter(tokens)
         ax.set_xlabel("Compaction point X (tokens)", color=t["muted"], fontsize=10)
-        axis_name(ax, "Cost per request (CRTs)", t)
+        axis_name(ax, "Cost per request, in CRTs", t)
         save(fig, out / f"model-average-{theme}.svg")
 
 
