@@ -33,7 +33,7 @@ plt.rcParams.update({"svg.fonttype": "none", "font.family": ["Helvetica", "Arial
 
 # "page" is GitHub's background in each theme. Text in "fit" names what is measured in my
 # sessions; its marks stay neutral, so the colour says where a number comes from without drawing the
-# eye. "cost" colours what the charts count in CRTs. Two ordinal ramps run from faint to strong
+# eye. "cost" colours what the charts count in dollars. Two ordinal ramps run from faint to strong
 # against the page: "beta" for β, an assumption, and "costs" for magnitudes of a cost. "beta" is the
 # dataviz reference palette's blue, "costs" OKLCH steps of its aqua, each validated as an ordinal
 # ramp against its page (validate_palette.js --ordinal). "parts" are the steps, faint to strong, that
@@ -120,8 +120,13 @@ def label_ends(ax, items, gap):
 
 
 def tokens(v, _=None):
-    """A count of tokens or CRTs: 0, 500k, 1.5M."""
+    """A count of tokens: 0, 500k, 1.5M."""
     return "0" if not v else f"{v / 1e6:g}M" if abs(v) >= 1e6 else f"{v / 1e3:.0f}k"
+
+
+def dollars(v, _=None):
+    """A cost: $0, $0.10, $1.20."""
+    return "$0" if not v else f"${v:.2f}"
 
 
 def percent(v, _=None):
@@ -170,8 +175,8 @@ def cycles(out, p, c):
     rows = [cycle(p, c, x) for x in X]
     never = rows[-1][1]
     for x, (n, cost) in zip(X, rows):
-        print(f"model-cycles, compacting at {tokens(x)}: {n:.0f} requests a cycle; mean cost {cost / 1e3:.0f}k CRTs, "
-              f"{(x + F0) / n / 1e3:.0f}k of it the compaction's share; {cost / never:.0%} of never compacting")
+        print(f"model-cycles, compacting at {tokens(x)}: {n:.0f} requests a cycle; mean cost ${cost * c.read:.3f}, "
+              f"${(x + F0) / n * c.read:.3f} of it the compaction's share; {cost / never:.0%} of never compacting")
 
     r = np.arange(R + 1)
     titles = ("Compact early", "Compact at X*", "Compact late", "Never compact")
@@ -209,7 +214,7 @@ def cycles(out, p, c):
         axes[0, 0].set_yticks([0, p.K], ["0", "K"])
         axes[1, 0].set_ylim(0, 1_600_000)
         axes[1, 0].set_yticks([0], ["0"])
-        for row, text in enumerate(("Context (tokens)", "Cost per request, in CRTs")):
+        for row, text in enumerate(("Context (tokens)", "Cost per request")):
             axis_name(axes[row, 0], text, t)
         fig.supxlabel("Requests", color=t["muted"], fontsize=10, y=0.02)
         handles, labels = axes[1, 0].get_legend_handles_labels()
@@ -242,8 +247,8 @@ def inputs(out, p, c):
     for name, stack in (("request", request), ("compaction", compaction)):
         for v in (p.K, 700_000):
             j = np.abs(x - v).argmin()
-            print(f"model-inputs, a {name} at {tokens(v)}: " + ", ".join(f"{k} {val[j] / 1e3:.0f}k" for k, val, _ in stack)
-                  + f"; {sum(val[j] for _, val, _ in stack) / 1e3:.0f}k CRTs in all")
+            print(f"model-inputs, a {name} at {tokens(v)}: " + ", ".join(f"{k} ${val[j] * c.read:.3f}" for k, val, _ in stack)
+                  + f"; ${sum(val[j] for _, val, _ in stack) * c.read:.3f} in all")
 
     for theme, t in THEMES.items():
         fit_c = t["fit"]
@@ -254,12 +259,13 @@ def inputs(out, p, c):
         # One hue, lighter for the parts lower in the stack, each band parted from the next by the page;
         # the labels say which parts the sessions measured.
         ramp = parts(t)
-        for ax, stack, cap in ((mid, request, 1_500_000), (low, compaction, 6_500_000)):
+        for ax, stack, cap in ((mid, request, 0.3), (low, compaction, 1.3)):
             base = np.zeros_like(x)
             ys = []
             for i, (label, v, fitted) in enumerate(stack):
                 # The cache read of the context takes the darkest step in both panels.
                 col = ramp[-1] if label.startswith("cache read") else ramp[i]
+                v = v * c.read  # in dollars
                 ax.fill_between(x, base, base + v, fc=col, ec=t["page"], lw=1.2, label=label)
                 ys.append(base[-1] + v[-1] / 2)
                 base = base + v
@@ -270,13 +276,13 @@ def inputs(out, p, c):
             for (label, _, fitted), y in zip(stack, ys):
                 ax.text(fit.AUTO + 12_000, y, label, va="center", fontsize=9, color=fit_c if fitted else t["ink"])
             ax.set_ylim(0, cap)
-            ax.set_yticks(np.arange(0, cap, 500_000 if cap < 2e6 else 2_000_000))
-            ax.yaxis.set_major_formatter(tokens)
+            ax.set_yticks(np.arange(0, cap, 0.1 if cap < 0.5 else 0.4))
+            ax.yaxis.set_major_formatter(dollars)
         low.xaxis.set_major_formatter(tokens)
         low.set_xticks([0, 200_000, 400_000, 600_000, 800_000])
         low.set_xlabel("Context x (tokens) before the request or the compaction", color=t["muted"], fontsize=10)
-        axis_name(mid, "Cost per request c(x) by part, in CRTs", t)
-        axis_name(low, "Cost per compaction F(x) by part, in CRTs", t)
+        axis_name(mid, "Cost per request c(x) by part ($)", t)
+        axis_name(low, "Cost per compaction F(x) by part ($)", t)
         mid.text(1, 1.04, "parts named in orange are fitted to the sessions", transform=mid.transAxes, ha="right",
                  va="bottom", fontsize=9, color=fit_c)
         save(fig, out / f"model-inputs-{theme}.svg")
@@ -284,7 +290,7 @@ def inputs(out, p, c):
 
 def bill(out, S, p, c):
     """The sessions' cost by kind of token, as one stacked bar: each request's
-    logged usage at the prices c, in CRTs. The transcripts don't log a compaction's own request, so its
+    logged usage at the prices c, in cached reads. The transcripts don't log a compaction's own request, so its
     tokens come from the model and join their kinds: it reads the context it compacts and writes N
     output tokens. The request after it, which writes the compacted context to the cache, is logged
     like any other."""
@@ -335,7 +341,7 @@ def average(out, p, c):
     M = h * X + c0 + p.g
     j = A.argmin()
     cross = np.abs(M - A)[: len(X) - 1].argmin()
-    print(f"model-average: least at {X[j] / 1e3:.0f}k, {A[j] / 1e3:.0f}k CRTs a request; "
+    print(f"model-average: least at {X[j] / 1e3:.0f}k, ${A[j] * c.read:.3f} a request; "
           f"the marginal cost crosses it at {X[cross] / 1e3:.0f}k")
     best = columns(p, c)[1]
     least = cycle(p, c, best)[1]  # exactly, as the cycles chart computes it, rather than off the 1k grid
@@ -363,7 +369,7 @@ def average(out, p, c):
         ax.set_ylim(0, 1_400_000)
         ax.set_yticks([0], ["0"])
         ax.set_xlabel("Compaction point X (tokens)", color=t["muted"], fontsize=10)
-        axis_name(ax, "Cost per request, in CRTs", t)
+        axis_name(ax, "Cost per request", t)
         save(fig, out / f"model-average-{theme}.svg")
 
 
