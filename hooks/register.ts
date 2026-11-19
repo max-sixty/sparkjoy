@@ -389,7 +389,7 @@ Nearly every long transcript is mostly finished work, so that alone is no reason
 
 A compaction takes about a minute, and the request that writes its summary outputs about ${thousands(SUMMARY)} tokens, thinking included. Afterwards the context holds about ${thousands(K)} tokens, counting the files the next requests read again, and those requests write it to the cache again, all but the ${thousands(P)} of system prompt and tools, which stay cached. A cache write costs as much as ${WRITE} cached reads, and an output token as much as ${OUTPUT}.${sum}${keeping}
 
-After a compaction, past sessions had about ${WASTED} more wasted requests than usual: failed tool calls, repeated lookups and corrections. That count misses detail lost without such a failure, such as a design's rejected options or what the user likes.
+It's very noisy and hard to judge, but as some indication, past sessions had about ${WASTED} more wasted requests than usual after a compaction: failed tool calls, repeated lookups and corrections. That count misses detail lost without such a failure, such as a design's rejected options or what the user likes.
 
 Weigh what keeping costs against what losing the detail would cost the next turns. The larger the context, the more detail a compaction can drop and still pay.
 

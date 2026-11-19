@@ -12,7 +12,7 @@ from one read of the sessions:
   cost           cost per unit of effectiveness against the compaction point, for each β in BETAS
   sensitivity    how far the best compaction point moves with each measured parameter
   threshold      the best compaction point against β, in the steady state and the replay
-  voi            the expected value of a check's information, on three mixes of work
+  voi            the expected value of a classifier's information, on three mixes of work
 """
 
 import html
@@ -524,15 +524,15 @@ def thresholds(out, cost, effectiveness, BT, BX, p, c):
 
 
 def voi(out, p, c):
-    """The expected value of a check's information on three mixes of work with the same mean β, 0.6: a
-    share of the work at one β > 0, the rest at β = 0, where the context doesn't help. For each mix and
-    each accuracy, the check splits the work into a group to keep and a group to compact, each
-    compacting at its own best point; the saving is against the best single threshold, and the x axis
-    is the mutual information between the check's verdict and the kind of work, as a share of a
-    perfect check's."""
-    # Denser near 1, where a check's saving on rare, steep work climbs fastest.
+    """The expected value of a classifier's information on three mixes of work with the same mean β,
+    0.6: a share of the work at one β > 0, the rest at β = 0, where the context doesn't help. For each
+    mix and each accuracy, the classifier splits the work into a group to keep and a group to compact,
+    each compacting at its own best point; the saving is against the best single threshold, and the x
+    axis is the mutual information between the classifier's verdict and the kind of work, as a share
+    of a perfect classifier's."""
+    # Denser near 1, where a classifier's saving on rare, steep work climbs fastest.
     A = np.unique(np.round(np.concatenate([np.linspace(0.5, 1, 201), 1 - np.logspace(-4, -1.6, 80)]), 6))
-    check = 0.003  # what the checks cost, as a share of the cost: the replay's 0.28%, rounded
+    running = 0.003  # what running the classifier costs, as a share of the cost: the replay's 0.28%, rounded
     mixes = ((0.60, 1, 2), (0.30, 2, 3), (0.12, 5, 4))  # (share of the work at β, β, step of the β ramp)
 
     def H(q):
@@ -545,7 +545,7 @@ def voi(out, p, c):
         Js = np.array([J0, fit.curve(p, c, beta)[1]])
         w = np.array([1 - share, share])
         single = (w[:, None] * Js).sum(0).min()
-        keep = np.array([1 - A, A]).T * w  # the check keeps the context for a share a of the β work, 1 - a of the rest
+        keep = np.array([1 - A, A]).T * w  # the classifier keeps the context for a share a of the β work, 1 - a of the rest
         both = np.array([(k[:, None] * Js).sum(0).min() + ((w - k)[:, None] * Js).sum(0).min() for k in keep])
         saved = 1 - both / single
         info = (H(share * A + (1 - share) * (1 - A)) - H(A)) / H(share)
@@ -553,7 +553,7 @@ def voi(out, p, c):
         at = [int(np.abs(A - a).argmin()) for a in (0.8, 0.9, 0.99, 1.0)]
         print(f"model-voi, {share:.0%} at β = {beta}: " + ", ".join(
             f"right {A[i]:.0%}, saves {saved[i]:.1%} ({info[i]:.0%} of the information)" for i in at)
-              + f"; pays for the checks from {A[np.argmax(saved > check)]:.1%} right")
+              + f"; pays for running it from {A[np.argmax(saved > running)]:.1%} right")
 
     for theme, t in THEMES.items():
         fig, ax = plt.subplots(figsize=(8, 4.2))
@@ -563,8 +563,8 @@ def voi(out, p, c):
             ax.plot(info, saved, color=t["beta"][step], lw=2, clip_on=False)
             ends.append((saved[-1], f"{share:.0%} at β = {beta}", t["ink"]))
         # A band from 0 behind the savings: at this scale a line would sit on the axis and over the lines' starts.
-        ax.fill_between([0, 1], 0, check, color=t["cost"], lw=0, zorder=1, clip_on=False)
-        ends.append((check, "Checks' cost, 0.3%", t["ink"]))
+        ax.fill_between([0, 1], 0, running, color=t["cost"], lw=0, zorder=1, clip_on=False)
+        ends.append((running, "Running the classifier, 0.3%", t["ink"]))
         label_ends(ax, ends, gap=0.02)
         ax.set_xlim(0, 1)
         ax.set_xticks([0, 0.25, 0.5, 0.75, 1])
@@ -572,7 +572,7 @@ def voi(out, p, c):
         ax.set_yticks([0, 0.1, 0.2, 0.3])
         ax.xaxis.set_major_formatter(percent)
         ax.yaxis.set_major_formatter(percent)
-        ax.set_xlabel("Mutual information between verdict and whether context helps (% of a perfect check's)",
+        ax.set_xlabel("Mutual information between verdict and whether context helps (% of a perfect classifier's)",
                       color=t["muted"], fontsize=10)
         axis_name(ax, "Expected value of information (% of cost saved)", t)
         save(fig, out / f"model-voi-{theme}.svg")

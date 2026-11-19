@@ -17,11 +17,11 @@ It answers two questions:
   can compact after any request.
   The replay, which compacts only at turn ends, gives sparkjoy's default
   floors: 250k at turn ends and 175k in an idle session.
-- **[Value of information](#value-of-information).** A check at each turn end
-  compacts before or after that threshold, depending on how much the work ahead
-  needs the context's detail. sparkjoy's question is such a check. The model
-  finds what a check could save over the best single threshold, and how often it
-  must be right to pay for itself.
+- **[Value of information](#value-of-information).** A classifier at each turn
+  end says to compact before or after that threshold, depending on how much the
+  work ahead needs the context's detail. sparkjoy's question is such a
+  classifier. The model finds what a classifier could save over the best single
+  threshold, and how often it must be right to pay for itself.
 
 Costs are in CRTs, cached-read tokens. One CRT is the price of reading one token
 from the prompt cache, which [Prices by model](#prices-by-model) gives for each
@@ -164,24 +164,25 @@ x > \frac{o\,N + w\,K}{w - 1}
 
 ### Value of information
 
-If a check could tell kinds of work apart, each kind could compact at its own
-best point, and sparkjoy's question, asked at each turn end, is such a check. The
-expected value of the check's information is the cost it saves against the best single
-threshold, as a share of the whole cost, output included; a perfect check's is
-the expected value of perfect information.
+If a classifier could tell kinds of work apart, each kind could compact at its
+own best point, and sparkjoy's question, asked at each turn end, is such a
+classifier. The expected value of the classifier's information is the cost it
+saves against the best single threshold, as a share of the whole cost, output
+included; a perfect classifier's is the expected value of perfect information.
 
-Work can differ in two ways that a check could tell apart:
+Work can differ in two ways that a classifier could tell apart:
 
-- **In β.** A check sorts the work into a group to keep and a group to compact,
+- **In β.** A classifier sorts the work into a group to keep and a group to compact,
   each compacting at its own best point, and is right the same share of the time
   in each. It is scored by the mutual information between its verdict and
-  whether the context helps the work, as a share of a perfect check's: a check
-  right 9 times in 10 carries about half a perfect check's information, and one
-  right 99 times in 100 about 90%.
+  whether the context helps the work, as a share of a perfect classifier's: a
+  classifier right 9 times in 10 carries about half a perfect classifier's
+  information, and one right 99 times in 100 about 90%.
 - **In lost detail.** A turn end is mid-task, where a compaction loses detail, or
-  finished, where it loses none. A check is right at some share of turn ends.
-  Once the context passes a floor, it compacts at each turn end it calls
-  finished, and once the context passes a higher ceiling, at every turn end. The
+  finished, where it loses none. A classifier is right at some share of turn
+  ends. Once the context passes a floor, the session compacts at each turn end
+  the classifier calls finished, and once it passes a higher ceiling, at every
+  turn end. The
   floor and ceiling are set where they cost least.
 
 ## Fitted to my sessions
@@ -336,7 +337,7 @@ past the best point before the next chance to compact.
 | 0.6 | 444k | 290k | 8.5%  | 8.3%  | 7.9%  |
 
 These savings are below the model's 45% because, without compaction, real
-sessions end before their context reaches 965k. Each assumes a check that always
+sessions end before their context reaches 965k. Each assumes a classifier that always
 says to compact; sparkjoy's question decides which turn ends past the floor to
 use.
 
@@ -365,22 +366,22 @@ With the values above, compacting before the cache lapses is cheaper for the
 next request alone from about 160k, by the inequality under [Compacting before
 the cache lapses](#compacting-before-the-cache-lapses).
 
-### What a check saves
+### What a classifier saves
 
 #### Work that differs in β
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-voi-dark.svg">
-  <img alt="The expected value of a check's information, the cost it saves against the best single threshold, by the mutual information between the check's verdict and whether the context helps the work, as a share of a perfect check's, for 60% of the work at β = 1, 30% at β = 2 and 12% at β = 5, the rest at β = 0. A perfect check saves 11%, 20% and 24%. The β = 1 line climbs fastest at first, the β = 2 line is nearly straight, and the β = 5 line stays at 0 until about 30% of the information and reaches half its saving only at 90%. A thin band along 0 marks what the checks cost, 0.3%." src="../assets/model-voi-light.svg">
+  <img alt="The expected value of a classifier's information, the cost it saves against the best single threshold, by the mutual information between the classifier's verdict and whether the context helps the work, as a share of a perfect classifier's, for 60% of the work at β = 1, 30% at β = 2 and 12% at β = 5, the rest at β = 0. A perfect classifier saves 11%, 20% and 24%. The β = 1 line climbs fastest at first, the β = 2 line is nearly straight, and the β = 5 line stays at 0 until about 30% of the information and reaches half its saving only at 90%. A thin band along 0 marks what running the classifier costs, 0.3%." src="../assets/model-voi-light.svg">
 </picture>
 
-What a check saves, against how much its verdict tells about whether the
+What a classifier saves, against how much its verdict tells about whether the
 context helps the work. Each line is a mix of work with mean β 0.6, with one
 share at a single β and the rest at β = 0. The higher that share's β, the more
-a perfect check saves, and the closer to perfect a check must be to get half of
-that saving. The band along 0 is what the checks cost, about 0.3%.
+a perfect classifier saves, and the closer to perfect a classifier must be to get half of
+that saving. The band along 0 is what running the classifier costs, about 0.3%.
 
-| mix | best single threshold | a perfect check saves | half that saving needs | right 9 times in 10, a check saves | a check pays once right |
+| mix | best single threshold | a perfect classifier saves | half that saving needs | right 9 times in 10, a classifier saves | a classifier pays once right |
 |----|----|----|----|----|----|
 | all at β = 0.6 | 440k | 0 | | 0 | |
 | 60% at β = 1 | 790k | 11% | 39% of the information | 7% | 57% of the time |
@@ -390,47 +391,47 @@ that saving. The band along 0 is what the checks cost, about 0.3%.
 Compacting work that needs its context is the costly error, and each unit of β
 makes it about 3.5 times dearer. Compacted at 261k, a unit of work costs 1.5,
 4.8 and 208 times what it does never compacting at β = 1, 2 and 5. So the higher
-β, the purer the group a check says to compact must be before compacting it
-pays, and at β = 5 a check saves nothing up to 29% of the information.
+β, the purer the group a classifier says to compact must be before compacting it
+pays, and at β = 5 a classifier saves nothing up to 29% of the information.
 
-A perfect check saves at most 15% on any mix of β = 0 and 1, 31% of 0 and 2, and
+A perfect classifier saves at most 15% on any mix of β = 0 and 1, 31% of 0 and 2, and
 40% of 0 and 5. On no mix can it save more than 45%, what β = 0 work saves at its
 best point against never compacting, since never compacting is always one choice
 of single threshold. At a given mean β, it saves most when a small share of the
 work has β around 5 to 10. A rarer, steeper share saves less, 17% with 2% of the work at
 β = 30, because a unit of its effectiveness costs 77 times one at β = 0 even
-when never compacting, and no check lowers that part of the cost.
+when never compacting, and no classifier lowers that part of the cost.
 
 #### Turn ends that differ in lost detail
 
 A replay of the sessions marks 30% of turn ends mid-task and the rest finished,
-and gives its check a floor and a ceiling as under [Value of
+and gives its classifier a floor and a ceiling as under [Value of
 information](#value-of-information).
 
-| with 1.8M CRTs lost per compaction, as measured, about 6 wasted requests | share of the cost under the best threshold without a check |
+| with 1.8M CRTs lost per compaction, as measured, about 6 wasted requests | share of the cost under the best threshold without a classifier |
 |----|----|
-| what a perfect check saves | 0.8% |
-| what a check saves that calls turn ends as sparkjoy's question did on the evals | 0.1% |
-| what the checks cost | 0.3% |
-| what the lost detail costs in all, the most any check can save | 2% |
+| what a perfect classifier saves | 0.8% |
+| what a classifier saves that calls turn ends as sparkjoy's question did on the evals | 0.1% |
+| what running the classifier costs | 0.3% |
+| what the lost detail costs in all, the most any classifier can save | 2% |
 
 On the evals, sparkjoy's question compacted at every finished turn end, and
 kept the context in 3 of 8 runs at the four mid-task turn ends, two runs each.
 The evals' verdicts have not yet been compared with the live plugin's. The lost detail costs little in all because
 real sessions end, and so compact less often than the steady state does.
 
-The replay's check doesn't see the context's size, so it needs the ceiling.
+The replay's classifier doesn't see the context's size, so it needs the ceiling.
 sparkjoy's question states what keeping the context costs, so the model can
 compact at a mid-task turn end once keeping costs more than the detail a
 compaction would lose. On the evals, its verdicts still respond noisily to
 context size.
 
-#### Where a check pays
+#### Where a classifier pays
 
 | telling work apart pays when | in the measured sessions |
 |----|----|
-| work's β varies widely, and the check is right most of the time | Neither how much β varies across the work nor how accurate sparkjoy's question is has been measured yet. Grading each of its verdicts by what happened next, such as whether the turns after a compaction re-read files it dropped, would measure the second. |
-| each compaction loses several times the 1.8M CRTs of detail measured so far | Not seen, though the measure misses some losses, such as a design's rejected options or what the user likes ([What does the model assume a compaction loses?](#questions-about-the-model)). |
+| work's β varies widely, and the classifier is right most of the time | Neither how much β varies across the work nor how accurate sparkjoy's question is has been measured yet. Grading each of its verdicts by what happened next, such as whether the turns after a compaction re-read files it dropped, would measure the second. |
+| each compaction loses several times the 1.8M CRTs of detail measured so far | Hard to judge: the measure is very noisy, and it misses some losses, such as a design's rejected options or what the user likes ([What does the model assume a compaction loses?](#questions-about-the-model)). |
 
 ### Prices by model
 
@@ -479,19 +480,21 @@ so far, counts as getting as much done as a request at 142k before the session's
 first compaction.
 
 At β above 0, a summary can do better than that. If it keeps what the work
-needs, the requests after it get as much done as with the whole transcript, more
-than the model counts, and compacting pays more than the model says. A summary
+needs, the requests after it get as much done as they would with the whole
+transcript, which is more than the model counts, so compacting pays more than
+the model says. A summary
 that drops detail the next turns need costs more instead, in a mistake, a
 correction from the user or a step run again. The model adds that cost as D
 CRTs per compaction, and the best point of 260k takes D as 0.
 
-After manual `/compact`s and Claude Code's own compactions, the author's
-sessions had about 6 more wasted requests than usual, failed tool calls,
-repeated lookups and corrections, a D of about 1.8M CRTs with a 90% interval
-from −0.7M to +5.6M. That count misses losses that waste no request, such as a
-design's rejected options or what the user likes.
+It's very noisy and hard to judge, but as some indication, the author's
+sessions had about 6 more wasted requests than usual after manual `/compact`s
+and Claude Code's own compactions. A wasted request is a failed tool call, a
+repeated lookup or a correction. That makes D about 1.8M CRTs, with a 90%
+interval from −0.7M to +5.6M. The count misses losses that waste no request,
+such as a design's rejected options or what the user likes.
 
-| D per compaction | best point, β = 0 | best point, β = 0.6 | a perfect check saves, β = 0 |
+| D per compaction | best point, β = 0 | best point, β = 0.6 | a perfect classifier saves, β = 0 |
 |----|----|----|----|
 | 0, a summary that keeps everything needed | 260k | 440k | 0 |
 | 1.8M CRTs, as measured | 280k | 480k | 0.8% |
@@ -505,9 +508,9 @@ design's rejected options or what the user likes.
 
 It has one parameter with a plain meaning: each doubling of the context makes a
 request $`2^\beta`$ times as effective, wherever it starts. The cost uses only the
-curve from about 150k to 965k, under three doublings, so what it does at small
-contexts doesn't enter the cost. Over that range a saturating form, levelling
-off once the context holds what the work needs, could serve as well. The two
+curve from about 150k to 965k, under three doublings. Over that range a
+saturating form, levelling off once the context holds what the work needs,
+could serve as well. The two
 differ on one question: does doubling an agent's context from 400k to 800k
 improve its next steps about as much as doubling it from 100k to 200k? The
 power law predicts it does.
@@ -515,12 +518,10 @@ power law predicts it does.
 </details>
 
 <details>
-<summary>Does the power law give more context diminishing returns?</summary>
+<summary>Does the power law give context diminishing returns?</summary>
 
-Per token, yes, with β below 1: a token at 400k adds less than one at 100k, half
-as much at β = 0.5 and 29% as much at β = 0.1. Per doubling, no, since each
-doubling makes a request $`2^\beta`$ times as effective at any size. Every token is
-worth the same only at β = 1.
+Yes, with β below 1: a token at 400k adds less than one at 100k, half as much at
+β = 0.5 and 29% as much at β = 0.1. Every token is worth the same only at β = 1.
 
 </details>
 
