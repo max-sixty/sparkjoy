@@ -306,7 +306,8 @@ The assumptions about the work move it more. It reaches 400k only at β = 0.55,
 where a request at 200k gets 68% as much done as one at 400k, or if each
 compaction loses about 19M CRTs of detail, some 64 wasted requests.
 
-### Does the model's simplification matter?
+<details>
+<summary>Does the model's simplification matter?</summary>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-threshold-dark.svg">
@@ -333,6 +334,8 @@ These savings are below the model's 45% because, without compaction, real
 sessions end before their context reaches 965k. Each assumes a check that always
 says to compact; sparkjoy's question decides which turn ends past the floor to
 use.
+
+</details>
 
 ### Idle sessions
 
