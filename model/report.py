@@ -13,11 +13,14 @@ The page shows every verdict sparkjoy logged in the window, what its compactions
 the returns to a large context after an hour or more idle, and the thresholds the cost
 model of docs/cost-model.md fits to the same sessions. It reads, replays and fits
 with fit.py, so it opens only the transcripts modified since --since, at low priority.
-It prints a summary and the page's path.
+With --figures it also saves, as JSON, the figures sparkjoy's question states, fitted to
+the same sessions; /sparkjoy:report passes the file in the plugin's data folder, which
+hooks/register.ts reads. It prints a summary and the page's path.
 """
 
 import argparse
 import html
+import json
 import subprocess
 import sys
 import tempfile
@@ -25,6 +28,7 @@ import warnings
 from collections import Counter
 from dataclasses import replace
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 
@@ -73,16 +77,19 @@ def returns(S):
     return sorted(rows, key=lambda r: -r[0].t[r[1]])
 
 
-def thresholds(S, p, ttl):
-    """The cost model's thresholds for these sessions with β = 0, at the prices of the model most
-    of their requests used (Opus 5.5's if none has a price here), and what compacting at them
-    saves in the replay. The best turn-end threshold is None when none costs less than never
-    compacting, as when no session reaches the thresholds that tie with it."""
+def usual_model(S):
+    """The model most of the sessions' requests used, of those with a price here, or Opus 5.5."""
     use = Counter()
     for s in S:
         if s.model in fit.PRICES:
             use[s.model] += len(s.size)
-    model = use.most_common(1)[0][0] if use else "claude-opus-5-5"
+    return use.most_common(1)[0][0] if use else "claude-opus-5-5"
+
+
+def thresholds(S, p, model, ttl):
+    """The cost model's thresholds for these sessions with β = 0, at `model`'s prices, and what
+    compacting at them saves in the replay. The best turn-end threshold is None when none costs
+    less than never compacting, as when no session reaches the thresholds that tie with it."""
     c = fit.prices(model, ttl)
     cost, effectiveness = fit.grid(S, p, c, ttl, betas=(0,))
     best, ratio = fit.best(cost, effectiveness)
@@ -132,6 +139,29 @@ def duration(seconds):
 def model_name(model):
     family, *version = model.removeprefix("claude-").split("-")
     return f"{family.title()} {'.'.join(version)}"
+
+
+# The figures sparkjoy's question states, by the names of their constants in hooks/register.ts,
+# each with how the page and the summary name and show it.
+FIGURES = (("K", "context after a compaction", tokens),
+           ("P", "system prompt and tools within it", tokens),
+           ("SUMMARY", "output of the request that writes the summary", tokens),
+           ("TURN_MEDIAN", "median requests per turn", "{:.0f}".format),
+           ("TURN_MEAN", "mean requests per turn", "{:.0f}".format),
+           ("LAPSE", "requests that find the prompt cache lapsed", "{:.2%}".format),
+           ("WRITE", "cached reads a cache write costs", "{:g}".format),
+           ("OUTPUT", "cached reads an output token costs", "{:g}".format))
+
+
+def figures(p, c):
+    """The figures sparkjoy's question states, fitted to these sessions at the prices `c`, by
+    the names of their constants in hooks/register.ts. Any the window couldn't measure is left
+    out, and the question states its author's figure instead. So is WASTED, the extra wasted
+    requests after a compaction: calibrate.py measures it over 60 days, and over a report's
+    window it varies across resamples by more than its own size."""
+    fitted = {"K": p.K, "P": p.P, "SUMMARY": p.N, "TURN_MEDIAN": p.turn_median, "TURN_MEAN": p.turn,
+              "LAPSE": p.lapse, "WRITE": c.write, "OUTPUT": c.output}
+    return {k: v for k, v in fitted.items() if np.isfinite(v)}
 
 
 def esc(text):
@@ -232,7 +262,7 @@ td.wrap { white-space: normal; min-width: 160px; }
 """
 
 
-def page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit):
+def page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit, saved):
     zone = datetime.now().astimezone().strftime("%Z")
     head = f"{days(since, until)}, times in {zone} · {len(S)} sessions · {sum(len(s.size) for s in S):,} requests"
     parts = [f"<h1>sparkjoy</h1><p class=sub>{head}</p>"]
@@ -289,7 +319,7 @@ def page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit):
     elif fitted:
         summary.append(f"<p><b>No turn-end threshold</b> costs less than never compacting for these sessions; "
                        f"{asks}.</p>")
-    sections = ["Sessions", "Verdicts"] * bool(verdicts) + ["Idle returns", "Thresholds"]
+    sections = ["Sessions", "Verdicts"] * bool(verdicts) + ["Idle returns", "Thresholds"] + ["Question"] * bool(saved)
     summary.append("<p class=note>" + " · ".join(f'<a href="#{anchor(h)}">{h}</a>' for h in sections) + "</p>")
     parts.append(f'<div class="summary">{"".join(summary)}</div>')
 
@@ -345,6 +375,19 @@ def page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit):
             f'done at any context size. The <a href="{DOC}">cost model</a> explains these figures.</p>')
     else:
         parts.append(f"<p>{unfit}</p>")
+
+    if saved:
+        parts.append(h2("Question"))
+        parts.append("<p>sparkjoy's question now states these figures from these sessions in place of its author's, "
+                     "from the next turn end or idle session it asks about.</p>")
+        parts.append('<div class="narrow">' + table(["Figure", "These sessions"], [
+            (label.capitalize(), show(saved[key])) for key, label, show in FIGURES if key in saved], numeric=(1,))
+                     + "</div>")
+        missing = [label for key, label, _ in FIGURES if key not in saved]
+        parts.append("<p class=note>" + (f"The window measured no {' or '.join(missing)}, so the question states "
+                                         "its author's. " if missing else "")
+                     + "The extra wasted requests after a compaction stay the author's: measuring them takes "
+                     "months of sessions.</p>")
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width, initial-scale=1">'
             f"<title>sparkjoy report</title><style>{CSS}</style></head><body><main>{''.join(parts)}</main></body></html>")
@@ -354,19 +397,31 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     fit.window_args(ap)
     ap.add_argument("--no-open", action="store_true", help="write the page without opening it")
+    ap.add_argument("--figures", type=Path, help="also save the figures sparkjoy's question states, fitted to "
+                    "these sessions, to this JSON file, which the plugin reads from its data folder")
     a = ap.parse_args()
     S, since, until = fit.read(a)
     verdicts = sorted(((s, v) for s in S for v in s.verdicts), key=lambda sv: -sv[1].t)
-    p = fitted = None
+    p = fitted = saved = None
     unfit = "The cost model needs compactions in the window to measure what one leaves."
+    kept = "the window holds no compactions to fit them to"  # why the question keeps the figures it has
     if any(((s.kind == fit.USER) | (s.kind == fit.POLICY)).any() for s in S):
         ttl = fit.usual(s.ttl for s in S)
+        model = usual_model(S)
         with warnings.catch_warnings():  # a short window leaves some parameters without data
             warnings.simplefilter("ignore", RuntimeWarning)
             p = fit.measure(S, ttl)
         if np.isfinite([p.K, p.P, p.N, p.g, p.out, p.lapse]).all():
-            fitted = thresholds(S, p, ttl)
+            fitted = thresholds(S, p, model, ttl)
         unfit = "The window holds too few requests to fit the cost model."
+        if a.figures:
+            values = figures(p, fit.prices(model, ttl))
+            try:
+                a.figures.parent.mkdir(parents=True, exist_ok=True)
+                a.figures.write_text(json.dumps(values))
+                saved = values
+            except OSError as e:  # such as a sandbox that keeps writes to the working directory
+                kept = f"saving them failed: {e}"
     # The replay prices each compaction from K, P and N.
     replays = p is not None and np.isfinite([p.K, p.P, p.N]).all()
     sessions = [(s, replayed(s, p)) for s in S] if replays else [(s, (None, s.size, s.size)) for s in S]
@@ -378,7 +433,7 @@ def main():
     # A file of its own, readable by this user alone: the page quotes prompts and reasons.
     fd, path = tempfile.mkstemp(prefix="sparkjoy-report-", suffix=".html")
     with open(fd, "w") as out:
-        out.write(page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit))
+        out.write(page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit, saved))
     counts = Counter(v.kind for _, v in verdicts)
     print(f"{len(verdicts)} verdicts in {len({id(s) for s, _ in verdicts})} of {len(S)} sessions: "
           + ", ".join(f"{counts[k]} {k}" for k in KINDS))
@@ -392,6 +447,11 @@ def main():
     if fitted:
         print(f"cheapest turn-end threshold {tokens(fitted['best']) if fitted['best'] else 'none'}, idle break-even "
               f"{tokens(fitted['idle'])} (sparkjoy asks from {tokens(fit.FLOOR)} and {tokens(fit.IDLE_FLOOR)})")
+    if saved:
+        print("sparkjoy's question now states these sessions' figures: "
+              + "; ".join(f"{label} {show(saved[key])}" for key, label, show in FIGURES if key in saved))
+    elif a.figures:
+        print(f"sparkjoy's question keeps the figures it states: {kept}")
     print(path)
     if not a.no_open:
         try:

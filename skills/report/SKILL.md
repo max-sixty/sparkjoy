@@ -10,8 +10,13 @@ Run the report script. It reads the user's transcripts in `~/.claude/projects` (
 directory, prints a few lines of summary and the page's path, and opens the page:
 
 ```
-uv run --script "${CLAUDE_PLUGIN_ROOT}/model/report.py"
+uv run --script "${CLAUDE_PLUGIN_ROOT}/model/report.py" --figures "${CLAUDE_PLUGIN_DATA}/figures.json"
 ```
+
+With `--figures` it also saves the figures the plugin's question states, such as
+the context a compaction leaves and the requests in a turn, fitted to the same
+sessions. From the next time the plugin asks, its question states them in
+place of the author's.
 
 It covers the last 14 days. When the user names another window, pass it as
 `--since` and `--until`, each an ISO date or time, read as local time unless it
@@ -36,6 +41,9 @@ Reply with the summary it printed and the page's path. The page shows:
   between.
 - **Thresholds**: the turn-end threshold the cost model fits to these sessions,
   beside the 250k and 175k sparkjoy asks from.
+- **Question**: the figures it saved for the question. A window without
+  compactions has nothing to fit them to, and the question keeps the figures
+  it had.
 
 The savings come from replaying each session's logged requests with sparkjoy's
 compactions where it made them and without them, at list prices for the

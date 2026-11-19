@@ -13,6 +13,10 @@ const ANNOUNCED = { 'compacting:s1': { at: '489k tokens', messages: [messageKey(
 
 const IDLE = 55 * 60_000
 
+// The plugin's data folder, and the figures file `/sparkjoy:report` saves in it.
+const DATA = '/home/u/.claude/plugins/data/sparkjoy-sparkjoy'
+const FIGURES = `${DATA}/figures.json`
+
 // Stands for the engine beneath the mod: a context of `tokens` until `resize`
 // changes it or a compaction leaves it unmeasured, the rate-limit windows
 // `rateLimits` (a subscription's five-hour and weekly ones unless told
@@ -22,7 +26,9 @@ const IDLE = 55 * 60_000
 // one succeeds, a turn whose end settles after `endMs`, a store holding
 // `stored` (what an earlier process left), a conversation of user messages
 // with the texts `conversation`, which a turn adds a message to and a
-// compaction its summary, and a record of what it was asked.
+// compaction its summary, a figures file holding `saved` (none when
+// undefined) in a data folder the engine makes unless `hasData` is false, and
+// a record of what it was asked.
 function engine(
   on: On,
   {
@@ -40,6 +46,8 @@ function engine(
       { kind: 'five_hour', percentUsed: 10 },
       { kind: 'seven_day', percentUsed: 30 },
     ],
+    saved = undefined as string | undefined,
+    hasData = true,
   } = {},
 ) {
   const clock = mock.clock(on)
@@ -55,6 +63,14 @@ function engine(
 
   mock.store(on, stored)
   on('session.id', () => ({ value: 's1' }))
+  on('process.hookEnv', () => {
+    if (!hasData) throw new Error('EACCES: permission denied, mkdir')
+    return { value: { CLAUDE_PLUGIN_ROOT: '/plugin', CLAUDE_PLUGIN_DATA: DATA } }
+  })
+  on('fs.read', (_, e) => {
+    if (e.path !== FIGURES || saved === undefined) throw new Error(`ENOENT: no such file or directory, open '${e.path}'`)
+    return { value: saved }
+  })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('turn.start', (_, e) => {
     messages.push(e.turnId)
@@ -112,6 +128,9 @@ function engine(
 
   const resize = (to: number | undefined) => (size = to)
 
+  // Saves a figures file, as the report does, or removes it.
+  const save = (text: string | undefined) => (saved = text)
+
   // Runs a slash command as the person typing it at the prompt would.
   const type = ($: Engine, command: string) =>
     $.command.run({
@@ -121,8 +140,29 @@ function engine(
       presentation: { isFullscreen: false, columns: 80 },
     })
 
-  return { clock, forks, compactions, commands, logs, begin, turn, resize, type }
+  return { clock, forks, compactions, commands, logs, begin, turn, resize, save, type }
 }
+
+// Figures the report fitted to a user on a five-minute cache, whose
+// compactions leave less and write a longer summary than the author's.
+const FITTED = JSON.stringify({
+  WRITE: 25,
+  OUTPUT: 100,
+  SUMMARY: 8_000,
+  K: 120_000,
+  P: 20_000,
+  LAPSE: 0.01,
+  TURN_MEDIAN: 12,
+  TURN_MEAN: 49.6,
+})
+
+// What the question says at 500k with the author's figures.
+const AUTHORS = [
+  'outputs about 6k tokens, thinking included. Afterwards the context holds about 142k tokens',
+  'all but the 30k of system prompt and tools, which stay cached. A cache write costs as much as 40 cached reads, and an output token as much as 100.',
+  'At 500k a compaction pays for itself after about 13 more requests',
+  'A turn runs a median of 9 requests and a mean of 38,',
+]
 
 test('a finished turn compacts with no instructions and no /compact row', async ($, on) => {
   const { begin, forks, compactions, commands, logs, turn } = engine(on)
@@ -153,6 +193,74 @@ test('the question sizes the saving for the context it asks about', async ($, on
   expect(forks[0]).toContain('keeping 500k through one more turn costs as much as about 0.7 compactions for a median turn and 3 for a mean one')
   expect(forks[1]).toContain('keeping 250k through one more turn costs as much as about 0.2 compactions for a median turn and 1.0 for a mean one')
 })
+
+test('the question states the figures the report fitted to the user’s sessions', async ($, on) => {
+  const { begin, forks, turn } = engine(on, { verdict: KEEP, saved: FITTED })
+  await begin($)
+
+  await turn($, 't1')
+
+  expect(forks[0]).toContain('outputs about 8k tokens, thinking included. Afterwards the context holds about 120k tokens')
+  expect(forks[0]).toContain('all but the 20k of system prompt and tools, which stay cached. A cache write costs as much as 25 cached reads, and an output token as much as 100.')
+  // (500k read + 100 × 8k output + 24 × (120k − 20k) cache write) over the
+  // 1.24 × (500k − 120k) each later request saves, rounded up.
+  expect(forks[0]).toContain('At 500k a compaction pays for itself after about 8 more requests')
+  // 12 and 49.6 requests × that saving, over what a compaction costs: 1.53
+  // and 6.3.
+  expect(forks[0]).toContain('A turn runs a median of 12 requests and a mean of 50, so keeping 500k through one more turn costs as much as about 2 compactions for a median turn and 6 for a mean one')
+})
+
+test('an idle session’s question states the fitted figures too', async ($, on) => {
+  const { begin, clock, forks, turn } = engine(on, { tokens: 200_000, saved: FITTED })
+  await begin($)
+
+  await turn($, 't1')
+  await clock.advance(IDLE)
+  await clock.settle()
+
+  expect(forks[0]).toContain('writes all but 20k of its 200k tokens to the cache again, against about 100k after a compaction')
+})
+
+test('a report saved mid-session counts from the next question', async ($, on) => {
+  const { begin, forks, turn, save } = engine(on, { verdict: KEEP })
+  await begin($)
+
+  await turn($, 't1')
+  save(FITTED)
+  await turn($, 't2')
+
+  for (const text of AUTHORS) expect(forks[0]).toContain(text)
+  expect(forks[1]).toContain('At 500k a compaction pays for itself after about 8 more requests')
+})
+
+test('each figure the file lacks, or holds where the sums can’t use it, stays the author’s', async ($, on) => {
+  // K at the floor, where no compaction asked about at a turn end would pay;
+  // P above the author's K; the summary as text; the median turn kept.
+  const saved = JSON.stringify({ K: 250_000, P: 150_000, SUMMARY: '8k', LAPSE: null, TURN_MEDIAN: 12 })
+  const { begin, forks, turn } = engine(on, { verdict: KEEP, saved })
+  await begin($)
+
+  await turn($, 't1')
+
+  for (const text of AUTHORS.slice(0, 3)) expect(forks[0]).toContain(text)
+  // 12 requests × the author's saving, over what a compaction costs: 0.96.
+  expect(forks[0]).toContain('A turn runs a median of 12 requests and a mean of 38, so keeping 500k through one more turn costs as much as about 1.0 compactions for a median turn and 3 for a mean one')
+})
+
+for (const [name, options] of [
+  ['a figures file that isn’t JSON', { saved: '{"K": 120' }],
+  ['a figures file that holds no object', { saved: 'null' }],
+  ['a data folder the engine can’t make', { saved: FITTED, hasData: false }],
+] as const) {
+  test(`${name} leaves the question the author’s`, async ($, on) => {
+    const { begin, forks, turn } = engine(on, { verdict: KEEP, ...options })
+    await begin($)
+
+    await turn($, 't1')
+
+    for (const text of AUTHORS) expect(forks[0]).toContain(text)
+  })
+}
 
 test('a verdict to keep leaves the conversation alone and says why', async ($, on) => {
   const { begin, forks, compactions, logs, turn } = engine(on, { verdict: KEEP })

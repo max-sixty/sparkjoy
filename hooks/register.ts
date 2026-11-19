@@ -16,7 +16,8 @@
 // small model over the last reply: which parts the work ahead still needs
 // depends on the work, and the fork reads it from cache. The question gives
 // the judge the costs and the saving, sized for the context it holds, to weigh
-// rather than a rule, and never names the floor. The mod runs only where a person is at the prompt: a `-p` run or
+// rather than a rule, and never names the floor. Its figures are the user's own
+// once `/sparkjoy:report` has fitted them. The mod runs only where a person is at the prompt: a `-p` run or
 // an SDK host keeps the engine's own compaction, so no script pays for a judge
 // or finds its conversation changed.
 //
@@ -35,49 +36,64 @@ import type { EngineInterface, Register, SessionMessage } from 'claude-code'
 // the copy already making it.
 const COMPACTING = { plugin: 'sparkjoy', key: 'compacting' } as const
 
-// What the author's sessions measured (docs/cost-model.md, 7-15 Nov 2026),
-// which the question gives every user as a guide to what keeping costs and
-// what a compaction loses. The costs follow that page's model and its table of
+// The figures the question states, as the author's sessions measured them
+// (docs/cost-model.md, 7-15 Nov 2026). `/sparkjoy:report` fits the same
+// figures to the user's own sessions and saves them in the plugin's data
+// folder, and the question states those instead (`fitted`), falling back to
+// these figure by figure. The costs follow that page's model and its table of
 // symbols ("Request and compaction costs"), which are those of `terms()` in
-// model/fit.py.
-// TODO: fit these to the user's own sessions, as model/fit.py and
-// model/calibrate.py do for the author's, and state those instead.
+// model/fit.py, and each key is the name model/report.py saves its figure
+// under: a figure whose meaning changes takes a new name, so a file an older
+// report saved falls back for it.
+const AUTHOR = {
+  // What a token costs, in cached reads: on Opus and Sonnet 5.5 a read is
+  // 0.05x the input price, a one-hour cache write 2x (w) and an output token
+  // 5x (o). The report prices the model most of the user's requests used, at
+  // the cache lifetime most of their sessions did.
+  WRITE: 40,
+  OUTPUT: 100,
+  // The output tokens of the compaction request (N): the summary's text plus
+  // its thinking. Transcripts log the summary's text, a median 3.5k tokens at
+  // 4 characters each, but not the request that wrote it. The main-thread
+  // requests whose visible output (text, and tool input as JSON) is half to
+  // 1.5 times that log a median 1.61 times as many output tokens as they
+  // show, thinking included, which makes about 5.6k.
+  SUMMARY: 5_600,
+  // The context after a compaction (K): the first request after it, plus the
+  // files the next few requests read again. Across 141 compactions in the
+  // author's sessions (7-16 Nov 2026) the first request carried a median 122k
+  // tokens (quartiles 111k-128k): the opening prompt (system prompt, tools,
+  // instructions; 85k), the summary, and the recent messages and files
+  // re-attached (34k). The next few requests read about 20k more again than
+  // after another turn end. Every later request reads K, and the requests
+  // after the compaction make a cache write of all of it but P.
+  K: 142_000,
+  // The system prompt and tools (P), which Claude Code keeps in a cache
+  // shared across sessions, so no request after a compaction makes a cache
+  // write of them.
+  P: 30_000,
+  // The share of requests that find the prompt cache lapsed and make a cache
+  // write of the whole context but P (ℓ), mostly after a gap of over an hour.
+  LAPSE: 0.0056,
+  // Requests in a turn: the median, and the mean, which a few long turns
+  // raise.
+  TURN_MEDIAN: 9,
+  TURN_MEAN: 38,
+}
 
-// What a token costs, in cached reads: on Opus and Sonnet 5.5 a read is 0.05x
-// the input price, a one-hour cache write 2x (w) and an output token 5x (o).
-const WRITE = 40
-const OUTPUT = 100
-// The output tokens of the compaction request (N): the summary's text plus
-// its thinking. Transcripts log the summary's text, a median 3.5k tokens at 4
-// characters each, but not the request that wrote it. The main-thread
-// requests whose visible output (text, and tool input as JSON) is half to 1.5
-// times that log a median 1.61 times as many output tokens as they show,
-// thinking included, which makes about 5.6k.
-const SUMMARY = 5_600
-// The context after a compaction (K): the first request after it, plus the
-// files the next few requests read again. Across 141 compactions in the
-// author's sessions (7-16 Nov 2026) the first request carried a median 122k
-// tokens (quartiles 111k-128k): the opening prompt (system prompt, tools,
-// instructions; 85k), the summary, and the recent messages and files
-// re-attached (34k). The next few requests read about 20k more again than
-// after another turn end. Every later request reads K, and the requests after
-// the compaction make a cache write of all of it but P.
-const K = 142_000
-// The system prompt and tools (P), which Claude Code keeps in a cache shared
-// across sessions, so no request after a compaction makes a cache write of
-// them.
-const P = 30_000
-// The share of requests that find the prompt cache lapsed and make a cache
-// write of the whole context but P (ℓ), mostly after a gap of over an hour.
-const LAPSE = 0.0056
-// Requests in a turn: the median, and the mean, which a few long turns raise.
-const TURN_MEDIAN = 9
-const TURN_MEAN = 38
+type Figures = typeof AUTHOR
+
 // The wasted requests (failed tool calls, repeated lookups, corrections)
-// beyond the usual after a compaction the user or Claude Code made. After
+// beyond the usual after a compaction the user or Claude Code made, which
+// model/calibrate.py measured over 60 days of the author's sessions. After
 // sparkjoy's, which came where a piece of work ended, there were fewer wasted
-// requests than usual.
+// requests than usual. The report leaves it the author's: over its two weeks,
+// resampling the sessions moves it by more than its own size.
 const WASTED = 6
+
+// The file `/sparkjoy:report` saves the user's figures to in the plugin's data
+// folder, as skills/report/SKILL.md tells it to.
+const FIGURES = 'figures.json'
 
 // The judge is asked at a turn end only from this many context tokens, and in
 // an idle session from IDLE_FLOOR: the pair of floors that costs least when
@@ -96,7 +112,7 @@ const FLOOR = 250_000
 const IDLE_FLOOR = 175_000
 
 // The mod acts only in a session whose model has a context window of at least
-// this many tokens. The floors and the question's figures come from sessions
+// this many tokens. The floors and the author's figures come from sessions
 // with a 1M window, and on a 200k one Claude Code compacts before the context
 // reaches FLOOR.
 const WINDOW = 1_000_000
@@ -194,7 +210,8 @@ async function afterTurn($: EngineInterface, watch: Watch, changes: number, repl
       $.clock.after(IDLE_MS, () => void idle($, isCurrent, say, tokens, reply, due))
     }
     if (tokens < FLOOR) return
-    await judge($, say, async () => isCurrent(), `${thousands(tokens)} tokens`, question(reply, tokens))
+    const prompt = question(reply, tokens, undefined, await fitted($))
+    await judge($, say, async () => isCurrent(), `${thousands(tokens)} tokens`, prompt)
   } catch (error) {
     say(`Failed: ${error}`)
   }
@@ -209,7 +226,8 @@ async function idle($: EngineInterface, isCurrent: () => boolean, say: (text: st
   try {
     if ((await $.clock.now()) > due + LATE_MS || !(await isUntouched())) return
     const minutes = IDLE_MS / 60_000
-    await judge($, say, isUntouched, `${thousands(tokens)} tokens, idle ${minutes} minutes`, question(reply, tokens, minutes))
+    const prompt = question(reply, tokens, minutes, await fitted($))
+    await judge($, say, isUntouched, `${thousands(tokens)} tokens, idle ${minutes} minutes`, prompt)
   } catch (error) {
     say(`Failed: ${error}`)
   }
@@ -323,8 +341,9 @@ function hash(text: string) {
 // The fork replays the turn's last request, which ends before the reply the
 // turn closed with, so the question carries the reply whole. Asked of an idle
 // session, it says so and that the prompt cache is about to lapse. README.md
-// shows both versions verbatim, for a 500k context.
-function question(reply: string, tokens: number, idleMinutes?: number) {
+// shows both versions verbatim with the author's figures, for a 500k context.
+function question(reply: string, tokens: number, idleMinutes?: number, figures: Figures = AUTHOR) {
+  const { WRITE, OUTPUT, SUMMARY, K, P, TURN_MEDIAN, TURN_MEAN } = figures
   const now = thousands(tokens)
   const isIdle = idleMinutes !== undefined
   const opening = isIdle
@@ -335,10 +354,10 @@ function question(reply: string, tokens: number, idleMinutes?: number) {
     : 'Decide whether to compact the conversation now, while the user reads that reply.'
   // Idle, the cache is about to go whatever the answer, so the sums are the one
   // the request above states.
-  const sum = isIdle ? '' : ` At ${now} a compaction pays for itself after about ${payback(tokens)} more requests that need nothing it dropped.`
+  const sum = isIdle ? '' : ` At ${now} a compaction pays for itself after about ${payback(tokens, figures)} more requests that need nothing it dropped.`
   const keeping = isIdle
     ? ''
-    : `\n\nKeeping costs too, and more the larger the context: every later request reads all ${now} tokens, against about ${thousands(K)} after a compaction, and keeping only puts the compaction off to a later turn end. A turn runs a median of ${TURN_MEDIAN} requests and a mean of ${TURN_MEAN}, so keeping ${now} through one more turn costs as much as about ${turnCost(tokens, TURN_MEDIAN)} compactions for a median turn and ${turnCost(tokens, TURN_MEAN)} for a mean one.`
+    : `\n\nKeeping costs too, and more the larger the context: every later request reads all ${now} tokens, against about ${thousands(K)} after a compaction, and keeping only puts the compaction off to a later turn end. A turn runs a median of ${Math.round(TURN_MEDIAN)} requests and a mean of ${Math.round(TURN_MEAN)}, so keeping ${now} through one more turn costs as much as about ${turnCost(tokens, TURN_MEDIAN, figures)} compactions for a median turn and ${turnCost(tokens, TURN_MEAN, figures)} for a mean one.`
   return `This message comes from the sparkjoy plugin, not from the user, and a program reads your reply. Use no tools.
 
 ${opening}
@@ -363,14 +382,14 @@ Reply with one JSON object and nothing else, filling its fields in order:
 
 // How many later requests a compaction at `tokens` takes to pay for itself:
 // its cost over what each later request saves.
-function payback(tokens: number) {
-  return Math.ceil(compaction(tokens) / saving(tokens))
+function payback(tokens: number, figures: Figures) {
+  return Math.ceil(compaction(tokens, figures) / saving(tokens, figures))
 }
 
 // What keeping `tokens` through a turn of `requests` costs, in compactions:
 // what its requests cost beyond what they would after one.
-function turnCost(tokens: number, requests: number) {
-  const n = (requests * saving(tokens)) / compaction(tokens)
+function turnCost(tokens: number, requests: number, figures: Figures) {
+  const n = (requests * saving(tokens, figures)) / compaction(tokens, figures)
   return n < 1.5 ? n.toFixed(1) : `${Math.round(n)}`
 }
 
@@ -378,15 +397,48 @@ function turnCost(tokens: number, requests: number) {
 // compaction request reads the context and outputs the summary, then the
 // requests after it make a cache write of K but P. A cache write costs
 // WRITE - 1 more than the read it stands in for.
-function compaction(tokens: number) {
+function compaction(tokens: number, { WRITE, OUTPUT, SUMMARY, K, P }: Figures) {
   return tokens + OUTPUT * SUMMARY + (WRITE - 1) * (K - P)
 }
 
 // What each request after a compaction at `tokens` saves, in cached reads: it
 // reads tokens - K less, and a token held costs h = 1 + ℓ(w - 1) reads a
 // request, counting the lapses after which it takes a cache write again.
-function saving(tokens: number) {
+function saving(tokens: number, { WRITE, K, LAPSE }: Figures) {
   return (1 + LAPSE * (WRITE - 1)) * (tokens - K)
+}
+
+// The figures `/sparkjoy:report` last saved for the question. Each is the
+// author's where the file lacks it or holds a value the question's sums can't
+// use: a cache write no dearer than a read, a compaction that leaves no more
+// than the cached system prompt and tools or at least the FLOOR the question
+// is asked from at a turn end, a lapse share outside 0 to 1, or a turn of
+// under one request. Read for each question, so a report run mid-session
+// counts from the next one; a data folder or file that can't be read leaves
+// every figure the author's.
+async function fitted($: EngineInterface): Promise<Figures> {
+  let saved: Record<string, unknown> | undefined
+  try {
+    const folder = (await $.process.hookEnv()).CLAUDE_PLUGIN_DATA
+    if (folder) saved = JSON.parse(await $.fs.read(`${folder}/${FIGURES}`))
+  } catch {
+    return AUTHOR
+  }
+  const figures = { ...AUTHOR }
+  // K before P, so P is held below the K the question states.
+  const take = (name: keyof Figures, isValid: (value: number) => boolean) => {
+    const value = saved?.[name]
+    if (typeof value === 'number' && Number.isFinite(value) && isValid(value)) figures[name] = value
+  }
+  take('WRITE', v => v > 1)
+  take('OUTPUT', v => v > 0)
+  take('SUMMARY', v => v > 0)
+  take('K', v => v > 0 && v < FLOOR)
+  take('P', v => v >= 0 && v < figures.K)
+  take('LAPSE', v => v >= 0 && v <= 1)
+  take('TURN_MEDIAN', v => v >= 1)
+  take('TURN_MEAN', v => v >= 1)
+  return figures
 }
 
 function parse(text: string): Verdict | undefined {
