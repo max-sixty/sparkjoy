@@ -5,12 +5,13 @@
 // the session's own model judges, over its prompt-cached transcript
 // (`$.model.fork`), whether to compact, weighing what a compaction costs
 // against the parts of the transcript the work ahead no longer needs; on yes,
-// the mod compacts. A session left idle at IDLE_FLOOR or more is asked again
-// just before its prompt cache lapses, told that the next request would
-// otherwise write the whole context to the cache again. Each decision shows in the transcript as a
-// dim line the model never reads, so a session that stays large says why. The
-// engine's auto-compaction at its threshold still runs as before, and covers a
-// turn that grows past the floor before it ends.
+// the mod compacts. A session on a one-hour prompt cache left idle at
+// IDLE_FLOOR or more is asked again just before the cache lapses, told that
+// the next request would otherwise write the whole context to the cache
+// again. Each decision shows in the transcript as a dim line the model never
+// reads, so a session that stays large says why. The engine's auto-compaction
+// at its threshold still runs as before, and covers a turn that grows past the
+// floor before it ends.
 //
 // The judge is the session's model over the whole transcript rather than a
 // small model over the last reply: which parts the work ahead still needs
@@ -29,7 +30,7 @@
 // announcement in `$.store` until the compaction settles, and the next process
 // finishes it if the conversation hasn't moved on.
 
-import type { EngineInterface, Register, SessionMessage } from 'claude-code'
+import type { EngineInterface, Register, SessionMessage, TurnUsage } from 'claude-code'
 
 // Set while this process compacts. `$.state` outlives a reload of the mod but
 // not the process, so a reload that finds a compaction announced leaves it to
@@ -107,8 +108,9 @@ const FLOOR = 250_000
 // An idle session is asked from this many tokens. Compacting just before the
 // cache lapses pays from about 160k, counting only the next request, whose
 // cache write it shrinks. Claude Code's own idle compaction acts only from
-// 200k, and only in a terminal session, so a background session
-// (`claude --bg`, agent view) is left to this.
+// 200k, and only in a session someone is attending (a terminal, VS Code, the
+// desktop app), so a background session (`claude --bg`, agent view) is left
+// to this.
 const IDLE_FLOOR = 175_000
 
 // The mod acts only in a session whose model has a context window of at least
@@ -117,9 +119,9 @@ const IDLE_FLOOR = 175_000
 // reaches FLOOR.
 const WINDOW = 1_000_000
 
-// How long a session sits idle before it is asked: inside the hour a
-// subscription's prompt cache lives, so the question and any summary still
-// read the context from the cache.
+// How long a session sits idle before it is asked: inside the hour a one-hour
+// prompt cache lives, so the question and any summary still read the context
+// from the cache.
 const IDLE_MS = 55 * 60_000
 
 // A wait that ends later than this after it was due slept with the machine,
@@ -177,35 +179,32 @@ export const register: Register = on => {
     // The judge runs outside the turn, on a timer of its own, so the turn
     // ends without waiting for it.
     if (watch.isInteractive && e.agentId === undefined && e.reason === 'answer') {
-      $.clock.after(0, () => void afterTurn($, watch, changes, e.answer))
+      $.clock.after(0, () => void afterTurn($, watch, changes, e.answer, e.usage))
     }
     return result
   })
 }
 
-async function afterTurn($: EngineInterface, watch: Watch, changes: number, reply: string) {
+async function afterTurn($: EngineInterface, watch: Watch, changes: number, reply: string, usage?: TurnUsage) {
   // A line about a conversation that has moved on would land inside the turn
   // now running, so it goes to the debug log.
   const isCurrent = () => watch.changes === changes
   const say = (text: string) => $.ui.log(text, isCurrent() ? undefined : { to: 'debug' })
   try {
-    const { context, rateLimits } = await $.session.usage()
+    const { context } = await $.session.usage()
     const tokens = context.tokens
     if (tokens === undefined || context.window < WINDOW || !isCurrent()) return
 
-    // A subscription caches for an hour and reports at least one rate-limit
-    // window, though not always a five-hour one: some plans report only the
-    // weekly window. An API key reports none and caches for five minutes, too
-    // short for this to pay. The wait starts at the turn's end, whatever the
-    // judge does meanwhile.
-    // TODO: gate on the cache lifetime the main thread's requests asked for,
-    // as Claude Code's own idle compaction does, rather than on rate limits,
-    // which misread usage credits and gateways (both cache five minutes). The
-    // mod API gives it only for subagents (`$.agent.list()`'s
-    // `lastRequest.cacheTtl`). An `http.fetch` hook can read `"ttl":"1h"` from
-    // the engine's request bodies, but the test engine can't raise one, so the
-    // idle tests could no longer arm the timer.
-    if (tokens >= IDLE_FLOOR && rateLimits.length > 0) {
+    // Only a one-hour prompt cache outlasts the wait, so an idle session is
+    // asked only after a turn whose cache writes were all for an hour, as
+    // Claude Code's own idle compaction decides. Claude Code caches for an hour
+    // on a subscription, and on an API key or Bedrock where the user opts in;
+    // usage credits and gateways cache for five minutes. A turn that wrote
+    // nothing to the cache, or whose provider names no lifetime, leaves the
+    // session alone. The wait starts at the turn's end, whatever the judge
+    // does meanwhile.
+    const isHourCache = (usage?.ephemeral_1h_input_tokens ?? 0) > 0 && !usage?.ephemeral_5m_input_tokens
+    if (tokens >= IDLE_FLOOR && isHourCache) {
       const due = (await $.clock.now()) + IDLE_MS
       $.clock.after(IDLE_MS, () => void idle($, isCurrent, say, tokens, reply, due))
     }

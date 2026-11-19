@@ -45,8 +45,9 @@ releases; `claude plugin disable sparkjoy` turns it off.
   ([How it decides](#how-it-decides)), and on yes it compacts.
 - **When the session then sits idle for 55 minutes**, it asks again, adding
   that the prompt cache is about to lapse and the next message would make a
-  cache write of the whole context. It asks this only on a Claude
-  subscription, whose cache lasts an hour.
+  cache write of the whole context. It asks this only where the prompt cache
+  lasts an hour: on a Claude subscription, or on an API key or Bedrock with the
+  one-hour cache turned on.
 - **Each decision shows as a dim line in the transcript**, which the model never
   reads, with its reason:
 
