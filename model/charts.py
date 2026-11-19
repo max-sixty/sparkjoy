@@ -13,6 +13,7 @@ from one read of the sessions:
   sensitivity    how far the best compaction point moves with each measured parameter
   threshold      the best compaction point against β, in the steady state and the replay
   voi            the expected value of a classifier's information, on three mixes of work
+  voi-point      the compaction point of the work a classifier says to compact, on the same mixes
 """
 
 import html
@@ -529,7 +530,8 @@ def voi(out, p, c):
     mix and each accuracy, the classifier splits the work into a group to keep and a group to compact,
     each compacting at its own best point; the saving is against the best single threshold, and the x
     axis is the mutual information between the classifier's verdict and the kind of work, as a share
-    of a perfect classifier's."""
+    of a perfect classifier's. A second chart, model-voi-point, draws the best compaction point of the
+    group to compact against the same axis."""
     # Denser near 1, where a classifier's saving on rare, steep work climbs fastest.
     A = np.unique(np.round(np.concatenate([np.linspace(0.5, 1, 201), 1 - np.logspace(-4, -1.6, 80)]), 6))
     running = 0.003  # what running the classifier costs, as a share of the cost: the replay's 0.28%, rounded
@@ -539,7 +541,7 @@ def voi(out, p, c):
         q = np.clip(q, 1e-12, 1 - 1e-12)
         return -(q * np.log2(q) + (1 - q) * np.log2(1 - q))
 
-    J0 = fit.curve(p, c, 0)[1]
+    X, J0 = fit.curve(p, c, 0)
     lines = []
     for share, beta, step in mixes:
         Js = np.array([J0, fit.curve(p, c, beta)[1]])
@@ -548,18 +550,24 @@ def voi(out, p, c):
         keep = np.array([1 - A, A]).T * w  # the classifier keeps the context for a share a of the β work, 1 - a of the rest
         both = np.array([(k[:, None] * Js).sum(0).min() + ((w - k)[:, None] * Js).sum(0).min() for k in keep])
         saved = 1 - both / single
+        point = np.array([X[((w - k)[:, None] * Js).sum(0).argmin()] for k in keep])
+        kept_at = np.array([X[(k[:, None] * Js).sum(0).argmin()] for k in keep])
         info = (H(share * A + (1 - share) * (1 - A)) - H(A)) / H(share)
-        lines.append((share, beta, step, saved, info))
+        lines.append((share, beta, step, saved, info, point))
         at = [int(np.abs(A - a).argmin()) for a in (0.8, 0.9, 0.99, 1.0)]
         print(f"model-voi, {share:.0%} at β = {beta}: " + ", ".join(
             f"right {A[i]:.0%}, saves {saved[i]:.1%} ({info[i]:.0%} of the information)" for i in at)
               + f"; pays for running it from {A[np.argmax(saved > running)]:.1%} right")
+        print(f"model-voi-point, {share:.0%} at β = {beta}: compacts the group to compact at "
+              + ", ".join(f"{tokens(point[i])} right {A[i]:.0%}" for i in at)
+              + f"; first below {tokens(fit.AUTO)} at {info[np.argmax(point < fit.AUTO)]:.0%} of the information;"
+              + f" compacts the rest at {tokens(fit.AUTO)} from {A[np.argmax(kept_at == fit.AUTO)]:.0%} right")
 
     for theme, t in THEMES.items():
         fig, ax = plt.subplots(figsize=(8, 4.2))
         style(ax, t)
         ends = []
-        for share, beta, step, saved, info in lines:
+        for share, beta, step, saved, info, _ in lines:
             ax.plot(info, saved, color=t["beta"][step], lw=2, clip_on=False)
             ends.append((saved[-1], f"{share:.0%} at β = {beta}", t["ink"]))
         # A band from 0 behind the savings: at this scale a line would sit on the axis and over the lines' starts.
@@ -576,6 +584,21 @@ def voi(out, p, c):
                       color=t["muted"], fontsize=10)
         axis_name(ax, "Expected value of information (% of cost saved)", t)
         save(fig, out / f"model-voi-{theme}.svg")
+
+        fig, ax = plt.subplots(figsize=(8, 3.6))
+        style(ax, t)
+        for share, beta, step, _, info, point in lines:
+            ax.plot(info, point, color=t["beta"][step], lw=2, clip_on=False, label=f"{share:.0%} at β = {beta}")
+        ax.legend(frameon=False, fontsize=9, labelcolor=t["ink"], loc="upper right")
+        ax.set_xlim(0, 1)
+        ax.set_xticks([0, 0.25, 0.5, 0.75, 1])
+        ax.xaxis.set_major_formatter(percent)
+        ax.set_ylim(X[J0.argmin()] - 40_000, fit.AUTO + 20_000)
+        ax.set_yticks([X[J0.argmin()], 500_000, 750_000, fit.AUTO])
+        ax.yaxis.set_major_formatter(tokens)
+        ax.set_xlabel("Accuracy (% of a perfect classifier's information)", color=t["muted"], fontsize=10)
+        axis_name(ax, "Compaction point of the work it says to compact (tokens)", t)
+        save(fig, out / f"model-voi-point-{theme}.svg")
 
 
 def draw(out, S, p, c, boot, cost, effectiveness, BT, BX):
