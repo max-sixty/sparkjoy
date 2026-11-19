@@ -38,11 +38,11 @@ def total(arm):
 
 
 def marker(t, compacted):
-    """A turn end sparkjoy asked about: a filled dot where the model compacted, a small ring where it
-    kept going."""
+    """A turn end sparkjoy asked about, in the colour of the line it sits on: a large dot where the
+    model compacted, a small one where it kept going."""
     if compacted:
-        return {"marker": "o", "ms": 7.5, "mew": 1.5, "mec": t["page"], "mfc": t["with"]}
-    return {"marker": "o", "ms": 4.5, "mew": 1, "mec": t["muted"], "mfc": t["page"]}
+        return {"marker": "o", "ms": 8, "mew": 1.5, "mec": t["page"], "mfc": t["with"]}
+    return {"marker": "o", "ms": 5, "mew": 1, "mec": t["page"], "mfc": t["with"]}
 
 
 def areas(t, draw):
