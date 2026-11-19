@@ -257,9 +257,7 @@ Over each cycle between compactions, a request's context x grows from K, the
 context right after a compaction, by g tokens a request, until the session
 compacts at X. A request with context x costs
 
-```math
-c(x) = h\,x + c_0, \qquad h = 1 + \ell\,(w - 1)
-```
+$`\displaystyle c(x) = h\,x + c_0, \qquad h = 1 + \ell\,(w - 1)`$
 
 Each token in the context costs one cached read, plus the extra cost of its
 cache write, at w CRTs, in the share ℓ of requests that find the cache lapsed.
@@ -271,9 +269,7 @@ thinking, at o CRTs each. The requests after it make a cache write of the K
 tokens it leaves, all but the P tokens of system prompt and tools, which
 Claude Code keeps in a cache shared across sessions:
 
-```math
-F(X) = F_0 + X, \qquad F_0 = o\,N + (w - 1)(K - P)
-```
+$`\displaystyle F(X) = F_0 + X, \qquad F_0 = o\,N + (w - 1)(K - P)`$
 
 <details>
 <summary>The model's symbols</summary>
@@ -326,9 +322,7 @@ request before compacting costs. Waiting for that request lowers the average
 while it costs less than the average, as in Harris's economic order quantity. If
 a request gets as much done at any context, the best point has a closed form:
 
-```math
-X^* = K + \sqrt{\frac{2g\,(F_0 + K)}{h}}
-```
+$`\displaystyle X^* = K + \sqrt{\frac{2g\,(F_0 + K)}{h}}`$
 
 ### Context size and effectiveness
 
@@ -347,9 +341,7 @@ work with less. The best point then minimizes J, a cycle's cost per unit of its
 effectiveness, which at β = 0 is the average cost under [Best compaction
 point](docs/cost-model.md#best-compaction-point):
 
-```math
-J(X) = \frac{g\,F(X) + \int_K^X c(x)\,dx}{\int_K^X \eta(x)\,dx}
-```
+$`\displaystyle J(X) = \frac{g\,F(X) + \int_K^X c(x)\,dx}{\int_K^X \eta(x)\,dx}`$
 
 ### Compacting before the cache lapses
 
@@ -359,9 +351,7 @@ Compacting first, while the cache still holds the context, costs x + oN for the
 compaction request and then P + w(K − P). If only the next request is counted,
 which understates the saving, compacting first is cheaper when
 
-```math
-x > \frac{o\,N + w\,K}{w - 1}
-```
+$`\displaystyle x > \frac{o\,N + w\,K}{w - 1}`$
 
 ### Value of information
 
@@ -480,9 +470,7 @@ The average is lowest where the marginal cost, the straight line in the chart,
 crosses it. With the values above, the closed form under [Best compaction
 point](docs/cost-model.md#best-compaction-point) gives
 
-```math
-X^* = 142\text{k} + \sqrt{\frac{2 \cdot 1706 \cdot (4.93\text{M} + 142\text{k})}{1.22}} = 142\text{k} + 119\text{k} = 262\text{k}
-```
+$`\displaystyle X^* = 142\text{k} + \sqrt{\frac{2 \cdot 1706 \cdot (4.93\text{M} + 142\text{k})}{1.22}} = 142\text{k} + 119\text{k} = 262\text{k}`$
 
 ### Best point for each β
 
