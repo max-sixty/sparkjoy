@@ -5,7 +5,7 @@
 # ///
 """Draws the README's replay charts, in a light and a dark theme, and prints the figures it quotes.
 
-    uv run --script model/replay_charts.py replay.json --session 453a529c --out assets
+    uv run --script model/replay_charts.py replay.json --session 00e0c1c4 --out assets
 
 The replay prices each session twice from its logged requests: "as run", with sparkjoy's
 compactions where they happened and a check at each turn end it asked about, and "no mod", with
