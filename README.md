@@ -22,10 +22,9 @@ compact, and at the six filled ones it did, when a piece of work had ended:
 > The hierarchy PR is open and handed over. The follow-up work needs only the
 > summary, not the transcript's diffs and logs. *(680k)*
 
-At the hollow dots the session went on without a compaction; the plugin that
-week didn't record why. Where the line climbs with no dot, a long turn is still
-running or the context is under 400k, the plugin's floor that week
-([Limits](#limits)). This session cost 25% less with the plugin, and all my
+At the hollow dots the session kept going. Where the line climbs with no dot, a
+long turn is still running or the context is under 400k, the plugin's floor
+that week ([Limits](#limits)). This session cost 25% less with the plugin, and all my
 sessions 23% less.
 
 ## Install
@@ -42,23 +41,14 @@ releases; `claude plugin disable sparkjoy` turns it off.
 
 ## What it does
 
-A turn is everything Claude does between your message and its reply, often
-dozens of requests.
+This is everything it does:
 
-- **After each turn**, the plugin asks the session's own model, which reads the
-  conversation from the prompt cache, whether to compact now
-  ([the prompt](#the-prompt)). On yes it compacts, which takes about a minute
-  while you read the reply. If Claude Code restarts the session before the
-  compaction finishes, as it does to each background session after an update,
-  the plugin compacts when the session starts again.
-- **When a session sits idle for 55 minutes**, it asks again, adding that the
-  prompt cache is about to lapse and the next message would make a cache write
-  of the whole context. Claude Code's own
-  [idle compaction](https://code.claude.com/docs/en/prompt-caching#compacting-the-conversation)
-  skips background sessions (`claude --bg`): in mine it fired in none of 358
-  idle gaps of 55 minutes or more. This needs a Claude subscription, where the
-  cache lasts an hour, and a computer that stays awake: a session the
-  computer slept through is left alone, its cache already gone.
+- **When a turn ends**, it asks the session's own model whether to compact now
+  ([How it decides](#how-it-decides)), and on yes it compacts.
+- **When the session then sits idle for 55 minutes**, it asks again, adding
+  that the prompt cache is about to lapse and the next message would make a
+  cache write of the whole context. It asks this only on a Claude
+  subscription, whose cache lasts an hour.
 - **Each decision shows as a dim line in the transcript**, which the model never
   reads, with its reason:
 
@@ -72,24 +62,29 @@ dozens of requests.
   question states the figures it fitted in place of mine. It needs
   [uv](https://docs.astral.sh/uv/).
 
-Claude Code's own compaction near the end of the window still runs, and
-`claude -p` and the Agent SDK are left alone.
+sparkjoy sends nothing anywhere itself. Its checks are ordinary requests that
+Claude Code makes to the session's model, on the same account and bill as the
+session's own, and the report reads your transcripts and writes its page on
+your computer.
 
-The top of my report:
+<details>
+<summary>The top of my report</summary>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/report-dark.png">
   <img alt="A sparkjoy report for 4 to 18 November: 505 verdicts, 374 compacted and 131 kept; saved $3,208, 22% of what the sessions would have cost; then a table of sessions, each with its context per request with and without sparkjoy's compactions, its verdicts and its cost." src="assets/report-light.png">
 </picture>
 
+</details>
+
 ## What it saves
 
 I replayed all 87 of my Claude Code sessions from 7 to 15 November 2026, 36,251
-requests, with and without the plugin:
+requests, with and without the plugin[^replay]:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/cost-dark.svg">
-  <img alt="Replayed cost: $5,214 without the plugin, $4,013 with it, of which the checks are $22." src="assets/cost-light.svg">
+  <img alt="Replayed cost: $5,214 without the plugin, $4,013 with it, of which sparkjoy's checks, ordinary requests to the session's model, are $22." src="assets/cost-light.svg">
 </picture>
 
 <picture>
@@ -97,19 +92,19 @@ requests, with and without the plugin:
   <img alt="Share of requests at each context size. With the plugin, most requests carry 100k to 450k tokens; without it, a long tail runs to 1M." src="assets/context-light.svg">
 </picture>
 
-|                                 | without | with          |
-| ------------------------------- | ------- | ------------- |
-| cost, at Opus 5.5 list prices   | $5,214  | $4,013 (−23%) |
-| mean context per request        | 462k    | 337k          |
-| requests at 600k tokens or more | 28%     | 6%            |
+|                                 | without sparkjoy | with sparkjoy |
+| ------------------------------- | ---------------- | ------------- |
+| cost, at Opus 5.5 list prices   | $5,214           | $4,013 (−23%) |
+| mean context per request        | 462k             | 337k          |
+| requests at 600k tokens or more | 28%              | 6%            |
 
 Of the 59 sessions that reached 400k, half saved between 12% and 31%, and one
-cost 19% more. On a subscription the same tokens count against your usage
-limits instead.
+cost 19% more. On a Claude subscription, which has no bill per token, the
+tokens saved leave more of your plan's usage limits instead.
 
-A check is one request, which reads the conversation from the cache and writes
-about a hundred tokens. The 198 checks, at turn ends of 400k or more, cost $22
-in all, and 122 of them compacted.
+Each check is one request to the session's model, which reads the conversation
+from the cache and writes about a hundred tokens. The 198 checks, at turn ends of 400k or more,
+cost $22 in all, and 122 of them compacted.
 
 A compaction costs about $0.99 on Opus 5.5, mostly to write to the cache the
 142k tokens it leaves. Every later request then reads less:
@@ -121,6 +116,10 @@ A compaction costs about $0.99 on Opus 5.5, mostly to write to the cache the
 | 700k          | 558k less                | 9 requests            | 327 requests          |
 
 ## How it decides
+
+sparkjoy asks only between turns: when a turn ends, and again if the session
+then sits idle. A turn's end is where a piece of work most likely ends, while
+inside a turn the work is still under way.
 
 The session's own model makes the call, reading the whole transcript from the
 prompt cache, since which parts the work ahead needs depends on the work. The
@@ -137,7 +136,7 @@ weighs the two and answers with its verdict and a one-line reason. In the
 [cost model](#cost-model) recommends past about 250k, and at the
 mid-task ones, from 519k to 681k, in 5 of 8 runs.
 
-## The prompt
+### The prompt
 
 `question()` in [`hooks/register.ts`](hooks/register.ts) writes it, filled in
 for the session's context size and the reply the turn ended with.
@@ -211,21 +210,19 @@ Reply with one JSON object and nothing else, filling its fields in order:
   and for what a compaction costs come from my sessions. The report fits them
   to yours, all but the wasted requests after a compaction, which take months
   of sessions to measure.
-- It acts between turns only. Claude Code's own compaction near the end of the
-  window still bounds a long turn.
-- It acts only in sessions with a 1M-token context window, the size its
-  floors and figures come from. On a 200k window, Claude Code compacts before
-  the context reaches 250k.
+- It leaves Claude Code's own compaction on, which still compacts a turn that
+  fills the window before it ends.
+- It acts only in sessions with a 1M-token context window, the size its floors
+  and figures come from, and leaves `claude -p` and the Agent SDK alone.
 
-## How the numbers were measured
+[^replay]: The replay keeps every logged request fixed and moves only the
+    compactions: "with sparkjoy" keeps the plugin's, and "without sparkjoy"
+    removes them and lets Claude Code compact near 965k, as it does on its own.
+    Both price each request at Opus 5.5 list prices with the session's own cache
+    lifetime, and "with sparkjoy" comes within 2% of the cost the transcripts log
+    ($4,013 against $3,943).
 
-The replay keeps every logged request fixed and moves only the compactions:
-"with" keeps the plugin's, and "without" removes them and lets Claude Code
-compact near 965k, as it does on its own. Both price each request at Opus 5.5
-list prices with the session's own cache lifetime, and "with" comes within 2%
-of the cost the transcripts log ($4,013 against $3,943).
-
-## Cost model
+# Cost model
 
 sparkjoy's floors come from a model of what keeping a context and compacting it
 cost, fitted to my sessions. It is also on [a page of its own](docs/cost-model.md).
@@ -234,17 +231,20 @@ cost, fitted to my sessions. It is also on [a page of its own](docs/cost-model.m
 <details>
 <summary>The cost model</summary>
 
-The cost model finds when to compact from the context's size alone, and its
-answer sets sparkjoy's floor. For Opus 5.5 with the one-hour cache, compacting
-costs least when the context reaches about **260k**<sup>1</sup>. Past the floor, sparkjoy
-asks at each turn end whether the next turns need the detail a summary would
-drop.
+The cost model asks when compacting costs least, knowing only the context's
+size. Its simplest form assumes that a request gets as much done at any context
+size, that a compaction loses nothing the next turns need, and that a session
+can compact after any request, and it takes its costs from my sessions on Opus
+5.5 with the one-hour cache. Under those assumptions the best point is about
+260k<sup>1</sup>. The later sections drop each assumption in turn, and sparkjoy's
+floors come from a replay of my sessions that compacts only at turn ends
+([Idle sessions](#idle-sessions)).
 
 Costs are in CRTs, cached-read tokens. One CRT is the price of reading one token
 from the prompt cache, which [Prices by model](#prices-by-model) gives for each
 model.
 
-### Trade-off
+## Trade-off
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-cycles-dark.svg">
@@ -254,10 +254,6 @@ model.
 The model at four compaction points over 600 requests. Compacting early makes
 compactions frequent, and compacting late makes requests large.
 
-The context grows by about 1.7k tokens a request<sup>2</sup> and drops back to about
-150k<sup>3</sup> at each compaction, which costs about 5M CRTs<sup>4</sup> plus one read of the
-context.
-
 | compact at | requests a cycle | mean cost per request | against never compacting |
 |----|----|----|----|
 | 175k | 19 | 600k CRTs | 73% |
@@ -265,7 +261,7 @@ context.
 | 400k | 151 | 500k CRTs | 61% |
 | never, leaving it to Claude Code at 965k | 482 | 820k CRTs | 100% |
 
-### Request and compaction costs
+## Request and compaction costs
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-inputs-dark.svg">
@@ -350,7 +346,7 @@ intervals from resampling sessions.
 
 </details>
 
-### Best compaction point
+## Best compaction point
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-average-dark.svg">
@@ -371,7 +367,7 @@ compaction costs](#request-and-compaction-costs):
 X^* = K + \sqrt{\frac{2g\,(F_0 + K)}{h}} = 142\text{k} + 119\text{k} = 262\text{k}
 ```
 
-### Context size and effectiveness
+## Context size and effectiveness
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-effectiveness-dark.svg">
@@ -407,7 +403,7 @@ larger β, the later the minimum comes and the less it saves.
 | 0.6 | 30% | 440k | 8% |
 | 1 | 15% | 965k, where Claude Code compacts | none |
 
-### Sensitivity
+## Sensitivity
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-sensitivity-dark.svg">
@@ -424,7 +420,7 @@ The assumptions about the work move it more. It reaches 400k only at β = 0.55,
 where a request at 200k gets 68% as much done as one at 400k, or if each
 compaction loses about 19M CRTs of detail, some 64 wasted requests.
 
-### Does the model's simplification matter?
+## Does the model's simplification matter?
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-threshold-dark.svg">
@@ -452,7 +448,7 @@ sessions end before their context reaches 965k. Each assumes a check that always
 says to compact; sparkjoy's question decides which turn ends past the floor to
 use.
 
-### Idle sessions
+## Idle sessions
 
 | policy | saved |
 |----|----|
@@ -482,7 +478,7 @@ alone, which understates the saving, compacting is cheaper when
 x > \frac{o\,N + w\,K}{w - 1} \approx 160\text{k}
 ```
 
-### Value of information
+## Value of information
 
 If a check could tell kinds of work apart, each kind could compact at its own
 best point, and sparkjoy's question, asked at each turn end, is such a check. The
@@ -490,7 +486,7 @@ expected value of the check's information is the cost it saves against the best 
 threshold, as a share of the whole cost, output included; a perfect check's is
 the expected value of perfect information.
 
-#### Work that differs in β
+### Work that differs in β
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-voi-dark.svg">
@@ -532,7 +528,7 @@ work has β around 5 to 10. A rarer, steeper share saves less, 17% with 2% of th
 β = 30, because a unit of its effectiveness costs 77 times one at β = 0 even
 when never compacting, and no check lowers that part of the cost.
 
-#### Turn ends that differ in lost detail
+### Turn ends that differ in lost detail
 
 I replayed my sessions with 30% of turn ends marked mid-task, where a compaction
 loses detail, and the rest finished, where it loses none. A check right at a
@@ -557,14 +553,14 @@ sparkjoy's question states what keeping the context costs, so sparkjoy can
 compact mid-task once that cost exceeds the detail a compaction would lose,
 though on the evals its response to size is still noisy.
 
-#### Where a check pays
+### Where a check pays
 
 | telling work apart pays when | in my sessions |
 |----|----|
 | work's β varies widely, and the check is right most of the time | Neither how much β varies across my work nor how accurate sparkjoy's question is has been measured yet. Grading each of its verdicts by what happened next, such as whether the turns after a compaction re-read files it dropped, would measure the second. |
 | each compaction loses several times the 1.8M CRTs of detail measured so far | Not seen, though the measure misses some losses, such as a design's rejected options or what I like ([What does the model assume a compaction loses?](#questions-about-the-model)). |
 
-### Questions about the model
+## Questions about the model
 
 <details>
 <summary>What would put the best point near 700k?</summary>
@@ -646,7 +642,7 @@ prices the cache write, or limits compaction to turn ends.
 
 </details>
 
-### Calibration against my sessions
+## Calibration against my sessions
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-calibration-dark.svg">
@@ -678,7 +674,7 @@ evidence is weak:
   wasted at each context size partly reflects the work's phase.
 - D was measured where compactions were chosen, at natural breaks.
 
-### Prices by model
+## Prices by model
 
 | model | price of 1M CRTs | a token's cache write, in CRTs | an output token, in CRTs | a compaction's fixed cost | best point |
 |----|----|----|----|----|----|
@@ -691,7 +687,7 @@ Prices for the one-hour cache. Where a model's cache write and output cost more
 CRTs, a compaction costs more too, and the best point moves later. Every other
 section's figures are for Opus 5.5.
 
-### Fitting it to your sessions
+## Fitting it to your sessions
 
 `/sparkjoy:report` fits the model to your sessions of the last 14 days. Its
 Thresholds section gives the floors that cost least for them, and from then on
@@ -718,16 +714,9 @@ They read the main thread of each interactive session in `~/.claude/projects`,
 opening only transcripts modified since `--since`, at low priority, and
 resample sessions for the intervals.
 
-### Notes
+## Notes
 
 1. X\*, the best compaction point: 262k from the closed form under [Best compaction point](#best-compaction-point), and 253–271k, its 90% interval from resampling sessions.
-2. g, the growth of the context per request: 1,706 tokens.
-3. K, the context after a compaction: 142k tokens, 90% interval 137–147k.
-4. F₀, a compaction's fixed cost: 4.93M CRTs.
 
 </details>
 <!-- End of the generated copy. -->
-
-## License
-
-MIT

@@ -1,10 +1,13 @@
 # Cost model
 
-The cost model finds when to compact from the context's size alone, and its
-answer sets sparkjoy's floor. For Opus 5.5 with the one-hour cache, compacting
-costs least when the context reaches about **260k**[^x]. Past the floor, sparkjoy
-asks at each turn end whether the next turns need the detail a summary would
-drop.
+The cost model asks when compacting costs least, knowing only the context's
+size. Its simplest form assumes that a request gets as much done at any context
+size, that a compaction loses nothing the next turns need, and that a session
+can compact after any request, and it takes its costs from my sessions on Opus
+5.5 with the one-hour cache. Under those assumptions the best point is about
+260k[^x]. The later sections drop each assumption in turn, and sparkjoy's
+floors come from a replay of my sessions that compacts only at turn ends
+([Idle sessions](#idle-sessions)).
 
 Costs are in CRTs, cached-read tokens. One CRT is the price of reading one token
 from the prompt cache, which [Prices by model](#prices-by-model) gives for each
@@ -19,10 +22,6 @@ model.
 
 The model at four compaction points over 600 requests. Compacting early makes
 compactions frequent, and compacting late makes requests large.
-
-The context grows by about 1.7k tokens a request[^g] and drops back to about
-150k[^k] at each compaction, which costs about 5M CRTs[^f] plus one read of the
-context.
 
 | compact at | requests a cycle | mean cost per request | against never compacting |
 |----|----|----|----|
@@ -487,9 +486,3 @@ resample sessions for the intervals.
 [^x]: X\*, the best compaction point: 262k from the closed form under [Best
 compaction point](#best-compaction-point), and 253–271k, its 90% interval from
 resampling sessions.
-
-[^g]: g, the growth of the context per request: 1,706 tokens.
-
-[^k]: K, the context after a compaction: 142k tokens, 90% interval 137–147k.
-
-[^f]: F₀, a compaction's fixed cost: 4.93M CRTs.
