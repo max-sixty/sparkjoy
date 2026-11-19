@@ -179,19 +179,23 @@ def cycles(out, p, c):
         label = {"fontsize": 9, "color": t["ink"], "ha": "right", "va": "bottom",
                  "bbox": {"boxstyle": "square,pad=0.15", "fc": t["page"], "ec": "none"}}
         for col, (x, (n, cost)) in enumerate(zip(X, rows)):
-            ctx = p.K + p.g * np.mod(r, n)
+            # Everything drawn is linear in the request between the context's drops, so the first and
+            # last requests and those either side of each drop draw the same lines as all R + 1.
+            drop = np.flatnonzero(np.diff(np.mod(r, n)) < 0)
+            at = np.unique(np.concatenate([[0, R], drop, drop + 1]))
+            ctx = p.K + p.g * np.mod(at, n)
             top, low = axes[:, col]
             for ax in (top, low):
                 style(ax, t)
                 ax.set_xlim(0, R)
                 ax.set_xticks([0, 200, 400])
-            top.plot(r, ctx, color=t["ink"], lw=1.2)
+            top.plot(at, ctx, color=t["ink"], lw=1.2)
             top.set_title("Never compact" if x == fit.AUTO else f"Compact at {tokens(x)}", color=t["ink"],
                           fontsize=10, loc="left", pad=24, fontweight="bold")
             each = h * ctx + c0
             share = (x + F0) / n
-            low.fill_between(r, 0, each, color=grey, lw=0, label="the request's own cost, which grows with its context")
-            low.fill_between(r, each, each + share, color=share_col, lw=0,
+            low.fill_between(at, 0, each, color=grey, lw=0, label="the request's own cost, which grows with its context")
+            low.fill_between(at, each, each + share, color=share_col, lw=0,
                              label="its share of the compaction that ends its cycle")
             low.axhline(cost, color=t["muted"], lw=0.9, label="mean cost per request over a cycle")
             low.text(R - 10, max(cost, h * x + c0 + share) + 50_000, f"mean {tokens(round(cost, -4))}", **label)
@@ -218,7 +222,9 @@ def inputs(out, p, c):
     part, on one axis. Parts that come from the sessions' fitted parameters are named in the fit colour."""
     h, c0, F0 = fit.terms(p, c)
     w1 = c.write - 1
-    x = np.linspace(1_000, fit.AUTO, 1_000)
+    # Every part is linear in x but for the lapse's kink at P, so the ends and P draw the same bands as
+    # any finer grid; K and 700k are where the figures below are read.
+    x = np.unique([1_000, p.P, p.K, 700_000, fit.AUTO])
     # c(x) = h x + c0 and F(x) = x + F0 by part, in reads: the parts that don't grow with the
     # context first, so they stack at the bottom.
     # Each part says whether it comes from what the sessions measured (output, growth, lapses, K, P,
