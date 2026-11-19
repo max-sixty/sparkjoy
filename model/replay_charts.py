@@ -80,7 +80,7 @@ def session_chart(s, t, path):
     ax.yaxis.set_major_formatter(charts.tokens)
     ax.set_yticks([0, 250_000, 500_000, 750_000, 1_000_000])
     ax.set_xlabel("Requests in one session", color=t["muted"], fontsize=10)
-    charts.axis_name(ax, "Context per request (tokens)", t)
+    charts.axis_name(ax, "Context (tokens)", t)
     charts.save(fig, path)
 
 
@@ -109,7 +109,7 @@ def context_chart(S, t, path):
     ax.set_ylim(0, 15)
     ax.set_yticks([0, 5, 10, 15])
     ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0f}%")
-    ax.set_xlabel("Context per request (tokens)", color=t["muted"], fontsize=10)
+    ax.set_xlabel("Context (tokens)", color=t["muted"], fontsize=10)
     charts.axis_name(ax, "Share of requests", t)
     charts.save(fig, path)
 
@@ -129,7 +129,7 @@ def cost_chart(S, t, path):
         ax.text(v + without * 0.01, y, f"${v:,.0f}", ha="left", va="center", fontsize=10, color=t["ink"])
     ax.text(with_ + without * 0.09, 0, charts.percent(with_ / without - 1), ha="left", va="center", fontsize=10,
             color=t["muted"])
-    ax.annotate(f"{PLUGIN}'s questions to the session's model, ${judge:,.0f}",(with_ - judge / 2, -0.31), xytext=(0, -12), textcoords="offset points",
+    ax.annotate(f"{PLUGIN}'s questions, ${judge:,.0f}",(with_ - judge / 2, -0.31), xytext=(0, -12), textcoords="offset points",
                 ha="center", va="top", fontsize=9, color=t["muted"],
                 arrowprops={"arrowstyle": "-", "color": t["muted"], "lw": 0.8})
     ax.set_xlim(0, without * 1.12)
