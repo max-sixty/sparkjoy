@@ -169,8 +169,8 @@ const FITTED = JSON.stringify({
 
 // What the question says at 500k with the author's figures.
 const AUTHORS = [
-  'outputs about 6k tokens, thinking included. Afterwards the context holds about 142k tokens',
-  'all but the 30k of system prompt and tools, which stay cached. A cache write costs as much as 40 cached reads, and an output token as much as 100.',
+  'outputs about 6k tokens, thinking included.\n- Afterwards the context holds about 142k tokens',
+  'all of it but the 30k of system prompt and tools, which stay cached.\n- A cache write costs as much as 40 cached reads, and an output token as much as 100.',
   'At 500k a compaction pays for itself after about 13 more requests',
   'A turn runs a median of 9 requests and a mean of 38,',
 ]
@@ -211,8 +211,8 @@ test('the question states the figures the report fitted to the user’s sessions
 
   await turn($, 't1')
 
-  expect(forks[0]).toContain('outputs about 8k tokens, thinking included. Afterwards the context holds about 120k tokens')
-  expect(forks[0]).toContain('all but the 20k of system prompt and tools, which stay cached. A cache write costs as much as 25 cached reads, and an output token as much as 100.')
+  expect(forks[0]).toContain('outputs about 8k tokens, thinking included.\n- Afterwards the context holds about 120k tokens')
+  expect(forks[0]).toContain('all of it but the 20k of system prompt and tools, which stay cached.\n- A cache write costs as much as 25 cached reads, and an output token as much as 100.')
   // (500k read + 100 × 8k output + 24 × (120k − 20k) cache write) over the
   // 1.24 × (500k − 120k) each later request saves, rounded up.
   expect(forks[0]).toContain('At 500k a compaction pays for itself after about 8 more requests')
@@ -229,7 +229,7 @@ test('an idle session’s question states the fitted figures too', async ($, on)
   await clock.advance(IDLE)
   await clock.settle()
 
-  expect(forks[0]).toContain('writes all but 20k of its 200k tokens to the cache again, against about 100k after a compaction')
+  expect(forks[0]).toContain('makes a cache write of all but 20k of its 200k tokens, against about 100k after a compaction')
 })
 
 test('the figures are read from $CLAUDE_CONFIG_DIR where it is set', async ($, on) => {
@@ -526,7 +526,7 @@ test('a session left idle is asked again before its prompt cache lapses', async 
   await clock.settle()
   expect(forks.length).toBe(1)
   expect(forks[0]).toContain('Merged #13. ✅')
-  expect(forks[0]).toContain('writes all but 30k of its 200k tokens to the cache again, against about 112k after a compaction')
+  expect(forks[0]).toContain('makes a cache write of all but 30k of its 200k tokens, against about 112k after a compaction')
   expect(forks[0]).not.toContain('pays for itself')
   expect(compactions).toEqual([''])
   expect(logs).toEqual(['Compacting at 200k tokens, idle 55 minutes: the PR merged'])

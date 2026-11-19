@@ -90,7 +90,7 @@ cache lapses either way.
 
 ## Results
 
-From `run.py --report` on 16 to 18 November 2026; each cell counts the runs
+From `run.py --report` on 16 to 19 November 2026; each cell counts the runs
 that matched the label. `main` is the question published at 02beed1;
 `sized-question` (cdfc871) adds the context's size, what a compaction leaves
 and how many requests it takes to pay back; `detail` (0915ee8) says what
@@ -98,24 +98,26 @@ decides it; `measured` (1f004a4, 17 November) weighs what keeping costs
 against what a compaction loses ([Context size](#context-size));
 `model-costs` (75fa52f) is `measured` with its costs from the cost model;
 `one-figure` (88ca497) states the compaction request's output as measured and
-one figure for what a compaction leaves; `now` (0465741, 18 November, the
-question now) opens the wasted-request figure with "It's very noisy and hard to
-judge, but as some indication".
+one figure for what a compaction leaves; `noisy` (0465741, 18 November, run
+again on 19 November) opens the wasted-request figure with "It's very noisy and
+hard to judge, but as some indication"; `goal-first` (b4b3308, 19 November, the
+question now) opens with the request's goal and lists the costs; `no-fields` is
+`goal-first` asking only for `compact` and `reason`.
 
-| case | recorded | replayed | expected | main | sized-question | detail | measured | model-costs | one-figure | now |
-|---|---|---|---|---|---|---|---|---|---|---|
-| leaf-scaling-closeout | 742k | 520k | compact | 4/4 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 2/2 |
-| leaf-hover-closeout | 736k | 488k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 2/2 |
-| leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 2/2 |
-| leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 2/2 |
-| worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 2/2 |
-| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 | 0/2 | 1/2 | 0/2 | 0/2 |
-| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 1/2 | 0/2 |
-| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 2/2 | 2/2 | 2/2 |
-| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 0/2 | 0/2 |
-| leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/2 |
-| worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/2 |
-| leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 2/2 |
+| case | recorded | replayed | expected | main | sized-question | detail | measured | model-costs | one-figure | noisy | goal-first | no-fields |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| leaf-scaling-closeout | 742k | 520k | compact | 4/4 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 |
+| leaf-hover-closeout | 736k | 488k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 |
+| leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 |
+| leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 |
+| worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 |
+| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 | 0/2 | 1/2 | 0/2 | 0/4 | 1/2 | 0/2 |
+| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 1/2 | 0/4 | 0/2 | 0/2 |
+| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 2/2 | 2/2 | 4/4 | 2/2 | 0/2 |
+| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 0/2 | 1/4 | 0/2 | 0/2 |
+| leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 |
+| worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 |
+| leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 |
 
 The first two questions said compact in all 73 runs. Their reasons agree: the
 context is mostly finished work, and what the next step needs is in the
@@ -204,10 +206,24 @@ paybacks run about 3% longer, still 13 requests at 500k. It compacts at the
 same cases, and also keeps in 3 of the 8 mid-task runs, though not all at the
 same cases: both at leaf-menu-design and one at leaf-send-hover-fix.
 
-`now` opens the wasted-request figure with "It's very noisy and hard to judge,
+`noisy` opens the wasted-request figure with "It's very noisy and hard to judge,
 but as some indication", as in the cost model. It compacts at the same cases
-and keeps in 2 of the 8 mid-task runs, both at leaf-menu-design. That is one
-run fewer than `one-figure`, within the noise above.
+and keeps in 5 of the 16 mid-task runs over two days: all four at
+leaf-menu-design and one at tend-eval-rerun-wait.
+
+`goal-first` opens with "The goal of this request is to decide whether to
+compact this session now", then quotes the reply, and lists what a compaction,
+keeping the context and lost detail each cost. Run beside `noisy` on 19
+November, it keeps in 3 of the 8 mid-task runs, as `noisy` did that day: both
+at leaf-menu-design and one at leaf-ring-test-rewrite-wait, where `noisy` kept
+once at tend-eval-rerun-wait. Both compact at every other case.
+
+`no-fields` drops `next` and `needs_detail`, which the hook never reads. It
+compacts in all 24 runs. At leaf-menu-design, which `model-costs`, `one-figure`,
+`noisy` and `goal-first` kept in all 10 of their runs, it compacts in both
+(Fisher's exact test, p = 0.015). Over the four mid-task cases it keeps in 0 of
+8 runs against 3 for `goal-first` (p = 0.2). So the question still asks what
+comes next and whether that needs the detail before the verdict.
 
 ## Against the live plugin
 
@@ -238,7 +254,7 @@ few days of use will give live verdicts to compare the harness against.
 ## Where this leaves them
 
 The question as it stands compacts at every finished case and both small
-breaks, and keeps in 2 of the 8 mid-task runs. These cases can't say whether
+breaks, and keeps in 3 of the 8 mid-task runs. These cases can't say whether
 that is too few. Their mid-task keep labels encode a rule, that work in progress
 keeps, rather than a measured cost, while the
 [cost model](../docs/cost-model.md) finds compacting at any turn end
