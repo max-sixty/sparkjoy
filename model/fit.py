@@ -552,6 +552,19 @@ def best(cost, effectiveness, rows=slice(None)):
     return np.append(THRESHOLDS, np.inf)[t], J[t, np.arange(J.shape[1])] / J[-1]
 
 
+# The floors sparkjoy can ask from, at a turn end and in an idle session.
+TURN_FLOORS = range(100_000, 400_001, 50_000)
+IDLE_FLOORS = range(100_000, 250_001, 25_000)
+
+
+def floors(S, p, c, ttl):
+    """The pair of floors, at a turn end and in an idle session, that costs least in the replay at
+    β = 0, compacting wherever they allow, and every pair's cost. sparkjoy's FLOOR and IDLE_FLOOR
+    are this pair for the author's sessions, and `/sparkjoy:report` fits it to the user's."""
+    pairs = {(t, i): sum(replay(s, p, c, t, ttl, idle=i)[0] for s in S) for t in TURN_FLOORS for i in IDLE_FLOORS}
+    return min(pairs, key=pairs.get), pairs
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     window_args(ap)
@@ -645,8 +658,7 @@ def main():
 
     never = cost[:, -1].sum()
     # Turn-end and idle thresholds chosen together.
-    pairs = {(t, i): arm(t, i) for t in range(150_000, 450_001, 50_000) for i in (None, *range(150_000, 300_001, 25_000))}
-    (bt, bi), low = min(pairs.items(), key=lambda kv: kv[1])
+    (bt, bi), pairs = floors(S, p, c, ttl)
     print(f"\n  policy at β = 0, compacting wherever it allows      saved   (never compacting: ${never * c.read:,.0f})")
     for label, threshold, idle in ((f"turn ends from {k(FLOOR)} (sparkjoy's FLOOR)", FLOOR, None),
                                    (f"  and idle sessions from {k(IDLE_FLOOR)} (its IDLE_FLOOR)", FLOOR, IDLE_FLOOR),
@@ -655,9 +667,9 @@ def main():
                                     f"idle sessions from {k(bi)}") + " (best pair)", bt, bi)):
         print(f"  {label:50s} {1 - pairs.get((threshold, idle), arm(threshold, idle)) / never:6.1%}")
     print("  saved by pair (rows: turn-end threshold; columns: idle threshold, '-' for none):")
-    print("        " + " ".join(f"{'-' if i is None else k(i):>6}" for i in (None, *range(150_000, 300_001, 25_000))))
-    for t in range(150_000, 450_001, 50_000):
-        print(f"  {k(t):>5} " + " ".join(f"{1 - pairs[t, i] / never:6.1%}" for i in (None, *range(150_000, 300_001, 25_000))))
+    print("        " + " ".join(f"{x:>6}" for x in ("-", *map(k, IDLE_FLOORS))))
+    for t in TURN_FLOORS:
+        print(f"  {k(t):>5} " + " ".join(f"{1 - x / never:6.1%}" for x in (arm(t), *(pairs[t, i] for i in IDLE_FLOORS))))
 
     print("\n  prices             cache   lapses (at turn ends)   h      steady X*   replay at turn ends   saved   idle break-even   (β = 0)")
     for model in ("claude-opus-5-5", "claude-fable-5-2"):

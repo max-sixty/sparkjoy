@@ -37,16 +37,29 @@ import type { EngineInterface, Register, SessionMessage, TurnUsage } from 'claud
 // the copy already making it.
 const COMPACTING = { plugin: 'sparkjoy', key: 'compacting' } as const
 
-// The figures the question states, as the author's sessions measured them
-// (docs/cost-model.md, 7-15 Nov 2026). `/sparkjoy:report` fits the same
-// figures to the user's own sessions and saves them (`FIGURES`), and the
-// question states those instead (`fitted`), falling back to these figure by
-// figure. The costs follow that page's model and its table of
+// The floors sparkjoy asks from and the figures the question states, as the
+// author's sessions measured them (docs/cost-model.md, 7-15 Nov 2026).
+// `/sparkjoy:report` fits the same figures to the user's own sessions and
+// saves them (`FIGURES`), and sparkjoy uses those instead (`fitted`), falling
+// back to these figure by figure. The costs follow that page's model and its table of
 // symbols ("Request and compaction costs"), which are those of `terms()` in
 // model/fit.py, and each key is the name model/report.py saves its figure
 // under: a figure whose meaning changes takes a new name, so a file an older
 // report saved falls back for it.
 const AUTHOR = {
+  // The judge is asked at a turn end only from FLOOR context tokens, and in
+  // an idle session from IDLE_FLOOR: the pair of floors that costs least when
+  // docs/cost-model.md replays the author's sessions ("Idle sessions"), which
+  // the report finds for the user's (`floors` in model/fit.py). 250k also comes
+  // within 0.2 points of the best turn-end threshold for any β up to 0.6
+  // ("Does the model's simplification matter?"). Compacting just before the
+  // cache lapses pays from about 160k, counting only the next request, whose
+  // cache write it shrinks. Claude Code's own idle compaction acts only from
+  // 200k, and only in a session someone is attending (a terminal, VS Code, the
+  // desktop app), so a background session (`claude --bg`, agent view) is left
+  // to this.
+  FLOOR: 250_000,
+  IDLE_FLOOR: 175_000,
   // What a token costs, in cached reads: on Opus and Sonnet 5.5 a read is
   // 0.05x the input price, a one-hour cache write 2x (w) and an output token
   // 5x (o). The report prices the model most of the user's requests used, at
@@ -100,23 +113,6 @@ const WASTED = 6
 // TODO: save and read it in that folder once every release CI tests has
 // `$.process.hookEnv()`.
 const FIGURES = 'sparkjoy/figures.json'
-
-// The judge is asked at a turn end only from this many context tokens, and in
-// an idle session from IDLE_FLOOR: the pair of floors that costs least when
-// docs/cost-model.md replays the author's sessions ("Idle sessions"). 250k
-// also comes within 0.2 points of the best turn-end threshold for any β up to
-// 0.6 ("Does the model's simplification matter?"). A compaction there pays for
-// itself after about 40 requests (`payback`); the question tells the judge
-// that figure for the context it holds.
-const FLOOR = 250_000
-
-// An idle session is asked from this many tokens. Compacting just before the
-// cache lapses pays from about 160k, counting only the next request, whose
-// cache write it shrinks. Claude Code's own idle compaction acts only from
-// 200k, and only in a session someone is attending (a terminal, VS Code, the
-// desktop app), so a background session (`claude --bg`, agent view) is left
-// to this.
-const IDLE_FLOOR = 175_000
 
 // The mod acts only in a session whose model has a context window of at least
 // this many tokens. The floors and the author's figures come from sessions
@@ -199,6 +195,7 @@ async function afterTurn($: EngineInterface, watch: Watch, changes: number, repl
     const { context } = await $.session.usage()
     const tokens = context.tokens
     if (tokens === undefined || context.window < WINDOW || !isCurrent()) return
+    const figures = await fitted($)
 
     // Only a one-hour prompt cache outlasts the wait, so an idle session is
     // asked only after a turn whose cache writes were all for an hour, as
@@ -209,12 +206,12 @@ async function afterTurn($: EngineInterface, watch: Watch, changes: number, repl
     // session alone. The wait starts at the turn's end, whatever the judge
     // does meanwhile.
     const isHourCache = (usage?.ephemeral_1h_input_tokens ?? 0) > 0 && !usage?.ephemeral_5m_input_tokens
-    if (tokens >= IDLE_FLOOR && isHourCache) {
+    if (tokens >= figures.IDLE_FLOOR && isHourCache) {
       const due = (await $.clock.now()) + IDLE_MS
       $.clock.after(IDLE_MS, () => void idle($, isCurrent, say, tokens, reply, due))
     }
-    if (tokens < FLOOR) return
-    const prompt = question(reply, tokens, undefined, await fitted($))
+    if (tokens < figures.FLOOR) return
+    const prompt = question(reply, tokens, undefined, figures)
     await judge($, say, async () => isCurrent(), `${thousands(tokens)} tokens`, prompt)
   } catch (error) {
     say(`Failed: ${error}`)
@@ -412,12 +409,12 @@ function saving(tokens: number, { WRITE, K, LAPSE }: Figures) {
   return (1 + LAPSE * (WRITE - 1)) * (tokens - K)
 }
 
-// The figures `/sparkjoy:report` last saved for the question. Each is the
-// author's where the file lacks it or holds a value the question's sums can't
-// use: a cache write no dearer than a read, a compaction that leaves no more
-// than the cached system prompt and tools or at least the FLOOR the question
-// is asked from at a turn end, a lapse share outside 0 to 1, or a turn of
-// under one request. Read for each question, so a report run mid-session
+// The floors and figures `/sparkjoy:report` last saved. Each is the author's
+// where the file lacks it or holds a value the question's sums can't use: a
+// floor outside the window, a cache write no dearer than a read, a compaction
+// that leaves no more than the cached system prompt and tools or at least the
+// FLOOR the question is asked from at a turn end, a lapse share outside 0 to
+// 1, or a turn of under one request. Read for each question, so a report run mid-session
 // counts from the next one; a configuration directory or file that can't be
 // found or read leaves every figure the author's. The directory is
 // $CLAUDE_CONFIG_DIR, or ~/.claude, as Claude Code and model/fit.py find it.
@@ -431,15 +428,17 @@ async function fitted($: EngineInterface): Promise<Figures> {
     return AUTHOR
   }
   const figures = { ...AUTHOR }
-  // K before P, so P is held below the K the question states.
+  // FLOOR before K, and K before P, so each is held below the one before.
   const take = (name: keyof Figures, isValid: (value: number) => boolean) => {
     const value = saved?.[name]
     if (typeof value === 'number' && Number.isFinite(value) && isValid(value)) figures[name] = value
   }
+  take('FLOOR', v => v > 0 && v < WINDOW)
+  take('IDLE_FLOOR', v => v > 0 && v < WINDOW)
   take('WRITE', v => v > 1)
   take('OUTPUT', v => v > 0)
   take('SUMMARY', v => v > 0)
-  take('K', v => v > 0 && v < FLOOR)
+  take('K', v => v > 0 && v < figures.FLOOR)
   take('P', v => v >= 0 && v < figures.K)
   take('LAPSE', v => v >= 0 && v <= 1)
   take('TURN_MEDIAN', v => v >= 1)
