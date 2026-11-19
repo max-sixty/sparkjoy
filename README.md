@@ -505,8 +505,11 @@ less than 10k across its own.
 That interval covers only the author's sessions, and K differs more between
 users. About two-thirds of what K holds beyond the shared system prompt is the
 user's own instructions and skills, which Claude Code attaches again after a
-compaction. For a user with few of them, K may be near 70–80k, an estimate
-rather than a measurement, which puts the best point near 155k. So
+compaction. One published session with few of them held 37k right after a
+compaction, on a 200k window
+([anthropics/claude-code#87602](https://github.com/anthropics/claude-code/issues/87602)).
+With the larger skill listing a 1M window carries and the files read again, that
+is a K of roughly 60–70k, which puts the best point near 140k. So
 `/sparkjoy:report` fits K and the floors to each user's sessions.
 
 The assumptions about the work move it more. It reaches 400k only at β = 0.55,
