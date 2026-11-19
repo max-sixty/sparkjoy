@@ -410,13 +410,13 @@ information](#value-of-information).
 
 | with 1.8M CRTs lost per compaction, as measured, about 6 wasted requests | share of the cost under the best threshold without a classifier |
 |----|----|
-| what a perfect classifier saves | 0.8% |
-| what a classifier saves that calls turn ends as sparkjoy's question did on the evals | 0.1% |
+| what a perfect classifier saves | 0.7% |
+| what a classifier saves that calls turn ends as sparkjoy's question did on the evals | under 0.1% |
 | what running the classifier costs | 0.3% |
 | what the lost detail costs in all, the most any classifier can save | 2% |
 
 On the evals, sparkjoy's question compacted at every finished turn end, and
-kept the context in 3 of 8 runs at the four mid-task turn ends, two runs each.
+kept the context in 2 of 8 runs at the four mid-task turn ends, two runs each.
 The evals' verdicts have not yet been compared with the live plugin's. The lost detail costs little in all because
 real sessions end, and so compact less often than the steady state does.
 
@@ -497,8 +497,8 @@ such as a design's rejected options or what the user likes.
 | D per compaction | best point, β = 0 | best point, β = 0.6 | a perfect classifier saves, β = 0 |
 |----|----|----|----|
 | 0, a summary that keeps everything needed | 260k | 440k | 0 |
-| 1.8M CRTs, as measured | 280k | 480k | 0.8% |
-| 5.6M, the top of its interval | 315k | 550k | 3.1% |
+| 1.8M CRTs, as measured | 280k | 480k | 0.7% |
+| 5.6M, the top of its interval | 315k | 550k | 3.2% |
 | 18.6M, about 64 wasted requests | 400k | 720k | 12% |
 
 </details>
