@@ -62,8 +62,6 @@ F(X) = F_0 + X, \qquad F_0 = o\,N + (w - 1)(K - P)
 
 The context and each request's cost over many requests, compacting early, at
 X\*, late, and never, which leaves it to Claude Code near the window's end.
-Compacting early makes compactions frequent, and compacting late makes requests
-large.
 
 <details>
 <summary>The model's symbols</summary>
@@ -301,10 +299,9 @@ skills. A published session with few of them
 would have a K of roughly 60–70k on a 1M window, which puts the best point near
 140k. So `/sparkjoy:report` fits K and the floors to each user's sessions.
 
-The assumptions about the work move the best point more. It reaches 400k only
-at β = 0.55, where a request at 200k gets 68% as much done as one at 400k, or if
-each compaction loses about \$3.70 of detail, the cost of some 64 wasted
-requests.
+The best point reaches 400k only at β = 0.55, where a request at 200k gets 68%
+as much done as one at 400k, or if each compaction loses about \$3.70 of detail,
+the cost of some 64 wasted requests.
 
 <details>
 <summary>Does the model's simplification matter?</summary>
@@ -418,7 +415,7 @@ On the evals, sparkjoy's question compacted at every finished turn end, and
 kept the context in 2 of 8 runs at the four mid-task turn ends. Whether the live
 plugin's verdicts match the evals' is still open ([Against the live
 plugin](../evals/README.md#against-the-live-plugin)). The lost detail costs
-little in all because real sessions end, so they compact less often than in the
+only 2% in all because real sessions end, so they compact less often than in the
 steady state.
 
 The replay's classifier doesn't see the context's size, so it needs the ceiling.
