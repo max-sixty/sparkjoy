@@ -237,10 +237,10 @@ can compact after any request, and it takes its costs from the author's sessions
 5.5 with the one-hour cache. Under those assumptions the best point is about
 260k<sup>1</sup>. The later sections drop each assumption in turn, and sparkjoy's
 floors come from a replay of those sessions that compacts only at turn ends
-([Idle sessions](#idle-sessions)).
+([Idle sessions](docs/cost-model.md#idle-sessions)).
 
 Costs are in CRTs, cached-read tokens. One CRT is the price of reading one token
-from the prompt cache, which [Prices by model](#prices-by-model) gives for each
+from the prompt cache, which [Prices by model](docs/cost-model.md#prices-by-model) gives for each
 model.
 
 ## Trade-off
@@ -360,7 +360,7 @@ The marginal cost is what one more request before compacting costs. Waiting for
 that request lowers the average while it costs less than the average, as in
 Harris's economic order quantity. If a request gets as much done at any context,
 the best point has a closed form, in the symbols tabled under [Request and
-compaction costs](#request-and-compaction-costs):
+compaction costs](docs/cost-model.md#request-and-compaction-costs):
 
 ```math
 X^* = K + \sqrt{\frac{2g\,(F_0 + K)}{h}} = 142\text{k} + 119\text{k} = 262\text{k}
@@ -381,7 +381,7 @@ context.
 At larger β, a compaction also costs effectiveness, since the requests after it
 work with less. The best point then minimizes J, a cycle's cost per unit of its
 effectiveness, which at β = 0 is the average cost under [Best compaction
-point](#best-compaction-point):
+point](docs/cost-model.md#best-compaction-point):
 
 ```math
 J(X) = \frac{g\,F(X) + \int_K^X c(x)\,dx}{\int_K^X \eta(x)\,dx}
@@ -470,7 +470,7 @@ Once the cache lapses, an idle session's next request makes a cache write of the
 whole context, compacted or not. Keeping costs that request P + w(x − P).
 Compacting first, while the cache still holds the context, costs x + oN for the
 compaction request and then P + w(K − P), in the symbols tabled under [Request
-and compaction costs](#request-and-compaction-costs). Counting the next request
+and compaction costs](docs/cost-model.md#request-and-compaction-costs). Counting the next request
 alone, which understates the saving, compacting is cheaper when
 
 ```math
@@ -557,7 +557,7 @@ though on the evals its response to size is still noisy.
 | telling work apart pays when | in the measured sessions |
 |----|----|
 | work's β varies widely, and the check is right most of the time | Neither how much β varies across the work nor how accurate sparkjoy's question is has been measured yet. Grading each of its verdicts by what happened next, such as whether the turns after a compaction re-read files it dropped, would measure the second. |
-| each compaction loses several times the 1.8M CRTs of detail measured so far | Not seen, though the measure misses some losses, such as a design's rejected options or what the user likes ([What does the model assume a compaction loses?](#questions-about-the-model)). |
+| each compaction loses several times the 1.8M CRTs of detail measured so far | Not seen, though the measure misses some losses, such as a design's rejected options or what the user likes ([What does the model assume a compaction loses?](docs/cost-model.md#questions-about-the-model)). |
 
 ## Questions about the model
 
@@ -587,7 +587,7 @@ The best point of 260k charges a compaction only its tokens. A summary that
 drops detail costs more, in a mistake, a correction from the user or a step run again,
 and the model charges that as D per compaction. In the measured sessions D is about 1.8M
 CRTs (−0.7M to +5.6M), about 6 wasted requests, after manual `/compact`s and
-Claude Code's ([Calibration](#calibration)).
+Claude Code's ([Calibration](docs/cost-model.md#calibration)).
 
 | D per compaction | best point, β = 0 | best point, β = 0.6 | a perfect check saves, β = 0 |
 |----|----|----|----|
@@ -714,7 +714,7 @@ resample sessions for the intervals.
 
 ## Notes
 
-1. X\*, the best compaction point: 262k from the closed form under [Best compaction point](#best-compaction-point), and 253–271k, its 90% interval from resampling sessions.
+1. X\*, the best compaction point: 262k from the closed form under [Best compaction point](docs/cost-model.md#best-compaction-point), and 253–271k, its 90% interval from resampling sessions.
 
 </details>
 <!-- End of the generated copy. -->
