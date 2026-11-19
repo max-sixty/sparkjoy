@@ -13,11 +13,12 @@ END = "<!-- End of the generated copy. -->"
 
 def section(doc):
     """The doc as the README holds it: under the README's own `# Cost model`, so the doc's title goes,
-    with paths from the repo root. GitHub lists a file's footnotes at its end, which in the README is
-    past the collapsed section and outside it, so the doc's footnotes become numbered notes at the
-    section's end."""
+    with paths from the repo root. GitHub gives headings inside a collapsed section no anchors, so a
+    link to one of the doc's sections opens the doc's own page there. GitHub lists a file's footnotes
+    at its end, which in the README is past the collapsed section and outside it, so the doc's
+    footnotes become numbered notes at the section's end."""
     body = doc.split("\n", 1)[1].lstrip()
-    body = body.replace('"../', '"').replace("](../", "](")
+    body = body.replace('"../', '"').replace("](../", "](").replace("](#", "](docs/cost-model.md#")
     notes = dict(re.findall(r"^\[\^(\w+)\]: (.*?)(?:\n\n|\Z)", body, flags=re.M | re.S))
     body = re.sub(r"^\[\^\w+\]: .*?(?:\n\n|\Z)", "", body, flags=re.M | re.S)
     order = list(dict.fromkeys(re.findall(r"\[\^(\w+)\]", body)))
