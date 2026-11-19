@@ -36,36 +36,23 @@ At the prompt of a Claude Code session:
 /plugin install sparkjoy --marketplace max-sixty/sparkjoy
 ```
 
-Answer `y` to add the marketplace, and choose the user scope to have it in
-every session. It is tested daily on the latest and stable Claude Code releases, and
-`claude plugin disable sparkjoy` turns it off.
-
 ## What it does
 
 - **When a turn ends**, it asks the session's own model whether to compact now
   ([How it decides](#how-it-decides)), and on yes it compacts.
-- **When the session then sits idle for 55 minutes**, it asks again, adding
-  that the prompt cache is about to lapse and the next message would make a
-  cache write of the whole context. It asks this only where the prompt cache
-  lasts an hour: on a Claude subscription, or on an API key or Bedrock with the
-  one-hour cache turned on.
-- **Each verdict shows in the transcript** as a dim line with its reason.
-  Claude Code shows these lines to you and never sends them to the model:
+- **When the session then sits idle for 55 minutes** on the one-hour prompt
+  cache, it asks again, adding that the cache is about to lapse and the next
+  message would make a cache write of the whole context.
+- **Each verdict shows in the transcript** as a dim line with its reason:
 
   ```
   sparkjoy: Compacting at 401k tokens: Long transcript of finished experiments, diffs and query output; …
   ```
 
-- **`/sparkjoy:report`** reads your transcripts of the last 14 days, writes a
-  page about them on your computer and opens it: every verdict, what the
-  compactions saved, and the thresholds the [cost model](#cost-model) fits to
-  your sessions. It also saves the floors and figures it fitted, which sparkjoy uses
-  from then on. It needs [uv](https://docs.astral.sh/uv/), which downloads
-  Python and numpy the first time.
-
-Claude Code sends these questions to the session's model on the session's
-account, as it does the session's own requests. They are the only requests
-sparkjoy makes with your conversation.
+- **`/sparkjoy:report`** opens a page on your sessions of the last 14 days:
+  every verdict, what the compactions saved, and the floors and figures the
+  [cost model](#cost-model) fits to them, which sparkjoy uses from then on. It
+  needs [uv](https://docs.astral.sh/uv/).
 
 <details>
 <summary>Sample report</summary>
@@ -207,21 +194,17 @@ Reply with one JSON object and nothing else, filling its fields in order:
   question leads to a compaction. Their sessions hold about 142k after a
   compaction, much of it their own instructions and skills, and sessions that
   hold less pay from lower floors.
-- The report finds the pair of floors that costs least for your sessions, and
-  sparkjoy asks from those from then on. It also fits the question's figures
-  for a turn's length and for what a compaction costs, all but the count of
-  wasted requests after a compaction, which needs months of sessions to
-  measure.
+- The report fits all of the question's figures but one, the count of wasted
+  requests after a compaction, which needs months of sessions to measure.
 - It leaves Claude Code's own compaction on. Claude Code still compacts a turn
-  that fills the window before it ends. In a session open in a terminal, an
-  IDE or the desktop app, it also compacts an idle context of 200k or more
-  without asking, a minute or more before sparkjoy would ask. So sparkjoy's
-  idle question comes mainly in background sessions (`claude --bg`) and below
-  200k, or in every idle session with
+  that fills the window before it ends. In a session you have open, it also
+  compacts an idle context of 200k or more without asking, a minute or more
+  before sparkjoy would ask. So sparkjoy's idle question comes mainly in
+  background sessions, below 200k, or with
   [`idleCompaction`](https://code.claude.com/docs/en/settings-reference#idlecompaction)
   set to `false`.
 - It acts only in sessions with a 1M-token context window, the size its floors
-  and figures come from, and leaves `claude -p` and the Agent SDK alone.
+  and figures come from.
 
 [^replay]: The replay keeps every logged request fixed and moves only the
     compactions: "with sparkjoy" keeps the plugin's, and "without sparkjoy"
