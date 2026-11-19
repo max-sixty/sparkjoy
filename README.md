@@ -173,12 +173,12 @@ Reply with one JSON object and nothing else, filling its fields in order:
 
 ## Limits
 
-- Until you run `/sparkjoy:report`, it asks only once the context reaches 250k
-  at a turn end, or 175k in an idle session. These floors cost least in a replay
-  of my sessions ([Cost model](#cost-model)) if every question leads to a
-  compaction. My sessions hold about 142k after a compaction, much of it my own
-  instructions and skills. Sessions that hold less would cost least with lower
-  floors.
+- It asks only once the context reaches 250k at a turn end, or 175k in an idle
+  session. These floors cost least in a replay of my sessions ([Cost
+  model](#cost-model)) if every question leads to a compaction. My sessions hold
+  about 142k after a compaction, much of it my own instructions and skills, and
+  sessions that hold less would cost least with lower floors.
+  `/sparkjoy:report` fits the floors to your own sessions.
 - The report fits every figure the question states except the count of wasted
   requests after a compaction, which takes months of sessions to measure.
 - It leaves Claude Code's own compaction on, so Claude Code still compacts when
