@@ -4,8 +4,8 @@
 // After each main-loop turn that answered with the context at FLOOR or more,
 // the session's own model judges, over its prompt-cached transcript
 // (`$.model.fork`), whether to compact, weighing what a compaction costs
-// against the parts of the transcript the work ahead no longer needs; on yes,
-// the mod compacts. A session on a one-hour prompt cache left idle at
+// against the parts of the transcript the work ahead no longer needs, and
+// the mod compacts if it says to. A session on a one-hour prompt cache left idle at
 // IDLE_FLOOR or more is asked again just before the cache lapses, told that
 // the next request would otherwise write the whole context to the cache
 // again. Each decision shows in the transcript as a dim line the model never
@@ -251,9 +251,9 @@ async function idle($: EngineInterface, isCurrent: () => boolean, say: (text: st
   }
 }
 
-// Asks the session's model whether to compact, and compacts on yes. The
-// verdict stands only while `stands` holds once the model has answered; `at`
-// names the moment in each line.
+// Asks the session's model whether to compact, and compacts if it says to.
+// The verdict stands only while `stands` holds once the model has answered;
+// `at` names the moment in each line.
 async function judge(
   $: EngineInterface,
   say: (text: string) => void,

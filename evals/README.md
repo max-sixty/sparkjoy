@@ -122,9 +122,10 @@ context is mostly finished work, and what the next step needs is in the
 summary, the files on disk or the transcript. That is true of nearly any long
 transcript, so it settled nothing.
 
-`detail` says so, and names what does decide it: whether the next turns will
-need detail a summary drops, as work iterating on something just shown does,
-and a result to report or a new task doesn't. It asks for what comes next and
+`detail` says so, and names what decides it: whether the next turns will need
+detail a summary drops. Work iterating on something just shown needs that
+detail, and work that reports a result or starts a new task needs only a
+summary. It asks for what comes next and
 whether that needs the detail before the verdict. It keeps at all four
 mid-task cases and still compacts at the six finished ones, the release whose
 run is still going included.
@@ -204,7 +205,7 @@ same cases, and also keeps in 3 of the 8 mid-task runs, though not all at the
 same cases: both at leaf-menu-design and one at leaf-send-hover-fix.
 
 `now` opens the wasted-request figure with "It's very noisy and hard to judge,
-but as some indication", as the cost model does. It compacts at the same cases
+but as some indication", as in the cost model. It compacts at the same cases
 and keeps in 2 of the 8 mid-task runs, both at leaf-menu-design. That is one
 run fewer than `one-figure`, within the noise above.
 

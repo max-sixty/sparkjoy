@@ -11,22 +11,10 @@ transcript spark joy? That is, does the work ahead still need it, or can it go?
 </picture>
 
 One session with the plugin, and the same session replayed without it. Every
-request reads the whole context again, so the area under each line counts the
-tokens the session read. At each dot the plugin asked the session's model whether to
-compact, and at the six filled ones it did, when a piece of work had ended:
-
-> Long transcript of finished exploration, reverted attempts and diffs;
-> remaining work is CI follow-up and the final closeout, which a summary
-> covers. *(728k)*
-
-> The hierarchy PR is open and handed over. The follow-up work needs only the
-> summary, not the transcript's diffs and logs. *(680k)*
-
-At the hollow dots the session kept going. Where the line climbs with no dot, either
-a long turn was still running or the context was under 400k, the plugin's floor
-when this session ran, since lowered to 250k ([Limits](#limits)). In the
-replay, this session cost 25% less with the plugin than without it, and the 87
-sessions under [What it saves](#what-it-saves) cost 23% less.
+request reads the whole context, so the area under each line counts the tokens
+the session read. At each dot the plugin asked the session's model whether to
+compact, and at the six filled dots the session compacted. In the replay, this
+session cost 25% less with the plugin than without it.
 
 ## Install
 
@@ -38,15 +26,16 @@ At the prompt of a Claude Code session:
 
 ## What it does
 
-- **When a turn ends**, it asks the session's own model whether to compact now
-  ([How it decides](#how-it-decides)), and on yes it compacts.
-- **When the session then sits idle for 55 minutes** on the one-hour prompt
-  cache, it asks again, adding that the cache is about to lapse and the next
-  message would make a cache write of the whole context.
-- **Each verdict shows in the transcript** as a dim line with its reason:
+- **When a turn ends**, it asks the session's own model whether to compact now,
+  and compacts if the model says to ([How it decides](#how-it-decides)).
+- **After 55 minutes idle**, it asks again before the one-hour prompt cache
+  lapses.
+- **Each verdict shows in the transcript** as a dim line with its reason, such
+  as these two from the session above:
 
   ```
-  sparkjoy: Compacting at 401k tokens: Long transcript of finished experiments, diffs and query output; …
+  sparkjoy: Compacting at 728k tokens: Long transcript of finished exploration, reverted attempts and diffs; remaining work is CI follow-up and the final closeout, which a summary covers.
+  sparkjoy: Compacting at 680k tokens: The hierarchy PR is open and handed over. The follow-up work needs only the summary, not the transcript's diffs and logs.
   ```
 
 - **`/sparkjoy:report`** opens a page on your sessions of the last 14 days:
@@ -104,8 +93,8 @@ A compaction costs about $0.99 on Opus 5.5, mostly the cache write of the
 
 ## How it decides
 
-sparkjoy asks only when a turn ends, and again if the session then sits idle,
-because a piece of work most likely ends where a turn does.
+sparkjoy asks only when a turn ends, because a piece of work most likely
+finishes with a turn. It asks again if the session then sits idle.
 
 The session's own model makes the call, reading the whole transcript from the
 prompt cache, because the parts of it the next turns need differ from one piece
@@ -631,7 +620,7 @@ information](docs/cost-model.md#value-of-information).
 On the evals, sparkjoy's question compacted at every finished turn end, and
 kept the context in 2 of 8 runs at the four mid-task turn ends, two runs each.
 The evals' verdicts have not yet been compared with the live plugin's. The lost detail costs little in all because
-real sessions end, and so compact less often than the steady state does.
+real sessions end, so they compact less often than in the steady state.
 
 The replay's classifier doesn't see the context's size, so it needs the ceiling.
 sparkjoy's question states what keeping the context costs, so Claude can
@@ -721,10 +710,10 @@ It has one parameter with a plain meaning: each doubling of the context makes a
 request $`2^\beta`$ times as effective, wherever it starts. The cost uses only the
 curve from about 150k to 965k, under three doublings. Over that range a
 saturating form, levelling off once the context holds what the work needs,
-could serve as well. The two
-differ on one question: does doubling an agent's context from 400k to 800k
-improve its next steps about as much as doubling it from 100k to 200k? The
-power law predicts it does.
+could serve as well. The two differ on one question: does doubling an agent's
+context from 400k to 800k improve its next steps about as much as doubling it
+from 100k to 200k? Under the power law, both doublings improve them by the same
+factor. Under a saturating form, the later doubling improves them less.
 
 </details>
 

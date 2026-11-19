@@ -421,7 +421,7 @@ information](#value-of-information).
 On the evals, sparkjoy's question compacted at every finished turn end, and
 kept the context in 2 of 8 runs at the four mid-task turn ends, two runs each.
 The evals' verdicts have not yet been compared with the live plugin's. The lost detail costs little in all because
-real sessions end, and so compact less often than the steady state does.
+real sessions end, so they compact less often than in the steady state.
 
 The replay's classifier doesn't see the context's size, so it needs the ceiling.
 sparkjoy's question states what keeping the context costs, so Claude can
@@ -511,10 +511,10 @@ It has one parameter with a plain meaning: each doubling of the context makes a
 request $`2^\beta`$ times as effective, wherever it starts. The cost uses only the
 curve from about 150k to 965k, under three doublings. Over that range a
 saturating form, levelling off once the context holds what the work needs,
-could serve as well. The two
-differ on one question: does doubling an agent's context from 400k to 800k
-improve its next steps about as much as doubling it from 100k to 200k? The
-power law predicts it does.
+could serve as well. The two differ on one question: does doubling an agent's
+context from 400k to 800k improve its next steps about as much as doubling it
+from 100k to 200k? Under the power law, both doublings improve them by the same
+factor. Under a saturating form, the later doubling improves them less.
 
 </details>
 
