@@ -449,24 +449,24 @@ Every part except the read of the context is measured from 36,249
 requests.
 
 <details>
-<summary>What share of the sessions' bill each kind of token took</summary>
+<summary>Cost by kind of token</summary>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-bill-dark.svg">
-  <img alt="One bar of the sessions' bill by kind of token: output, thinking included, 14%, cache writes 25%, cache reads 61%." src="assets/model-bill-light.svg">
+  <img alt="One bar of the sessions' cost by kind of token: output, thinking included, 14%; cache writes 25%; cache reads 61%." src="assets/model-bill-light.svg">
 </picture>
 
-The sessions' 36,000 requests, each priced from its logged usage at Opus 5.5,
-with each compaction's own request, which isn't logged, taken from the model.
-Output is a small share because each request reads its whole context again: on
-average, a request's 746 output tokens cost as much as 75k cached reads, against
-a context of 335k tokens.
+Each of the sessions' 36,000 requests is priced from its logged usage at Opus
+5.5. A compaction's own request isn't logged, so its cost comes from the model.
+Output is a small share because each request reads its whole context again. On
+average, a request's 746 output tokens cost as much as 75k cached reads, and its
+context holds 335k tokens.
 
-| kind of token | share of the bill | compactions' part, as a share of the bill |
+| kind of token | share of the cost | share of the cost from compactions |
 |----|----|----|
 | output, thinking included | 14% | 0.4%, the summary |
-| cache writes | 25% | 2.4%, the compacted context, on the request after each compaction |
-| cache reads | 61% | 0.35%, the context the compaction reads |
+| cache writes | 25% | 2.4%, the cache write of the compacted context on the request after each compaction |
+| cache reads | 61% | 0.35%, the compaction request's read of the context |
 | uncached input | 0.01%, too thin to draw | |
 | all | 100% | 3.2% |
 
