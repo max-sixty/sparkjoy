@@ -276,7 +276,7 @@ def inputs(out, p, c):
         low.set_xlabel("Context x (tokens) before the request or the compaction", color=t["muted"], fontsize=10)
         axis_name(mid, "Cost per request c(x), by part (CRTs)", t)
         axis_name(low, "Cost per compaction F(x), by part (CRTs)", t)
-        mid.text(1, 1.04, "parts named in orange are fitted to my sessions", transform=mid.transAxes, ha="right",
+        mid.text(1, 1.04, "parts named in orange are fitted to the sessions", transform=mid.transAxes, ha="right",
                  va="bottom", fontsize=9, color=fit_c)
         save(fig, out / f"model-inputs-{theme}.svg")
 
@@ -499,7 +499,7 @@ def thresholds(out, cost, effectiveness, BT, BX, p, c):
         # band a tint of its line, the lighter line's tinted less so its band still shows.
         for y, band, color, share, label in (
                 (X, BX, tint(t["muted"], t["page"], 0.55), 2.2 * t["band"], "steady state, compacting at any request"),
-                (T, BT, t["ink"], t["band"], "replay of my sessions, compacting at turn ends")):
+                (T, BT, t["ink"], t["band"], "replay of the sessions, compacting at turn ends")):
             lo, hi = np.percentile(band, [5, 95], axis=0)
             ax.fill_between(bs, lo, hi, color=tint(color, t["page"], share), lw=0)
             ax.plot(bs, y, color=color, lw=2, label=label)

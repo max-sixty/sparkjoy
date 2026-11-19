@@ -10,7 +10,7 @@ transcript spark joy? That is, does the work ahead still need it, or can it go?
   <img alt="Context per request across one session. With sparkjoy, dots mark the 11 turn ends where the plugin asked whether to compact: at 5 the session kept going, and at 6 it compacted, at sizes from 417k to 728k tokens. Without it, the context climbs to about 960k before Claude Code compacts." src="assets/session-light.svg">
 </picture>
 
-One of my sessions, replayed without the plugin for comparison. Every request
+A session replayed without the plugin for comparison. Every request
 re-reads the whole context, so the area under each line is what the session
 paid to read. At each dot the plugin asked the session's model whether to
 compact, and at the six filled ones it did, when a piece of work had ended:
@@ -24,8 +24,8 @@ compact, and at the six filled ones it did, when a piece of work had ended:
 
 At the hollow dots the session kept going. Where the line climbs with no dot, a
 long turn is still running or the context is under 400k, the plugin's floor
-that week ([Limits](#limits)). This session cost 25% less with the plugin, and all my
-sessions 23% less.
+that week ([Limits](#limits)). This session cost 25% less with the plugin, and the 87 sessions under
+[What it saves](#what-it-saves) 23% less.
 
 ## Install
 
@@ -59,7 +59,7 @@ This is everything it does:
 - **`/sparkjoy:report`** writes a page about your own sessions of the last 14
   days and opens it: every verdict, what the compactions saved, and the
   thresholds the [cost model](#cost-model) fits to them. From then on the
-  question states the figures it fitted in place of mine. It needs
+  question states the figures it fitted in place of its defaults. It needs
   [uv](https://docs.astral.sh/uv/).
 
 sparkjoy sends nothing anywhere itself. Its checks are ordinary requests that
@@ -68,7 +68,7 @@ session's own, and the report reads your transcripts and writes its page on
 your computer.
 
 <details>
-<summary>The top of my report</summary>
+<summary>The top of a report</summary>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/report-dark.png">
@@ -79,8 +79,8 @@ your computer.
 
 ## What it saves
 
-I replayed all 87 of my Claude Code sessions from 7 to 15 November 2026, 36,251
-requests, with and without the plugin[^replay]:
+The author's 87 Claude Code sessions from 7 to 15 November 2026, 36,251
+requests, replayed with and without the plugin[^replay]:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/cost-dark.svg">
@@ -204,10 +204,9 @@ Reply with one JSON object and nothing else, filling its fields in order:
 ## Limits
 
 - It asks only from 250k, or 175k in an idle session: the pair of floors that
-  costs least when my sessions are replayed
-  ([Cost model](#cost-model)), taking every check to say yes.
+  costs least in the replay ([Cost model](#cost-model)), taking every check to say yes.
 - Until you run `/sparkjoy:report`, the question's figures for a turn's length
-  and for what a compaction costs come from my sessions. The report fits them
+  and for what a compaction costs are defaults measured on the author's sessions. The report fits them
   to yours, all but the wasted requests after a compaction, which take months
   of sessions to measure.
 - It leaves Claude Code's own compaction on, which still compacts a turn that
@@ -234,10 +233,10 @@ cost, fitted to my sessions. It is also on [a page of its own](docs/cost-model.m
 The cost model asks when compacting costs least, knowing only the context's
 size. Its simplest form assumes that a request gets as much done at any context
 size, that a compaction loses nothing the next turns need, and that a session
-can compact after any request, and it takes its costs from my sessions on Opus
+can compact after any request, and it takes its costs from the author's sessions on Opus
 5.5 with the one-hour cache. Under those assumptions the best point is about
 260k<sup>1</sup>. The later sections drop each assumption in turn, and sparkjoy's
-floors come from a replay of my sessions that compacts only at turn ends
+floors come from a replay of those sessions that compacts only at turn ends
 ([Idle sessions](#idle-sessions)).
 
 Costs are in CRTs, cached-read tokens. One CRT is the price of reading one token
@@ -265,7 +264,7 @@ compactions frequent, and compacting late makes requests large.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-inputs-dark.svg">
-  <img alt="Two panels against the context x, from 0 to 965k, in CRTs; parts named in orange are fitted to my sessions. Top, c(x), a request's cost by part, the fixed parts at the bottom: output and uncached input, and the cache write of the new tokens, about 140k together; above them the cache write of the context after a lapse and the cache read of the context, both growing; 310k in all at 142k and 990k at 700k. Bottom, F(x), a compaction's cost by part, about 5M at any context: the compaction request's output, 0.6M, the cache write of the context after it, 4.4M, and the cache read of the context, the only part that grows; 5.6M at 700k." src="assets/model-inputs-light.svg">
+  <img alt="Two panels against the context x, from 0 to 965k, in CRTs; parts named in orange are fitted to the sessions. Top, c(x), a request's cost by part, the fixed parts at the bottom: output and uncached input, and the cache write of the new tokens, about 140k together; above them the cache write of the context after a lapse and the cache read of the context, both growing; 310k in all at 142k and 990k at 700k. Bottom, F(x), a compaction's cost by part, about 5M at any context: the compaction request's output, 0.6M, the cache write of the context after it, 4.4M, and the cache read of the context, the only part that grows; 5.6M at 700k." src="assets/model-inputs-light.svg">
 </picture>
 
 A request's cost c(x) (top) and a compaction's F(x) (bottom) by part, against
@@ -273,18 +272,18 @@ the context x. A request's cost grows with its context, mostly its cache read,
 from about 300k CRTs at 150k to 1M at 700k. A compaction costs about 5M at any
 context, 4.4M of it the cache write of the context it leaves.
 
-Every part except the read of the context is measured from 36,249 of my
+Every part except the read of the context is measured from 36,249
 requests.
 
 <details>
-<summary>What share of my sessions' bill each kind of token took</summary>
+<summary>What share of the sessions' bill each kind of token took</summary>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-bill-dark.svg">
-  <img alt="One bar of my sessions' bill by kind of token: output, thinking included, 14%, cache writes 25%, cache reads 61%." src="assets/model-bill-light.svg">
+  <img alt="One bar of the sessions' bill by kind of token: output, thinking included, 14%, cache writes 25%, cache reads 61%." src="assets/model-bill-light.svg">
 </picture>
 
-My sessions' 36,000 requests, each priced from its logged usage at Opus 5.5,
+The sessions' 36,000 requests, each priced from its logged usage at Opus 5.5,
 with each compaction's own request, which isn't logged, taken from the model.
 Output is a small share because each request reads its whole context again: on
 average, a request's 746 output tokens cost as much as 75k cached reads, against
@@ -303,7 +302,7 @@ a context of 335k tokens.
 <details>
 <summary>The model's symbols and their values</summary>
 
-Measured parameters come from my sessions of 7 to 15 November, with 90%
+Measured parameters come from the author's sessions of 7 to 15 November, with 90%
 intervals from resampling sessions.
 
 **Variables**
@@ -327,7 +326,7 @@ intervals from resampling sessions.
 | symbol | what it is | value | source |
 |----|----|----|----|
 | K | Context after a compaction, in tokens. It is the first request's context (122k: the system prompt and tools, instructions, the summary, and recent messages and files), plus the files the next few requests read again (20k). | 142k | measured, 90% interval 137–147k |
-| g | Growth of the context per request, in tokens, from tool results, files read and the model's own output. It is the mean over my sessions' requests except the first few after a compaction, since K counts the files those read again. | 1,706 | measured, 1,615–1,805 |
+| g | Growth of the context per request, in tokens, from tool results, files read and the model's own output. It is the mean over the sessions' requests except the first few after a compaction, since K counts the files those read again. | 1,706 | measured, 1,615–1,805 |
 | P | Size of the system prompt and tools, in tokens. Claude Code keeps this part of K in a cache shared across sessions, so it stays cached through a compaction. | 30.4k | measured, 30.4–31.0k |
 | ℓ | Share of requests that find the cache lapsed, and so make a cache write of the whole context. The cache lapses when it expires after an hour idle or is invalidated. | 0.56% | measured, 0.51–0.63% |
 | N | Output of the compaction request, in tokens: the summary's text plus its thinking. The text is a median 3.5k tokens, and requests that show about that much output produce 1.61 times as much in all, thinking included. | 5.6k | measured, 5.2–5.9k |
@@ -407,11 +406,11 @@ larger β, the later the minimum comes and the less it saves.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-sensitivity-dark.svg">
-  <img alt="Horizontal bars, one for each parameter measured in my sessions, from the best compaction point at β = 0 with the parameter halved (open dot) to the point with it doubled (filled dot), with a solid segment where the point lies across the parameter's 90% interval, around a line at about 260k, the point with every parameter as measured: K, 150k to 459k, and 254k to 269k across its interval; g, 227k to 311k, and 258k to 265k; P, 268k to 247k, and 261k to 262k; ℓ, 267k to 252k, and 260k to 263k; N, 258k to 268k, and 261k to 262k." src="assets/model-sensitivity-light.svg">
+  <img alt="Horizontal bars, one for each parameter measured in the sessions, from the best compaction point at β = 0 with the parameter halved (open dot) to the point with it doubled (filled dot), with a solid segment where the point lies across the parameter's 90% interval, around a line at about 260k, the point with every parameter as measured: K, 150k to 459k, and 254k to 269k across its interval; g, 227k to 311k, and 258k to 265k; P, 268k to 247k, and 261k to 262k; ℓ, 267k to 252k, and 260k to 263k; N, 258k to 268k, and 261k to 262k." src="assets/model-sensitivity-light.svg">
 </picture>
 
 How far the best point at β = 0, about 260k, moves when a parameter measured in
-my sessions is halved or doubled, and across its 90% interval. K, the context
+the sessions is halved or doubled, and across its 90% interval. K, the context
 after a compaction, moves it most, from 150k to 459k when halved or doubled, but
 only from 254k to 269k across its interval, and each other parameter moves it
 less than 10k across its own.
@@ -428,7 +427,7 @@ compaction loses about 19M CRTs of detail, some 64 wasted requests.
 </picture>
 
 The best point against β, in the model, which compacts after any request, and
-in a replay of my sessions from 7 to 15 November, which compacts only at turn
+in a replay of the sessions from 7 to 15 November, which compacts only at turn
 ends, with 90% bands. Turn ends move the best point earlier.
 
 The replay keeps every logged request and moves only the compactions. Allowed
@@ -530,7 +529,7 @@ when never compacting, and no check lowers that part of the cost.
 
 ### Turn ends that differ in lost detail
 
-I replayed my sessions with 30% of turn ends marked mid-task, where a compaction
+A replay of the sessions marks 30% of turn ends mid-task, where a compaction
 loses detail, and the rest finished, where it loses none. A check right at a
 share a of turn ends compacts at a turn end it calls finished once the context
 passes a floor, and at any turn end past a higher ceiling, with the floor and
@@ -555,10 +554,10 @@ though on the evals its response to size is still noisy.
 
 ### Where a check pays
 
-| telling work apart pays when | in my sessions |
+| telling work apart pays when | in the measured sessions |
 |----|----|
-| work's β varies widely, and the check is right most of the time | Neither how much β varies across my work nor how accurate sparkjoy's question is has been measured yet. Grading each of its verdicts by what happened next, such as whether the turns after a compaction re-read files it dropped, would measure the second. |
-| each compaction loses several times the 1.8M CRTs of detail measured so far | Not seen, though the measure misses some losses, such as a design's rejected options or what I like ([What does the model assume a compaction loses?](#questions-about-the-model)). |
+| work's β varies widely, and the check is right most of the time | Neither how much β varies across the work nor how accurate sparkjoy's question is has been measured yet. Grading each of its verdicts by what happened next, such as whether the turns after a compaction re-read files it dropped, would measure the second. |
+| each compaction loses several times the 1.8M CRTs of detail measured so far | Not seen, though the measure misses some losses, such as a design's rejected options or what the user likes ([What does the model assume a compaction loses?](#questions-about-the-model)). |
 
 ## Questions about the model
 
@@ -575,7 +574,7 @@ done, and even then compacting at 700k barely beats never compacting:
 | β = 0.75 (best point 690k) | 23% of 1M's | +1.1% |
 | β = 0, and each compaction loses 106M CRTs of detail, 365 requests' worth | 100% | +5.3% |
 
-My sessions look like neither case. At β = 0.75, requests at 150k would get
+The measured sessions look like neither case. At β = 0.75, requests at 150k would get
 about 30% as much done as those at 700k, yet requests below 200k go wrong no
 more often than those at 400–600k.
 
@@ -585,11 +584,10 @@ more often than those at 400–600k.
 <summary>What does the model assume a compaction loses?</summary>
 
 The best point of 260k charges a compaction only its tokens. A summary that
-drops detail costs more, in a mistake, a correction from me or a step run again,
-and the model charges that as D per compaction. In my sessions D is about 1.8M
-CRTs (−0.7M to +5.6M), about 6 wasted requests, after my own `/compact`s and
-Claude Code's ([Calibration against my
-sessions](#calibration-against-my-sessions)).
+drops detail costs more, in a mistake, a correction from the user or a step run again,
+and the model charges that as D per compaction. In the measured sessions D is about 1.8M
+CRTs (−0.7M to +5.6M), about 6 wasted requests, after manual `/compact`s and
+Claude Code's ([Calibration](#calibration)).
 
 | D per compaction | best point, β = 0 | best point, β = 0.6 | a perfect check saves, β = 0 |
 |----|----|----|----|
@@ -599,8 +597,8 @@ sessions](#calibration-against-my-sessions)).
 | 18.6M, about 64 wasted requests | 400k | 720k | 12% |
 
 D counts only losses that show within two turns, as a failed tool call, a
-repeated lookup or a correction. It misses a design's rejected options, what I
-like, harm that comes later and my own time, so the true D could be larger.
+repeated lookup or a correction. It misses a design's rejected options, what the
+user likes, harm that comes later and the user's own time, so the true D could be larger.
 
 </details>
 
@@ -642,28 +640,28 @@ prices the cache write, or limits compaction to turn ends.
 
 </details>
 
-## Calibration against my sessions
+## Calibration
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-calibration-dark.svg">
-  <img alt="The share of requests wasted in five context bands, against requests at 400k to 600k, in percentage points with 90% intervals, measured in 993 of my sessions over 60 days: 0 to 200k, −13 (−37 to +5); 200k to 300k, +7 (−15 to +32); 300k to 400k, +7 (−18 to +30); 600k and over, −37 (−97 to −5). Blue curves give what an assumed β would predict, falling from the left to 0 at 400k to 600k: at the first band, +8 for β = 0.1, +21 for 0.3 and +36 for 0.6." src="assets/model-calibration-light.svg">
+  <img alt="The share of requests wasted in five context bands, against requests at 400k to 600k, in percentage points with 90% intervals, measured in 993 sessions over 60 days: 0 to 200k, −13 (−37 to +5); 200k to 300k, +7 (−15 to +32); 300k to 400k, +7 (−18 to +30); 600k and over, −37 (−97 to −5). Blue curves give what an assumed β would predict, falling from the left to 0 at 400k to 600k: at the first band, +8 for β = 0.1, +21 for 0.3 and +36 for 0.6." src="assets/model-calibration-light.svg">
 </picture>
 
 The share of requests wasted in each context band, against the same session's
-requests at 400–600k, in 993 of my sessions over 60 days, and what each β would
+requests at 400–600k, in 993 sessions over 60 days, and what each β would
 predict if a request's effectiveness fell as the share wasted rose. Below 200k,
 requests go wrong no more often, −13 points (−37 to +5), where β = 0.3 predicts
 21 points more.
 
 Effectiveness isn't logged, but what goes wrong is: a failed tool call, a lookup
-repeated while its result is still in context, a turn I correct or interrupt.
+repeated while its result is still in context, a turn the user corrects or interrupts.
 The intervals come from resampling the sessions' 311k requests by session.
 
 | fitted | value (90%) | what it implies |
 |----|----|----|
-| D, detail a compaction loses | −0.8M CRTs (−5.4M to +3.7M) over all my compactions; 1.8M (−0.7M to +5.6M) after my own `/compact`s and Claude Code's | 400k would need 18.6M CRTs per compaction, about 64 wasted requests |
+| D, detail a compaction loses | −0.8M CRTs (−5.4M to +3.7M) over all compactions; 1.8M (−0.7M to +5.6M) after manual `/compact`s and Claude Code's | 400k would need 18.6M CRTs per compaction, about 64 wasted requests |
 
-My own `/compact`s, 664 of them and mostly from before sparkjoy, came at a
+Manual `/compact`s, 664 of them and mostly from before sparkjoy, came at a
 median 413k, later than the best point, and sparkjoy's at 453k because of its
 floor at the time. Nothing measured shows that compacting later pays, but the
 evidence is weak:
@@ -691,13 +689,13 @@ section's figures are for Opus 5.5.
 
 `/sparkjoy:report` fits the model to your sessions of the last 14 days. Its
 Thresholds section gives the floors that cost least for them, and from then on
-the plugin's question states the parameters it measured in place of mine. A
+the plugin's question states the parameters it measured in place of the defaults. A
 fit needs some compactions in the window, to measure K and N.
 
-My own figures and charts come from `model/fit.py` and `model/calibrate.py`:
+The figures and charts here come from `model/fit.py` and `model/calibrate.py`:
 
 ```
-# The figures and charts above, from my sessions of 7 to 15 November
+# The figures and charts above, from the sessions of 7 to 15 November
 uv run --script model/fit.py --since 2026-11-07T12:00Z --until 2026-11-16T00:00Z \
   --charts assets
 

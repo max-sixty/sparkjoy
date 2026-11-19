@@ -4,7 +4,7 @@
 # dependencies = ["numpy>=2.1", "matplotlib>=3.9"]
 # ///
 """Measures how trouble varies with the context in your sessions, and fits D, the cost of the detail
-a compaction drops. See "Calibration against my sessions" in docs/cost-model.md.
+a compaction drops. See "Calibration" in docs/cost-model.md.
 
     uv run --script model/calibrate.py --since 2026-09-17T00:00Z --until 2026-11-16T00:00Z \
         --costs-since 2026-11-07T12:00Z --costs-until 2026-11-16T00:00Z --charts assets
@@ -288,7 +288,7 @@ def chart(out, x, profile, sessions):
         ax.set_xlabel("Context, by band (each drawn at its mean)", color=t["muted"], fontsize=10)
         charts.axis_name(ax, "Requests wasted, in percentage points against the 400–600k band", t)
         handles = [plt.Line2D([], [], color=t["ink"], marker="o", ls="", ms=7, mec=t["page"])]
-        legend = fig.legend(handles, [f"measured in {sessions} of my sessions, with 90% intervals"],
+        legend = fig.legend(handles, [f"measured in {sessions} sessions, with 90% intervals"],
                             frameon=False, fontsize=9, loc="upper left", bbox_to_anchor=(0.1, -0.02))
         legend.get_texts()[0].set_color(fit_c)
         charts.save(fig, out / f"model-calibration-{theme}.svg")
