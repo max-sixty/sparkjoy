@@ -23,9 +23,10 @@ const HOUR = {
   model: 'claude-opus-5-5',
 }
 
-// The plugin's data folder, and the figures file `/sparkjoy:report` saves in it.
-const DATA = '/home/u/.claude/plugins/data/sparkjoy-sparkjoy'
-const FIGURES = `${DATA}/figures.json`
+// The user's home, and the figures file `/sparkjoy:report` saves in Claude
+// Code's configuration directory there.
+const HOME = '/home/u'
+const FIGURES = `${HOME}/.claude/sparkjoy/figures.json`
 
 // Stands for the engine beneath the mod: a context of `tokens` until `resize`
 // changes it or a compaction leaves it unmeasured, the rate-limit windows
@@ -37,9 +38,9 @@ const FIGURES = `${DATA}/figures.json`
 // one succeeds, a turn whose end settles after `endMs`, a store holding
 // `stored` (what an earlier process left), a conversation of user messages
 // with the texts `conversation`, which a turn adds a message to and a
-// compaction its summary, a figures file holding `saved` (none when
-// undefined) in a data folder the engine makes unless `hasData` is false, and
-// a record of what it was asked.
+// compaction its summary, a process environment of `env` (`HOME` unless told
+// otherwise), a file at `figuresAt` holding `saved` (none when undefined),
+// and a record of what it was asked.
 function engine(
   on: On,
   {
@@ -58,8 +59,9 @@ function engine(
       { kind: 'seven_day', percentUsed: 30 },
     ],
     usage = HOUR as TurnUsage,
+    env = { HOME } as Record<string, string>,
+    figuresAt = FIGURES,
     saved = undefined as string | undefined,
-    hasData = true,
   } = {},
 ) {
   const clock = mock.clock(on)
@@ -75,12 +77,9 @@ function engine(
 
   mock.store(on, stored)
   on('session.id', () => ({ value: 's1' }))
-  on('process.hookEnv', () => {
-    if (!hasData) throw new Error('EACCES: permission denied, mkdir')
-    return { value: { CLAUDE_PLUGIN_ROOT: '/plugin', CLAUDE_PLUGIN_DATA: DATA } }
-  })
+  on('env.get', (_, e) => ({ value: env[e.name] }))
   on('fs.read', (_, e) => {
-    if (e.path !== FIGURES || saved === undefined) throw new Error(`ENOENT: no such file or directory, open '${e.path}'`)
+    if (e.path !== figuresAt || saved === undefined) throw new Error(`ENOENT: no such file or directory, open '${e.path}'`)
     return { value: saved }
   })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
@@ -233,6 +232,16 @@ test('an idle session’s question states the fitted figures too', async ($, on)
   expect(forks[0]).toContain('writes all but 20k of its 200k tokens to the cache again, against about 100k after a compaction')
 })
 
+test('the figures are read from $CLAUDE_CONFIG_DIR where it is set', async ($, on) => {
+  const env = { HOME, CLAUDE_CONFIG_DIR: '/work/claude' }
+  const { begin, forks, turn } = engine(on, { verdict: KEEP, env, figuresAt: '/work/claude/sparkjoy/figures.json', saved: FITTED })
+  await begin($)
+
+  await turn($, 't1')
+
+  expect(forks[0]).toContain('At 500k a compaction pays for itself after about 8 more requests')
+})
+
 test('a report saved mid-session counts from the next question', async ($, on) => {
   const { begin, forks, turn, save } = engine(on, { verdict: KEEP })
   await begin($)
@@ -262,7 +271,7 @@ test('each figure the file lacks, or holds where the sums can’t use it, stays 
 for (const [name, options] of [
   ['a figures file that isn’t JSON', { saved: '{"K": 120' }],
   ['a figures file that holds no object', { saved: 'null' }],
-  ['a data folder the engine can’t make', { saved: FITTED, hasData: false }],
+  ['a process with no home or configuration directory', { saved: FITTED, env: {} }],
 ] as const) {
   test(`${name} leaves the question the author’s`, async ($, on) => {
     const { begin, forks, turn } = engine(on, { verdict: KEEP, ...options })
