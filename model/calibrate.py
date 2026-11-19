@@ -3,26 +3,27 @@
 # requires-python = ">=3.12"
 # dependencies = ["numpy>=2.1", "matplotlib>=3.9"]
 # ///
-"""Fits s, the context at which a request reaches half of full efficacy, and D, the cost of the
-detail a compaction drops, to what happens in your sessions. See "Calibrating s" in
-docs/when-to-compact.md.
+"""Measures how trouble varies with the context in your sessions, and fits D, the cost of the detail
+a compaction drops. See "Calibration against my sessions" in docs/cost-model.md.
 
     uv run --script model/calibrate.py --since 2026-09-17T00:00Z --until 2026-11-16T00:00Z \
-        --costs-since 2026-11-07T12:00Z --costs-until 2026-11-16T00:00Z
+        --costs-since 2026-11-07T12:00Z --costs-until 2026-11-16T00:00Z --charts assets
 
-Progress isn't logged, so the script measures what is lost of it, as trouble, and how trouble
+Effectiveness isn't logged, so the script measures what lowers it, as trouble, and how trouble
 varies with the context within a session. A request is in trouble when a tool call it made
 failed or when it repeated a lookup its context already held; a turn is in trouble when the
 user's next message corrects it or they interrupt it. Regressions with a fixed effect for each
-session estimate how trouble changes with the context, which bounds s and gives α, the exponent
-of a power law that would let long contexts hurt, and how much more of it follows a compaction,
-which gives D, with 90% intervals from resampling sessions. Outcomes need many sessions, so the
-cost model that prices D and finds X* can come from a shorter, more recent window.
+session estimate how trouble changes with the context, and how much more of it follows a
+compaction, which gives D, with 90% intervals from resampling sessions. Outcomes need many sessions, so the
+cost model that prices D and finds X* can come from a shorter, more recent window. With --charts
+it also draws the doc's model-calibration chart into that directory: trouble by context band beside
+what β would predict.
 """
 
 import argparse
 import re
 from collections import defaultdict
+from pathlib import Path
 
 import numpy as np
 
@@ -66,7 +67,10 @@ EDITS = {"Edit", "Write", "NotebookEdit", "MultiEdit"}
 F = 1.0  # share of a corrected or interrupted turn's requests that are wasted; the script also tries 0 and 2
 BINS = np.array([0, 200_000, 300_000, 400_000, 600_000, np.inf])
 REFERENCE = 3  # 400k to 600k, where most compactions happen
-SCALES = np.arange(5_000, 600_001, 5_000)  # the saturating form's s, searched
+# The half points searched for the saturating form, 1 - 2^(-x/s), which the comparison of forms fits
+# beside the power law.
+BETAS = (0, 0.3, 0.6)  # values of β, the cost model's effectiveness exponent, to replay with D at the top of its interval
+PREDICT = (0.1, 0.3, 0.6)  # values of β whose trouble by context band the results set beside the sessions'
 DRAWS = 200
 
 
@@ -121,14 +125,14 @@ def rows(s):
     explored = np.array([bool(calls) and all(name in LOOKUPS for name, _, _ in calls) for calls in s.calls])
     ok = s.size > 0
     r = {"x": s.size, "src": src, "start": (np.arange(n) < fit.SPAN) & (s.kind[0] == fit.FIRST),
-         "age": np.arange(n), "failed": failed, "looked": looked, "wasted": failed | looked, "explored": explored,
+         "failed": failed, "looked": looked, "wasted": failed | looked, "explored": explored,
          "guard": np.array([bool(f) and all("isolated in the worktree" in e for e in f) for f in s.failed])}
     r = {k: v[ok] for k, v in r.items()}
-    turns = [(s.size[b - 1], after, by[a] if after else 0, a == 0 and s.kind[0] == fit.FIRST, a, b - a,
+    turns = [(s.size[b - 1], after, by[a] if after else 0, a == 0 and s.kind[0] == fit.FIRST, b - a,
               any(corrects(t) for t in said), any(t.startswith(INTERRUPTED) for t in said))
              for a, b, after, said in answered(s) if s.size[b - 1] > 0]
-    T = np.array(turns, float).reshape(-1, 8)
-    for k, col in enumerate(("tx", "tpost", "tsrc", "tstart", "tage", "tlen", "corrected", "interrupted")):
+    T = np.array(turns, float).reshape(-1, 7)
+    for k, col in enumerate(("tx", "tpost", "tsrc", "tstart", "tlen", "corrected", "interrupted")):
         r[col] = T[:, k]
     return r
 
@@ -165,11 +169,8 @@ def coefficients(d):
         out[y], out[y + " after"], out[y + " start"] = within(d[y], [lx, post, start], g)
     out["failed, guard aside"], out["failed, guard aside after"], out["failed, guard aside start"] = within(
         d["failed"] & ~d["guard"], [lx, post, start], g)
-    out["wasted, with age"] = within(d["wasted"], [lx, post, start, np.log1p(d["age"])], g)[0]
     for y in ("corrected", "interrupted"):
         out[y], out[y + " after"], out[y + " after 2"], out[y + " start"] = within(d[y], [tlx, p1, p2, d["tstart"]], tg, w)
-    for y in ("corrected", "interrupted"):
-        out[y + ", with age"] = within(d[y], [tlx, p1, p2, d["tstart"], np.log1p(d["tage"])], tg, w)[0]
     # By who compacted.
     b = within(d["wasted"], [lx, d["src"] == 1, d["src"] == 2, start], g)
     out["wasted after sparkjoy"], out["wasted after other"] = b[1], b[2]
@@ -199,15 +200,10 @@ def trouble(e, key="", j=J, f=F):
 
 
 def derived(e, m, j=J, f=F, cost=None):
-    """α, the trouble by band, the saturating form's s and D from one set of coefficients e; m holds
+    """The trouble per e-fold of context and by band, and D, from one set of coefficients e; m holds
     the sample's means, and cost(x) prices a request at context x for D."""
     w = m["wasted"] + f * (m["corrected"] / j + m["interrupted"])  # the mean share of requests wasted
     out = {"slope": trouble(e, j=j, f=f)}
-    out["alpha"] = 1 - out["slope"] / (1 - w)
-    out["alpha, with age"] = 1 - trouble(e, ", with age", j, f) / (1 - w)
-    for g in (0.0, 2.0):
-        wg = m["wasted"] + g * (m["corrected"] / j + m["interrupted"])
-        out[f"alpha, F = {g:.0f}"] = 1 - trouble(e, j=j, f=g) / (1 - wg)
     out["profile"] = np.array([trouble(e, f" band {k}", j, f) for k in range(len(BINS) - 1)])
     out["w"], out["band x"] = w, m["band x"]
     # D: the extra trouble over each source's own requests after its compactions, priced at its
@@ -219,24 +215,6 @@ def derived(e, m, j=J, f=F, cost=None):
         out["D requests" + key] = n
         out["D" + key] = n * cost(m["post x" + key]) if cost else np.nan
     return out
-
-
-def shapes(b, weight):
-    """Fits the forms of η to one set of trouble by band, b from derived(), each band weighted by
-    `weight`, the inverse of its resampled variance: the saturating form's best s, and the
-    weighted squared error of a flat η, the power law and the saturating form. Under η ∝ 1 - w,
-    a form predicts trouble in each band, against the reference, of (1 - w)(1 - η/η_ref)."""
-    profile, w, x = b["profile"], b["w"], b["band x"]
-    sse = lambda pred: (weight * (profile - pred) ** 2).sum()
-    fits = []
-    for s in SCALES:
-        eta = fit.eta(x, s)
-        fits.append(sse((1 - w) * (1 - eta / eta[REFERENCE])))
-    lnx = np.log(x / x[REFERENCE])
-    # The power law's pred is linear in its coefficient, (1 - w)(1 - (x/x_ref)^(α-1)) ≈ -(1 - w)(α - 1) ln(x/x_ref).
-    k = (weight * profile * lnx).sum() / (weight * lnx * lnx).sum()
-    return {"scale": SCALES[int(np.argmin(fits))], "sse saturating": min(fits), "sse flat": sse(0 * profile),
-            "sse power": sse(k * lnx)}
 
 
 def means(d):
@@ -260,13 +238,70 @@ def interval(values, q=(5, 95)):
     return np.percentile(np.array(values, float), q, axis=0)
 
 
+def predicted(x, w, band_x, beta):
+    """The trouble at context x, against the reference band, that β predicts if a request's
+    effectiveness falls only as trouble rises, η ∝ 1 - trouble, with mean trouble w:
+    (1 - w)(1 - η(x) / η(reference band))."""
+    return (1 - w) * (1 - fit.eta(x, beta) / fit.eta(band_x[REFERENCE], beta))
+
+
+def chart(out, x, profile, sessions):
+    """Draws model-calibration into `out`: trouble by context band against the reference band, with
+    90% intervals, beside what each β in PREDICT would predict. `x` is `derived`'s results, `profile`
+    the 90% interval of their profile, and `sessions` how many sessions they come from."""
+    import charts
+    from charts import plt
+
+    bx, prof = x["band x"], x["profile"]
+    lo, hi = profile
+    grid = np.linspace(20_000, 900_000, 200)
+    names = [f"{BINS[k] / 1e3:.0f}–{BINS[k + 1] / 1e3:.0f}k" if BINS[k + 1] != np.inf else f"{BINS[k] / 1e3:.0f}k+"
+             for k in range(len(bx))]
+
+    def points(v, _=None):
+        """A difference in percentage points, signed, with a true minus."""
+        return f"{v * 100:+.0f}".replace("-", "−") if round(v * 100) else "0"
+
+    out.mkdir(parents=True, exist_ok=True)
+    for theme, t in charts.THEMES.items():
+        fit_c = t["fit"]
+        fig, ax = plt.subplots(figsize=(9, 3.8))
+        charts.style(ax, t)
+        for beta in PREDICT:
+            y = predicted(grid, x["w"], bx, beta)
+            keep = grid >= 110_000
+            ax.plot(grid[keep], y[keep], color=charts.shade(t, beta), lw=2)
+            ax.text(grid[keep][0] - 8_000, y[keep][0], f"if β were {beta:g}", ha="right", va="center", fontsize=9,
+                    color=t["ink"])
+        # The reference band is 0 by construction, so it is drawn open and named rather than as a measurement.
+        rest = np.arange(len(bx)) != REFERENCE
+        ax.errorbar(bx[rest], prof[rest], yerr=[(prof - lo)[rest], (hi - prof)[rest]], fmt="o", ms=7, color=t["ink"],
+                    mec=t["page"], mew=1.5, elinewidth=1.4, capsize=0, zorder=3)
+        ax.plot([bx[REFERENCE]], [0], "o", ms=7, mfc=t["page"], mec=t["ink"], mew=1.5, zorder=3)
+        ax.text(bx[REFERENCE], -0.06, "reference", ha="center", va="top", fontsize=9, color=t["muted"])
+        ax.text(bx[0] + 25_000, prof[0], points(prof[0]), va="center", fontsize=9, color=fit_c)
+        ax.set_xlim(-60_000, 950_000)
+        ax.set_xticks(bx, names)
+        ax.set_ylim(-1.0, 0.55)
+        ax.set_yticks([-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5])
+        ax.yaxis.set_major_formatter(points)
+        ax.set_xlabel("Context, by band (each drawn at its mean)", color=t["muted"], fontsize=10)
+        charts.axis_name(ax, "Requests wasted, in percentage points against the 400–600k band", t)
+        handles = [plt.Line2D([], [], color=t["ink"], marker="o", ls="", ms=7, mec=t["page"])]
+        legend = fig.legend(handles, [f"measured in {sessions} of my sessions, with 90% intervals"],
+                            frameon=False, fontsize=9, loc="upper left", bbox_to_anchor=(0.1, -0.02))
+        legend.get_texts()[0].set_color(fit_c)
+        charts.save(fig, out / f"model-calibration-{theme}.svg")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     fit.window_args(ap)
     ap.add_argument("--costs-since", help="fit the cost model to the sessions from here instead (ISO time)")
     ap.add_argument("--costs-until", help="and to here (ISO time)")
     ap.add_argument("--model", default="claude-opus-5-5", choices=fit.PRICES, help="whose prices to fit")
-    ap.add_argument("--no-replay", action="store_true", help="skip replaying the sessions under the fitted s and D")
+    ap.add_argument("--no-replay", action="store_true", help="skip replaying the sessions with D at the top of its interval")
+    ap.add_argument("--charts", type=Path, help="directory to draw the doc's calibration chart into")
     a = ap.parse_args()
     S, since, until = fit.read(a)
     # Outcomes need many sessions; the cost model can come from fewer, more recent ones.
@@ -290,13 +325,6 @@ def main():
         # J is uncertain too: draw it to match its 90% interval from resampling the labels.
         j = float(np.clip(rng.normal(J, J_SD), 0.15, 0.85))
         boot_x.append(derived(boot_e[-1], means(dd), j=j, cost=price))
-    # The bands' trouble varies a great deal in how well it is measured, so the forms are fitted
-    # with each band weighted by its resampled variance.
-    var = np.var([b["profile"] for b in boot_x], axis=0)
-    weight = np.where(var > 0, 1 / np.where(var > 0, var, 1), 0)
-    x |= shapes(x, weight)
-    for b in boot_x:
-        b |= shapes(b, weight)
     E = {k: interval([b[k] for b in boot_e]) for k in e}
     X = {k: interval([b[k] for b in boot_x]) for k in x}
 
@@ -326,7 +354,7 @@ def main():
           f"requests;\n    J = {J:.2f} scales them to corrections, {m['corrected'] / J:.1%} of requests. Explored: "
           f"every call it made was a lookup.")
 
-    w = m["wasted"] + F * (m["corrected"] / J + m["interrupted"])
+    w = x["w"]
     print(f"\ntrouble, the share of requests wasted, by context band against {BINS[REFERENCE] / 1e3:.0f}k to "
           f"{BINS[REFERENCE + 1] / 1e3:.0f}k (90%)")
     for k in range(len(BINS) - 1):
@@ -335,17 +363,10 @@ def main():
               f"{x['profile'][k]:+.2%} ({X['profile'][0][k]:+.2%} to {X['profile'][1][k]:+.2%})")
     print(f"  per e-fold: {pct('slope', X, x)}; mean trouble {w:.1%}")
 
-    ci = lambda key: f"{x[key]:.3f} ({X[key][0]:.3f} to {X[key][1]:.3f})"
-    print(f"\npower law, α = {ci('alpha')}; controlling for requests since the session started, {ci('alpha, with age')}; "
-          f"counting a corrected turn as none of its requests wasted, {ci('alpha, F = 0')}, or twice them, "
-          f"{ci('alpha, F = 2')}")
-    s_lo, s_hi = X["scale"]
-    print(f"saturating form: s = {x['scale'] / 1e3:.0f}k (90%: {s_lo / 1e3:.0f}k to {s_hi / 1e3:.0f}k); squared error over the "
-          f"bands, weighted: flat {x['sse flat']:.1f}, power {x['sse power']:.1f}, saturating {x['sse saturating']:.1f}")
-    for s in (50_000, 100_000, 200_000):
-        eta = fit.eta(m["band x"], s)
-        print(f"  s = {s / 1e3:.0f}k would need {(1 - w) * (1 - eta[0] / eta[REFERENCE]):+.1%} trouble below 200k "
-              f"against 400k to 600k")
+    print()
+    for beta in PREDICT:
+        print(f"  the cost model at β = {beta:g} would need {predicted(m['band x'][0], w, m['band x'], beta):+.1%} "
+              f"trouble below 200k against 400k to 600k")
 
     print(f"\nD, from the extra trouble in each source's first {fit.SPAN} requests and two turns after a compaction:")
     for key, label in (("", "all"), (" sparkjoy", "sparkjoy's"), (" other", "the user's and Claude Code's")):
@@ -358,7 +379,7 @@ def main():
     # interval, where the user's and Claude Code's compactions reach.
     high = max(X["D"][1], X["D other"][1])
     need = (400_000 - p.K) ** 2 * h / (2 * p.g) - p.K - F0
-    print(f"  X* reaches 400k at s = 0 with D = {need / 1e6:.1f}M reads (${need * c.read:.2f}), "
+    print(f"  X* reaches 400k at β = 0 with D = {need / 1e6:.1f}M reads (${need * c.read:.2f}), "
           f"{need / price(m['post x']):.0f} wasted requests per compaction")
     # A LangWatch-style comparison, without the session effects or the context.
     first, rest = d["tpost"] == 1, d["tpost"] == 0
@@ -367,18 +388,18 @@ def main():
     print(f"  corrections answering the first turn after a compaction: {r1:.0%} of {n1}; after other turns: {r0:.0%} of {n0}")
 
     k = lambda v: f"{v / 1e3:.0f}k"
-    print(f"\nsteady-state X*: s = 0, D = 0: {k(fit.steady(p, c))}; fitted s: {k(fit.steady(p, c, x['scale']))} "
-          f"(at its 95th percentile, {k(fit.steady(p, c, s_hi))}); with D at the top of its interval, "
-          f"${high * c.read:.2f}: {k(fit.steady(p, c, x['scale'], high))}")
+    print(f"\nsteady-state X* with D = 0, then with D at the top of its interval, ${high * c.read:.2f}: " + ", ".join(
+        f"β = {beta:g}: {k(fit.steady(p, c, beta))}, {k(fit.steady(p, c, beta, high))}" for beta in BETAS))
     if not a.no_replay:
-        ks = (x["scale"], s_hi)
         for lost, label in ((0.0, "D = 0"), (high, "D at the top of its interval")):
-            cost, progress = fit.grid(C, p, c, ttl, scales=ks, lost=lost)
-            T, saved = fit.best(cost, progress)
+            cost, effectiveness = fit.grid(C, p, c, ttl, betas=BETAS, lost=lost)
+            T, saved = fit.best(cost, effectiveness)
             at = list(fit.THRESHOLDS).index(400_000)  # sparkjoy's first floor, which the doc compares against
-            floor = cost[:, at].sum() / progress[:, at].sum(0) / (cost[:, -1].sum() / progress[:, -1].sum(0))
+            floor = cost[:, at].sum() / effectiveness[:, at].sum(0) / (cost[:, -1].sum() / effectiveness[:, -1].sum(0))
             print(f"best turn-end threshold, replayed, {label}: " + ", ".join(
-                f"s = {k(q)}: {k(T[i])}, saving {1 - saved[i]:.1%} (400k: {1 - floor[i]:.1%})" for i, q in enumerate(ks)))
+                f"β = {beta:g}: {k(T[i])}, saving {1 - saved[i]:.1%} (400k: {1 - floor[i]:.1%})" for i, beta in enumerate(BETAS)))
+    if a.charts:
+        chart(a.charts, x, X["profile"], len(S))
 
 
 if __name__ == "__main__":

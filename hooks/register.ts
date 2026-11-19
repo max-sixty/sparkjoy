@@ -35,11 +35,11 @@ import type { EngineInterface, Register, SessionMessage } from 'claude-code'
 // the copy already making it.
 const COMPACTING = { plugin: 'sparkjoy', key: 'compacting' } as const
 
-// What the author's sessions measured (docs/when-to-compact.md, 7-15 Nov
-// 2026), which the question gives every user as a guide to what keeping costs
-// and what a compaction loses. The costs follow that page's model ("The
-// model") and fitted parameters ("Fitted parameters"), with its symbols and
-// those of `terms()` in model/fit.py.
+// What the author's sessions measured (docs/cost-model.md, 7-15 Nov 2026),
+// which the question gives every user as a guide to what keeping costs and
+// what a compaction loses. The costs follow that page's model and its table of
+// symbols ("Request and compaction costs"), which are those of `terms()` in
+// model/fit.py.
 // TODO: fit these to the user's own sessions, as model/fit.py and
 // model/calibrate.py do for the author's, and state those instead.
 
@@ -81,9 +81,9 @@ const WASTED = 6
 
 // The judge is asked at a turn end only from this many context tokens, and in
 // an idle session from IDLE_FLOOR: the pair of floors that costs least when
-// docs/when-to-compact.md replays the author's sessions ("Idle sessions").
-// 250k also comes within 0.2 points of the best turn-end threshold for any s
-// up to 200k ("What it implies for sparkjoy"). A compaction there pays for
+// docs/cost-model.md replays the author's sessions ("Idle sessions"). 250k
+// also comes within 0.2 points of the best turn-end threshold for any β up to
+// 0.6 ("Does the model's simplification matter?"). A compaction there pays for
 // itself after about 40 requests (`payback`); the question tells the judge
 // that figure for the context it holds.
 const FLOOR = 250_000
@@ -94,6 +94,12 @@ const FLOOR = 250_000
 // 200k, and only in a terminal session, so a background session
 // (`claude --bg`, agent view) is left to this.
 const IDLE_FLOOR = 175_000
+
+// The mod acts only in a session whose model has a context window of at least
+// this many tokens. The floors and the question's figures come from sessions
+// with a 1M window, and on a 200k one Claude Code compacts before the context
+// reaches FLOOR.
+const WINDOW = 1_000_000
 
 // How long a session sits idle before it is asked: inside the hour a
 // subscription's prompt cache lives, so the question and any summary still
@@ -169,7 +175,7 @@ async function afterTurn($: EngineInterface, watch: Watch, changes: number, repl
   try {
     const { context, rateLimits } = await $.session.usage()
     const tokens = context.tokens
-    if (tokens === undefined || !isCurrent()) return
+    if (tokens === undefined || context.window < WINDOW || !isCurrent()) return
 
     // A subscription caches for an hour and reports at least one rate-limit
     // window, though not always a five-hour one: some plans report only the

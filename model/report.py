@@ -11,7 +11,7 @@
 
 The page shows every verdict sparkjoy logged in the window, what its compactions saved,
 the returns to a large context after an hour or more idle, and the thresholds the cost
-model of docs/when-to-compact.md fits to the same sessions. It reads, replays and fits
+model of docs/cost-model.md fits to the same sessions. It reads, replays and fits
 with fit.py, so it opens only the transcripts modified since --since, at low priority.
 It prints a summary and the page's path.
 """
@@ -32,7 +32,7 @@ import fit
 
 CHECK_OUTPUT = 100  # output tokens of a check, which reads the context from the cache
 RETURN = 3600  # seconds a session sits idle before taking it up again counts as a return
-DOC = "https://github.com/max-sixty/sparkjoy/blob/main/docs/when-to-compact.md"
+DOC = "https://github.com/max-sixty/sparkjoy/blob/main/docs/cost-model.md"
 KINDS = list(fit.KINDS.values())
 # What each verdict means, from `judge` in hooks/register.ts.
 MEANING = {"compacted": "The model said to compact, and sparkjoy began compacting.",
@@ -74,7 +74,7 @@ def returns(S):
 
 
 def thresholds(S, p, ttl):
-    """The cost model's thresholds for these sessions with s = 0, at the prices of the model most
+    """The cost model's thresholds for these sessions with β = 0, at the prices of the model most
     of their requests used (Opus 5.5's if none has a price here), and what compacting at them
     saves in the replay. The best turn-end threshold is None when none costs less than never
     compacting, as when no session reaches the thresholds that tie with it."""
@@ -84,11 +84,11 @@ def thresholds(S, p, ttl):
             use[s.model] += len(s.size)
     model = use.most_common(1)[0][0] if use else "claude-opus-5-5"
     c = fit.prices(model, ttl)
-    cost, progress = fit.grid(S, p, c, ttl, scales=(0,))
-    best, ratio = fit.best(cost, progress)
+    cost, effectiveness = fit.grid(S, p, c, ttl, betas=(0,))
+    best, ratio = fit.best(cost, effectiveness)
     never = cost[:, -1].sum()
     floors = sum(fit.replay(s, p, c, fit.FLOOR, ttl, idle=fit.IDLE_FLOOR)[0] for s in S)
-    # At s = 0 every request has the same efficacy, so cost per unit of progress is cost.
+    # At β = 0 every request is equally effective, so cost per unit of effectiveness is cost.
     return {"model": model, "ttl": ttl, "best": best[0] if ratio[0] < 1 else None, "saved_best": 1 - ratio[0],
             "saved_floor": 1 - cost[:, list(fit.THRESHOLDS).index(fit.FLOOR)].sum() / never,
             "saved_floors": 1 - floors / never, "steady": fit.steady(p, c),
@@ -342,7 +342,7 @@ def page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit):
             f"be {tokens(f['steady'])}.</p>"
             f"<p class=note>Fitted to {len(S)} sessions and {f['compactions']} compactions, at {model_name(f['model'])} "
             f"prices with a {'5-minute' if f['ttl'] == 300 else '1-hour'} cache, taking a request to get as much "
-            f'done at any context size. <a href="{DOC}">When to compact</a> explains the model.</p>')
+            f'done at any context size. The <a href="{DOC}">cost model</a> explains these figures.</p>')
     else:
         parts.append(f"<p>{unfit}</p>")
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8">'
