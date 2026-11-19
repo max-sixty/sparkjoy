@@ -209,8 +209,14 @@ Reply with one JSON object and nothing else, filling its fields in order:
   them with figures fitted to your sessions, except the count of wasted
   requests after a compaction, which needs months of sessions to measure. The
   floors stay at 250k and 175k.
-- It leaves Claude Code's own compaction on, which still compacts a turn that
-  fills the window before it ends.
+- It leaves Claude Code's own compaction on. Claude Code still compacts a turn
+  that fills the window before it ends. In a session open in a terminal, an
+  IDE or the desktop app, it also compacts an idle context of 200k or more
+  without asking, a minute or more before sparkjoy would ask. So sparkjoy's
+  idle question comes mainly in background sessions (`claude --bg`) and below
+  200k, or in every idle session with
+  [`idleCompaction`](https://code.claude.com/docs/en/settings-reference#idlecompaction)
+  set to `false`.
 - It acts only in sessions with a 1M-token context window, the size its floors
   and figures come from, and leaves `claude -p` and the Agent SDK alone.
 
