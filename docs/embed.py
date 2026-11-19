@@ -14,21 +14,12 @@ END = "<!-- End of the generated copy. -->"
 def section(doc):
     """The doc as the README holds it: under the README's own `# Cost model`, so the doc's title goes,
     with paths from the repo root. GitHub gives headings inside a collapsed section no anchors, so a
-    link to one of the doc's sections opens the doc's own page there. GitHub lists a file's footnotes
-    at its end, which in the README is past the collapsed section and outside it, so the doc's
-    footnotes become numbered notes at the section's end. GitHub renders display maths only outside
+    link to one of the doc's sections opens the doc's own page there. GitHub renders display maths only outside
     HTML blocks, and inline maths inside them too, so each display formula becomes a paragraph of
     inline maths in display style."""
     body = doc.split("\n", 1)[1].lstrip()
     body = re.sub(r"^```math\n(.*?)\n```$", lambda m: f"$`\\displaystyle {m[1]}`$", body, flags=re.M | re.S)
     body = body.replace('"../', '"').replace("](../", "](").replace("](#", "](docs/cost-model.md#")
-    notes = dict(re.findall(r"^\[\^(\w+)\]: (.*?)(?:\n\n|\Z)", body, flags=re.M | re.S))
-    body = re.sub(r"^\[\^\w+\]: .*?(?:\n\n|\Z)", "", body, flags=re.M | re.S)
-    order = list(dict.fromkeys(re.findall(r"\[\^(\w+)\]", body)))
-    body = re.sub(r"\[\^(\w+)\]", lambda m: f"<sup>{order.index(m[1]) + 1}</sup>", body)
-    if order:
-        body = body.rstrip() + "\n\n## Notes\n\n" + "\n".join(
-            f"{n}. " + re.sub(r"\s*\n\s*", " ", notes[key]) for n, key in enumerate(order, 1))
     return f"{START}\n<details>\n<summary>The cost model</summary>\n\n{body.rstrip()}\n\n</details>\n{END}"
 
 

@@ -1,7 +1,7 @@
 # Evals
 
-These evals put sparkjoy's question to the model at 12 turn ends from the
-author's Claude Code sessions on open-source work (Leaf, Worktrunk and tend),
+These evals put sparkjoy's question to the model at 12 turn ends from my
+Claude Code sessions on open-source work (Leaf, Worktrunk and tend),
 and score its verdict against a label chosen with hindsight, from what the
 session did next.
 
@@ -35,7 +35,7 @@ it in a second block.
 
 ## How a run works
 
-`build.py` made each fixture in `fixtures/` from the author's transcript: the
+`build.py` made each fixture in `fixtures/` from my transcript: the
 conversation from the last compaction to the turn's reply, which is what a
 resume sends the model, sanitized for publishing.
 
@@ -52,7 +52,7 @@ A replay differs from the plugin's own fork in these ways:
 
 - **The replayed context is smaller than the recorded one**, 43% to 70% of it
   (the results table's two size columns). The fixture leaves out the model's
-  hidden thinking, which is encrypted and so can't be checked, and the author's
+  hidden thinking, which is encrypted and so can't be checked, and my
   instructions, skills and tool listings, and Claude Code's `-p` system prompt
   is shorter than an interactive one. A question that states the size is told
   the recorded one; one that doesn't sees only the replayed transcript.
@@ -139,7 +139,7 @@ that keeping only defers the compaction to a later turn end.
 The labels at those two cases deserve a second look:
 
 - **At 296k, a compaction pays by the question's own sum.** It pays back
-  after about 30 requests, and a turn in the author's sessions averages about
+  after about 30 requests, and a turn in my sessions averages about
   36. That case's keep label rests on the next task building on the change
   just landed, not on the cost.
 - **At 210k it pays back after about 58 requests**, under two average turns,
@@ -175,7 +175,7 @@ Without the figures below, a version that also states what keeping costs
 through a turn, and asks the model to weigh the two, compacted the mid-task
 cases in 4 of 8 runs told 300k and in all 8 told 700k.
 
-`measured` is that version with figures from the author's sessions, as the
+`measured` is that version with figures from my sessions, as the
 [README's prompt](../README.md#the-prompt) shows: what keeping costs through a
 median turn of 9 requests and a mean one of 38, and what a compaction cost the
 requests after it, about 20k tokens read again and about 6 more wasted
@@ -242,7 +242,7 @@ that is too few. Their mid-task keep labels encode a rule, that work in progress
 keeps, rather than a measured cost, while the
 [cost model](../docs/cost-model.md) finds compacting at any turn end
 from about 250k cheapest when a compaction loses nothing. What a compaction
-loses is very noisy and hard to judge, but as some indication, the author's
+loses is very noisy and hard to judge, but as some indication, my
 sessions had about 6 more wasted requests than usual after one.
 
 Live verdicts graded by what followed each one can settle it, since they would
@@ -261,12 +261,12 @@ The 12 fixtures take 3.5 MB, gzipped. Before publishing, `build.py` removed:
 - the hidden thinking blocks, and images (a placeholder marks each);
 - home paths (`~` instead), email addresses (`user@example.com`), credentials
   of every common form, local page tokens and private hostnames;
-- any tool output naming the author's work outside open source, replaced by
+- any tool output naming my work outside open source, replaced by
   a placeholder;
 - every field of an entry but those a resume reads.
 
 `check.py` fails on any home path, email address, credential, private
 hostname or phone number left in a fixture, on text read out of Claude Code's
 own binary, and on any word or phrase from a
-list of the author's private terms, which it holds only as hashes so that it
+list of my private terms, which it holds only as hashes so that it
 doesn't publish them itself. It passes on the fixtures as committed.

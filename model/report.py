@@ -89,7 +89,7 @@ def usual_model(S):
 
 def thresholds(S, p, model, ttl):
     """The pair of floors, at turn ends and in idle sessions, that costs least for these sessions in
-    the replay with β = 0, at `model`'s prices, and what it and the author's floors save against
+    the replay with β = 0, at `model`'s prices, and what it and my floors save against
     never compacting."""
     c = fit.prices(model, ttl)
     floors, pairs = fit.floors(S, p, c, ttl)
@@ -156,7 +156,7 @@ FIGURES = (("FLOOR", "floor at turn ends", tokens),
 def figures(p, c, floors=None):
     """The figures sparkjoy's question states, fitted to these sessions at the prices `c`, by
     the names of their constants in hooks/register.ts. Any the window couldn't measure is left
-    out, and the question states its author's figure instead. So is WASTED, the extra wasted
+    out, and the question states the one in `AUTHOR` instead. So is WASTED, the extra wasted
     requests after a compaction: calibrate.py measures it over 60 days, and over a report's
     window it varies across resamples by more than its own size. `floors` is the pair sparkjoy
     asks from, at turn ends and in idle sessions, where the report fitted one."""

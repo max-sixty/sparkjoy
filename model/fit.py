@@ -264,7 +264,7 @@ def load(root, since, until):
                 md = e.get("compactMetadata") or {}
                 took = (md.get("durationMs") or 0) / 1000
                 # sparkjoy starts compacting as soon as it writes its line. Of the 351 compactions
-                # that followed one in the author's sessions (16 Oct to 15 Nov 2026), 349 began
+                # that followed one in my sessions (16 Oct to 15 Nov 2026), 349 began
                 # within 2 s of it; the other two were the user's, 20 minutes or more later, after
                 # a compaction of sparkjoy's that never ran.
                 mod = asked is not None and t - took - asked < 60
@@ -559,7 +559,7 @@ IDLE_FLOORS = range(100_000, 250_001, 25_000)
 def floors(S, p, c, ttl):
     """The pair of floors, at a turn end and in an idle session, that costs least in the replay at
     β = 0, compacting wherever they allow, and every pair's cost. sparkjoy's FLOOR and IDLE_FLOOR
-    are this pair for the author's sessions, and `/sparkjoy:report` fits it to the user's."""
+    are this pair for my sessions, and `/sparkjoy:report` fits it to the user's."""
     pairs = {(t, i): sum(replay(s, p, c, t, ttl, idle=i)[0] for s in S) for t in TURN_FLOORS for i in IDLE_FLOORS}
     return min(pairs, key=pairs.get), pairs
 

@@ -66,7 +66,7 @@ At the prompt of a Claude Code session:
 
 ## What it saves
 
-The author's 87 Claude Code sessions from 7 to 15 November 2026, 36,251
+My 87 Claude Code sessions from 7 to 15 November 2026, 36,251
 requests, replayed with and without the plugin[^replay]:
 
 <picture>
@@ -190,10 +190,10 @@ Reply with one JSON object and nothing else, filling its fields in order:
 
 - Until you run `/sparkjoy:report`, it asks only once the context reaches 250k
   at a turn end, or 175k in an idle session. That pair of floors costs least in
-  a replay of the author's sessions ([Cost model](#cost-model)) when every
-  question leads to a compaction. Their sessions hold about 142k after a
-  compaction, much of it their own instructions and skills, and sessions that
-  hold less pay from lower floors.
+  a replay of my sessions ([Cost model](#cost-model)) when every question
+  leads to a compaction. My sessions hold about 142k after a compaction, much of
+  it my own instructions and skills, and sessions that hold less pay from lower
+  floors.
 - The report fits all of the question's figures but one, the count of wasted
   requests after a compaction, which needs months of sessions to measure.
 - It leaves Claude Code's own compaction on. Claude Code still compacts a turn
@@ -216,7 +216,7 @@ Reply with one JSON object and nothing else, filling its fields in order:
 # Cost model
 
 sparkjoy's default floors come from a model of what keeping a context and compacting it
-cost, fitted to the author's sessions. It is also on [a page of its own](docs/cost-model.md).
+cost, fitted to my sessions. It is also on [a page of its own](docs/cost-model.md).
 
 <!-- Generated from docs/cost-model.md by docs/embed.py; edit that file. -->
 <details>
@@ -227,22 +227,22 @@ session to a context that grows by the same number of tokens with each request
 and drops back to the same size at each compaction, which gives the best
 compaction point in closed form. [The model](docs/cost-model.md#the-model) states it in symbols.
 [Fitted to my sessions](docs/cost-model.md#fitted-to-my-sessions) puts in values measured from
-the author's sessions on Opus 5.5 with the one-hour cache, and tests the
+my sessions on Opus 5.5 with the one-hour cache, and tests the
 simplifications with a replay of the same sessions.
 
 It answers two questions:
 
 - **One compaction threshold.** If every compaction comes at the same context
-  size, whatever the work, which size costs least? For the author's sessions,
-  the cost is lowest at about 260k<sup>1</sup>. That figure counts token costs alone,
+  size, whatever the work, which size costs least? For my sessions, the cost
+  is lowest at about 260k[^x]. That figure counts token costs alone,
   not how much each request gets done or detail a compaction loses, and lets a
   session compact after any request.
   The replay, which compacts only at turn ends, gives sparkjoy's default
   floors: 250k at turn ends and 175k in an idle session.
-- **[Value of information](docs/cost-model.md#value-of-information).** A classifier at each turn
-  end says to compact before or after that threshold, depending on how much the
-  work ahead needs the context's detail. sparkjoy's question is such a
-  classifier. The model finds what a classifier could save over the best single
+- **[Value of information](docs/cost-model.md#value-of-information).** A classifier, such as
+  sparkjoy's question, says at each turn end whether to compact before or after
+  that threshold, depending on how much the work ahead needs the context's
+  detail. The model finds what a classifier could save over the best single
   threshold, and how often it must be right to pay for itself.
 
 Costs are in CRTs, cached-read tokens. One CRT is the price of reading one token
@@ -376,26 +376,28 @@ $`\displaystyle x > \frac{o\,N + w\,K}{w - 1}`$
 
 ### Value of information
 
-If a classifier could tell kinds of work apart, each kind could compact at its
-own best point, and sparkjoy's question, asked at each turn end, is such a
-classifier. The expected value of the classifier's information is the cost it
-saves against the best single threshold, as a share of the whole cost, output
-included; a perfect classifier's is the expected value of perfect information.
+A single threshold compacts all work at the same context size. A classifier
+that tells kinds of work apart lets each kind compact at its own best point.
+sparkjoy's question is a classifier: at each turn end, it says whether to keep
+the context or compact it. The expected value of a classifier's information is
+the cost it saves against the best single threshold, as a share of the whole
+cost, output included. For a classifier that is always right, this is the
+expected value of perfect information.
 
-Work can differ in two ways that a classifier could tell apart:
+The model covers two ways in which work differs:
 
-- **In β.** A classifier sorts the work into a group to keep and a group to compact,
-  each compacting at its own best point, and is right the same share of the time
-  in each. It is scored by the mutual information between its verdict and
-  whether the context helps the work, as a share of a perfect classifier's: a
-  classifier right 9 times in 10 carries about half a perfect classifier's
-  information, and one right 99 times in 100 about 90%.
-- **In lost detail.** A turn end is mid-task, where a compaction loses detail, or
-  finished, where it loses none. A classifier is right at some share of turn
-  ends. Once the context passes a floor, the session compacts at each turn end
-  the classifier calls finished, and once it passes a higher ceiling, at every
-  turn end. The
-  floor and ceiling are set where they cost least.
+- **In β.** The classifier sorts the work into two groups, the work it judges
+  the context helps and the work it judges the context doesn't. Each group
+  compacts at its own best point. The classifier is right the same share of the
+  time in each group. Its information is the mutual information between its
+  verdict and whether the context helps the work, as a share of a perfect
+  classifier's. A classifier right 9 times in 10 has about half a perfect
+  classifier's information, and one right 99 times in 100 has about 90%.
+- **In lost detail.** Each turn end is either mid-task, where a compaction loses
+  detail, or finished, where it loses none. The classifier is right at some
+  share of turn ends. Above a floor, the session compacts at each turn end the
+  classifier calls finished. Above a higher ceiling, it compacts at every turn
+  end. The floor and ceiling are set where the cost is lowest.
 
 ## Fitted to my sessions
 
@@ -698,8 +700,8 @@ that drops detail the next turns need costs more instead, in a mistake, a
 correction from the user or a step run again. The model adds that cost as D
 CRTs per compaction, and the best point of 260k takes D as 0.
 
-It's very noisy and hard to judge, but as some indication, the author's
-sessions had about 6 more wasted requests than usual after manual `/compact`s
+It's very noisy and hard to judge, but as some indication, my sessions had
+about 6 more wasted requests than usual after manual `/compact`s
 and Claude Code's own compactions. A wasted request is a failed tool call, a
 repeated lookup or a correction. That makes D about 1.8M CRTs, with a 90%
 interval from −0.7M to +5.6M. The count misses losses that waste no request,
@@ -750,9 +752,9 @@ prices the cache write, or limits compaction to turn ends.
 
 </details>
 
-## Notes
-
-1. X\*, the best compaction point: 262k from the closed form under [Best compaction point](docs/cost-model.md#best-compaction-point), and 253–271k, its 90% interval from resampling sessions.
+[^x]: X\*, the best compaction point: 262k from the closed form under [Best
+compaction point](docs/cost-model.md#best-compaction-point), and 253–271k, its 90% interval from
+resampling sessions.
 
 </details>
 <!-- End of the generated copy. -->

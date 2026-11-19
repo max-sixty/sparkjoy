@@ -37,8 +37,8 @@ import type { EngineInterface, Register, SessionMessage, TurnUsage } from 'claud
 // the copy already making it.
 const COMPACTING = { plugin: 'sparkjoy', key: 'compacting' } as const
 
-// The floors sparkjoy asks from and the figures the question states, as the
-// author's sessions measured them (docs/cost-model.md, 7-15 Nov 2026).
+// The floors sparkjoy asks from and the figures the question states, as my
+// sessions measured them (docs/cost-model.md, 7-15 Nov 2026).
 // `/sparkjoy:report` fits the same figures to the user's own sessions and
 // saves them (`FIGURES`), and sparkjoy uses those instead (`fitted`), falling
 // back to these figure by figure. The costs follow that page's model and its table of
@@ -49,7 +49,7 @@ const COMPACTING = { plugin: 'sparkjoy', key: 'compacting' } as const
 const AUTHOR = {
   // The judge is asked at a turn end only from FLOOR context tokens, and in
   // an idle session from IDLE_FLOOR: the pair of floors that costs least when
-  // docs/cost-model.md replays the author's sessions ("Idle sessions"), which
+  // docs/cost-model.md replays my sessions ("Idle sessions"), which
   // the report finds for the user's (`floors` in model/fit.py). 250k also comes
   // within 0.2 points of the best turn-end threshold for any β up to 0.6
   // ("Does the model's simplification matter?"). Compacting just before the
@@ -74,8 +74,8 @@ const AUTHOR = {
   // show, thinking included, which makes about 5.6k.
   SUMMARY: 5_600,
   // The context after a compaction (K): the first request after it, plus the
-  // files the next few requests read again. Across 141 compactions in the
-  // author's sessions (7-16 Nov 2026) the first request carried a median 122k
+  // files the next few requests read again. Across 141 compactions in my
+  // sessions (7-16 Nov 2026) the first request carried a median 122k
   // tokens (quartiles 111k-128k): the opening prompt (system prompt, tools,
   // instructions; 85k), the summary, and the recent messages and files
   // re-attached (34k). The next few requests read about 20k more again than
@@ -95,8 +95,8 @@ const AUTHOR = {
   // window, at 1% of it (https://code.claude.com/docs/en/skills), so a figure
   // from a 200k window carries over to 1M with about 8k more. Before Claude
   // Code 2.1.304 a compaction dropped the listing
-  // (https://github.com/anthropics/claude-code/issues/82017), and the author's
-  // first request after one carried a median 92k.
+  // (https://github.com/anthropics/claude-code/issues/82017), and my first
+  // request after one carried a median 92k.
   K: 142_000,
   // The system prompt and tools (P), which Claude Code keeps in a cache
   // shared across sessions, so no request after a compaction makes a cache
@@ -115,10 +115,11 @@ type Figures = typeof AUTHOR
 
 // The wasted requests (failed tool calls, repeated lookups, corrections)
 // beyond the usual after a compaction the user or Claude Code made, which
-// model/calibrate.py measured over 60 days of the author's sessions. After
-// sparkjoy's, which came where a piece of work ended, there were fewer wasted
-// requests than usual. The report leaves it the author's: over its two weeks,
-// resampling the sessions moves it by more than its own size.
+// model/calibrate.py measured over 60 days of my sessions. After sparkjoy's,
+// which came where a piece of work ended, there were fewer wasted requests
+// than usual. The report doesn't fit it to the user's sessions: over the
+// report's two weeks, resampling the sessions moves it by more than its own
+// size.
 const WASTED = 6
 
 // The file `/sparkjoy:report` saves the user's figures to, under Claude Code's
@@ -131,7 +132,7 @@ const WASTED = 6
 const FIGURES = 'sparkjoy/figures.json'
 
 // The mod acts only in a session whose model has a context window of at least
-// this many tokens. The floors and the author's figures come from sessions
+// this many tokens. The floors and figures in `AUTHOR` come from sessions
 // with a 1M window, and on a 200k one Claude Code compacts before the context
 // reaches FLOOR.
 const WINDOW = 1_000_000
@@ -358,7 +359,7 @@ function hash(text: string) {
 // The fork replays the turn's last request, which ends before the reply the
 // turn closed with, so the question carries the reply whole. Asked of an idle
 // session, it says so and that the prompt cache is about to lapse. README.md
-// shows both versions verbatim with the author's figures, for a 500k context.
+// shows both versions verbatim with the figures in `AUTHOR`, for a 500k context.
 function question(reply: string, tokens: number, idleMinutes?: number, figures: Figures = AUTHOR) {
   const { WRITE, OUTPUT, SUMMARY, K, P, TURN_MEDIAN, TURN_MEAN } = figures
   const now = thousands(tokens)
@@ -425,14 +426,14 @@ function saving(tokens: number, { WRITE, K, LAPSE }: Figures) {
   return (1 + LAPSE * (WRITE - 1)) * (tokens - K)
 }
 
-// The floors and figures `/sparkjoy:report` last saved. Each is the author's
+// The floors and figures `/sparkjoy:report` last saved. Each is `AUTHOR`'s
 // where the file lacks it or holds a value the question's sums can't use: a
 // floor outside the window, a cache write no dearer than a read, a compaction
 // that leaves no more than the cached system prompt and tools or at least the
 // FLOOR the question is asked from at a turn end, a lapse share outside 0 to
 // 1, or a turn of under one request. Read for each question, so a report run mid-session
 // counts from the next one; a configuration directory or file that can't be
-// found or read leaves every figure the author's. The directory is
+// found or read leaves every figure at `AUTHOR`'s. The directory is
 // $CLAUDE_CONFIG_DIR, or ~/.claude, as Claude Code and model/fit.py find it.
 async function fitted($: EngineInterface): Promise<Figures> {
   let saved: Record<string, unknown> | undefined
