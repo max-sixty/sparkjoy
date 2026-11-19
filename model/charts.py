@@ -5,7 +5,7 @@ from one read of the sessions:
   cycles         the context and each request's cost over 600 requests, at four compaction points, as a
                  schematic: axes in the model's symbols
   inputs         a request's cost and a compaction's cost by part, against the context
-  bill           the sessions' bill by kind of token
+  bill           the sessions' cost by kind of token
   average        a request's mean cost over a cycle against the compaction point, with the marginal cost,
                  as a schematic
   effectiveness  a request's effectiveness against its context, for each β in BETAS
@@ -282,7 +282,7 @@ def inputs(out, p, c):
 
 
 def bill(out, S, p, c):
-    """What share of the sessions' bill each kind of token took, as one stacked bar: each request's
+    """The sessions' cost by kind of token, as one stacked bar: each request's
     logged usage at the prices c, in CRTs. The transcripts don't log a compaction's own request, so its
     tokens come from the model and join their kinds: it reads the context it compacts and writes N
     output tokens. The request after it, which writes the compacted context to the cache, is logged
