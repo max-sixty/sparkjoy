@@ -41,8 +41,6 @@ releases; `claude plugin disable sparkjoy` turns it off.
 
 ## What it does
 
-This is everything it does:
-
 - **When a turn ends**, it asks the session's own model whether to compact now
   ([How it decides](#how-it-decides)), and on yes it compacts.
 - **When the session then sits idle for 55 minutes**, it asks again, adding
@@ -62,10 +60,9 @@ This is everything it does:
   question states the figures it fitted in place of its defaults. It needs
   [uv](https://docs.astral.sh/uv/).
 
-sparkjoy sends nothing anywhere itself. Its checks are ordinary requests that
-Claude Code makes to the session's model, on the same account and bill as the
-session's own, and the report reads your transcripts and writes its page on
-your computer.
+sparkjoy's only requests are these checks, which Claude Code sends to the
+session's model on the session's account. The report reads your transcripts
+and writes its page on your computer.
 
 <details>
 <summary>Sample report</summary>
@@ -99,8 +96,7 @@ requests, replayed with and without the plugin[^replay]:
 | requests at 600k tokens or more | 28%              | 6%            |
 
 Of the 59 sessions that reached 400k, half saved between 12% and 31%, and one
-cost 19% more. On a Claude subscription, which has no bill per token, the
-tokens saved leave more of your plan's usage limits instead.
+cost 19% more.
 
 Each check is one request to the session's model, which reads the conversation
 from the cache and writes about a hundred tokens. The 198 checks, at turn ends of 400k or more,
@@ -137,9 +133,6 @@ weighs the two and answers with its verdict and a one-line reason. In the
 mid-task ones, from 519k to 681k, in 5 of 8 runs.
 
 ### The prompt
-
-`question()` in [`hooks/register.ts`](hooks/register.ts) writes it, filled in
-for the session's context size and the reply the turn ended with.
 
 <details>
 <summary>At the end of a turn, for a 500k context</summary>
@@ -705,9 +698,6 @@ section's figures are for Opus 5.5.
 Thresholds section gives the floors that cost least for them, and from then on
 the plugin's question states the parameters it measured in place of the defaults. A
 fit needs some compactions in the window, to measure K and N.
-
-The author's figures and charts come from `model/fit.py` and
-`model/calibrate.py`, whose docstrings give their options.
 
 ## Notes
 

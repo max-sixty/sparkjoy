@@ -476,9 +476,6 @@ Thresholds section gives the floors that cost least for them, and from then on
 the plugin's question states the parameters it measured in place of the defaults. A
 fit needs some compactions in the window, to measure K and N.
 
-The author's figures and charts come from `model/fit.py` and
-`model/calibrate.py`, whose docstrings give their options.
-
 [^x]: X\*, the best compaction point: 262k from the closed form under [Best
 compaction point](#best-compaction-point), and 253–271k, its 90% interval from
 resampling sessions.
