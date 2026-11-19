@@ -70,7 +70,7 @@ z
      </g>
     </g>
     <g id="text_6">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="254.06" y="286.645514" transform="rotate(-0 254.06 286.645514)">Mutual information between verdict and whether context helps (% of a perfect classifier's)</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="254.06" y="286.645514" transform="rotate(-0 254.06 286.645514)">Accuracy (% of a perfect classifier's information)</text>
     </g>
    </g>
    <g id="matplotlib.axis_2">

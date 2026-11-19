@@ -375,11 +375,10 @@ the cache lapses](#compacting-before-the-cache-lapses).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-voi-dark.svg">
-  <img alt="The expected value of a classifier's information, the cost it saves against the best single threshold, by the mutual information between the classifier's verdict and whether the context helps the work, as a share of a perfect classifier's, for 60% of the work at β = 1, 30% at β = 2 and 12% at β = 5, the rest at β = 0. A perfect classifier saves 11%, 20% and 24%. The β = 1 line climbs fastest at first, the β = 2 line is nearly straight, and the β = 5 line stays at 0 until about 30% of the information and reaches half its saving only at 90%. A thin band along 0 marks what running the classifier costs, 0.3%." src="../assets/model-voi-light.svg">
+  <img alt="What a classifier saves against the best single threshold, by its accuracy as a share of a perfect classifier's information, for 60% of the work at β = 1, 30% at β = 2 and 12% at β = 5, the rest at β = 0. A perfect classifier saves 11%, 20% and 24%. The β = 1 line climbs fastest at first, the β = 2 line is nearly straight, and the β = 5 line stays at 0 until about 30% of the information and reaches half its saving only at 90%. A thin band along 0 marks what running the classifier costs, 0.3%." src="../assets/model-voi-light.svg">
 </picture>
 
-What a classifier saves, against how much its verdict tells about whether the
-context helps the work. Each line is a mix of work with mean β 0.6, with one
+What a classifier saves, against its accuracy. Each line is a mix of work with mean β 0.6, with one
 share at a single β and the rest at β = 0. The higher that share's β, the more
 a perfect classifier saves, and the closer to perfect a classifier must be to get half of
 that saving. The band along 0 is what running the classifier costs, about 0.3%.
