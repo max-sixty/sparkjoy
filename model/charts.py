@@ -5,6 +5,8 @@ from one read of the sessions:
   cycles         the context and each request's cost over 600 requests, at four compaction points, as a
                  schematic: axes in the model's symbols
   inputs         a request's cost and a compaction's cost by part, against the context
+  payback        how many later requests a compaction takes to pay for itself, against the context it
+                 compacts, for the README's What it saves
   bill           the sessions' cost by kind of token
   average        a request's mean cost over a cycle against the compaction point, with the marginal cost,
                  as a schematic
@@ -286,6 +288,41 @@ def inputs(out, p, c):
         mid.text(1, 1.04, "parts named in orange are fitted to the sessions", transform=mid.transAxes, ha="right",
                  va="bottom", fontsize=9, color=fit_c)
         save(fig, out / f"model-inputs-{theme}.svg")
+
+
+def payback(out, p, c):
+    """How many later requests a compaction takes to pay for itself, against the context x it compacts:
+    its cost, x + F0 cached reads, over what each later request saves, h (x - K), with every request
+    alike (β = 0). Each later request reads x - K less, so the curve rises without bound as x falls to
+    K, which a line marks. Dots mark the three sizes the README names."""
+    h, _, F0 = fit.terms(p, c)
+    X = np.arange(p.K + 1_000, fit.AUTO + 1, 1_000.0)
+    N = (X + F0) / (h * (X - p.K))
+    marks = (200_000, 400_000, 700_000)
+    each = {x: int(np.ceil((x + F0) / (h * (x - p.K)))) for x in marks}
+    for x in marks:
+        print(f"model-payback: at {x / 1e3:.0f}k each later request reads {(x - p.K) / 1e3:.0f}k less, and the "
+              f"compaction (${(x + F0) * c.read:.2f}) pays for itself after {each[x]} requests")
+    top = 100
+    for theme, t in THEMES.items():
+        fig, ax = plt.subplots(figsize=(9, 3))
+        style(ax, t)
+        ax.axvline(p.K, color=t["grid"], lw=1.2, zorder=1)
+        ax.text(p.K + 12_000, 3, f"{p.K / 1e3:.0f}k, what a compaction leaves", ha="left", va="bottom",
+                fontsize=9, color=t["fit"])
+        ax.plot(X, N, color=t["ink"], lw=2, zorder=2)
+        for x in marks:
+            ax.plot([x], [each[x]], "o", ms=7, mfc=t["ink"], mec=t["page"], mew=1.5, zorder=3)
+            ax.text(x + 14_000, each[x] + 4, f"{each[x]} requests at {x / 1e3:.0f}k,\neach reading "
+                    f"{(x - p.K) / 1e3:.0f}k less", ha="left", va="bottom", fontsize=9, color=t["ink"])
+        ax.set_xlim(0, fit.AUTO)
+        ax.set_ylim(0, top)
+        ax.xaxis.set_major_formatter(tokens)
+        ax.set_xticks([0, 250_000, 500_000, 750_000])
+        ax.set_yticks([0, 25, 50, 75, 100])
+        ax.set_xlabel("Context compacted at a turn end (tokens)", color=t["muted"], fontsize=10)
+        axis_name(ax, "Later requests until the compaction pays for itself", t)
+        save(fig, out / f"model-payback-{theme}.svg")
 
 
 def bill(out, S, p, c):
@@ -615,6 +652,7 @@ def draw(out, S, p, c, boot, cost, effectiveness, BT, BX):
     print()
     cycles(out, p, c)
     inputs(out, p, c)
+    payback(out, p, c)
     bill(out, S, p, c)
     average(out, p, c)
     effectiveness_curve(out)
