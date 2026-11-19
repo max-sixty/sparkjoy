@@ -271,6 +271,17 @@ Claude Code keeps in a cache shared across sessions:
 
 $`\displaystyle F(X) = F_0 + X, \qquad F_0 = o\,N + (w - 1)(K - P)`$
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/model-cycles-dark.svg">
+  <img alt="Eight panels, two rows by four columns, in symbols without figures. Columns: compact early, compact at X*, compact late, and never compact, where Claude Code compacts at X near the window's end. Top row, the context: a sawtooth rising from K to the column's X and dropping back to K, with many short teeth when compacting early and one long tooth when never compacting. Bottom row, cost per request: the request's own cost, rising with the context, with its share of the compaction ending its cycle on top, thick when compacting early and thin when late. A line marks each column's mean cost per request, lowest at X*." src="assets/model-cycles-light.svg">
+</picture>
+
+The context and each request's cost over many requests, compacting early, at
+X\*, late, and never, which leaves it to Claude Code near the window's end. The
+context climbs from K by g a request and drops back at each compaction at X. A
+request costs c(x) plus its share of the F(X) that ends its cycle. Compacting
+early makes compactions frequent, and compacting late makes requests large.
+
 <details>
 <summary>The model's symbols</summary>
 
@@ -323,6 +334,14 @@ while it costs less than the average, as in Harris's economic order quantity. If
 a request gets as much done at any context, the best point has a closed form:
 
 $`\displaystyle X^* = K + \sqrt{\frac{2g\,(F_0 + K)}{h}}`$
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/model-average-dark.svg">
+  <img alt="Cost per request against the compaction point X, in symbols without figures. The average, a request's cost with its share of the compaction included, falls steeply from just above K to its minimum at X*, then rises slowly to Claude Code's default near the window's end, where a hollow dot marks it. The marginal cost, a straight grey line from K, rises through the minimum, where a filled dot labelled min(cost) at X* marks the crossing." src="assets/model-average-light.svg">
+</picture>
+
+The average and marginal costs against the compaction point X, with a request
+getting as much done at any context.
 
 ### Context size and effectiveness
 
@@ -401,13 +420,8 @@ from resampling sessions.
 
 ### Trade-off
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/model-cycles-dark.svg">
-  <img alt="Eight panels, two rows by four columns, each over 600 requests. Columns: compact at 175k, at 260k, at 400k, and never compact, where Claude Code compacts at 965k. Top row, the context in tokens: a sawtooth from 142k up to 175k every 19 requests, to 260k every 69, to 400k every 151 and to 965k every 482. Bottom row, CRTs per request: the request's own cost, with its share of the compaction ending its cycle on top, thick at 175k and thin at 965k. A line marks each column's mean cost per request: 600k (73% of never compacting), 450k (55%), 500k (61%) and 820k (100%)." src="assets/model-cycles-light.svg">
-</picture>
-
-The model at four compaction points over 600 requests. Compacting early makes
-compactions frequent, and compacting late makes requests large.
+The four compaction points of the chart under [Request and compaction
+costs](docs/cost-model.md#request-and-compaction-costs), with the values above:
 
 | compact at | requests a cycle | mean cost per request | against never compacting |
 |----|----|----|----|
@@ -457,20 +471,10 @@ a context of 335k tokens.
 
 ### Average cost
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/model-average-dark.svg">
-  <img alt="Cost per request, in CRTs, against the compaction point X, from 142k to 965k. The average, a request's cost with its share of the compaction included, falls steeply from 142k to its minimum, about 450k at 260k, then rises to 500k at 400k and to 820k at 965k, Claude Code's default, where a hollow dot marks it; a filled dot marks the minimum, labelled 45% less than the default. The marginal cost, a straight grey line, rises from 310k at 142k to 1.3M at 965k and crosses the average at its minimum." src="assets/model-average-light.svg">
-</picture>
-
-A request's cost averaged over a cycle, its share of the compaction included,
-against the compaction point, with a request getting as much done at any
-context size. Against Claude Code's default of compacting at 965k, compacting
-at the cheapest point, about 260k, saves 45% per request, and compacting at
-400k saves 39%.
-
-The average is lowest where the marginal cost, the straight line in the chart,
-crosses it. With the values above, the closed form under [Best compaction
-point](docs/cost-model.md#best-compaction-point) gives
+With a request getting as much done at any context size, compacting at the
+cheapest point, about 260k, saves 45% per request against Claude Code's default
+of compacting at 965k, and compacting at 400k saves 39%. With the values above,
+the closed form under [Best compaction point](docs/cost-model.md#best-compaction-point) gives
 
 $`\displaystyle X^* = 142\text{k} + \sqrt{\frac{2 \cdot 1706 \cdot (4.93\text{M} + 142\text{k})}{1.22}} = 142\text{k} + 119\text{k} = 262\text{k}`$
 
