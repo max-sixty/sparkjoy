@@ -10,13 +10,14 @@ Run the report script. It reads the user's transcripts in `~/.claude/projects` (
 directory, prints a few lines of summary and the page's path, and opens the page:
 
 ```
-uv run --script "${CLAUDE_PLUGIN_ROOT}/model/report.py" --figures "${CLAUDE_PLUGIN_DATA}/figures.json"
+uv run --script "${CLAUDE_PLUGIN_ROOT}/model/report.py" --figures
 ```
 
 With `--figures` it also saves the figures the plugin's question states, such as
 the context a compaction leaves and the requests in a turn, fitted to the same
-sessions. From the next time the plugin asks, its question states them in
-place of the author's.
+sessions, to `sparkjoy/figures.json` in the same directory as `projects`. From
+the next time the plugin asks, its question states them in place of the
+author's.
 
 It covers the last 14 days. When the user names another window, pass it as
 `--since` and `--until`, each an ISO date or time, read as local time unless it

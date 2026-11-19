@@ -39,9 +39,9 @@ const COMPACTING = { plugin: 'sparkjoy', key: 'compacting' } as const
 
 // The figures the question states, as the author's sessions measured them
 // (docs/cost-model.md, 7-15 Nov 2026). `/sparkjoy:report` fits the same
-// figures to the user's own sessions and saves them in the plugin's data
-// folder, and the question states those instead (`fitted`), falling back to
-// these figure by figure. The costs follow that page's model and its table of
+// figures to the user's own sessions and saves them (`FIGURES`), and the
+// question states those instead (`fitted`), falling back to these figure by
+// figure. The costs follow that page's model and its table of
 // symbols ("Request and compaction costs"), which are those of `terms()` in
 // model/fit.py, and each key is the name model/report.py saves its figure
 // under: a figure whose meaning changes takes a new name, so a file an older
@@ -92,9 +92,14 @@ type Figures = typeof AUTHOR
 // resampling the sessions moves it by more than its own size.
 const WASTED = 6
 
-// The file `/sparkjoy:report` saves the user's figures to in the plugin's data
-// folder, as skills/report/SKILL.md tells it to.
-const FIGURES = 'figures.json'
+// The file `/sparkjoy:report` saves the user's figures to, under Claude Code's
+// configuration directory, as model/report.py names it. Its home would be the
+// plugin's data folder, but Claude Code before 2.1.326 gives a hooks module no
+// way to find that folder, and refuses at load a module that calls
+// `$.process.hookEnv()`, the API that names it.
+// TODO: save and read it in that folder once every release CI tests has
+// `$.process.hookEnv()`.
+const FIGURES = 'sparkjoy/figures.json'
 
 // The judge is asked at a turn end only from this many context tokens, and in
 // an idle session from IDLE_FLOOR: the pair of floors that costs least when
@@ -413,13 +418,15 @@ function saving(tokens: number, { WRITE, K, LAPSE }: Figures) {
 // than the cached system prompt and tools or at least the FLOOR the question
 // is asked from at a turn end, a lapse share outside 0 to 1, or a turn of
 // under one request. Read for each question, so a report run mid-session
-// counts from the next one; a data folder or file that can't be read leaves
-// every figure the author's.
+// counts from the next one; a configuration directory or file that can't be
+// found or read leaves every figure the author's. The directory is
+// $CLAUDE_CONFIG_DIR, or ~/.claude, as Claude Code and model/fit.py find it.
 async function fitted($: EngineInterface): Promise<Figures> {
   let saved: Record<string, unknown> | undefined
   try {
-    const folder = (await $.process.hookEnv()).CLAUDE_PLUGIN_DATA
-    if (folder) saved = JSON.parse(await $.fs.read(`${folder}/${FIGURES}`))
+    const home = await $.env.get('HOME')
+    const config = (await $.env.get('CLAUDE_CONFIG_DIR')) || (home && `${home}/.claude`)
+    if (config) saved = JSON.parse(await $.fs.read(`${config}/${FIGURES}`))
   } catch {
     return AUTHOR
   }

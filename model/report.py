@@ -14,8 +14,9 @@ the returns to a large context after an hour or more idle, and the thresholds th
 model of docs/cost-model.md fits to the same sessions. It reads, replays and fits
 with fit.py, so it opens only the transcripts modified since --since, at low priority.
 With --figures it also saves, as JSON, the figures sparkjoy's question states, fitted to
-the same sessions; /sparkjoy:report passes the file in the plugin's data folder, which
-hooks/register.ts reads. It prints a summary and the page's path.
+the same sessions, to sparkjoy/figures.json in Claude Code's configuration directory,
+where hooks/register.ts reads them, or to the file it names. It prints a summary and the
+page's path.
 """
 
 import argparse
@@ -397,8 +398,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     fit.window_args(ap)
     ap.add_argument("--no-open", action="store_true", help="write the page without opening it")
-    ap.add_argument("--figures", type=Path, help="also save the figures sparkjoy's question states, fitted to "
-                    "these sessions, to this JSON file, which the plugin reads from its data folder")
+    # The file hooks/register.ts reads (FIGURES there), in Claude Code's configuration directory.
+    ap.add_argument("--figures", type=Path, nargs="?", const=fit.PROJECTS.parent / "sparkjoy" / "figures.json",
+                    help="also save the figures sparkjoy's question states, fitted to these sessions, to this "
+                    "JSON file; with no file named, to the one the plugin reads")
     a = ap.parse_args()
     S, since, until = fit.read(a)
     verdicts = sorted(((s, v) for s in S for v in s.verdicts), key=lambda sv: -sv[1].t)
