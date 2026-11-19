@@ -88,18 +88,15 @@ def usual_model(S):
 
 
 def thresholds(S, p, model, ttl):
-    """The cost model's thresholds for these sessions with β = 0, at `model`'s prices, and what
-    compacting at them saves in the replay. The best turn-end threshold is None when none costs
-    less than never compacting, as when no session reaches the thresholds that tie with it."""
+    """The pair of floors, at turn ends and in idle sessions, that costs least for these sessions in
+    the replay with β = 0, at `model`'s prices, and what it and the author's floors save against
+    never compacting."""
     c = fit.prices(model, ttl)
-    cost, effectiveness = fit.grid(S, p, c, ttl, betas=(0,))
-    best, ratio = fit.best(cost, effectiveness)
-    never = cost[:, -1].sum()
-    floors = sum(fit.replay(s, p, c, fit.FLOOR, ttl, idle=fit.IDLE_FLOOR)[0] for s in S)
-    # At β = 0 every request is equally effective, so cost per unit of effectiveness is cost.
-    return {"model": model, "ttl": ttl, "best": best[0] if ratio[0] < 1 else None, "saved_best": 1 - ratio[0],
-            "saved_floor": 1 - cost[:, list(fit.THRESHOLDS).index(fit.FLOOR)].sum() / never,
-            "saved_floors": 1 - floors / never, "steady": fit.steady(p, c),
+    floors, pairs = fit.floors(S, p, c, ttl)
+    never = sum(fit.replay(s, p, c, np.inf, ttl)[0] for s in S)
+    author = sum(fit.replay(s, p, c, fit.FLOOR, ttl, idle=fit.IDLE_FLOOR)[0] for s in S)
+    return {"model": model, "ttl": ttl, "floors": floors, "saved": 1 - pairs[floors] / never,
+            "saved_author": 1 - author / never, "steady": fit.steady(p, c),
             "idle": fit.idle_break_even(p, c), "compactions": p.compactions}
 
 
@@ -144,7 +141,9 @@ def model_name(model):
 
 # The figures sparkjoy's question states, by the names of their constants in hooks/register.ts,
 # each with how the page and the summary name and show it.
-FIGURES = (("K", "context after a compaction", tokens),
+FIGURES = (("FLOOR", "floor at turn ends", tokens),
+           ("IDLE_FLOOR", "floor in idle sessions", tokens),
+           ("K", "context after a compaction", tokens),
            ("P", "system prompt and tools within it", tokens),
            ("SUMMARY", "output of the request that writes the summary", tokens),
            ("TURN_MEDIAN", "median requests per turn", "{:.0f}".format),
@@ -154,13 +153,14 @@ FIGURES = (("K", "context after a compaction", tokens),
            ("OUTPUT", "cached reads an output token costs", "{:g}".format))
 
 
-def figures(p, c):
+def figures(p, c, floors=None):
     """The figures sparkjoy's question states, fitted to these sessions at the prices `c`, by
     the names of their constants in hooks/register.ts. Any the window couldn't measure is left
     out, and the question states its author's figure instead. So is WASTED, the extra wasted
     requests after a compaction: calibrate.py measures it over 60 days, and over a report's
-    window it varies across resamples by more than its own size."""
-    fitted = {"K": p.K, "P": p.P, "SUMMARY": p.N, "TURN_MEDIAN": p.turn_median, "TURN_MEAN": p.turn,
+    window it varies across resamples by more than its own size. `floors` is the pair sparkjoy
+    asks from, at turn ends and in idle sessions, where the report fitted one."""
+    fitted = {**dict(zip(("FLOOR", "IDLE_FLOOR"), floors or ())), "K": p.K, "P": p.P, "SUMMARY": p.N, "TURN_MEDIAN": p.turn_median, "TURN_MEAN": p.turn,
               "LAPSE": p.lapse, "WRITE": c.write, "OUTPUT": c.output}
     return {k: v for k, v in fitted.items() if np.isfinite(v)}
 
@@ -313,14 +313,11 @@ def page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit, saved
                    f"between{f' ({first})' if first else ''}."
                    + (f" The other {len(lapsed)} wrote {tokens(rewrote)} tokens to the cache again, for "
                       f"{usd(spent)}." if lapsed else "") + "</p>")
-    asks = f"sparkjoy asks from {tokens(fit.FLOOR)} at turn ends and {tokens(fit.IDLE_FLOOR)} in idle sessions"
-    if fitted and fitted["best"]:
-        summary.append(f"<p><b>Compacting at turn ends from {tokens(fitted['best'])}</b> costs least for these "
-                       f"sessions, {change(fitted['saved_best'])} than never compacting; {asks}.</p>")
-    elif fitted:
-        summary.append(f"<p><b>No turn-end threshold</b> costs less than never compacting for these sessions; "
-                       f"{asks}.</p>")
-    sections = ["Sessions", "Verdicts"] * bool(verdicts) + ["Idle returns", "Thresholds"] + ["Question"] * bool(saved)
+    if fitted:
+        turn, idle = fitted["floors"]
+        summary.append(f"<p><b>Asking from {tokens(turn)} at turn ends and {tokens(idle)} in idle sessions</b> "
+                       f"costs least for these sessions, {change(fitted['saved'])} than never compacting.</p>")
+    sections = ["Sessions", "Verdicts"] * bool(verdicts) + ["Idle returns", "Thresholds"] + ["Saved figures"] * bool(saved)
     summary.append("<p class=note>" + " · ".join(f'<a href="#{anchor(h)}">{h}</a>' for h in sections) + "</p>")
     parts.append(f'<div class="summary">{"".join(summary)}</div>')
 
@@ -358,17 +355,15 @@ def page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit, saved
     parts.append(h2("Thresholds"))
     if fitted:
         f = fitted
-        best = (f"Compacting at every turn end from {tokens(f['best'])} would cost {change(f['saved_best'])} than "
-                f"never compacting; from {tokens(fit.FLOOR)}," if f["best"] else
-                f"No turn-end threshold costs less than never compacting; from {tokens(fit.FLOOR)}, it costs")
-        parts.append('<div class="narrow">' + table(["Compact from", "sparkjoy", "Fitted to these sessions"], [
-            ("At turn ends", tokens(fit.FLOOR), tokens(f["best"]) if f["best"] else "none"),
-            ("In idle sessions", tokens(fit.IDLE_FLOOR), tokens(f["idle"])),
+        turn, idle = f["floors"]
+        parts.append('<div class="narrow">' + table(["Ask from", "The author's floors", "Fitted to these sessions"], [
+            ("At turn ends", tokens(fit.FLOOR), tokens(turn)),
+            ("In idle sessions", tokens(fit.IDLE_FLOOR), tokens(idle)),
         ], numeric=(1, 2)) + "</div>")
         parts.append(
-            f"<p>{best} {change(f['saved_floor'])}, or {change(f['saved_floors'])} "
-            f"with idle sessions from {tokens(fit.IDLE_FLOOR)}. These replays compact wherever the threshold allows, "
-            f"as if every check said yes. In an idle session, compacting before the cache lapses breaks even from "
+            f"<p>Compacting from the fitted floors would cost {change(f['saved'])} than never compacting, and from "
+            f"the author's {change(f['saved_author'])}. These replays compact wherever the floors allow, as if every "
+            f"question said to. In an idle session, compacting before the cache lapses breaks even from "
             f"{tokens(f['idle'])}. Compacting after any request rather than only at turn ends, the best point would "
             f"be {tokens(f['steady'])}.</p>"
             f"<p class=note>Fitted to {len(S)} sessions and {f['compactions']} compactions, at {model_name(f['model'])} "
@@ -378,9 +373,9 @@ def page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit, saved
         parts.append(f"<p>{unfit}</p>")
 
     if saved:
-        parts.append(h2("Question"))
-        parts.append("<p>sparkjoy's question now states these figures from these sessions in place of its author's, "
-                     "from the next turn end or idle session it asks about.</p>")
+        parts.append(h2("Saved figures"))
+        parts.append("<p>From the next turn end or idle session, sparkjoy asks from these floors and its question "
+                     "states these figures, fitted to these sessions, in place of its author's.</p>")
         parts.append('<div class="narrow">' + table(["Figure", "These sessions"], [
             (label.capitalize(), show(saved[key])) for key, label, show in FIGURES if key in saved], numeric=(1,))
                      + "</div>")
@@ -418,7 +413,7 @@ def main():
             fitted = thresholds(S, p, model, ttl)
         unfit = "The window holds too few requests to fit the cost model."
         if a.figures:
-            values = figures(p, fit.prices(model, ttl))
+            values = figures(p, fit.prices(model, ttl), fitted and fitted["floors"])
             try:
                 a.figures.parent.mkdir(parents=True, exist_ok=True)
                 a.figures.write_text(json.dumps(values))
@@ -448,13 +443,15 @@ def main():
     print(f"{len(rows)} returns after an hour idle to sessions left at {tokens(fit.IDLE_FLOOR)} or more, "
           f"{sum(1 for r in rows if r[3])} compacted in between")
     if fitted:
-        print(f"cheapest turn-end threshold {tokens(fitted['best']) if fitted['best'] else 'none'}, idle break-even "
-              f"{tokens(fitted['idle'])} (sparkjoy asks from {tokens(fit.FLOOR)} and {tokens(fit.IDLE_FLOOR)})")
+        turn, idle = fitted["floors"]
+        print(f"cheapest floors {tokens(turn)} at turn ends and {tokens(idle)} in idle sessions, "
+              f"{change(fitted['saved'])} than never compacting (the author's {tokens(fit.FLOOR)} and "
+              f"{tokens(fit.IDLE_FLOOR)}: {change(fitted['saved_author'])})")
     if saved:
-        print("sparkjoy's question now states these sessions' figures: "
+        print("sparkjoy now asks from these sessions' floors and states their figures: "
               + "; ".join(f"{label} {show(saved[key])}" for key, label, show in FIGURES if key in saved))
     elif a.figures:
-        print(f"sparkjoy's question keeps the figures it states: {kept}")
+        print(f"sparkjoy keeps the floors and figures it has: {kept}")
     print(path)
     if not a.no_open:
         try:

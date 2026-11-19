@@ -59,7 +59,7 @@ every session. It is tested daily on the latest and stable Claude Code releases,
 - **`/sparkjoy:report`** reads your transcripts of the last 14 days, writes a
   page about them on your computer and opens it: every verdict, what the
   compactions saved, and the thresholds the [cost model](#cost-model) fits to
-  your sessions. It also saves the figures it fitted, which the question states
+  your sessions. It also saves the floors and figures it fitted, which sparkjoy uses
   from then on. It needs [uv](https://docs.astral.sh/uv/), which downloads
   Python and numpy the first time.
 
@@ -201,14 +201,17 @@ Reply with one JSON object and nothing else, filling its fields in order:
 
 ## Limits
 
-- It asks only once the context reaches 250k at a turn end, or 175k in an
-  idle session. In the replay under [Cost model](#cost-model), that pair of
-  floors costs least when every question leads to a compaction.
-- Until you run `/sparkjoy:report`, the question's figures for a turn's length
-  and for what a compaction costs are defaults measured on the author's sessions. The report replaces
-  them with figures fitted to your sessions, except the count of wasted
-  requests after a compaction, which needs months of sessions to measure. The
-  floors stay at 250k and 175k.
+- Until you run `/sparkjoy:report`, it asks only once the context reaches 250k
+  at a turn end, or 175k in an idle session. That pair of floors costs least in
+  a replay of the author's sessions ([Cost model](#cost-model)) when every
+  question leads to a compaction. Their sessions hold about 142k after a
+  compaction, much of it their own instructions and skills, and sessions that
+  hold less pay from lower floors.
+- The report finds the pair of floors that costs least for your sessions, and
+  sparkjoy asks from those from then on. It also fits the question's figures
+  for a turn's length and for what a compaction costs, all but the count of
+  wasted requests after a compaction, which needs months of sessions to
+  measure.
 - It leaves Claude Code's own compaction on. Claude Code still compacts a turn
   that fills the window before it ends. In a session open in a terminal, an
   IDE or the desktop app, it also compacts an idle context of 200k or more
@@ -439,6 +442,13 @@ the sessions is halved or doubled, and across its 90% interval. K, the context
 after a compaction, moves it most, from 150k to 459k when halved or doubled, but
 only from 254k to 269k across its interval, and each other parameter moves it
 less than 10k across its own.
+
+That interval covers only the author's sessions, and K differs more between
+users. About two-thirds of what K holds beyond the shared system prompt is the
+user's own instructions and skills, which Claude Code attaches again after a
+compaction. For a user with few of them, K may be near 70–80k, an estimate
+rather than a measurement, which puts the best point near 155k. So
+`/sparkjoy:report` fits K, and sparkjoy's floors, to each user's sessions.
 
 The assumptions about the work move it more. It reaches 400k only at β = 0.55,
 where a request at 200k gets 68% as much done as one at 400k, or if each
@@ -716,8 +726,9 @@ section's figures are for Opus 5.5.
 ## Fitting it to your sessions
 
 `/sparkjoy:report` fits the model to your sessions of the last 14 days. Its
-Thresholds section gives the floors that cost least for them, and from then on
-the plugin's question states the parameters it measured in place of the defaults. A
+Thresholds section gives the pair of floors that costs least for them. From then
+on sparkjoy asks from that pair, and its question states the parameters the
+report measured in place of the defaults. A
 fit needs some compactions in the window, to measure K and N.
 
 ## Notes

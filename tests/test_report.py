@@ -113,11 +113,13 @@ def test_saves_the_figures_the_question_states(tmp_path):
     # 1k-token summary times the 1.5 output per visible token of the reply its size. Every request ends
     # its turn, and two of the four between the first request and the user's compaction came more than
     # an hour after the one before, past the cache's lifetime. Opus 5.5 prices that hour-long cache.
-    assert json.loads(figures.read_text()) == {"K": 225_002, "P": 30_000, "SUMMARY": 1_500, "TURN_MEDIAN": 1,
-                                               "TURN_MEAN": 1, "LAPSE": 0.5, "WRITE": 40, "OUTPUT": 100}
-    assert summary[-1].startswith("sparkjoy's question now states these sessions' figures: context after a "
-                                  "compaction 225k; system prompt and tools within it 30k;")
-    assert "sparkjoy's question now states these figures" in page
+    # The floors are the replay's cheapest pair on fit.py's grids.
+    assert json.loads(figures.read_text()) == {"FLOOR": 350_000, "IDLE_FLOOR": 125_000, "K": 225_002, "P": 30_000,
+                                               "SUMMARY": 1_500, "TURN_MEDIAN": 1, "TURN_MEAN": 1, "LAPSE": 0.5,
+                                               "WRITE": 40, "OUTPUT": 100}
+    assert summary[-1].startswith("sparkjoy now asks from these sessions' floors and states their figures: floor at "
+                                  "turn ends 350k; floor in idle sessions 125k; context after a compaction 225k;")
+    assert "sparkjoy asks from these floors and its question states these figures" in page
 
 
 def test_saves_no_figures_without_compactions(tmp_path):
@@ -125,13 +127,12 @@ def test_saves_no_figures_without_compactions(tmp_path):
     summary, page = report(tmp_path, [prompt("10:00:00Z", "hello"), request("10:00:10Z", 0, 20_000)],
                            "--figures", figures)
     assert not figures.exists()
-    assert summary[-1] == ("sparkjoy's question keeps the figures it states: the window holds no compactions to "
-                           "fit them to")
-    assert "now states these figures" not in page
+    assert summary[-1] == "sparkjoy keeps the floors and figures it has: the window holds no compactions to fit them to"
+    assert "its question states these figures" not in page
 
 
 def test_a_figures_file_it_cannot_save_leaves_the_page(tmp_path):
     (tmp_path / "data").write_text("")  # a file where the figures' folder would go
     summary, page = report(tmp_path, session_with_compactions(), "--figures", tmp_path / "data" / "figures.json")
-    assert summary[-1].startswith("sparkjoy's question keeps the figures it states: saving them failed: ")
-    assert "now states these figures" not in page and "Fix the parser" in page
+    assert summary[-1].startswith("sparkjoy keeps the floors and figures it has: saving them failed: ")
+    assert "its question states these figures" not in page and "Fix the parser" in page

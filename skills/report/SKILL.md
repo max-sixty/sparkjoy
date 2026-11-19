@@ -13,11 +13,11 @@ directory, prints a few lines of summary and the page's path, and opens the page
 uv run --script "${CLAUDE_PLUGIN_ROOT}/model/report.py" --figures
 ```
 
-With `--figures` it also saves the figures the plugin's question states, such as
-the context a compaction leaves and the requests in a turn, fitted to the same
-sessions, to `sparkjoy/figures.json` in the same directory as `projects`. From
-the next time the plugin asks, its question states them in place of the
-author's.
+With `--figures` it also saves the floors sparkjoy asks from and the figures its
+question states, such as the context a compaction leaves and the requests in a
+turn, fitted to the same sessions, to `sparkjoy/figures.json` in the same
+directory as `projects`. From the next turn end, the plugin uses them in place
+of the author's.
 
 It covers the last 14 days. When the user names another window, pass it as
 `--since` and `--until`, each an ISO date or time, read as local time unless it
@@ -40,11 +40,11 @@ Reply with the summary it printed and the page's path. The page shows:
 - **Idle returns**: each time a session left with 175k or more in context took
   a new message after an hour or more, and whether a compaction came in
   between.
-- **Thresholds**: the turn-end threshold the cost model fits to these sessions,
-  beside the 250k and 175k sparkjoy asks from.
-- **Question**: the figures it saved for the question. A window without
-  compactions has nothing to fit them to, and the question keeps the figures
-  it had.
+- **Thresholds**: the pair of floors, at turn ends and in idle sessions, that
+  costs least for these sessions, beside the author's 250k and 175k.
+- **Saved figures**: the floors and figures it saved. A window without
+  compactions has nothing to fit them to, and the plugin keeps the ones it
+  had.
 
 The savings come from replaying each session's logged requests with sparkjoy's
 compactions where it made them and without them, at list prices for the

@@ -242,6 +242,24 @@ test('the figures are read from $CLAUDE_CONFIG_DIR where it is set', async ($, o
   expect(forks[0]).toContain('At 500k a compaction pays for itself after about 8 more requests')
 })
 
+test('the floors the report fitted decide where sparkjoy asks', async ($, on) => {
+  const saved = JSON.stringify({ FLOOR: 150_000, IDLE_FLOOR: 120_000 })
+  const { begin, clock, forks, turn, resize } = engine(on, { verdict: KEEP, tokens: 200_000, saved })
+  await begin($)
+
+  // Below the author's 250k at a turn end, above the fitted 150k.
+  await turn($, 't1')
+  expect(forks.length).toBe(1)
+
+  // Below the fitted floor at a turn end, above the fitted idle floor.
+  resize(130_000)
+  await turn($, 't2')
+  expect(forks.length).toBe(1)
+  await clock.advance(IDLE)
+  await clock.settle()
+  expect(forks.length).toBe(2)
+})
+
 test('a report saved mid-session counts from the next question', async ($, on) => {
   const { begin, forks, turn, save } = engine(on, { verdict: KEEP })
   await begin($)

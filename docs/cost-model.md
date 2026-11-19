@@ -204,6 +204,13 @@ after a compaction, moves it most, from 150k to 459k when halved or doubled, but
 only from 254k to 269k across its interval, and each other parameter moves it
 less than 10k across its own.
 
+That interval covers only the author's sessions, and K differs more between
+users. About two-thirds of what K holds beyond the shared system prompt is the
+user's own instructions and skills, which Claude Code attaches again after a
+compaction. For a user with few of them, K may be near 70–80k, an estimate
+rather than a measurement, which puts the best point near 155k. So
+`/sparkjoy:report` fits K, and sparkjoy's floors, to each user's sessions.
+
 The assumptions about the work move it more. It reaches 400k only at β = 0.55,
 where a request at 200k gets 68% as much done as one at 400k, or if each
 compaction loses about 19M CRTs of detail, some 64 wasted requests.
@@ -480,8 +487,9 @@ section's figures are for Opus 5.5.
 ## Fitting it to your sessions
 
 `/sparkjoy:report` fits the model to your sessions of the last 14 days. Its
-Thresholds section gives the floors that cost least for them, and from then on
-the plugin's question states the parameters it measured in place of the defaults. A
+Thresholds section gives the pair of floors that costs least for them. From then
+on sparkjoy asks from that pair, and its question states the parameters the
+report measured in place of the defaults. A
 fit needs some compactions in the window, to measure K and N.
 
 [^x]: X\*, the best compaction point: 262k from the closed form under [Best
