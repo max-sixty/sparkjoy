@@ -356,27 +356,36 @@ function hash(text: string) {
   return (h >>> 0).toString(36)
 }
 
-// The fork replays the turn's last request, which ends before the reply the
-// turn closed with, so the question carries the reply whole. Asked of an idle
-// session, it says so and that the prompt cache is about to lapse. README.md
+// The question opens with its goal. The fork replays the turn's last request,
+// which ends before the reply the turn closed with, so the question then
+// quotes the reply whole. It lists what a compaction, keeping the context and
+// lost detail each cost. Asked of an idle session, it says the prompt cache is
+// about to lapse, so keeping costs the cache write that follows. README.md
 // shows both versions verbatim with the figures in `AUTHOR`, for a 500k context.
 function question(reply: string, tokens: number, idleMinutes?: number, figures: Figures = AUTHOR) {
   const { WRITE, OUTPUT, SUMMARY, K, P, TURN_MEDIAN, TURN_MEAN } = figures
   const now = thousands(tokens)
   const isIdle = idleMinutes !== undefined
+  const goal = isIdle
+    ? 'The goal of this request is to decide whether to compact this session now, before its prompt cache lapses.'
+    : 'The goal of this request is to decide whether to compact this session now.'
   const opening = isIdle
     ? `Your turn ended ${idleMinutes} minutes ago with this reply to the user, and nothing has happened since:`
-    : 'Your turn just ended with this reply to the user:'
-  const ask = isIdle
-    ? `Decide whether to compact the conversation now. The prompt cache holding it lapses in a few minutes, and the first request after that writes all but ${thousands(P)} of its ${now} tokens to the cache again, against about ${thousands(K - P)} after a compaction. So compact unless the next turn continues work that needs the transcript's detail.`
-    : 'Decide whether to compact the conversation now, while the user reads that reply.'
-  // Idle, the cache is about to go whatever the answer, so the sums are the one
-  // the request above states.
-  const sum = isIdle ? '' : ` At ${now} a compaction pays for itself after about ${payback(tokens, figures)} more requests that need nothing it dropped.`
+    : 'Your turn just ended with this reply, which the user is reading now:'
+  // Idle, the cache is about to go whatever the answer, so a compaction needs
+  // no payback sum, and keeping costs the one cache write the lapse brings.
+  const sum = isIdle ? '' : `\n- At ${now} a compaction pays for itself after about ${payback(tokens, figures)} more requests that need nothing it dropped.`
   const keeping = isIdle
-    ? ''
-    : `\n\nKeeping costs too, and more the larger the context: every later request reads all ${now} tokens, against about ${thousands(K)} after a compaction, and keeping only puts the compaction off to a later turn end. A turn runs a median of ${Math.round(TURN_MEDIAN)} requests and a mean of ${Math.round(TURN_MEAN)}, so keeping ${now} through one more turn costs as much as about ${turnCost(tokens, TURN_MEDIAN, figures)} compactions for a median turn and ${turnCost(tokens, TURN_MEAN, figures)} for a mean one.`
-  return `This message comes from the sparkjoy plugin, not from the user, and a program reads your reply. Use no tools.
+    ? `What keeping costs now:
+- The prompt cache holding the conversation lapses in a few minutes.
+- The first request after that makes a cache write of all but ${thousands(P)} of its ${now} tokens, against about ${thousands(K - P)} after a compaction.
+
+So compact unless the next turn continues work that needs the transcript's detail.`
+    : `What keeping costs, more the larger the context:
+- Every later request reads all ${now} tokens, against about ${thousands(K)} after a compaction.
+- Keeping only puts the compaction off to a later turn end.
+- A turn runs a median of ${Math.round(TURN_MEDIAN)} requests and a mean of ${Math.round(TURN_MEAN)}, so keeping ${now} through one more turn costs as much as about ${turnCost(tokens, TURN_MEDIAN, figures)} compactions for a median turn and ${turnCost(tokens, TURN_MEAN, figures)} for a mean one.`
+  return `${goal} It comes from the sparkjoy plugin, not from the user, and a program reads your answer. Use no tools.
 
 ${opening}
 
@@ -384,17 +393,22 @@ ${opening}
 ${reply}
 </reply>
 
-${ask}
-
 Nearly every long transcript is mostly finished work, so that alone is no reason to compact. What decides it is whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
 
-A compaction takes about a minute, and the request that writes its summary outputs about ${thousands(SUMMARY)} tokens, thinking included. Afterwards the context holds about ${thousands(K)} tokens, counting the files the next requests read again, and those requests write it to the cache again, all but the ${thousands(P)} of system prompt and tools, which stay cached. A cache write costs as much as ${WRITE} cached reads, and an output token as much as ${OUTPUT}.${sum}${keeping}
+What a compaction costs:
+- It takes about a minute, and the request that writes its summary outputs about ${thousands(SUMMARY)} tokens, thinking included.
+- Afterwards the context holds about ${thousands(K)} tokens, counting the files the next requests read again. Those requests make a cache write of all of it but the ${thousands(P)} of system prompt and tools, which stay cached.
+- A cache write costs as much as ${WRITE} cached reads, and an output token as much as ${OUTPUT}.${sum}
 
-It's very noisy and hard to judge, but as some indication, past sessions had about ${WASTED} more wasted requests than usual after a compaction: failed tool calls, repeated lookups and corrections. That count misses detail lost without such a failure, such as a design's rejected options or what the user likes.
+${keeping}
+
+What lost detail costs:
+- It's very noisy and hard to judge, but as some indication, past sessions had about ${WASTED} more wasted requests than usual after a compaction: failed tool calls, repeated lookups and corrections.
+- That count misses detail lost without such a failure, such as a design's rejected options or what the user likes.
 
 Weigh what keeping costs against what losing the detail would cost the next turns. The larger the context, the more detail a compaction can drop and still pay.
 
-Reply with one JSON object and nothing else, filling its fields in order:
+Answer with one JSON object and nothing else, filling its fields in order:
 {"next": "what most likely comes next, in a few words", "needs_detail": true or false, "compact": true or false, "reason": "one short line saying why"}`
 }
 
