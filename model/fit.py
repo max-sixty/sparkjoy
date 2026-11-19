@@ -18,9 +18,8 @@ sessions finds cheapest per unit of effectiveness. Only transcripts modified sin
 --since are opened, and the process lowers its own priority, since a full scan
 of ~/.claude/projects is heavy.
 
-The last is the doc's run. Its --charts also draws into assets/ the charts
-charts.py lists, all of the doc's but the calibration, which calibrate.py draws,
-and prints the figures the doc quotes from them.
+The last is the doc's run. Its --charts also draws into assets/ the doc's charts,
+which charts.py lists, and prints the figures the doc quotes from them.
 """
 
 import argparse

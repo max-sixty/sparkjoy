@@ -120,8 +120,10 @@ a share of a request's with the full 1M window. Each doubling of the context
 multiplies it by $`2^\beta`$, so at β = 0 a request gets as much done at any
 context.
 
-At larger β, a compaction also costs effectiveness, since the requests after it
-work with less. The best point then minimizes J, a cycle's cost per unit of its
+η depends only on the context's size, so a request right after a compaction, at
+K, counts as getting as much done as one at K before any compaction. At larger
+β, a compaction then costs effectiveness, since the requests after it work with
+less. The best point then minimizes J, a cycle's cost per unit of its
 effectiveness, which at β = 0 is the average cost under [Best compaction
 point](#best-compaction-point):
 
@@ -427,38 +429,6 @@ context size.
 | work's β varies widely, and the check is right most of the time | Neither how much β varies across the work nor how accurate sparkjoy's question is has been measured yet. Grading each of its verdicts by what happened next, such as whether the turns after a compaction re-read files it dropped, would measure the second. |
 | each compaction loses several times the 1.8M CRTs of detail measured so far | Not seen, though the measure misses some losses, such as a design's rejected options or what the user likes ([What does the model assume a compaction loses?](#questions-about-the-model)). |
 
-### Calibration
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="../assets/model-calibration-dark.svg">
-  <img alt="The share of requests wasted in five context bands, against requests at 400k to 600k, in percentage points with 90% intervals, measured in 993 sessions over 60 days: 0 to 200k, −13 (−37 to +5); 200k to 300k, +7 (−15 to +32); 300k to 400k, +7 (−18 to +30); 600k and over, −37 (−97 to −5). Blue curves give what an assumed β would predict, falling from the left to 0 at 400k to 600k: at the first band, +8 for β = 0.1, +21 for 0.3 and +36 for 0.6." src="../assets/model-calibration-light.svg">
-</picture>
-
-The share of requests wasted in each context band, against the same session's
-requests at 400–600k, in 993 sessions over 60 days, and what each β would
-predict if a request's effectiveness fell as the share wasted rose. Below 200k,
-requests go wrong no more often, −13 points (−37 to +5), where β = 0.3 predicts
-21 points more.
-
-Effectiveness isn't logged, but what goes wrong is: a failed tool call, a lookup
-repeated while its result is still in context, a turn the user corrects or interrupts.
-The intervals come from resampling the sessions' 311k requests by session.
-
-| fitted | value (90%) | what it implies |
-|----|----|----|
-| D, detail a compaction loses | −0.8M CRTs (−5.4M to +3.7M) over all compactions; 1.8M (−0.7M to +5.6M) after manual `/compact`s and Claude Code's | 400k would need 18.6M CRTs per compaction, about 64 wasted requests |
-
-Manual `/compact`s, 664 of them and mostly from before sparkjoy, came at a
-median 413k, later than the best point, and sparkjoy's at 453k because of its
-floor at the time. Nothing measured shows that compacting later pays, but the
-evidence is weak:
-
-- These signals see only visible waste, so a request at a large context that
-  goes right and gets more done doesn't show.
-- Within a session the context grows as a piece of work goes on, so the share
-  wasted at each context size partly reflects the work's phase.
-- D was measured where compactions were chosen, at natural breaks.
-
 ### Prices by model
 
 | model | price of 1M CRTs | a token's cache write, in CRTs | an output token, in CRTs | a compaction's fixed cost | best point |
@@ -495,20 +465,28 @@ done, and even then compacting at 700k barely beats never compacting:
 | β = 0.75 (best point 690k) | 23% of 1M's | +1.1% |
 | β = 0, and each compaction loses 106M CRTs of detail, 365 requests' worth | 100% | +5.3% |
 
-The measured sessions look like neither case. At β = 0.75, requests at 150k would get
-about 30% as much done as those at 700k, yet requests below 200k go wrong no
-more often than those at 400–600k.
-
 </details>
 
 <details>
 <summary>What does the model assume a compaction loses?</summary>
 
-The best point of 260k charges a compaction only its tokens. A summary that
-drops detail costs more, in a mistake, a correction from the user or a step run again,
-and the model charges that as D per compaction. In the measured sessions D is about 1.8M
-CRTs (−0.7M to +5.6M), about 6 wasted requests, after manual `/compact`s and
-Claude Code's ([Calibration](#calibration)).
+The model makes a request's effectiveness depend only on its context's size. A
+request right after a compaction, whose 142k tokens hold a summary of the work
+so far, counts as getting as much done as a request at 142k before the session's
+first compaction.
+
+At β above 0, a summary can do better than that. If it keeps what the work
+needs, the requests after it get as much done as with the whole transcript, more
+than the model counts, and compacting pays more than the model says. A summary
+that drops detail the next turns need costs more instead, in a mistake, a
+correction from the user or a step run again. The model adds that cost as D
+CRTs per compaction, and the best point of 260k takes D as 0.
+
+After manual `/compact`s and Claude Code's own compactions, the author's
+sessions had about 6 more wasted requests than usual, failed tool calls,
+repeated lookups and corrections, a D of about 1.8M CRTs with a 90% interval
+from −0.7M to +5.6M. That count misses losses that waste no request, such as a
+design's rejected options or what the user likes.
 
 | D per compaction | best point, β = 0 | best point, β = 0.6 | a perfect check saves, β = 0 |
 |----|----|----|----|
@@ -517,28 +495,24 @@ Claude Code's ([Calibration](#calibration)).
 | 5.6M, the top of its interval | 315k | 550k | 3.1% |
 | 18.6M, about 64 wasted requests | 400k | 720k | 12% |
 
-D counts only losses that show within two turns, as a failed tool call, a
-repeated lookup or a correction. It misses a design's rejected options, what the
-user likes, harm that comes later and the user's own time, so the true D could be larger.
-
 </details>
 
 <details>
 <summary>Why a power law?</summary>
 
 It has one parameter with a plain meaning: each doubling of the context makes a
-request $`2^\beta`$ times as effective, wherever it starts. It can't hold at small
-contexts, since at β = 0.1 a request with 1k tokens would get half as much done
-as one at 1M. The cost uses only the curve from about 150k to 965k, under three
-doublings, where a saturating form, levelling off once the context holds what
-the work needs, could serve as well. The two differ on one question: does
-doubling an agent's context from 400k to 800k improve its next steps about as
-much as doubling it from 100k to 200k? The power law predicts it does.
+request $`2^\beta`$ times as effective, wherever it starts. The cost uses only the
+curve from about 150k to 965k, under three doublings, so what it does at small
+contexts doesn't enter the cost. Over that range a saturating form, levelling
+off once the context holds what the work needs, could serve as well. The two
+differ on one question: does doubling an agent's context from 400k to 800k
+improve its next steps about as much as doubling it from 100k to 200k? The
+power law predicts it does.
 
 </details>
 
 <details>
-<summary>Does more context have diminishing returns?</summary>
+<summary>Does the power law give more context diminishing returns?</summary>
 
 Per token, yes, with β below 1: a token at 400k adds less than one at 100k, half
 as much at β = 0.5 and 29% as much at β = 0.1. Per doubling, no, since each

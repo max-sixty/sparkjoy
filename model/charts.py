@@ -11,8 +11,6 @@ from one read of the sessions:
   sensitivity    how far the best compaction point moves with each measured parameter
   threshold      the best compaction point against β, in the steady state and the replay
   voi            the expected value of a check's information, on three mixes of work
-
-calibrate.py's --charts draws the doc's last chart, model-calibration, from a longer window.
 """
 
 import html

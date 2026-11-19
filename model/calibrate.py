@@ -4,10 +4,11 @@
 # dependencies = ["numpy>=2.1", "matplotlib>=3.9"]
 # ///
 """Measures how trouble varies with the context in your sessions, and fits D, the cost of the detail
-a compaction drops. See "Calibration" in docs/cost-model.md.
+a compaction drops, which "What does the model assume a compaction loses?" in docs/cost-model.md
+quotes.
 
     uv run --script model/calibrate.py --since 2026-09-17T00:00Z --until 2026-11-16T00:00Z \
-        --costs-since 2026-11-07T12:00Z --costs-until 2026-11-16T00:00Z --charts assets
+        --costs-since 2026-11-07T12:00Z --costs-until 2026-11-16T00:00Z
 
 Effectiveness isn't logged, so the script measures what lowers it, as trouble, and how trouble
 varies with the context within a session. A request is in trouble when a tool call it made
@@ -15,15 +16,12 @@ failed or when it repeated a lookup its context already held; a turn is in troub
 user's next message corrects it or they interrupt it. Regressions with a fixed effect for each
 session estimate how trouble changes with the context, and how much more of it follows a
 compaction, which gives D, with 90% intervals from resampling sessions. Outcomes need many sessions, so the
-cost model that prices D and finds X* can come from a shorter, more recent window. With --charts
-it also draws the doc's model-calibration chart into that directory: trouble by context band beside
-what β would predict.
+cost model that prices D and finds X* can come from a shorter, more recent window.
 """
 
 import argparse
 import re
 from collections import defaultdict
-from pathlib import Path
 
 import numpy as np
 
@@ -70,7 +68,6 @@ REFERENCE = 3  # 400k to 600k, where most compactions happen
 # The half points searched for the saturating form, 1 - 2^(-x/s), which the comparison of forms fits
 # beside the power law.
 BETAS = (0, 0.3, 0.6)  # values of β, the cost model's effectiveness exponent, to replay with D at the top of its interval
-PREDICT = (0.1, 0.3, 0.6)  # values of β whose trouble by context band the results set beside the sessions'
 DRAWS = 200
 
 
@@ -238,62 +235,6 @@ def interval(values, q=(5, 95)):
     return np.percentile(np.array(values, float), q, axis=0)
 
 
-def predicted(x, w, band_x, beta):
-    """The trouble at context x, against the reference band, that β predicts if a request's
-    effectiveness falls only as trouble rises, η ∝ 1 - trouble, with mean trouble w:
-    (1 - w)(1 - η(x) / η(reference band))."""
-    return (1 - w) * (1 - fit.eta(x, beta) / fit.eta(band_x[REFERENCE], beta))
-
-
-def chart(out, x, profile, sessions):
-    """Draws model-calibration into `out`: trouble by context band against the reference band, with
-    90% intervals, beside what each β in PREDICT would predict. `x` is `derived`'s results, `profile`
-    the 90% interval of their profile, and `sessions` how many sessions they come from."""
-    import charts
-    from charts import plt
-
-    bx, prof = x["band x"], x["profile"]
-    lo, hi = profile
-    grid = np.linspace(20_000, 900_000, 200)
-    names = [f"{BINS[k] / 1e3:.0f}–{BINS[k + 1] / 1e3:.0f}k" if BINS[k + 1] != np.inf else f"{BINS[k] / 1e3:.0f}k+"
-             for k in range(len(bx))]
-
-    def points(v, _=None):
-        """A difference in percentage points, signed, with a true minus."""
-        return f"{v * 100:+.0f}".replace("-", "−") if round(v * 100) else "0"
-
-    out.mkdir(parents=True, exist_ok=True)
-    for theme, t in charts.THEMES.items():
-        fit_c = t["fit"]
-        fig, ax = plt.subplots(figsize=(9, 3.8))
-        charts.style(ax, t)
-        for beta in PREDICT:
-            y = predicted(grid, x["w"], bx, beta)
-            keep = grid >= 110_000
-            ax.plot(grid[keep], y[keep], color=charts.shade(t, beta), lw=2)
-            ax.text(grid[keep][0] - 8_000, y[keep][0], f"if β were {beta:g}", ha="right", va="center", fontsize=9,
-                    color=t["ink"])
-        # The reference band is 0 by construction, so it is drawn open and named rather than as a measurement.
-        rest = np.arange(len(bx)) != REFERENCE
-        ax.errorbar(bx[rest], prof[rest], yerr=[(prof - lo)[rest], (hi - prof)[rest]], fmt="o", ms=7, color=t["ink"],
-                    mec=t["page"], mew=1.5, elinewidth=1.4, capsize=0, zorder=3)
-        ax.plot([bx[REFERENCE]], [0], "o", ms=7, mfc=t["page"], mec=t["ink"], mew=1.5, zorder=3)
-        ax.text(bx[REFERENCE], -0.06, "reference", ha="center", va="top", fontsize=9, color=t["muted"])
-        ax.text(bx[0] + 25_000, prof[0], points(prof[0]), va="center", fontsize=9, color=fit_c)
-        ax.set_xlim(-60_000, 950_000)
-        ax.set_xticks(bx, names)
-        ax.set_ylim(-1.0, 0.55)
-        ax.set_yticks([-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5])
-        ax.yaxis.set_major_formatter(points)
-        ax.set_xlabel("Context, by band (each drawn at its mean)", color=t["muted"], fontsize=10)
-        charts.axis_name(ax, "Requests wasted, in percentage points against the 400–600k band", t)
-        handles = [plt.Line2D([], [], color=t["ink"], marker="o", ls="", ms=7, mec=t["page"])]
-        legend = fig.legend(handles, [f"measured in {sessions} sessions, with 90% intervals"],
-                            frameon=False, fontsize=9, loc="upper left", bbox_to_anchor=(0.1, -0.02))
-        legend.get_texts()[0].set_color(fit_c)
-        charts.save(fig, out / f"model-calibration-{theme}.svg")
-
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     fit.window_args(ap)
@@ -301,7 +242,6 @@ def main():
     ap.add_argument("--costs-until", help="and to here (ISO time)")
     ap.add_argument("--model", default="claude-opus-5-5", choices=fit.PRICES, help="whose prices to fit")
     ap.add_argument("--no-replay", action="store_true", help="skip replaying the sessions with D at the top of its interval")
-    ap.add_argument("--charts", type=Path, help="directory to draw the doc's calibration chart into")
     a = ap.parse_args()
     S, since, until = fit.read(a)
     # Outcomes need many sessions; the cost model can come from fewer, more recent ones.
@@ -363,10 +303,6 @@ def main():
               f"{x['profile'][k]:+.2%} ({X['profile'][0][k]:+.2%} to {X['profile'][1][k]:+.2%})")
     print(f"  per e-fold: {pct('slope', X, x)}; mean trouble {w:.1%}")
 
-    print()
-    for beta in PREDICT:
-        print(f"  the cost model at β = {beta:g} would need {predicted(m['band x'][0], w, m['band x'], beta):+.1%} "
-              f"trouble below 200k against 400k to 600k")
 
     print(f"\nD, from the extra trouble in each source's first {fit.SPAN} requests and two turns after a compaction:")
     for key, label in (("", "all"), (" sparkjoy", "sparkjoy's"), (" other", "the user's and Claude Code's")):
@@ -398,8 +334,6 @@ def main():
             floor = cost[:, at].sum() / effectiveness[:, at].sum(0) / (cost[:, -1].sum() / effectiveness[:, -1].sum(0))
             print(f"best turn-end threshold, replayed, {label}: " + ", ".join(
                 f"β = {beta:g}: {k(T[i])}, saving {1 - saved[i]:.1%} (400k: {1 - floor[i]:.1%})" for i, beta in enumerate(BETAS)))
-    if a.charts:
-        chart(a.charts, x, X["profile"], len(S))
 
 
 if __name__ == "__main__":
