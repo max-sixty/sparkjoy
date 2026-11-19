@@ -90,7 +90,7 @@ L 535.22 66.803474
      </g>
     </g>
     <g id="text_4">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="7.2" y="14.7" transform="rotate(-0 7.2 14.7)">Cost per request c(x), by part (CRTs)</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="7.2" y="14.7" transform="rotate(-0 7.2 14.7)">Cost per request c(x) by part, in CRTs</text>
     </g>
    </g>
    <g id="FillBetweenPolyCollection_1">
@@ -289,7 +289,7 @@ L 535.22 209.133787
      </g>
     </g>
     <g id="text_20">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="15.12" y="191.34331" transform="rotate(-0 15.12 191.34331)">Cost per compaction F(x), by part (CRTs)</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="15.12" y="191.34331" transform="rotate(-0 15.12 191.34331)">Cost per compaction F(x) by part, in CRTs</text>
     </g>
    </g>
    <g id="FillBetweenPolyCollection_5">

@@ -450,7 +450,7 @@ L 160.079623 206.976706
      </g>
     </g>
     <g id="text_17">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="7.2" y="194.195672" transform="rotate(-0 7.2 194.195672)">Cost per request (CRTs)</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="7.2" y="194.195672" transform="rotate(-0 7.2 194.195672)">Cost per request, in CRTs</text>
     </g>
    </g>
    <g id="FillBetweenPolyCollection_1">

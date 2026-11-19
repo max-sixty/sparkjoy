@@ -108,7 +108,7 @@ L 535.22 78.180215
      </g>
     </g>
     <g id="text_10">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="7.2" y="14.7" transform="rotate(-0 7.2 14.7)">Cost per request (CRTs)</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="7.2" y="14.7" transform="rotate(-0 7.2 14.7)">Cost per request, in CRTs</text>
     </g>
    </g>
    <g id="line2d_12">
@@ -193,8 +193,8 @@ z
     </g>
    </g>
    <g id="text_13">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(176.13399 181.3881)">lowest at 260k,</text>
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(176.13399 189.935463)">45% less than the default</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(178.736062 164.5581)">min(cost) at 260k,</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(178.736062 173.412728)">45% less than the default</text>
    </g>
    <g id="line2d_15">
     <defs>
