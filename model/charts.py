@@ -502,7 +502,7 @@ def thresholds(out, cost, effectiveness, BT, BX, p, c):
         ax.text(bs[0] + 0.01, fit.AUTO + 15_000, f"Claude Code compacts at {tokens(fit.AUTO)}", ha="left",
                 fontsize=9, color=t["muted"])
         ax.axhline(fit.FLOOR, color=t["muted"], lw=0.8)
-        ax.text(bs[-1], fit.FLOOR + 15_000, f"sparkjoy asks from {tokens(fit.FLOOR)}", ha="right", fontsize=9,
+        ax.text(bs[-1], fit.FLOOR + 15_000, f"sparkjoy's default floor, {tokens(fit.FLOOR)}", ha="right", fontsize=9,
                 color=t["muted"])
         # The steady state in a grey halfway to the page, so it reads apart from the replay's ink; each
         # band a tint of its line, the lighter line's tinted less so its band still shows.

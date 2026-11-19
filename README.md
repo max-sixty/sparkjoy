@@ -232,7 +232,7 @@ Reply with one JSON object and nothing else, filling its fields in order:
 
 # Cost model
 
-sparkjoy's floors come from a model of what keeping a context and compacting it
+sparkjoy's default floors come from a model of what keeping a context and compacting it
 cost, fitted to the author's sessions. It is also on [a page of its own](docs/cost-model.md).
 
 <!-- Generated from docs/cost-model.md by docs/embed.py; edit that file. -->
@@ -253,8 +253,8 @@ It has two parts:
   if three things hold: a request gets as much done at any context size, a
   compaction loses nothing the next turns need, and a session can compact after
   any request.
-  The replay, which compacts only at turn ends, gives sparkjoy's floors: 250k
-  at turn ends and 175k in an idle session.
+  The replay, which compacts only at turn ends, gives sparkjoy's default
+  floors: 250k at turn ends and 175k in an idle session.
 - **[Value of information](docs/cost-model.md#value-of-information).** A check at each turn end
   compacts before or after that threshold, depending on how much the work ahead
   needs the context's detail. sparkjoy's question is such a check. This part
@@ -448,7 +448,7 @@ users. About two-thirds of what K holds beyond the shared system prompt is the
 user's own instructions and skills, which Claude Code attaches again after a
 compaction. For a user with few of them, K may be near 70–80k, an estimate
 rather than a measurement, which puts the best point near 155k. So
-`/sparkjoy:report` fits K, and sparkjoy's floors, to each user's sessions.
+`/sparkjoy:report` fits K and the floors to each user's sessions.
 
 The assumptions about the work move it more. It reaches 400k only at β = 0.55,
 where a request at 200k gets 68% as much done as one at 400k, or if each
@@ -458,7 +458,7 @@ compaction loses about 19M CRTs of detail, some 64 wasted requests.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-threshold-dark.svg">
-  <img alt="Best compaction point against β from 0 to 1, with 90% bands. The steady-state point, compacting at any request (grey), rises from about 260k at β = 0 to 310k at 0.3, crosses 400k at 0.55 and reaches 965k, where Claude Code compacts, from 0.85. The replay's best turn-end threshold (black) stays lower: 200k at β = 0, 240k to 250k from 0.1 to 0.45, 290k at 0.6 and 530k at 0.85, then 850k to 960k. A label marks 250k, where sparkjoy asks from." src="assets/model-threshold-light.svg">
+  <img alt="Best compaction point against β from 0 to 1, with 90% bands. The steady-state point, compacting at any request (grey), rises from about 260k at β = 0 to 310k at 0.3, crosses 400k at 0.55 and reaches 965k, where Claude Code compacts, from 0.85. The replay's best turn-end threshold (black) stays lower: 200k at β = 0, 240k to 250k from 0.1 to 0.45, 290k at 0.6 and 530k at 0.85, then 850k to 960k. A label marks 250k, sparkjoy's default floor." src="assets/model-threshold-light.svg">
 </picture>
 
 The best point against β, in the model, which compacts after any request, and
@@ -471,7 +471,7 @@ so uneven growth, cache lapses and sessions ending move it little. Turns run a
 median of 9 requests but a mean of 38, so one turn can carry the context far
 past the best point before the next chance to compact.
 
-| β | best point | best turn-end threshold | saved there | saved from 250k, sparkjoy's floor | saved from 400k |
+| β | best point | best turn-end threshold | saved there | saved from 250k, sparkjoy's default floor | saved from 400k |
 |----|----|----|----|----|----|
 | 0   | 261k | 200k | 30.0% | 29.8% | 25.0% |
 | 0.3 | 307k | 250k | 20.1% | 20.1% | 17.2% |
@@ -498,7 +498,7 @@ followed by an hour's gap.
 sparkjoy asks once a session has sat 55 minutes since its last reply without a
 new message. The replay times that wait from each reply to the next message, and
 counts each session's last reply as followed by one. The last row, sparkjoy's
-floors, is the best pair on a grid of 50k steps at turn ends and 25k steps idle. Every pair of 200k–250k at turn ends and
+default floors, is the best pair on a grid of 50k steps at turn ends and 25k steps idle. Every pair of 200k–250k at turn ends and
 150k–175k idle comes within 0.3 points of it.
 
 Once the cache lapses, an idle session's next request makes a cache write of the
