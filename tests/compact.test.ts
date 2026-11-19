@@ -1,4 +1,4 @@
-import type { On } from 'claude-code'
+import type { On, TurnUsage } from 'claude-code'
 import { type Engine, expect, mock, test } from 'claude-code/testing'
 import { messageKey } from '../hooks/register'
 
@@ -13,6 +13,16 @@ const ANNOUNCED = { 'compacting:s1': { at: '489k tokens', messages: [messageKey(
 
 const IDLE = 55 * 60_000
 
+// What a turn's requests wrote to the prompt cache: all of it for an hour, as
+// on a subscription.
+const HOUR = {
+  ...USAGE,
+  cache_creation_input_tokens: 3_000,
+  ephemeral_5m_input_tokens: 0,
+  ephemeral_1h_input_tokens: 3_000,
+  model: 'claude-opus-5-5',
+}
+
 // The plugin's data folder, and the figures file `/sparkjoy:report` saves in it.
 const DATA = '/home/u/.claude/plugins/data/sparkjoy-sparkjoy'
 const FIGURES = `${DATA}/figures.json`
@@ -20,6 +30,7 @@ const FIGURES = `${DATA}/figures.json`
 // Stands for the engine beneath the mod: a context of `tokens` until `resize`
 // changes it or a compaction leaves it unmeasured, the rate-limit windows
 // `rateLimits` (a subscription's five-hour and weekly ones unless told
+// otherwise), turns that end reporting `usage` (`HOUR` unless told
 // otherwise), a fork that answers `verdict` after a turn and `idleVerdict`
 // after an idle wait, each after `forkMs` (`null`: an empty reply),
 // compactions that take `compactMs` and fail `compactFailures` times before
@@ -46,6 +57,7 @@ function engine(
       { kind: 'five_hour', percentUsed: 10 },
       { kind: 'seven_day', percentUsed: 30 },
     ],
+    usage = HOUR as TurnUsage,
     saved = undefined as string | undefined,
     hasData = true,
   } = {},
@@ -117,7 +129,7 @@ function engine(
   // Runs one main-loop turn to its answer and lets what it starts settle.
   async function turn($: Engine, turnId: string, answer = 'Merged #12. ✅') {
     await $.turn.start({ text: 'go', turnId })
-    await $.turn.complete({ answer, durationMs: 1, isAborted: false, turnId, reason: 'answer' })
+    await $.turn.complete({ answer, durationMs: 1, isAborted: false, turnId, reason: 'answer', usage })
     await clock.settle()
   }
 
@@ -613,9 +625,9 @@ test('an idle session below 175k is left as it is', async ($, on) => {
   expect(compactions).toEqual([''])
 })
 
-test('an idle session on a plan with only a weekly limit is asked too', async ($, on) => {
-  const rateLimits = [{ kind: 'seven_day', percentUsed: 85 }]
-  const { begin, clock, compactions, turn } = engine(on, { tokens: 200_000, rateLimits })
+test('an idle session on a one-hour cache is asked without a subscription', async ($, on) => {
+  // An API key that opted in to the one-hour cache reports no rate limits.
+  const { begin, clock, compactions, turn } = engine(on, { tokens: 200_000, rateLimits: [] })
   await begin($)
 
   await turn($, 't1')
@@ -624,6 +636,25 @@ test('an idle session on a plan with only a weekly limit is asked too', async ($
 
   expect(compactions).toEqual([''])
 })
+
+for (const [name, usage] of [
+  // A turn that ran onto usage credits partway, whose later requests cached
+  // for five minutes.
+  ['wrote some of the cache for five minutes', { ...HOUR, ephemeral_5m_input_tokens: 1_000, ephemeral_1h_input_tokens: 2_000 }],
+  // A provider that names no lifetime reports only the whole write.
+  ['named no cache lifetime', { ...USAGE, cache_creation_input_tokens: 3_000, model: HOUR.model }],
+] as const) {
+  test(`an idle session whose turn ${name} is left as it is`, async ($, on) => {
+    const { begin, clock, forks, turn } = engine(on, { tokens: 200_000, usage })
+    await begin($)
+
+    await turn($, 't1')
+    await clock.advance(IDLE)
+    await clock.settle()
+
+    expect(forks).toEqual([])
+  })
+}
 
 test('a session with a 200k context window is left as it is, idle or not', async ($, on) => {
   const { begin, clock, forks, logs, turn } = engine(on, { tokens: 180_000, window: 200_000 })
@@ -635,15 +666,4 @@ test('a session with a 200k context window is left as it is, idle or not', async
 
   expect(forks).toEqual([])
   expect(logs).toEqual([])
-})
-
-test('an idle session on an API key is left as it is', async ($, on) => {
-  const { begin, clock, compactions, turn } = engine(on, { tokens: 200_000, rateLimits: [] })
-  await begin($)
-
-  await turn($, 't1')
-  await clock.advance(IDLE)
-  await clock.settle()
-
-  expect(compactions).toEqual([])
 })
