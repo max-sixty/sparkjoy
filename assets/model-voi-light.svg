@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
   "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="571.866875pt" height="295.929889pt" viewBox="0 0 571.866875 295.929889" xmlns="http://www.w3.org/2000/svg" version="1.1">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="606.681406pt" height="295.929889pt" viewBox="0 0 606.681406 295.929889" xmlns="http://www.w3.org/2000/svg" version="1.1">
  <metadata>
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
@@ -21,8 +21,8 @@
  <g id="figure_1">
   <g id="patch_1">
    <path d="M 0 295.929889 
-L 571.866875 295.929889 
-L 571.866875 0 
+L 606.681406 295.929889 
+L 606.681406 0 
 L 0 0 
 L 0 295.929889 
 z
@@ -70,7 +70,7 @@ z
      </g>
     </g>
     <g id="text_6">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="254.06" y="286.645514" transform="rotate(-0 254.06 286.645514)">Mutual information between verdict and whether context helps (% of a perfect check's)</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="254.06" y="286.645514" transform="rotate(-0 254.06 286.645514)">Mutual information between verdict and whether context helps (% of a perfect classifier's)</text>
     </g>
    </g>
    <g id="matplotlib.axis_2">
@@ -257,7 +257,7 @@ L 477.26 258.946295
 " style="fill: none; stroke: #52514e; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
    <g id="text_12">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="488.42" y="259.373697" transform="rotate(-0 488.42 259.373697)">Checks' cost, 0.3%</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="488.42" y="259.14272" transform="rotate(-0 488.42 259.14272)">Running the classifier, 0.3%</text>
    </g>
    <g id="text_13">
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="488.42" y="178.172881" transform="rotate(-0 488.42 178.172881)">60% at β = 1</text>
