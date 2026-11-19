@@ -1,19 +1,33 @@
 # Cost model
 
-The cost model asks when compacting costs least, knowing only the context's
-size. Its simplest form assumes that a request gets as much done at any context
-size, that a compaction loses nothing the next turns need, and that a session
-can compact after any request, and it takes its costs from the author's sessions on Opus
-5.5 with the one-hour cache. Under those assumptions the best point is about
-260k[^x]. The later sections drop each assumption in turn, and sparkjoy's
-floors come from a replay of those sessions that compacts only at turn ends
-([Idle sessions](#idle-sessions)).
+This is an analytical model of when compacting costs least. It simplifies a
+session to a context that grows by the same number of tokens with each request
+and drops back to the same size at each compaction, and it prices requests and
+compactions from the author's sessions on Opus 5.5 with the one-hour cache.
+Those simplifications give the best compaction point in closed form, and a
+replay of the same sessions tests them.
+
+It has two parts:
+
+- **[One compaction threshold](#one-compaction-threshold).** Every compaction
+  comes at the same context size, whatever the work. If a request gets as much
+  done at any context size, a compaction loses nothing the next turns need, and
+  a session can compact after any request, the best size is about 260k[^x].
+  The replay, which compacts only at turn ends, gives sparkjoy's floors: 250k
+  at turn ends and 175k in an idle session.
+- **[Value of information](#value-of-information).** A check at each turn end
+  compacts sooner or later than that threshold, by how much the work ahead needs
+  what the context holds. sparkjoy's question is such a check. This part finds
+  what a check could save over the best single threshold, and how often it must
+  be right to pay.
 
 Costs are in CRTs, cached-read tokens. One CRT is the price of reading one token
 from the prompt cache, which [Prices by model](#prices-by-model) gives for each
 model.
 
-## Trade-off
+## One compaction threshold
+
+### Trade-off
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-cycles-dark.svg">
@@ -30,7 +44,7 @@ compactions frequent, and compacting late makes requests large.
 | 400k | 151 | 500k CRTs | 61% |
 | never, leaving it to Claude Code at 965k | 482 | 820k CRTs | 100% |
 
-## Request and compaction costs
+### Request and compaction costs
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-inputs-dark.svg">
@@ -115,7 +129,7 @@ intervals from resampling sessions.
 
 </details>
 
-## Best compaction point
+### Best compaction point
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-average-dark.svg">
@@ -136,7 +150,7 @@ compaction costs](#request-and-compaction-costs):
 X^* = K + \sqrt{\frac{2g\,(F_0 + K)}{h}} = 142\text{k} + 119\text{k} = 262\text{k}
 ```
 
-## Context size and effectiveness
+### Context size and effectiveness
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-effectiveness-dark.svg">
@@ -172,7 +186,7 @@ larger β, the later the minimum comes and the less it saves.
 | 0.6 | 30% | 440k | 8% |
 | 1 | 15% | 965k, where Claude Code compacts | none |
 
-## Sensitivity
+### Sensitivity
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-sensitivity-dark.svg">
@@ -189,7 +203,7 @@ The assumptions about the work move it more. It reaches 400k only at β = 0.55,
 where a request at 200k gets 68% as much done as one at 400k, or if each
 compaction loses about 19M CRTs of detail, some 64 wasted requests.
 
-## Does the model's simplification matter?
+### Does the model's simplification matter?
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-threshold-dark.svg">
@@ -217,7 +231,7 @@ sessions end before their context reaches 965k. Each assumes a check that always
 says to compact; sparkjoy's question decides which turn ends past the floor to
 use.
 
-## Idle sessions
+### Idle sessions
 
 | policy | saved |
 |----|----|
@@ -462,25 +476,8 @@ Thresholds section gives the floors that cost least for them, and from then on
 the plugin's question states the parameters it measured in place of the defaults. A
 fit needs some compactions in the window, to measure K and N.
 
-The figures and charts here come from `model/fit.py` and `model/calibrate.py`:
-
-```
-# The figures and charts above, from the sessions of 7 to 15 November
-uv run --script model/fit.py --since 2026-11-07T12:00Z --until 2026-11-16T00:00Z \
-  --charts assets
-
-# The same at other prices and cache lifetimes
-uv run --script model/fit.py --since 2026-11-07T12:00Z --until 2026-11-16T00:00Z \
-  --model claude-fable-5-2 --ttl 5m
-
-# The calibration, D and its chart, over 60 days of sessions
-uv run --script model/calibrate.py --since 2026-09-17T00:00Z --until 2026-11-16T00:00Z \
-  --costs-since 2026-11-07T12:00Z --costs-until 2026-11-16T00:00Z --charts assets
-```
-
-They read the main thread of each interactive session in `~/.claude/projects`,
-opening only transcripts modified since `--since`, at low priority, and
-resample sessions for the intervals.
+The author's figures and charts come from `model/fit.py` and
+`model/calibrate.py`, whose docstrings give their options.
 
 [^x]: X\*, the best compaction point: 262k from the closed form under [Best
 compaction point](#best-compaction-point), and 253–271k, its 90% interval from
