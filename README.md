@@ -586,6 +586,9 @@ mean β 0.6, with one share at the β shown and the rest at β = 0. The band alo
 | 30% at β = 2 | never compacting | 20% | 7% | 71% |
 | 12% at β = 5, work that stalls without its history | never compacting | 24% | 1% | 87% |
 
+<details>
+<summary>Where a classifier compacts</summary>
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-voi-point-dark.svg">
   <img alt="The compaction point of the work a classifier says to compact, from 261k to 965k, against its accuracy as a share of a perfect classifier's information, for the same three mixes. For 60% at β = 1 it starts at 790k, the best single threshold, and falls to 344k at about half the information. For 30% at β = 2 it stays at 965k until 7% of the information, then falls to 501k at about half. For 12% at β = 5 it stays at 965k until 29%, and is still at 858k at 46%. All three reach 261k with a perfect classifier." src="assets/model-voi-point-light.svg">
@@ -596,6 +599,8 @@ accuracy. The work it says to keep compacts at 965k at all but the lowest
 accuracies. At β = 5, a unit of work compacted at 261k costs 208 times as much
 as when the session never compacts, so compacting any of that mix pays only once
 a classifier has 29% of a perfect classifier's information.
+
+</details>
 
 | work mixed with β = 0, in any share | the most a perfect classifier saves |
 |----|----|
