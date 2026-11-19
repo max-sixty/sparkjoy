@@ -5,8 +5,9 @@
 //
 // `question()` isn't exported, so this imports a copy of register.ts that
 // exports it. It passes each parameter by name: `reply`, `tokens` (the
-// context's size) and `idleMinutes`, so a checkout whose question takes
-// fewer of them is called with just those.
+// context's size), `idleMinutes` and `figures`, so a checkout whose question
+// takes fewer of them is called with just those. `figures` is left out, so
+// the question states the author's: the cases come from his sessions.
 
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -23,6 +24,7 @@ const values: Record<string, unknown> = {
   reply: await Bun.stdin.text(),
   tokens: Number(tokens),
   idleMinutes: idleMinutes === undefined ? undefined : Number(idleMinutes),
+  figures: undefined,
 }
 const unknown = names.filter(name => !(name in values))
 if (unknown.length > 0) throw new Error(`question() takes parameters this script doesn't know: ${unknown}`)

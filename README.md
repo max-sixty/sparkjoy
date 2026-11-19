@@ -68,7 +68,8 @@ dozens of requests.
 
 - **`/sparkjoy:report`** writes a page about your own sessions of the last 14
   days and opens it: every verdict, what the compactions saved, and the
-  thresholds the [cost model](#cost-model) fits to them. It needs
+  thresholds the [cost model](#cost-model) fits to them. From then on the
+  question states the figures it fitted in place of mine. It needs
   [uv](https://docs.astral.sh/uv/).
 
 Claude Code's own compaction near the end of the window still runs, and
@@ -206,8 +207,10 @@ Reply with one JSON object and nothing else, filling its fields in order:
 - It asks only from 250k, or 175k in an idle session: the pair of floors that
   costs least when my sessions are replayed
   ([Cost model](#cost-model)), taking every check to say yes.
-- The question's figures for a turn's length and for what a compaction costs
-  the requests after it come from my sessions, not yours.
+- Until you run `/sparkjoy:report`, the question's figures for a turn's length
+  and for what a compaction costs come from my sessions. The report fits them
+  to yours, all but the wasted requests after a compaction, which take months
+  of sessions to measure.
 - It acts between turns only. Claude Code's own compaction near the end of the
   window still bounds a long turn.
 - It acts only in sessions with a 1M-token context window, the size its
@@ -745,8 +748,9 @@ moves later.
 ### Fitting it to your sessions
 
 `/sparkjoy:report` fits the model to your sessions of the last 14 days. Its
-Thresholds section gives the floors that cost least for them. A fit needs some
-compactions in the window, to measure K and N.
+Thresholds section gives the floors that cost least for them, and from then on
+the plugin's question states the parameters it measured in place of mine. A
+fit needs some compactions in the window, to measure K and N.
 
 My own figures and charts come from `model/fit.py` and `model/calibrate.py`:
 
