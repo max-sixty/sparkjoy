@@ -7,14 +7,14 @@ transcript spark joy? That is, does the work ahead still need it, or can it go?
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/session-dark.svg">
-  <img alt="Context per request across one session. With sparkjoy, dots mark the 11 turn ends where the plugin asked whether to compact: at 5 the session kept going, and at 6 it compacted, at sizes from 417k to 728k tokens. Without it, the context climbs to about 960k before Claude Code compacts." src="assets/session-light.svg">
+  <img alt="Context per request across one session of 3,110 requests over three days. With sparkjoy, dots mark the 55 turn ends where the plugin asked whether to compact: at 30 the session kept going, 16 times in a row from 445k to 700k, and at 25 it compacted, at sizes from 206k to 867k tokens. Without it, the context climbs to about 960k each time before Claude Code compacts, seven times in all." src="assets/session-light.svg">
 </picture>
 
 One session with the plugin, and the same session replayed without it. Every
 request reads the whole context, so the area under each line counts the tokens
 the session read. At each dot the plugin asked the session's model whether to
-compact, and at the six filled dots the session compacted. In the replay, this
-session cost 25% less with the plugin than without it.
+compact, and at the filled dots the session compacted. In the replay, this
+session cost 30% less with the plugin than without it.
 
 ## Install
 
@@ -34,8 +34,8 @@ At the prompt of a Claude Code session:
   as these two from the session above:
 
   ```
-  sparkjoy: Compacting at 728k tokens: Long transcript of finished exploration, reverted attempts and diffs; remaining work is CI follow-up and the final closeout, which a summary covers.
-  sparkjoy: Compacting at 680k tokens: The hierarchy PR is open and handed over. The follow-up work needs only the summary, not the transcript's diffs and logs.
+  sparkjoy: Kept at 362k tokens: The README move is half done: unpushed files, a helper still running, and a page rebuild that hasn't been run yet
+  sparkjoy: Compacting at 404k tokens: Move is finished and pushed; file paths, commands and conventions fit in a summary, and files can be re-read
   ```
 
 - **`/sparkjoy:report`** opens a page on your sessions of the last 14 days,
