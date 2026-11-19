@@ -321,7 +321,7 @@ L 59.12 73.659065
 " style="fill: none; stroke: #0b0b0b; stroke-width: 2; stroke-linecap: square"/>
     </g>
     <g id="text_16">
-     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #a3500c" x="66.32" y="76.809065" transform="rotate(-0 66.32 76.809065)">replay of my sessions, compacting at turn ends</text>
+     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #a3500c" x="66.32" y="76.809065" transform="rotate(-0 66.32 76.809065)">replay of the sessions, compacting at turn ends</text>
     </g>
     <g id="patch_4">
      <path d="M 41.12 90.050315 

@@ -61,7 +61,7 @@ class Mix:
 
 # Three averages of D, each with 30% of turn ends mid-task: the D measured after the compactions the
 # user and Claude Code made, $0.35, the top of its 90% interval, $1.12 (docs/cost-model.md,
-# "Calibration against my sessions"), and $3.72, enough on its own to move the best point to 400k. How the
+# "Calibration"), and $3.72, enough on its own to move the best point to 400k. How the
 # average splits between the share and the loss moves the saving much less than the average does.
 # The share stays below 0.43: if the evals' accuracy held live, the plugin's compacting at 125 of at
 # most 149 verdicts would put it there or lower. D at a finished turn end is 0 rather than below: a
