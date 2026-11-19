@@ -514,9 +514,8 @@ moves later.
 ## Fitting it to your sessions
 
 `/sparkjoy:report` fits the model to your sessions of the last 14 days. Its
-Thresholds section gives the floors that cost least for them, and from then on
-the plugin's question states the parameters it measured in place of mine. A
-fit needs some compactions in the window, to measure K and N.
+Thresholds section gives the floors that cost least for them. A fit needs some
+compactions in the window, to measure K and N.
 
 My own figures and charts come from `model/fit.py` and `model/calibrate.py`:
 
