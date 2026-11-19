@@ -1,27 +1,27 @@
 # Cost model
 
-This is an analytical model of when compacting costs least. It treats a
-session's context as growing by the same number of tokens with each request and
-dropping back to the same size at each compaction, which gives the best
-compaction point in closed form. [The model](#the-model) states it in symbols.
-[Fitted to my sessions](#fitted-to-my-sessions) gives it values measured from
-my sessions on Opus 5.5 with the one-hour cache, and tests that simplification
-against a replay of the same sessions.
+For my sessions, compacting costs least at about 260k tokens if every
+compaction comes at the same context size, whatever the work[^x]. That figure
+assumes a session can compact after any request. A replay of the sessions that
+compacts only at turn ends gives sparkjoy's default floors, the context sizes
+from which it asks whether to compact: 250k at turn ends and 175k in an idle
+session. Both count token costs alone, leaving out how much each request gets
+done and the detail a compaction loses.
 
-It answers two questions:
+The model treats a session's context as growing by the same number of tokens
+with each request and dropping back to the same size at each compaction, which
+gives the best compaction point in closed form. [The model](#the-model) states
+it in symbols. [Fitted to my sessions](#fitted-to-my-sessions) gives it values
+measured from my sessions on Opus 5.5 with the one-hour cache, and tests that
+simplification against a replay of the same sessions.
 
-- **One compaction threshold.** If every compaction comes at the same context
-  size, whatever the work, which size costs least? For my sessions, the cost
-  is lowest at about 260k[^x]. That figure counts token costs alone, leaving out
-  how much each request gets done and the detail a compaction loses, and it
-  assumes a session can compact after any request. A replay of the sessions that compacts only
-  at turn ends gives sparkjoy's default floors, the context sizes from which it
-  asks whether to compact: 250k at turn ends and 175k in an idle session.
-- **[Value of information](#value-of-information).** A classifier, such as
-  sparkjoy's question, says at each turn end whether to compact before or after
-  that threshold, depending on how much the work ahead needs the context's
-  detail. The model finds what a classifier could save over the best single
-  threshold, and how often it must be right to pay for itself.
+[Value of information](#value-of-information) asks what a classifier could save
+over the best single threshold. A classifier, such as sparkjoy's question, says
+at each turn end whether to compact before or after that threshold, depending on
+how much the work ahead needs the context's detail. With the lost detail
+measured in my sessions, a perfect classifier would save 0.7% of what the best
+single threshold costs, and one right as often as sparkjoy's question on the
+evals under 0.1%.
 
 Costs are in dollars, at Opus 5.5's prices for the one-hour cache. The formulas
 count them in cached reads: reading one token from the prompt cache costs one

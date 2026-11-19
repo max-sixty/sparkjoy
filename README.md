@@ -30,11 +30,16 @@ At the prompt of a Claude Code session:
   and compacts if the model says to ([How it decides](#how-it-decides)).
 - **After 55 minutes idle**, it asks again before the one-hour prompt cache
   lapses.
-- **Each verdict shows in the transcript** as a dim line with its reason, such
-  as these two from the session above:
+- **Each verdict shows in the transcript** as a dim line with its reason. In
+  the session above, it kept the context while a move was half done:
 
   ```
   sparkjoy: Kept at 362k tokens: The README move is half done: unpushed files, a helper still running, and a page rebuild that hasn't been run yet
+  ```
+
+  Once the move was on main, it compacted the session:
+
+  ```
   sparkjoy: Compacting at 404k tokens: Move is finished and pushed; file paths, commands and conventions fit in a summary, and files can be re-read
   ```
 
@@ -55,8 +60,9 @@ At the prompt of a Claude Code session:
 
 ## What it saves
 
-My 87 Claude Code sessions from 7 to 15 November 2026, 36,251
-requests, replayed with and without the plugin[^replay]:
+In a replay of my 87 Claude Code sessions from 7 to 15 November 2026, 36,251
+requests in all, the plugin cut their cost by 23%, from $5,214 to $4,013 at
+Opus 5.5 list prices[^replay]:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/cost-dark.svg">
@@ -68,44 +74,39 @@ requests, replayed with and without the plugin[^replay]:
   <img alt="Share of requests at each context size. With the plugin, most requests carry 100k to 450k tokens; without it, a long tail runs to 1M." src="assets/context-light.svg">
 </picture>
 
-|                                 | without sparkjoy | with sparkjoy |
-| ------------------------------- | ---------------- | ------------- |
-| cost, at Opus 5.5 list prices   | $5,214           | $4,013 (−23%) |
-| mean context per request        | 462k             | 337k          |
-| requests at 600k tokens or more | 28%              | 6%            |
-
-Of the 59 sessions that reached 400k, half saved between 12% and 31%, and one
-cost 19% more.
-
-Each question is one request, which reads the conversation from the cache and
-outputs about a hundred tokens. The 198 questions, at turn ends of 400k or more,
-cost $22 in all, and 122 led to a compaction.
+With the plugin, the mean request carried 337k tokens rather than 462k, and 6%
+of requests carried 600k or more rather than 28%. Of the 59 sessions that
+reached 400k, half saved between 12% and 31%, and one cost 19% more. The 198
+questions, at turn ends of 400k or more, cost $22 in all, and 122 of them led to
+a compaction.
 
 A compaction costs about $1 on Opus 5.5, mostly the cache write of the 142k
-tokens left after it. Every later request then reads less:
+tokens it leaves. After a compaction at 200k, each later request reads 58k fewer
+tokens, the 200k less those 142k, and after one at 400k, 258k fewer. The larger
+the context, the sooner a compaction pays for itself:
 
-| compacting at | each later request reads | pays for itself after | context grows back in |
-| ------------- | ------------------------ | --------------------- | --------------------- |
-| 200k          | 58k less                 | 74 requests           | 34 requests           |
-| 400k          | 258k less                | 17 requests           | 151 requests          |
-| 700k          | 558k less                | 9 requests            | 327 requests          |
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/model-payback-dark.svg">
+  <img alt="Later requests until a compaction pays for itself, against the context it compacts. The curve falls steeply from above 100 just past 142k, what a compaction leaves, to 74 requests at 200k, where each later request reads 58k less, 17 at 400k, reading 258k less, and 9 at 700k, reading 558k less, then flattens toward 6 near 965k." src="assets/model-payback-light.svg">
+</picture>
 
 ## How it decides
 
-sparkjoy asks only when a turn ends, because a piece of work most likely
-finishes with a turn. It asks again if the session then sits idle.
+sparkjoy forks the conversation for one request, which asks the session's own
+model whether to compact now. The fork reads the whole transcript from the
+prompt cache and outputs about a hundred tokens, a verdict and a one-line
+reason. sparkjoy asks when a turn ends, since a piece of work most likely
+finishes with a turn, and again if the session then sits idle for 55 minutes.
 
-The question goes to the session's own model, which reads the whole transcript
-from the prompt cache. It asks whether the next turns will need detail a summary
-drops, such as exact output, failed attempts or a design still taking shape. It
-also tells the model that nearly every long transcript is mostly finished work,
-so that alone is no reason to compact.
+The question asks whether the next turns will need detail a summary drops, such
+as exact output, failed attempts or a design still taking shape. Nearly every
+long transcript is mostly finished work, so it tells the model that this alone
+is no reason to compact. It also gives both costs at the context's size: what a
+compaction costs and how many requests it takes to pay for itself, and what
+keeping the context through another turn costs.
 
-The question gives both costs for the context's size: what a compaction costs
-and how many requests it takes to pay for itself, and what keeping the context
-through another turn costs. The model answers with its verdict and a one-line
-reason. In the [evals](evals/README.md), the model compacts at every turn end
-that finishes a piece of work, as the [cost model](#cost-model) recommends past
+In the [evals](evals/README.md), the model compacts at every turn end that
+finishes a piece of work, as the [cost model](#cost-model) recommends past
 about 250k. At the four turn ends in the middle of a task, from 519k to 681k, it
 compacts in 5 of 8 runs.
 
@@ -223,28 +224,28 @@ compacting it cost, fitted to my sessions.
 <details>
 <summary>The cost model</summary>
 
-This is an analytical model of when compacting costs least. It treats a
-session's context as growing by the same number of tokens with each request and
-dropping back to the same size at each compaction, which gives the best
-compaction point in closed form. [The model](docs/cost-model.md#the-model) states it in symbols.
-[Fitted to my sessions](docs/cost-model.md#fitted-to-my-sessions) gives it values measured from
-my sessions on Opus 5.5 with the one-hour cache, and tests that simplification
-against a replay of the same sessions.
+For my sessions, compacting costs least at about 260k tokens if every
+compaction comes at the same context size, whatever the work[^x]. That figure
+assumes a session can compact after any request. A replay of the sessions that
+compacts only at turn ends gives sparkjoy's default floors, the context sizes
+from which it asks whether to compact: 250k at turn ends and 175k in an idle
+session. Both count token costs alone, leaving out how much each request gets
+done and the detail a compaction loses.
 
-It answers two questions:
+The model treats a session's context as growing by the same number of tokens
+with each request and dropping back to the same size at each compaction, which
+gives the best compaction point in closed form. [The model](docs/cost-model.md#the-model) states
+it in symbols. [Fitted to my sessions](docs/cost-model.md#fitted-to-my-sessions) gives it values
+measured from my sessions on Opus 5.5 with the one-hour cache, and tests that
+simplification against a replay of the same sessions.
 
-- **One compaction threshold.** If every compaction comes at the same context
-  size, whatever the work, which size costs least? For my sessions, the cost
-  is lowest at about 260k[^x]. That figure counts token costs alone, leaving out
-  how much each request gets done and the detail a compaction loses, and it
-  assumes a session can compact after any request. A replay of the sessions that compacts only
-  at turn ends gives sparkjoy's default floors, the context sizes from which it
-  asks whether to compact: 250k at turn ends and 175k in an idle session.
-- **[Value of information](docs/cost-model.md#value-of-information).** A classifier, such as
-  sparkjoy's question, says at each turn end whether to compact before or after
-  that threshold, depending on how much the work ahead needs the context's
-  detail. The model finds what a classifier could save over the best single
-  threshold, and how often it must be right to pay for itself.
+[Value of information](docs/cost-model.md#value-of-information) asks what a classifier could save
+over the best single threshold. A classifier, such as sparkjoy's question, says
+at each turn end whether to compact before or after that threshold, depending on
+how much the work ahead needs the context's detail. With the lost detail
+measured in my sessions, a perfect classifier would save 0.7% of what the best
+single threshold costs, and one right as often as sparkjoy's question on the
+evals under 0.1%.
 
 Costs are in dollars, at Opus 5.5's prices for the one-hour cache. The formulas
 count them in cached reads: reading one token from the prompt cache costs one
