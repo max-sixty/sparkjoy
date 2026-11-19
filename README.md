@@ -200,8 +200,8 @@ Reply with one JSON object and nothing else, filling its fields in order:
 
 # Cost model
 
-sparkjoy's default floors come from a model of what keeping a context and compacting it
-cost, fitted to my sessions. It is also on [a page of its own](docs/cost-model.md).
+sparkjoy's default floors come from a model of what keeping a context and
+compacting it cost, fitted to my sessions.
 
 <!-- Generated from docs/cost-model.md by docs/embed.py; edit that file. -->
 <details>
