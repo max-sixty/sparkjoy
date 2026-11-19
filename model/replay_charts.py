@@ -61,7 +61,9 @@ def session_chart(s, t, path):
     def draw(key, color, fill):
         ys = traces[key]
         if fill:
-            ax.fill_between(range(len(ys)), ys, color=color, lw=0)
+            # The area under the line, closed by its two corners on the axis, where fill_between would
+            # write a point on the axis under every request.
+            ax.fill([0, *range(len(ys)), len(ys) - 1], [0, *ys, 0], color=color, lw=0)
         else:
             ax.plot(ys, color=color, lw=2, solid_joinstyle="round")
 
