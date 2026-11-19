@@ -480,7 +480,7 @@ def sensitivity(out, p, c, boot):
         ax.legend(keys, ["parameter halved", "parameter doubled", "across its 90% interval"], frameon=False,
                   fontsize=9, labelcolor=t["ink"], ncol=3, loc="lower right", bbox_to_anchor=(1, 1.0),
                   handletextpad=0.4, columnspacing=1.2, handlelength=1.2)
-        ax.set_xlabel("Best compaction point at β = 0 (tokens)", color=t["muted"], fontsize=10)
+        ax.set_xlabel("Compaction point of lowest cost (tokens)", color=t["muted"], fontsize=10)
         # Every parameter here is measured, which its name's colour says, so the chart needs no key for it.
         save(fig, out / f"model-sensitivity-{theme}.svg", labels)
 

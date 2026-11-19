@@ -84,7 +84,7 @@ L 647.751809 43.185445
      </g>
     </g>
     <g id="text_5">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="502.378125" y="270.468664" transform="rotate(-0 502.378125 270.468664)">Best compaction point at β = 0 (tokens)</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="502.378125" y="270.468664" transform="rotate(-0 502.378125 270.468664)">Compaction point of lowest cost (tokens)</text>
     </g>
    </g>
    <g id="matplotlib.axis_2">

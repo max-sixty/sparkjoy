@@ -233,10 +233,10 @@ simplifications with a replay of the same sessions.
 It answers two questions:
 
 - **One compaction threshold.** If every compaction comes at the same context
-  size, whatever the work, which size costs least? For the author's sessions it
-  is about 260k<sup>1</sup> if three things hold: a request gets as much done at any
-  context size, a compaction loses nothing the next turns need, and a session
-  can compact after any request.
+  size, whatever the work, which size costs least? For the author's sessions,
+  the cost is lowest at about 260k<sup>1</sup>. That figure counts token costs alone,
+  not how much each request gets done or detail a compaction loses, and lets a
+  session compact after any request.
   The replay, which compacts only at turn ends, gives sparkjoy's default
   floors: 250k at turn ends and 175k in an idle session.
 - **[Value of information](docs/cost-model.md#value-of-information).** A classifier at each turn
@@ -330,8 +330,9 @@ early makes compactions frequent, and compacting late makes requests large.
 A request's cost averaged over a cycle, its share of the compaction included,
 is lowest where the marginal cost crosses it. The marginal cost is what one more
 request before compacting costs. Waiting for that request lowers the average
-while it costs less than the average, as in Harris's economic order quantity. If
-a request gets as much done at any context, the best point has a closed form:
+while it costs less than the average, as in Harris's economic order quantity.
+The point where the average cost is lowest has a closed form. It counts cost
+alone, not how much each request gets done:
 
 $`\displaystyle X^* = K + \sqrt{\frac{2g\,(F_0 + K)}{h}}`$
 
@@ -340,8 +341,7 @@ $`\displaystyle X^* = K + \sqrt{\frac{2g\,(F_0 + K)}{h}}`$
   <img alt="Cost per request against the compaction point X, in symbols without figures. The average, a request's cost with its share of the compaction included, falls steeply from just above K to its minimum at X*, then rises slowly to Claude Code's default near the window's end, where a hollow dot marks it. The marginal cost, a straight grey line from K, rises through the minimum, where a filled dot labelled min(cost) at X* marks the crossing." src="assets/model-average-light.svg">
 </picture>
 
-The average and marginal costs against the compaction point X, with a request
-getting as much done at any context.
+The average and marginal costs of a request against the compaction point X.
 
 ### Context size and effectiveness
 
@@ -472,9 +472,9 @@ a context of 335k tokens.
 
 ### Average cost
 
-With a request getting as much done at any context size, compacting at the
-cheapest point, about 260k, saves 45% per request against Claude Code's default
-of compacting at 965k, and compacting at 400k saves 39%. With the values above,
+Compacting at the cheapest point, about 260k, saves 45% per request against
+Claude Code's default of compacting at 965k, and compacting at 400k saves 39%.
+These savings count cost alone, not how much each request gets done. With the values above,
 the closed form under [Best compaction point](docs/cost-model.md#best-compaction-point) gives
 
 $`\displaystyle X^* = 142\text{k} + \sqrt{\frac{2 \cdot 1706 \cdot (4.93\text{M} + 142\text{k})}{1.22}} = 142\text{k} + 119\text{k} = 262\text{k}`$
@@ -500,10 +500,10 @@ larger β, the later the minimum comes and the less it saves.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-sensitivity-dark.svg">
-  <img alt="Horizontal bars, one for each parameter measured in the sessions, from the best compaction point at β = 0 with the parameter halved (open dot) to the point with it doubled (filled dot), with a solid segment where the point lies across the parameter's 90% interval, around a line at about 260k, the point with every parameter as measured: K, 150k to 459k, and 254k to 269k across its interval; g, 227k to 311k, and 258k to 265k; P, 268k to 247k, and 261k to 262k; ℓ, 267k to 252k, and 260k to 263k; N, 258k to 268k, and 261k to 262k." src="assets/model-sensitivity-light.svg">
+  <img alt="Horizontal bars, one for each parameter measured in the sessions, from the compaction point of lowest cost with the parameter halved (open dot) to the point with it doubled (filled dot), with a solid segment where the point lies across the parameter's 90% interval, around a line at about 260k, the point with every parameter as measured: K, 150k to 459k, and 254k to 269k across its interval; g, 227k to 311k, and 258k to 265k; P, 268k to 247k, and 261k to 262k; ℓ, 267k to 252k, and 260k to 263k; N, 258k to 268k, and 261k to 262k." src="assets/model-sensitivity-light.svg">
 </picture>
 
-How far the best point at β = 0, about 260k, moves when a parameter measured in
+How far the point of lowest cost, about 260k, moves when a parameter measured in
 the sessions is halved or doubled, and across its 90% interval. K, the context
 after a compaction, moves it most, from 150k to 459k when halved or doubled, but
 only from 254k to 269k across its interval, and each other parameter moves it
@@ -562,7 +562,8 @@ use.
 | turn ends from 200k, the best without idle compaction | 30.0% |
 | turn ends from 250k and idle sessions from 175k | 30.7% |
 
-The replay at β = 0, each policy compacting wherever it allows. Idle compaction
+Savings in the replay, counting cost alone, with each policy compacting
+wherever it allows. Idle compaction
 does much of what a lower turn-end threshold would, since 18% of turn ends are
 followed by an hour's gap.
 
