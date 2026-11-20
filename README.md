@@ -182,7 +182,9 @@ At the two small natural breaks the [cost model](#cost-model) also says to
 compact. At the mid-task turn ends, the same question and transcripts kept the
 context in 6 of 16 runs on the evening of 19 November, in none of 16 on the
 morning of 20 November and in 47 of 64 over two batches that afternoon, so two
-versions of the question compare only when run in the same batch.
+versions of the question compare only when run in the same batch. Some labels
+are uncertain, since each records what the session did next rather than what
+it needed ([Where this leaves them](evals/README.md#where-this-leaves-them)).
 
 The hook reads only `compact` and `reason`, yet the question asks for `next`
 and `needs_detail` first, because without them the model almost never keeps the

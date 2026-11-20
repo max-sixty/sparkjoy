@@ -359,8 +359,18 @@ few days of use will give live verdicts to compare the harness against.
 ## Where this leaves them
 
 The question as it stands compacts at every finished case and both small
-breaks. At the mid-task cases it keeps in anywhere from none of 16 runs to 23
-of 32, depending on the batch. These cases can't say which rate is right. Their mid-task keep labels encode a rule, that work in progress
+breaks. At the mid-task cases it keeps in anywhere from none of 16 runs to 24
+of 32, depending on the batch. These cases can't say which rate is right.
+
+Some labels are themselves uncertain. Each records what the session did next,
+which needn't be what it needed: at three of the four mid-task cases the next
+work rested on files, a branch or a result that arrives anyway, and at
+`leaf-panzoom-drop-ask` I compacted and the work went through, though the turn
+stopped with a fix half done. The labels, and the question with them, are
+working guesses to revise as live verdicts show what each kind of turn end
+loses.
+
+The mid-task keep labels encode a rule, that work in progress
 keeps, rather than a measured cost, while the
 [cost model](../docs/cost-model.md) finds compacting at any turn end
 from about 250k cheapest when a compaction loses nothing. What a compaction
