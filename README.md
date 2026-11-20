@@ -181,6 +181,16 @@ At the two small natural breaks the [cost model](#cost-model) also says to
 compact. At the mid-task turn ends, the same question and transcripts kept the
 context in 6 of 16 runs on 19 November and in none of 16 on 20 November.
 
+The hook reads only `compact` and `reason`, yet the question asks for `next`
+and `needs_detail` first, because without them the model almost never keeps the
+context. At the mid-task turn ends, versions of the question with the two fields
+kept it in 18 of 72 runs, and versions that ask only for `compact` and `reason`
+kept it in 3 of 112 (Fisher's p < 0.0001). Among the versions without them,
+one asks first for a `reason` that says what most likely comes next and whether
+it needs detail a summary drops, and another tells the model to consider those
+two things before it answers. The two fields cost about 20 output tokens a
+question.
+
 </details>
 
 ## Limits

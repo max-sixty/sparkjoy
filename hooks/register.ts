@@ -396,10 +396,9 @@ function hash(text: string) {
 // and results before it show where the work stands, and in the evals quoting it
 // made no measurable difference to the verdicts. The answer gives what most
 // likely comes next and whether that needs the transcript's detail before
-// `compact`, though the hook reads only `compact` and `reason`. In the evals,
-// questions with those two fields kept the context in 13 of 56 runs at the four
-// mid-task turn ends, and questions without them in 2 of 88, among them ones
-// that ask for `reason` first or ask the model to consider what comes next.
+// `compact`, though the hook reads only `compact` and `reason`. Without those
+// two fields the model almost never keeps the context mid-task, even when asked
+// for `reason` first or told to consider what comes next (README.md, "Evals").
 function question(tokens: number, idleMinutes?: number, figures: Figures = AUTHOR) {
   const { WRITE, OUTPUT, SUMMARY, K, P, TURN_MEDIAN, TURN_MEAN } = figures
   const now = thousands(tokens)
