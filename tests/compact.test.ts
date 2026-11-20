@@ -179,10 +179,9 @@ test('a finished turn compacts with no instructions and no /compact row', async 
   const { begin, forks, compactions, commands, logs, turn } = engine(on)
   await begin($)
 
-  await turn($, 't1', 'Merged #13. ✅')
+  await turn($, 't1')
 
   expect(forks.length).toBe(1)
-  expect(forks[0]).toContain('Merged #13. ✅')
   expect(compactions).toEqual([''])
   expect(commands).toEqual([])
   expect(logs).toEqual(['Compacting at 500k tokens: the PR merged'])
@@ -518,14 +517,13 @@ test('a session left idle is asked again before its prompt cache lapses', async 
   const { begin, clock, compactions, forks, logs, turn } = engine(on, { tokens: 200_000 })
   await begin($)
 
-  await turn($, 't1', 'Merged #13. ✅')
+  await turn($, 't1')
   await clock.advance(IDLE - 1)
   expect(forks).toEqual([])
 
   await clock.advance(1)
   await clock.settle()
   expect(forks.length).toBe(1)
-  expect(forks[0]).toContain('Merged #13. ✅')
   expect(forks[0]).toContain('makes a cache write of all but 30k of its 200k tokens, against about 112k after a compaction')
   expect(forks[0]).not.toContain('pays for itself')
   expect(compactions).toEqual([''])

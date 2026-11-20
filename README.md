@@ -108,7 +108,7 @@ keeping the context through another turn costs.
 In the [evals](evals/README.md), the model compacts at every turn end that
 finishes a piece of work, as the [cost model](#cost-model) recommends past
 about 250k. At the four turn ends in the middle of a task, from 519k to 681k, it
-compacts in 5 of 8 runs.
+compacts in 10 of 16 runs.
 
 ### The prompt
 
@@ -118,12 +118,7 @@ compacts in 5 of 8 runs.
 ```
 The goal of this request is to decide whether to compact this session now. It comes from the sparkjoy plugin, not from the user, and a program reads your answer. Use no tools.
 
-Your turn just ended with this reply, which the user is reading now:
-
-<reply>
-…the reply…
-
-</reply>
+Your turn just ended.
 
 Nearly every long transcript is mostly finished work, so that alone is no reason to compact. What decides it is whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
 
@@ -156,12 +151,7 @@ Answer with one JSON object and nothing else, filling its fields in order:
 ```
 The goal of this request is to decide whether to compact this session now, before its prompt cache lapses. It comes from the sparkjoy plugin, not from the user, and a program reads your answer. Use no tools.
 
-Your turn ended 55 minutes ago with this reply to the user, and nothing has happened since:
-
-<reply>
-…the reply…
-
-</reply>
+Your turn ended 55 minutes ago, and nothing has happened since.
 
 Nearly every long transcript is mostly finished work, so that alone is no reason to compact. What decides it is whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
 
@@ -619,12 +609,12 @@ information](docs/cost-model.md#value-of-information).
 | with \$0.35 lost per compaction, as measured, about 6 wasted requests | share of the cost under the best threshold without a classifier |
 |----|----|
 | what a perfect classifier saves | 0.7% |
-| what a classifier saves that is right as often as sparkjoy's question on the evals, at every finished turn end and 3 in 8 of the mid-task ones | under 0.1% |
+| what a classifier saves that is right as often as sparkjoy's question on the evals, at every finished turn end and 6 in 16 of the mid-task ones | under 0.1% |
 | what running the classifier costs | 0.3% |
 | what the lost detail costs in all, the most any classifier can save | 2% |
 
 On the evals, sparkjoy's question compacted at every finished turn end, and
-kept the context in 3 of 8 runs at the four mid-task turn ends. Whether the live
+kept the context in 6 of 16 runs at the four mid-task turn ends. Whether the live
 plugin's verdicts match the evals' is still open ([Against the live
 plugin](evals/README.md#against-the-live-plugin)). The lost detail costs
 only 2% in all because real sessions end, so they compact less often than in the

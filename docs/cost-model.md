@@ -407,12 +407,12 @@ information](#value-of-information).
 | with \$0.35 lost per compaction, as measured, about 6 wasted requests | share of the cost under the best threshold without a classifier |
 |----|----|
 | what a perfect classifier saves | 0.7% |
-| what a classifier saves that is right as often as sparkjoy's question on the evals, at every finished turn end and 3 in 8 of the mid-task ones | under 0.1% |
+| what a classifier saves that is right as often as sparkjoy's question on the evals, at every finished turn end and 6 in 16 of the mid-task ones | under 0.1% |
 | what running the classifier costs | 0.3% |
 | what the lost detail costs in all, the most any classifier can save | 2% |
 
 On the evals, sparkjoy's question compacted at every finished turn end, and
-kept the context in 3 of 8 runs at the four mid-task turn ends. Whether the live
+kept the context in 6 of 16 runs at the four mid-task turn ends. Whether the live
 plugin's verdicts match the evals' is still open ([Against the live
 plugin](../evals/README.md#against-the-live-plugin)). The lost detail costs
 only 2% in all because real sessions end, so they compact less often than in the

@@ -10,14 +10,14 @@
 Each run rebuilds a case's fixture as a session in a scratch Claude Code
 config, resumes it with `claude -p --resume <id> --fork-session`, and sends
 the question that `question()` in `<checkout>/hooks/register.ts` renders for
-the case's reply and context size (`question.ts`). The child has no tools, no
+the case's context size (`question.ts`), with the case's reply for a checkout
+whose question quotes it. The child has no tools, no
 MCP servers and no user instructions, skills or plugins. Each result is
 appended to `results.jsonl` (or `--results`); `--report` prints the table
 README.md shows.
 
 The session stops before the turn's reply, as the plugin's fork does: the fork
-replays the turn's last request, which ends before the reply, and the question
-quotes the reply.
+replays the turn's last request, which ends before the reply.
 
 Runs of one case go in sequence from one directory and share one cache write
 of its transcript, so each run after the first costs about a twentieth of it.

@@ -197,13 +197,13 @@ export const register: Register = on => {
     // The judge runs outside the turn, on a timer of its own, so the turn
     // ends without waiting for it.
     if (watch.isInteractive && e.agentId === undefined && e.reason === 'answer') {
-      $.clock.after(0, () => void afterTurn($, watch, changes, e.answer, e.usage))
+      $.clock.after(0, () => void afterTurn($, watch, changes, e.usage))
     }
     return result
   })
 }
 
-async function afterTurn($: EngineInterface, watch: Watch, changes: number, reply: string, usage?: TurnUsage) {
+async function afterTurn($: EngineInterface, watch: Watch, changes: number, usage?: TurnUsage) {
   // A line about a conversation that has moved on would land inside the turn
   // now running, so it goes to the debug log.
   const isCurrent = () => watch.changes === changes
@@ -225,10 +225,10 @@ async function afterTurn($: EngineInterface, watch: Watch, changes: number, repl
     const isHourCache = (usage?.ephemeral_1h_input_tokens ?? 0) > 0 && !usage?.ephemeral_5m_input_tokens
     if (tokens >= figures.IDLE_FLOOR && isHourCache) {
       const due = (await $.clock.now()) + IDLE_MS
-      $.clock.after(IDLE_MS, () => void idle($, isCurrent, say, tokens, reply, due))
+      $.clock.after(IDLE_MS, () => void idle($, isCurrent, say, tokens, due))
     }
     if (tokens < figures.FLOOR) return
-    const prompt = question(reply, tokens, undefined, figures)
+    const prompt = question(tokens, undefined, figures)
     await judge($, say, async () => isCurrent(), `${thousands(tokens)} tokens`, prompt)
   } catch (error) {
     say(`Failed: ${error}`)
@@ -239,12 +239,12 @@ async function afterTurn($: EngineInterface, watch: Watch, changes: number, repl
 // now that its prompt cache is about to lapse: no turn has begun since, and
 // the context is the size it was then. After any compaction, the judge's or
 // Claude Code's own idle one, the context has no size until the next request.
-async function idle($: EngineInterface, isCurrent: () => boolean, say: (text: string) => void, tokens: number, reply: string, due: number) {
+async function idle($: EngineInterface, isCurrent: () => boolean, say: (text: string) => void, tokens: number, due: number) {
   const isUntouched = async () => isCurrent() && (await $.session.usage()).context.tokens === tokens
   try {
     if ((await $.clock.now()) > due + LATE_MS || !(await isUntouched())) return
     const minutes = IDLE_MS / 60_000
-    const prompt = question(reply, tokens, minutes, await fitted($))
+    const prompt = question(tokens, minutes, await fitted($))
     await judge($, say, isUntouched, `${thousands(tokens)} tokens, idle ${minutes} minutes`, prompt)
   } catch (error) {
     say(`Failed: ${error}`)
@@ -356,13 +356,21 @@ function hash(text: string) {
   return (h >>> 0).toString(36)
 }
 
-// The question opens with its goal. The fork replays the turn's last request,
-// which ends before the reply the turn closed with, so the question then
-// quotes the reply whole. It lists what a compaction, keeping the context and
-// lost detail each cost. Asked of an idle session, it says the prompt cache is
-// about to lapse, so keeping costs the cache write that follows. README.md
-// shows both versions verbatim with the figures in `AUTHOR`, for a 500k context.
-function question(reply: string, tokens: number, idleMinutes?: number, figures: Figures = AUTHOR) {
+// The question opens with its goal, then lists what a compaction, keeping the
+// context and lost detail each cost. Asked of an idle session, it says the
+// prompt cache is about to lapse, so keeping costs the cache write that
+// follows. README.md shows both versions verbatim with the figures in `AUTHOR`,
+// for a 500k context.
+//
+// The fork replays the turn's last request, which ends before the reply the
+// turn closed with, and the question doesn't quote the reply: the tool calls
+// and results before it show where the work stands, and in the evals quoting it
+// made no measurable difference to the verdicts. The answer gives what most
+// likely comes next and whether that needs the transcript's detail before
+// `compact`, though the hook reads only `compact` and `reason`. In the evals,
+// the question without those two fields kept the context in none of 16 runs at
+// the four mid-task turn ends, against 6 of 16 with them.
+function question(tokens: number, idleMinutes?: number, figures: Figures = AUTHOR) {
   const { WRITE, OUTPUT, SUMMARY, K, P, TURN_MEDIAN, TURN_MEAN } = figures
   const now = thousands(tokens)
   const isIdle = idleMinutes !== undefined
@@ -370,8 +378,8 @@ function question(reply: string, tokens: number, idleMinutes?: number, figures: 
     ? 'The goal of this request is to decide whether to compact this session now, before its prompt cache lapses.'
     : 'The goal of this request is to decide whether to compact this session now.'
   const opening = isIdle
-    ? `Your turn ended ${idleMinutes} minutes ago with this reply to the user, and nothing has happened since:`
-    : 'Your turn just ended with this reply, which the user is reading now:'
+    ? `Your turn ended ${idleMinutes} minutes ago, and nothing has happened since.`
+    : 'Your turn just ended.'
   // Idle, the cache is about to go whatever the answer, so a compaction needs
   // no payback sum, and keeping costs the one cache write the lapse brings.
   const sum = isIdle ? '' : `\n- At ${now} a compaction pays for itself after about ${payback(tokens, figures)} more requests that need nothing it dropped.`
@@ -388,10 +396,6 @@ So compact unless the next turn continues work that needs the transcript's detai
   return `${goal} It comes from the sparkjoy plugin, not from the user, and a program reads your answer. Use no tools.
 
 ${opening}
-
-<reply>
-${reply}
-</reply>
 
 Nearly every long transcript is mostly finished work, so that alone is no reason to compact. What decides it is whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
 
