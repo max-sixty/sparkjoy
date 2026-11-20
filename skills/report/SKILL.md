@@ -35,7 +35,8 @@ Reply with the summary it printed and the page's path. The page shows:
   request with and without sparkjoy's compactions, and the cost of each.
 - **Verdicts**: every verdict sparkjoy logged in the window, newest first,
   with the context size, whether a turn end or an idle session prompted it,
-  and the model's reason. Under its old name, compact-when-done, it logged
+  whether its question missed the prompt cache, and the model's reason. The
+  checks' cost in the savings prices each miss's unread input as a cache write. Under its old name, compact-when-done, it logged
   only the checks that compacted.
 - **Idle returns**: each time a session left with 175k or more in context took
   a new message after an hour or more, and whether a compaction came in

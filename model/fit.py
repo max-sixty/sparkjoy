@@ -64,6 +64,10 @@ IDLE = {3600: 55 * 60, 300: 4 * 60}  # seconds idle before sparkjoy asks, by cac
 VERDICT = re.compile(r"(?P<plugin>sparkjoy|compact-when-done): (?:(?P<kind>Compacting|Kept|Unreadable verdict|No verdict|"
                      r"Dropped the verdict) at (?P<tokens>\d+)k tokens(?:, idle (?P<idle>\d+) minutes)?|Failed): "
                      r"(?P<reason>.*)", re.S)
+# The line it writes before a verdict whose question read less than nine tenths of its input from
+# the prompt cache (MISSED in hooks/register.ts).
+MISSED = re.compile(r"sparkjoy: Missed the prompt cache at \d+k tokens(?:, idle \d+ minutes)?: "
+                    r"read (?P<read>\d+)k of (?P<input>\d+)k from it")
 KINDS = {"Compacting": "compacted", "Kept": "kept", "Unreadable verdict": "unreadable", "No verdict": "no verdict",
          "Dropped the verdict": "dropped", None: "failed"}
 # Where a session's name comes from, in order of preference: one the user gave it, then
@@ -86,6 +90,7 @@ class Verdict:
     tokens: int | None  # the context it was asked at; a failure doesn't say
     idle: int | None  # minutes the session had sat idle, when it was asked for that reason
     reason: str
+    missed: tuple | None = None  # tokens of its question's input read from the cache, and in all, when it missed
 
 
 @dataclass
@@ -181,7 +186,7 @@ def load(root, since, until):
     for path in sorted(root.glob("*/*.jsonl")):
         if path.stat().st_mtime < since.timestamp():
             continue
-        reqs, comps, prompts, verdicts, entry, asked = {}, [], [], [], None, None
+        reqs, comps, prompts, verdicts, entry, asked, missed = {}, [], [], [], None, None, None
         titles, first, models, said, failed, summaries = {}, None, Counter(), [], {}, []
         for raw in path.open(errors="replace"):
             prompt = '"type":"user"' in raw and '"tool_result"' not in raw  # a message that starts a turn
@@ -252,10 +257,13 @@ def load(root, since, until):
                             q[3].add(i["file_path"])
             elif e.get("subtype") == "informational":
                 text = str(e.get("content", ""))
-                if line := VERDICT.fullmatch(text):
+                if line := MISSED.fullmatch(text):
+                    missed = int(line["read"]) * 1000, int(line["input"]) * 1000
+                elif line := VERDICT.fullmatch(text):
                     kind = KINDS[line["kind"]]
                     verdicts.append(Verdict(t, line["plugin"], kind, line["tokens"] and int(line["tokens"]) * 1000,
-                                            line["idle"] and int(line["idle"]), line["reason"]))
+                                            line["idle"] and int(line["idle"]), line["reason"], missed))
+                    missed = None
                     asked = t if kind == "compacted" else asked
                 elif text.startswith("Compacted while idle") and comps and t - comps[-1][0] < 10:
                     # Claude Code's idle compaction logs as an auto compaction, then says so.

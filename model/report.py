@@ -46,6 +46,8 @@ MEANING = {"compacted": "The model said to compact, and sparkjoy began compactin
            "no verdict": "The model gave no reply.",
            "dropped": "The conversation moved on before the reply came, so sparkjoy set it aside.",
            "failed": "An error stopped the check."}
+MISSED = ("Its question read less than nine tenths of its input from the prompt cache, so the rest cost a cache "
+          "write. sparkjoy logs these from 20 November 2026 on.")
 
 
 def replayed(s, p):
@@ -57,9 +59,16 @@ def replayed(s, p):
     # As compactions the user typed, sparkjoy's stay where the log has them.
     ran, ran_trace = fit.replay(replace(s, kind=np.where(s.sparkjoy, fit.USER, s.kind)), p, c, np.inf, s.ttl)
     without, without_trace = fit.replay(s, p, c, np.inf, s.ttl)
-    checks = sum(v.tokens + c.output * CHECK_OUTPUT for v in s.verdicts if v.tokens)
+    checks = sum(check(v, c) for v in s.verdicts if v.tokens)
     dollars = ((ran + checks) * c.read, without * c.read, checks * c.read) if priced else None
     return dollars, ran_trace, without_trace
+
+
+def check(v, c):
+    """A check's cost in cached reads: its question's input, all read from the cache unless the check
+    logged a miss, whose unread part is priced as a cache write, and its output."""
+    read, size = v.missed or (v.tokens, v.tokens)
+    return read + c.write * (size - read) + c.output * CHECK_OUTPUT
 
 
 def returns(S):
@@ -187,7 +196,10 @@ def mark(kind):
 
 
 def at(v):
-    return "" if v.tokens is None else f"idle {v.idle} min" if v.idle else "turn end"
+    where = "" if v.tokens is None else f"idle {v.idle} min" if v.idle else "turn end"
+    if v.missed:
+        where += f", missed the cache (read {tokens(v.missed[0])} of {tokens(v.missed[1])})"
+    return where
 
 
 def table(head, rows, numeric=(), wrap=()):
@@ -274,8 +286,10 @@ def page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit, saved
         tiles = "".join(tile(counts[k], k, MEANING[k]) for k in KINDS if counts[k])
         none = " · ".join(f'<span title="{MEANING[k]}">0 {k}</span>' for k in KINDS if not counts[k])
         old = sum(v.plugin == "compact-when-done" for _, v in verdicts)
+        missed = sum(1 for _, v in verdicts if v.missed)
         parts.append(f'<div class="tiles">{tile(len(verdicts), "verdicts")}{tiles}</div><p class=note>'
-                     f"{len(verdicts) - idle - counts['failed']:,} at turn ends, {idle:,} in idle sessions"
+                     f"{len(verdicts) - idle - counts['failed']:,} at turn ends, {idle:,} in idle sessions · "
+                     f'<span title="{MISSED}">{missed:,} missed the prompt cache</span>'
                      f"{f' · {none}' if none else ''}</p>")
         if old:
             parts.append(f"<p class=note>{old:,} of them came from the plugin under its old name, compact-when-done, "
@@ -434,7 +448,8 @@ def main():
         out.write(page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit, saved))
     counts = Counter(v.kind for _, v in verdicts)
     print(f"{len(verdicts)} verdicts in {len({id(s) for s, _ in verdicts})} of {len(S)} sessions: "
-          + ", ".join(f"{counts[k]} {k}" for k in KINDS))
+          + ", ".join(f"{counts[k]} {k}" for k in KINDS)
+          + f"; {sum(1 for _, v in verdicts if v.missed)} missed the prompt cache")
     if saving:
         ran, without, _ = saving
         d = without - ran
