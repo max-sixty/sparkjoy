@@ -89,8 +89,9 @@ as failed attempts or a design still taking shape, and gives what a compaction
 and keeping the context each cost at the context's size.
 
 In the [evals](#evals), the question compacts at every turn end that finishes
-a piece of work, and also at most turn ends in the middle of a task, where it
-should keep the context.
+a piece of work. At turn ends in the middle of a task, where it should keep the
+context, it kept it in anywhere from none of 16 runs to 23 of 32, depending on
+the day the runs were made.
 
 ### The prompt
 
@@ -172,18 +173,21 @@ asks the question above, on 19 and 20 November 2026[^evals]:
 |---|---|---|---|
 | five that finished a piece of work | 479k–742k | compact | 10 of 10 |
 | one idle for 55 minutes after everything landed | 290k | compact | 2 of 2 |
-| four in the middle of a task | 519k–681k | keep | 6 of 32 |
+| four in the middle of a task | 519k–681k | keep | 29 of 64 |
 | two natural breaks, but small | 210k–296k | keep | 0 of 4 |
 
 At the two small natural breaks the [cost model](#cost-model) also says to
 compact. At the mid-task turn ends, the same question and transcripts kept the
-context in 6 of 16 runs on 19 November and in none of 16 on 20 November.
+context in 6 of 16 runs on the evening of 19 November, in none of 16 on the
+morning of 20 November and in 23 of 32 that afternoon, so two versions of the
+question compare only when run in the same batch.
 
 The hook reads only `compact` and `reason`, yet the question asks for `next`
 and `needs_detail` first, because without them the model almost never keeps the
-context. At the mid-task turn ends, versions of the question with the two fields
-kept it in 18 of 72 runs, and versions that ask only for `compact` and `reason`
-kept it in 3 of 112 (Fisher's p < 0.0001). Among the versions without them,
+context. At the mid-task turn ends, in the batches that ran both, versions of the
+question with the two fields kept it in 16 of 64 runs, and versions that ask
+only for `compact` and `reason` in 3 of 96 (p = 0.03, an exact test within
+batches). In one of those batches neither kept. Among the versions without them,
 one asks first for a `reason` that says what most likely comes next and whether
 it needs detail a summary drops, and another tells the model to consider those
 two things before it answers. The two fields cost about 20 output tokens a
@@ -647,8 +651,9 @@ information](docs/cost-model.md#value-of-information).
 | what running the classifier costs | 0.3% |
 | what the lost detail costs in all, the most any classifier can save | 2% |
 
-On the evals, sparkjoy's question compacted at every finished turn end, and
-kept the context in 6 of 32 runs at the four mid-task turn ends. Whether the live
+On the evals, sparkjoy's question compacted at every finished turn end. At the
+four mid-task turn ends it kept the context in anywhere from none of 16 runs to
+23 of 32, depending on the batch ([Batches](evals/README.md#batches)). Whether the live
 plugin's verdicts match the evals' is still open ([Against the live
 plugin](evals/README.md#against-the-live-plugin)). The lost detail costs
 only 2% in all because real sessions end, so they compact less often than in the
