@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
   "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="626.503906pt" height="250.420844pt" viewBox="0 0 626.503906 250.420844" xmlns="http://www.w3.org/2000/svg" version="1.1">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="543.997034pt" height="250.420844pt" viewBox="0 0 543.997034 250.420844" xmlns="http://www.w3.org/2000/svg" version="1.1">
  <metadata>
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
@@ -21,8 +21,8 @@
  <g id="figure_1">
   <g id="patch_1">
    <path d="M 0 250.420844 
-L 626.503906 250.420844 
-L 626.503906 0 
+L 543.997034 250.420844 
+L 543.997034 0 
 L 0 0 
 L 0 250.420844 
 z
@@ -9482,24 +9482,36 @@ z
      <use xlink:href="#m52543ec01b" x="532.797034" y="162.962456" style="fill: #3987e5; stroke: #0d1117; stroke-width: 1.5"/>
     </g>
    </g>
-   <g id="text_15">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="547.775" y="182.362542" transform="rotate(-0 547.775 182.362542)">with sparkjoy</text>
-   </g>
-   <g id="text_16">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="547.775" y="160.228307" transform="rotate(-0 547.775 160.228307)">without (replayed)</text>
-   </g>
    <g id="legend_1">
     <g id="line2d_75">
+     <path d="M 118.325937 14.4 
+L 124.175937 14.4 
+L 130.025937 14.4 
+" style="fill: none; stroke: #3987e5; stroke-width: 2; stroke-linecap: square"/>
+    </g>
+    <g id="text_15">
+     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="134.525937" y="17.55" transform="rotate(-0 134.525937 17.55)">with sparkjoy</text>
+    </g>
+    <g id="line2d_76">
+     <path d="M 196.441719 14.4 
+L 202.291719 14.4 
+L 208.141719 14.4 
+" style="fill: none; stroke: #d95926; stroke-width: 2; stroke-linecap: square"/>
+    </g>
+    <g id="text_16">
+     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="212.641719" y="17.55" transform="rotate(-0 212.641719 17.55)">without sparkjoy, replayed</text>
+    </g>
+    <g id="line2d_77">
      <g>
-      <use xlink:href="#m70b272b00c" x="308.825" y="14.4" style="fill: #3987e5; stroke: #0d1117"/>
+      <use xlink:href="#m70b272b00c" x="331.775" y="14.4" style="fill: #3987e5; stroke: #0d1117"/>
      </g>
     </g>
     <g id="text_17">
-     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="325.025" y="17.55" transform="rotate(-0 325.025 17.55)">turn end, kept going</text>
+     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="342.125" y="17.55" transform="rotate(-0 342.125 17.55)">turn end, kept going</text>
     </g>
-    <g id="line2d_76">
+    <g id="line2d_78">
      <g>
-      <use xlink:href="#m52543ec01b" x="431.576563" y="14.4" style="fill: #3987e5; stroke: #0d1117; stroke-width: 1.5"/>
+      <use xlink:href="#m52543ec01b" x="437.426563" y="14.4" style="fill: #3987e5; stroke: #0d1117; stroke-width: 1.5"/>
      </g>
     </g>
     <g id="text_18">

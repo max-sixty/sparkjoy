@@ -71,10 +71,15 @@ def session_chart(s, t, path):
     ys = traces["with"]
     for i, compacted in s["checks"]:
         ax.plot([i], [ys[i]], zorder=3, clip_on=False, **marker(t, compacted))
-    charts.label_ends(ax, [(traces[key][-1], label, t["ink"]) for key, _, label in ARMS], gap=80_000)
-    handles = [plt.Line2D([], [], ls="", **marker(t, c)) for c in (False, True)]
-    ax.legend(handles, ["turn end, kept going", "turn end, compacted"], frameon=False, fontsize=9,
-              labelcolor=t["ink"], loc="lower right", bbox_to_anchor=(1, 1), ncols=2, borderaxespad=0.2)
+    # The line ends sit close together, so a legend names the arms, each beside a swatch of its line.
+    lines = [(plt.Line2D([], [], color=t[key], lw=2), label)
+             for key, label in (("with", f"with {PLUGIN}"), ("without", f"without {PLUGIN}, replayed"))]
+    dots = [(plt.Line2D([], [], ls="", **marker(t, c)), label)
+            for c, label in ((False, "turn end, kept going"), (True, "turn end, compacted"))]
+    handles, labels = zip(*lines, *dots)
+    ax.legend(handles, labels, frameon=False, fontsize=9, labelcolor=t["ink"], loc="lower right",
+              bbox_to_anchor=(1, 1), ncols=4, borderaxespad=0.2, handlelength=1.3, handletextpad=0.5,
+              columnspacing=1.1)
     ax.set_ylim(0, 1_020_000)
     ax.set_xlim(0, len(ys) - 1)
     ax.yaxis.set_major_formatter(charts.tokens)
