@@ -72,8 +72,8 @@ SHARE = 0.3
 MIXES = tuple(Mix(SHARE, 0.0, mean / SHARE) for mean in (0.35, 1.12, 3.72))
 ACCURACIES = (0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
 # The current question on the evals (evals/README.md), as runs it called rightly of runs: it
-# compacted in all 12 at the 6 finished cases and kept in 6 of the 16 at the 4 mid-task ones.
-RUNS = ((12, 12), (6, 16))
+# compacted in all 12 at the 6 finished cases and kept in 6 of the 32 at the 4 mid-task ones.
+RUNS = ((12, 12), (6, 32))
 EVALS = tuple(k / n for k, n in RUNS)
 CHECKS = (*((a, a) for a in ACCURACIES), EVALS)  # (right at a finished turn end, at a mid-task one)
 FLOORS = np.arange(150_000, 350_001, 25_000)

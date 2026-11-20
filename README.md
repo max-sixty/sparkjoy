@@ -74,41 +74,22 @@ Opus 5.5 list prices[^replay]:
   <img alt="Share of requests at each context size. With the plugin, most requests carry 100k to 450k tokens; without it, a long tail runs to 1M." src="assets/context-light.svg">
 </picture>
 
-With the plugin, the mean request carried 337k tokens rather than 462k, and 6%
-of requests carried 600k or more rather than 28%. Of the 59 sessions that
-reached 400k, half saved between 12% and 31%, and one cost 19% more. The 198
-questions, at turn ends of 400k or more, cost $22 in all, and 122 of them led to
-a compaction.
-
-A compaction costs about $1 on Opus 5.5, mostly the cache write of the 142k
-tokens it leaves. After a compaction at 200k, each later request reads 58k fewer
-tokens, the 200k less those 142k, and after one at 400k, 258k fewer. The larger
-the context, the sooner a compaction pays for itself:
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/model-payback-dark.svg">
-  <img alt="Later requests until a compaction pays for itself, against the context it compacts. The curve falls steeply from above 100 just past 142k, what a compaction leaves, to 74 requests at 200k, where each later request reads 58k less, 17 at 400k, reading 258k less, and 9 at 700k, reading 558k less, then flattens toward 6 near 965k." src="assets/model-payback-light.svg">
-</picture>
-
 ## How it decides
 
-sparkjoy forks the conversation for one request, which asks the session's own
-model whether to compact now. The fork reads the whole transcript from the
-prompt cache and outputs about a hundred tokens, a verdict and a one-line
-reason. sparkjoy asks when a turn ends, since a piece of work most likely
-finishes with a turn, and again if the session then sits idle for 55 minutes.
+sparkjoy's question fires at each turn end from 250k, since a piece of work most
+likely finishes with a turn, and again if the session then sits idle until just
+before its prompt cache lapses. It forks the conversation for one request, which
+asks the session's own model whether to compact now. The fork reads the whole
+transcript from the prompt cache and outputs about a hundred tokens, a verdict
+and a one-line reason.
 
 The question asks whether the next turns will need detail a summary drops, such
-as exact output, failed attempts or a design still taking shape. Nearly every
-long transcript is mostly finished work, so it tells the model that this alone
-is no reason to compact. It also gives both costs at the context's size: what a
-compaction costs and how many requests it takes to pay for itself, and what
-keeping the context through another turn costs.
+as failed attempts or a design still taking shape, and gives what a compaction
+and keeping the context each cost at the context's size.
 
-In the [evals](evals/README.md), the model compacts at every turn end that
-finishes a piece of work, as the [cost model](#cost-model) recommends past
-about 250k. At the four turn ends in the middle of a task, from 519k to 681k, it
-compacts in 10 of 16 runs.
+In the [evals](#evals), the question compacts at every turn end that finishes
+a piece of work, and also at most turn ends in the middle of a task, where it
+should keep the context.
 
 ### The prompt
 
@@ -178,13 +159,35 @@ Answer with one JSON object and nothing else, filling its fields in order:
 
 </details>
 
+### Evals
+
+<details>
+<summary>The question's verdicts at 12 turn ends from my sessions</summary>
+
+The [evals](evals/README.md) put the question to the model at turn ends from my
+sessions, and compare each verdict with a label chosen from what the session
+did next. Runs of the question above on 19 and 20 November 2026:
+
+| turn ends | context | label | runs that matched it |
+|---|---|---|---|
+| five that finished a piece of work | 479k–742k | compact | 10 of 10 |
+| one idle for 55 minutes after everything landed | 290k | compact | 2 of 2 |
+| four in the middle of a task | 519k–681k | keep | 6 of 32 |
+| two natural breaks, but small | 210k–296k | keep | 0 of 4 |
+
+At the two small natural breaks the [cost model](#cost-model) also says to
+compact. At the mid-task turn ends, the same question and transcripts kept the
+context in 6 of 16 runs on 19 November and in none of 16 on 20 November.
+
+</details>
+
 ## Limits
 
 - It asks only once the context reaches 250k at a turn end, or 175k in an idle
-  session. These floors cost least in a replay of my sessions ([Cost
+  session. These floors minimize the cost of a replay of my sessions ([Cost
   model](#cost-model)) if every question leads to a compaction. My sessions hold
   about 142k after a compaction, much of it my own instructions and skills, and
-  sessions that hold less would cost least with lower floors.
+  sessions that hold less would do better with lower floors.
   `/sparkjoy:report` fits the floors to your own sessions.
 - The report fits every figure the question states except the count of wasted
   requests after a compaction, which takes months of sessions to measure.
@@ -214,33 +217,33 @@ compacting it cost, fitted to my sessions.
 <details>
 <summary>The cost model</summary>
 
-For my sessions, compacting costs least at about 260k tokens if every
-compaction comes at the same context size, whatever the work[^x]. That figure
-assumes a session can compact after any request. A replay of the sessions that
-compacts only at turn ends gives sparkjoy's default floors, the context sizes
-from which it asks whether to compact: 250k at turn ends and 175k in an idle
-session. Both count token costs alone, leaving out how much each request gets
-done and the detail a compaction loses.
+This model asks at what context size a session should compact so that its
+overall cost is lowest. Every request reads the whole context, so a session that
+compacts late pays to read a large context on every request, and one that
+compacts early pays for many compactions, each about \$1 on Opus 5.5 and each
+able to drop detail the work needs. The model treats a session's context as
+growing by the same number of tokens with each request and dropping back to the
+same size at each compaction, which gives the best compaction point in closed
+form. [The model](docs/cost-model.md#the-model) states it in symbols, and [Fitted to my
+sessions](docs/cost-model.md#fitted-to-my-sessions) gives it values measured from my sessions on
+Opus 5.5 and tests that simplification against a replay of the same sessions.
 
-The model treats a session's context as growing by the same number of tokens
-with each request and dropping back to the same size at each compaction, which
-gives the best compaction point in closed form. [The model](docs/cost-model.md#the-model) states
-it in symbols. [Fitted to my sessions](docs/cost-model.md#fitted-to-my-sessions) gives it values
-measured from my sessions on Opus 5.5 with the one-hour cache, and tests that
-simplification against a replay of the same sessions.
+For my sessions, a threshold of 200k–300k at turn ends minimizes overall cost,
+under assumptions about how much past context is worth to the work[^x].
+sparkjoy's default floors come from that replay: it asks whether to compact from
+250k at turn ends and from 175k in an idle session.
 
-[Value of information](docs/cost-model.md#value-of-information) asks what a classifier could save
-over the best single threshold. A classifier, such as sparkjoy's question, says
-at each turn end whether to compact before or after that threshold, depending on
-how much the work ahead needs the context's detail. With the lost detail
-measured in my sessions, a perfect classifier would save 0.7% of what the best
-single threshold costs, and one right as often as sparkjoy's question on the
-evals under 0.1%.
+[Value of information](docs/cost-model.md#value-of-information) asks what sparkjoy's question adds
+over the best threshold by telling finished work from work in progress. That
+depends on how much a compaction in the middle of a task loses, which my
+sessions measure poorly. If some of the work depends heavily on its history, a
+question that is always right saves 11% to 24% of the cost in the model.
+Counting only the wasted requests measured after a compaction, it saves 0.7%.
 
-Costs are in dollars, at Opus 5.5's prices for the one-hour cache. The formulas
-count them in cached reads: reading one token from the prompt cache costs one
-cached read, \$0.20 per million tokens on Opus 5.5. [Prices by
-model](docs/cost-model.md#prices-by-model) gives other models' prices.
+The formulas count costs in cached reads, the price of reading one token from
+the prompt cache, and the text gives them in dollars at Opus 5.5's prices for
+the one-hour cache. [Prices by model](docs/cost-model.md#prices-by-model) gives other models'
+prices.
 
 ## The model
 
@@ -281,7 +284,7 @@ X\*, late, and never, which leaves it to Claude Code near the window's end.
 | symbol | what it is |
 |----|----|
 | x | Context of a request, in tokens. Over each cycle between compactions, it grows from K to X. |
-| X | Context at which the session compacts, in tokens. The model chooses it. |
+| X | Context at which the session compacts, in tokens. |
 
 **Functions of the variables**
 
@@ -318,11 +321,10 @@ X\*, late, and never, which leaves it to Claude Code near the window's end.
 
 ### Best compaction point
 
-A request's cost, averaged over a cycle with its share of the compaction
-included, is lowest where the marginal cost crosses the average. The marginal
-cost is the cost of one more request before compacting. While it is below the
-average, waiting one more request to compact lowers the average, as in Harris's
-economic order quantity. Counting cost alone, the best point has a closed form:
+A request's average cost over a cycle, its share of the compaction included,
+is lowest where it equals the marginal cost, the cost of one more request before
+compacting, as in Harris's economic order quantity. Counting cost alone, that
+point has a closed form:
 
 $`\displaystyle X^* = K + \sqrt{\frac{2g\,(F_0 + K)}{h}}`$
 
@@ -335,24 +337,41 @@ The average and marginal costs of a request against the compaction point X.
 
 ### Context size and effectiveness
 
+A request's effectiveness η(x) is how much it gets done with context x. If a
+larger context helps the work, compacting costs more than tokens, since the
+requests after a compaction work with less context. The best point then
+minimizes J, a cycle's cost per unit of its effectiveness:
+
+$`\displaystyle J(X) = \frac{g\,F(X) + \int_K^X c(x)\,dx}{\int_K^X \eta(x)\,dx}`$
+
+J is lowest where one more request's cost, c(X) plus the g tokens it adds to
+the compaction's read, per unit of what that request gets done, equals the
+cycle's average:
+
+$`\displaystyle \frac{c(X^*) + g}{\eta(X^*)} = J(X^*)`$
+
+The model takes η to be a power of the context, relative to a request with the
+full 1M window, so each doubling of the context multiplies it by $`2^\beta`$:
+
+$`\displaystyle \eta(x) = \left(\frac{x}{1\text{M}}\right)^\beta`$
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-effectiveness-dark.svg">
   <img alt="Effectiveness η(x), relative to a request at 1M, against the context x, for β of 0, 0.3, 0.6 and 1, on one blue ramp from light to dark. β = 0, equally effective at any context, is flat at 100%. The others rise from 0 to 100% at 1M, β = 1 in a straight line; at 142k they are at 56%, 31% and 14%." src="assets/model-effectiveness-light.svg">
 </picture>
 
-A request's effectiveness η(x), how much it gets done, against its context x,
-relative to a request with the full 1M window. Each doubling of the context
-multiplies it by $`2^\beta`$, so at β = 0 a request gets as much done at any
-context.
+A request's effectiveness η(x) against its context x, for four values of β.
 
 η depends only on the context's size, so a request right after a compaction, at
-K, counts as getting as much done as one at K before any compaction. At β above
-0, the requests after a compaction get less done than the ones before it, since
-their context is smaller. The best point minimizes J, a cycle's cost per unit of
-its effectiveness, which at β = 0 is the average cost under [Best compaction
-point](docs/cost-model.md#best-compaction-point):
+K, counts as getting as much done as one at K before any compaction.
 
-$`\displaystyle J(X) = \frac{g\,F(X) + \int_K^X c(x)\,dx}{\int_K^X \eta(x)\,dx}`$
+At β = 0, where a request gets as much done at any context, J is the average
+cost under [Best compaction point](docs/cost-model.md#best-compaction-point), and the condition
+above gives its closed form. That is an extreme simplification: it says a
+request at 150k gets as much done as one at 1M. The figures under [Fitted to my
+sessions](docs/cost-model.md#fitted-to-my-sessions) take β = 0 unless they name another value,
+and [Best point for each β](docs/cost-model.md#best-point-for-each-β) gives the best point for β
+up to 1.
 
 ### Compacting before the cache lapses
 
@@ -433,6 +452,16 @@ A request's cost c(x) (top) and a compaction's F(x) (bottom) by part, against
 the context x. Every part except the read of the context is measured from
 36,249 requests. A compaction costs about \$1 at any context, and \$0.87 of
 that is the cache write of the context it leaves.
+
+The larger the context, the sooner a compaction pays for itself. After a
+compaction at 700k, each later request reads 558k fewer tokens, and the
+compaction pays for itself within 9 requests; at 400k within 17, and at 200k
+within 74:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/model-payback-dark.svg">
+  <img alt="Later requests until a compaction pays for itself, against the context it compacts. The curve falls steeply from above 100 just past 142k, what a compaction leaves, to 74 requests at 200k, where each later request reads 58k less, 17 at 400k, reading 258k less, and 9 at 700k, reading 558k less, then flattens toward 6 near 965k." src="assets/model-payback-light.svg">
+</picture>
 
 <details>
 <summary>Cost by kind of token</summary>
@@ -609,12 +638,12 @@ information](docs/cost-model.md#value-of-information).
 | with \$0.35 lost per compaction, as measured, about 6 wasted requests | share of the cost under the best threshold without a classifier |
 |----|----|
 | what a perfect classifier saves | 0.7% |
-| what a classifier saves that is right as often as sparkjoy's question on the evals, at every finished turn end and 6 in 16 of the mid-task ones | under 0.1% |
+| what a classifier saves that is right as often as sparkjoy's question on the evals, at every finished turn end and 6 in 32 of the mid-task ones | under 0.1% |
 | what running the classifier costs | 0.3% |
 | what the lost detail costs in all, the most any classifier can save | 2% |
 
 On the evals, sparkjoy's question compacted at every finished turn end, and
-kept the context in 6 of 16 runs at the four mid-task turn ends. Whether the live
+kept the context in 6 of 32 runs at the four mid-task turn ends. Whether the live
 plugin's verdicts match the evals' is still open ([Against the live
 plugin](evals/README.md#against-the-live-plugin)). The lost detail costs
 only 2% in all because real sessions end, so they compact less often than in the
@@ -647,7 +676,7 @@ Prices for the one-hour cache. Every other section's figures are for Opus 5.5.
 ## Fitting it to your sessions
 
 `/sparkjoy:report` fits the model to your sessions of the last 14 days, and its
-Thresholds section gives the pair of floors that costs least for them. From then
+Thresholds section gives the pair of floors that minimizes their cost. From then
 on, sparkjoy asks once the context reaches those floors, and its question states
 the parameters the report measured in place of mine. The fit needs some
 compactions in those sessions, to measure K and N.
@@ -737,9 +766,13 @@ prices the cache write, or limits compaction to turn ends.
 
 </details>
 
-[^x]: X\*, the best compaction point: 262k from the closed form under [Best
-compaction point](docs/cost-model.md#best-compaction-point), and 253–271k, its 90% interval from
-resampling sessions.
+[^x]: The replay's best turn-end threshold is 200k if a request gets as much
+done at any context size (β = 0), 250k at β = 0.3 and 290k at β = 0.6, where a
+request at 150k gets 30% as much done as one at 1M (under
+[Sensitivity](docs/cost-model.md#sensitivity)). Each assumes a compaction loses no detail the
+work needs. Compacting after any request rather than at
+turn ends, the closed form gives 262k at β = 0, with a 90% interval of
+253–271k from resampling sessions.
 
 </details>
 <!-- End of the generated copy. -->

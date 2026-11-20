@@ -114,6 +114,9 @@ reply at the end of the transcript as well as in the question. `fork` is
 `goal-first`; `fork-no-fields` is `no-fields`; `fork-no-reply` (the question
 now) is `goal-first` without the quoted reply, so the model sees no reply at
 all; `fork-neither` is `fork-no-reply` asking only for `compact` and `reason`.
+`reason-first`, `why-first` and `consider` (20 November) are `fork-no-reply`
+asking only for fields the hook reads, as [Fields the hook doesn't
+read](#fields-the-hook-doesnt-read) describes.
 
 | case | recorded | replayed | expected | main | sized-question | detail | measured | model-costs | one-figure | noisy | goal-first | no-fields | fork | fork-no-fields | fork-no-reply | fork-neither |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -122,10 +125,10 @@ all; `fork-neither` is `fork-no-reply` asking only for `compact` and `reason`.
 | leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 |
 | leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 |
 | worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 |
-| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 | 0/2 | 1/2 | 0/2 | 0/4 | 1/2 | 0/2 | 0/4 | 0/4 | 0/4 | 0/4 |
-| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 1/2 | 0/4 | 0/2 | 0/2 | 0/4 | 0/4 | 2/4 | 0/4 |
-| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 2/2 | 2/2 | 4/4 | 2/2 | 0/2 | 4/4 | 2/4 | 4/4 | 0/4 |
-| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 0/2 | 1/4 | 0/2 | 0/2 | 0/4 | 0/4 | 0/4 | 0/4 |
+| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 | 0/2 | 1/2 | 0/2 | 0/4 | 1/2 | 0/2 | 0/4 | 0/4 | 0/8 | 0/4 |
+| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 1/2 | 0/4 | 0/2 | 0/2 | 0/4 | 0/4 | 2/8 | 0/4 |
+| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 2/2 | 2/2 | 4/4 | 2/2 | 0/2 | 4/4 | 2/4 | 4/8 | 0/4 |
+| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 0/2 | 1/4 | 0/2 | 0/2 | 0/4 | 0/4 | 0/8 | 0/4 |
 | leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 | 0/2 | | 0/2 | 0/2 |
 | worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 | 0/2 | | 0/2 | 0/2 |
 | leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 |
@@ -253,9 +256,32 @@ runs, against 6 (p = 0.02). The fields are the only difference between the
 two questions, so asking for them keeps the context mid-task, most of all at
 leaf-menu-design. In the runs that stop before the reply, the question kept
 there in 8 of 8 runs with the fields and in 2 of 8 without them (p = 0.007).
-Pooled over 19 November, `goal-first`, `fork` and `fork-no-reply` kept in 13
-of 40 mid-task runs, and `no-fields`, `fork-no-fields` and `fork-neither` in 2
-of 40 (p = 0.003).
+
+### Fields the hook doesn't read
+
+The hook reads only `compact` and `reason`. On 20 November three questions
+asked for nothing else, each `fork-no-reply` with its answer paragraph changed:
+
+- `reason-first` asks for `reason` before `compact`, as "one short line: what
+  most likely comes next, and whether it needs detail a summary drops";
+- `why-first` asks for a plain `reason` before `compact`;
+- `consider` asks the model, before it answers, to "consider what most likely
+  comes next and whether it needs detail a summary drops", then for `compact`
+  and `reason`.
+
+Each compacted at every finished case it ran, and at the four mid-task turn
+ends they kept in 1, 0 and 0 of 24 runs. `fork-no-reply`, run again beside
+them, kept in none of its 16 mid-task runs, against 6 of 16 on 19 November with
+the same question and transcripts (p = 0.02), so the mid-task rate moves
+between batches as much as between questions. Pooled over both days,
+`goal-first`, `fork` and `fork-no-reply` kept in 13 of 56 mid-task runs, and
+`no-fields`, `fork-no-fields`, `fork-neither`, `why-first` and `consider` in 2
+of 88 (p = 0.0001).
+
+The runner sends each question as two text blocks, where the plugin sends one
+(`run.py` says why). Sending `fork-no-reply` as one block made no clear
+difference at leaf-menu-design and leaf-send-hover-fix: it kept in 1 of 8
+runs, against 2 of 8 as two blocks in the same hour.
 
 ## Against the live plugin
 
