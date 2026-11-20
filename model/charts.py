@@ -4,7 +4,8 @@ from one read of the sessions:
 
   cycles         the context and each request's cost over 600 requests, at four compaction points, as a
                  schematic: axes in the model's symbols
-  inputs         a request's cost and a compaction's cost by part, against the context
+  inputs         a request's cost and a compaction's cost by part, against the context, the cache write
+                 after a compaction split by what fills the context (context.py's context-parts.json)
   payback        how many later requests a compaction takes to pay for itself, against the context it
                  compacts, for the README's What it saves
   bill           the sessions' cost by kind of token
@@ -19,7 +20,9 @@ from one read of the sessions:
 """
 
 import html
+import json
 from dataclasses import replace
+from pathlib import Path
 
 import matplotlib
 
@@ -225,6 +228,26 @@ def cycles(out, p, c):
         save(fig, out / f"model-cycles-{theme}.svg")
 
 
+def written(p):
+    """What the cache write after a compaction writes, K - P tokens in all, by where it comes from:
+    each group's mean tokens per compaction in context.py's measurement of the same sessions, scaled
+    so the groups sum to K - P. The measurement's first request plus E comes within about 2% of K - P,
+    which takes medians where the measurement takes means."""
+    m = json.loads(Path(__file__).with_name("context-parts.json").read_text())
+    first = m["first_request"]
+    groups = {
+        "the summary": ("summary",),
+        "files, re-attached or read again": ("files", "E"),
+        "instructions and memory": ("user_claude_md", "project_instructions", "memory_index", "instructions_wrapper"),
+        "skills and their listing": ("skill_bodies", "skill_listing"),
+    }
+    sizes = {what: sum(m["E_total"] if k == "E" else first[k] for k in keys) for what, keys in groups.items()}
+    taken = {k for keys in groups.values() for k in keys}
+    sizes["the rest of the context"] = sum(v for k, v in first.items() if k not in taken)
+    total = sum(sizes.values())
+    return [(what, (p.K - p.P) * v / total) for what, v in sizes.items()]
+
+
 def inputs(out, p, c):
     """What the costs are made of: a request's cost at its context by part, and a compaction's cost by
     part, on one axis. Parts that come from the sessions' fitted parameters are named in the fit colour."""
@@ -237,20 +260,23 @@ def inputs(out, p, c):
     # context first, so they stack at the bottom.
     # Each part says whether it comes from what the sessions measured (output, growth, lapses, K, P,
     # N) or not: the cache read of the context is the context itself.
-    request = [("output and uncached input", np.full_like(x, c.output * p.out + c.input * p.inp), True),
-               ("cache write of the new tokens", np.full_like(x, (1 - p.lapse) * w1 * p.g), True),
-               ("cache write of the context after a lapse", p.lapse * w1 * np.maximum(x - p.P, 0), True),
-               ("cache read of the context", x, False)]
-    compaction = [("output of the compaction request", np.full_like(x, c.output * p.N), True),
-                  ("cache write of the compacted context", np.full_like(x, w1 * (p.K - p.P)), True),
-                  ("cache read of the context", x, False)]
-    assert np.allclose(sum(v for _, v, _ in request)[x > p.P], (h * x + c0)[x > p.P])
-    assert np.allclose(sum(v for _, v, _ in compaction), x + F0)
+    # Each part also names its step of the ramp: output 0, cache writes 1 (2 for the lapse's), the cache
+    # read of the context the strongest, as the bill chart colours the same kinds.
+    request = [("output and uncached input", np.full_like(x, c.output * p.out + c.input * p.inp), True, 0),
+               ("cache write of the new tokens", np.full_like(x, (1 - p.lapse) * w1 * p.g), True, 1),
+               ("cache write of the context after a lapse", p.lapse * w1 * np.maximum(x - p.P, 0), True, 2),
+               ("cache read of the context", x, False, 3)]
+    compaction = [("output of the compaction request", np.full_like(x, c.output * p.N), True, 0),
+                  *[(f"cache write of {what}", np.full_like(x, w1 * tokens), True, 1)
+                    for what, tokens in written(p)],
+                  ("cache read of the context", x, False, 3)]
+    assert np.allclose(sum(v for _, v, _, _ in request)[x > p.P], (h * x + c0)[x > p.P])
+    assert np.allclose(sum(v for _, v, _, _ in compaction), x + F0)
     for name, stack in (("request", request), ("compaction", compaction)):
         for v in (p.K, 700_000):
             j = np.abs(x - v).argmin()
-            print(f"model-inputs, a {name} at {tokens(v)}: " + ", ".join(f"{k} ${val[j] * c.read:.3f}" for k, val, _ in stack)
-                  + f"; ${sum(val[j] for _, val, _ in stack) * c.read:.3f} in all")
+            print(f"model-inputs, a {name} at {tokens(v)}: " + ", ".join(f"{k} ${val[j] * c.read:.3f}" for k, val, _, _ in stack)
+                  + f"; ${sum(val[j] for _, val, _, _ in stack) * c.read:.3f} in all")
 
     for theme, t in THEMES.items():
         fit_c = t["fit"]
@@ -264,19 +290,25 @@ def inputs(out, p, c):
         for ax, stack, cap in ((mid, request, 0.3), (low, compaction, 1.3)):
             base = np.zeros_like(x)
             ys = []
-            for i, (label, v, fitted) in enumerate(stack):
-                # The cache read of the context takes the darkest step in both panels.
-                col = ramp[-1] if label.startswith("cache read") else ramp[i]
+            for label, v, fitted, step in stack:
                 v = v * c.read  # in dollars
-                ax.fill_between(x, base, base + v, fc=col, ec=t["page"], lw=1.2, label=label)
+                ax.fill_between(x, base, base + v, fc=ramp[step], ec=t["page"], lw=1.2, label=label)
                 ys.append(base[-1] + v[-1] / 2)
                 base = base + v
-            # Each part named at the right end of its band, thin bands pushed apart to stay legible.
-            gap = 0.1 * cap
+            # Each part named at the right end of its band, thin bands' names pushed apart to stay
+            # legible: up from the bottom, then down from the cap where that pushed one past it. A
+            # name moved off its band's middle has a leader to it.
+            mids, gap = list(ys), 0.1 * cap
             for i in range(1, len(ys)):
                 ys[i] = max(ys[i], ys[i - 1] + gap)
-            for (label, _, fitted), y in zip(stack, ys):
-                ax.text(fit.AUTO + 12_000, y, label, va="center", fontsize=9, color=fit_c if fitted else t["ink"])
+            ys[-1] = min(ys[-1], cap - gap / 2)
+            for i in range(len(ys) - 2, -1, -1):
+                ys[i] = min(ys[i], ys[i + 1] - gap)
+            for (label, _, fitted, _), y, mid_y in zip(stack, ys, mids):
+                if abs(y - mid_y) > 0.02 * cap:
+                    ax.plot([fit.AUTO + 6_000, fit.AUTO + 30_000], [mid_y, y], color=t["muted"], lw=0.8,
+                            clip_on=False)
+                ax.text(fit.AUTO + 36_000, y, label, va="center", fontsize=9, color=fit_c if fitted else t["ink"])
             ax.set_ylim(0, cap)
             ax.set_yticks(np.arange(0, cap, 0.1 if cap < 0.5 else 0.4))
             ax.yaxis.set_major_formatter(dollars)
