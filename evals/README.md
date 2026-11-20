@@ -105,29 +105,30 @@ against what a compaction loses ([Context size](#context-size));
 `one-figure` (88ca497) states the compaction request's output as measured and
 one figure for what a compaction leaves; `noisy` (0465741, 18 November, run
 again on 19 November) opens the wasted-request figure with "It's very noisy and
-hard to judge, but as some indication"; `goal-first` (b4b3308, 19 November, the
-question now) opens with the request's goal and lists the costs; `no-fields` is
+hard to judge, but as some indication"; `goal-first` (b4b3308, 19 November)
+opens with the request's goal and lists the costs; `no-fields` is
 `goal-first` asking only for `compact` and `reason`. From `fork` on (19
 November), the session stops before the reply, as the plugin's fork does
 ([How a run works](#how-a-run-works)), where every earlier column ran with the
 reply at the end of the transcript as well as in the question. `fork` is
-`goal-first`; `fork-no-fields` is `no-fields`; `fork-no-reply` is `goal-first`
-without the quoted reply, so the model sees no reply at all.
+`goal-first`; `fork-no-fields` is `no-fields`; `fork-no-reply` (the question
+now) is `goal-first` without the quoted reply, so the model sees no reply at
+all; `fork-neither` is `fork-no-reply` asking only for `compact` and `reason`.
 
-| case | recorded | replayed | expected | main | sized-question | detail | measured | model-costs | one-figure | noisy | goal-first | no-fields | fork | fork-no-fields | fork-no-reply |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| leaf-scaling-closeout | 742k | 520k | compact | 4/4 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 |
-| leaf-hover-closeout | 736k | 488k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 |
-| leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 |
-| leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 |
-| worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 |
-| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 | 0/2 | 1/2 | 0/2 | 0/4 | 1/2 | 0/2 | 0/4 | 0/4 | 0/4 |
-| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 1/2 | 0/4 | 0/2 | 0/2 | 0/4 | 0/4 | 2/4 |
-| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 2/2 | 2/2 | 4/4 | 2/2 | 0/2 | 4/4 | 2/4 | 4/4 |
-| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 0/2 | 1/4 | 0/2 | 0/2 | 0/4 | 0/4 | 0/4 |
-| leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 | 0/2 | | 0/2 |
-| worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 | 0/2 | | 0/2 |
-| leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 |
+| case | recorded | replayed | expected | main | sized-question | detail | measured | model-costs | one-figure | noisy | goal-first | no-fields | fork | fork-no-fields | fork-no-reply | fork-neither |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| leaf-scaling-closeout | 742k | 520k | compact | 4/4 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 |
+| leaf-hover-closeout | 736k | 488k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 |
+| leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 |
+| leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 |
+| worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 |
+| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 | 0/2 | 1/2 | 0/2 | 0/4 | 1/2 | 0/2 | 0/4 | 0/4 | 0/4 | 0/4 |
+| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 1/2 | 0/4 | 0/2 | 0/2 | 0/4 | 0/4 | 2/4 | 0/4 |
+| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 2/2 | 2/2 | 4/4 | 2/2 | 0/2 | 4/4 | 2/4 | 4/4 | 0/4 |
+| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 0/2 | 1/4 | 0/2 | 0/2 | 0/4 | 0/4 | 0/4 | 0/4 |
+| leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 | 0/2 | | 0/2 | 0/2 |
+| worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 | 0/2 | | 0/2 | 0/2 |
+| leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 |
 
 The first two questions said compact in all 73 runs. Their reasons agree: the
 context is mostly finished work, and what the next step needs is in the
@@ -238,15 +239,23 @@ With the session stopped before the reply, `fork` keeps in 4 of the 16 mid-task
 runs, all at leaf-menu-design, and `fork-no-fields` in 2, both there (p = 0.65).
 Pooled with the runs on 19 November above, the question with the fields keeps
 in 7 of 24 mid-task runs against 2 of 24 without them (p = 0.14), and at
-leaf-menu-design in 6 of 6 against 2 of 6 (p = 0.06). The fields lean toward
-keeping where a design awaits the user's reaction, but the evals don't settle
-whether they help.
+leaf-menu-design in 6 of 6 against 2 of 6 (p = 0.06).
 
 `fork-no-reply` gives the same verdicts as `fork` at every finished case, the
 idle one and both small breaks, and keeps in 6 of the 16 mid-task runs against
 4 (p = 0.7). Quoting the reply changes no verdict the evals can measure: in
 each case the tool calls and results before the reply already show where the
 work stands.
+
+`fork-neither` gives the same verdicts as `fork-no-reply` at every finished
+case, the idle one and both small breaks, but keeps in none of the 16 mid-task
+runs, against 6 (p = 0.02). The fields are the only difference between the
+two questions, so asking for them keeps the context mid-task, most of all at
+leaf-menu-design. In the runs that stop before the reply, the question kept
+there in 8 of 8 runs with the fields and in 2 of 8 without them (p = 0.007).
+Pooled over 19 November, `goal-first`, `fork` and `fork-no-reply` kept in 13
+of 40 mid-task runs, and `no-fields`, `fork-no-fields` and `fork-neither` in 2
+of 40 (p = 0.003).
 
 ## Against the live plugin
 
