@@ -5,13 +5,13 @@
 // the session's own model judges, over its prompt-cached transcript
 // (`$.model.fork`), whether to compact, weighing what a compaction costs
 // against the parts of the transcript the work ahead no longer needs, and
-// the mod compacts if it says to. A session on a one-hour prompt cache left idle at
-// IDLE_FLOOR or more is asked again just before the cache lapses, told that
-// the next request would otherwise write the whole context to the cache
-// again. Each decision shows in the transcript as a dim line the model never
-// reads, so a session that stays large says why. The engine's auto-compaction
-// at its threshold still runs as before, and covers a turn that grows past the
-// floor before it ends.
+// the mod compacts if it says to. A session left idle at IDLE_FLOOR or more is
+// asked again just before its prompt cache lapses, whether the cache lives an
+// hour or five minutes, told that the next request would otherwise write the
+// whole context to the cache again. Each decision shows in the transcript as
+// a dim line the model never reads, so a session that stays large says why.
+// The engine's auto-compaction at its threshold still runs as before, and
+// covers a turn that grows past the floor before it ends.
 //
 // The judge is the session's model over the whole transcript rather than a
 // small model over the last reply: which parts the work ahead still needs
@@ -53,11 +53,12 @@ const AUTHOR = {
   // the report finds for the user's (`floors` in model/fit.py). 250k also comes
   // within 0.2 points of the best turn-end threshold for any β up to 0.6
   // ("Does the model's simplification matter?"). Compacting just before the
-  // cache lapses pays from about 160k, counting only the next request, whose
-  // cache write it shrinks. Claude Code's own idle compaction acts only from
-  // 200k, and only in a session someone is attending (a terminal, VS Code, the
-  // desktop app), so a background session (`claude --bg`, agent view) is left
-  // to this.
+  // cache lapses pays from about 160k on a one-hour cache and 172k on a
+  // five-minute one, counting only the next request, whose cache write it
+  // shrinks. Claude Code's own idle compaction acts only from 200k, only on a
+  // one-hour cache, and only in a session someone is attending (a terminal, VS
+  // Code, the desktop app), so a five-minute cache or a background session
+  // (`claude --bg`, agent view) is left to this.
   FLOOR: 250_000,
   IDLE_FLOOR: 175_000,
   // What a token costs, in cached reads: on Opus and Sonnet 5.5 a read is
@@ -137,10 +138,14 @@ const FIGURES = 'sparkjoy/figures.json'
 // reaches FLOOR.
 const WINDOW = 1_000_000
 
-// How long a session sits idle before it is asked: inside the hour a one-hour
-// prompt cache lives, so the question and any summary still read the context
-// from the cache.
-const IDLE_MS = 55 * 60_000
+// How long a session sits idle before it is asked, by the lifetime of the
+// prompt cache its last turn wrote to: inside that lifetime, so the question
+// reads the context from the cache, and its read keeps the cache alive for the
+// summary after it. On a five-minute cache that leaves a minute of margin, the
+// lateness LATE_MS allows. Of my turn ends followed by more than 4 minutes
+// idle, 95% ran past 5, so the question seldom comes just before the user
+// returns to a warm cache.
+const IDLE_MS = { '1h': 55 * 60_000, '5m': 4 * 60_000 }
 
 // A wait that ends later than this after it was due slept with the machine,
 // and the prompt cache lapsed meanwhile, so asking would pay to write the
@@ -214,18 +219,21 @@ async function afterTurn($: EngineInterface, watch: Watch, changes: number, usag
     if (tokens === undefined || context.window < WINDOW || !isCurrent()) return
     const figures = await fitted($)
 
-    // Only a one-hour prompt cache outlasts the wait, so an idle session is
-    // asked only after a turn whose cache writes were all for an hour, as
-    // Claude Code's own idle compaction decides. Claude Code caches for an hour
-    // on a subscription, and on an API key or Bedrock where the user opts in;
-    // usage credits and gateways cache for five minutes. A turn that wrote
-    // nothing to the cache, or whose provider names no lifetime, leaves the
-    // session alone. The wait starts at the turn's end, whatever the judge
-    // does meanwhile.
-    const isHourCache = (usage?.ephemeral_1h_input_tokens ?? 0) > 0 && !usage?.ephemeral_5m_input_tokens
-    if (tokens >= figures.IDLE_FLOOR && isHourCache) {
-      const due = (await $.clock.now()) + IDLE_MS
-      $.clock.after(IDLE_MS, () => void idle($, isCurrent, say, tokens, due))
+    // An idle session is asked after a turn whose cache writes all had one
+    // lifetime, an hour or five minutes, once it has sat idle for the wait
+    // IDLE_MS sets for that lifetime. Claude Code caches for an hour on a
+    // subscription, and on an API key or Bedrock where the user opts in;
+    // otherwise, under usage credits and behind gateways, it caches for five
+    // minutes. A turn that wrote nothing to the cache, wrote for both
+    // lifetimes, or whose provider names no lifetime, leaves the session
+    // alone. The wait starts at the turn's end, whatever the judge does
+    // meanwhile.
+    const hour = usage?.ephemeral_1h_input_tokens ?? 0
+    const fiveMinutes = usage?.ephemeral_5m_input_tokens ?? 0
+    const wait = hour > 0 && fiveMinutes === 0 ? IDLE_MS['1h'] : fiveMinutes > 0 && hour === 0 ? IDLE_MS['5m'] : undefined
+    if (tokens >= figures.IDLE_FLOOR && wait !== undefined) {
+      const due = (await $.clock.now()) + wait
+      $.clock.after(wait, () => void idle($, isCurrent, say, tokens, due, wait / 60_000))
     }
     if (tokens < figures.FLOOR) return
     const prompt = question(tokens, undefined, figures)
@@ -239,11 +247,18 @@ async function afterTurn($: EngineInterface, watch: Watch, changes: number, usag
 // now that its prompt cache is about to lapse: no turn has begun since, and
 // the context is the size it was then. After any compaction, the judge's or
 // Claude Code's own idle one, the context has no size until the next request.
-async function idle($: EngineInterface, isCurrent: () => boolean, say: (text: string) => void, tokens: number, due: number) {
+// `minutes` is how long it has sat idle.
+async function idle(
+  $: EngineInterface,
+  isCurrent: () => boolean,
+  say: (text: string) => void,
+  tokens: number,
+  due: number,
+  minutes: number,
+) {
   const isUntouched = async () => isCurrent() && (await $.session.usage()).context.tokens === tokens
   try {
     if ((await $.clock.now()) > due + LATE_MS || !(await isUntouched())) return
-    const minutes = IDLE_MS / 60_000
     const prompt = question(tokens, minutes, await fitted($))
     await judge($, say, isUntouched, `${thousands(tokens)} tokens, idle ${minutes} minutes`, prompt)
   } catch (error) {
@@ -385,7 +400,7 @@ function question(tokens: number, idleMinutes?: number, figures: Figures = AUTHO
   const sum = isIdle ? '' : `\n- At ${now} a compaction pays for itself after about ${payback(tokens, figures)} more requests that need nothing it dropped.`
   const keeping = isIdle
     ? `What keeping costs now:
-- The prompt cache holding the conversation lapses in a few minutes.
+- The prompt cache holding the conversation lapses within a few minutes.
 - The first request after that makes a cache write of all but ${thousands(P)} of its ${now} tokens, against about ${thousands(K - P)} after a compaction.
 
 So compact unless the next turn continues work that needs the transcript's detail.`
