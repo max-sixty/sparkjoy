@@ -142,6 +142,13 @@ def chain(path: Path, end: int) -> list[dict]:
     return entries[::-1]
 
 
+def harness_file(path: str) -> bool:
+    """Whether an edited file is the harness's own, under ~/.claude: memory, the
+    user's instructions, skills. A background job's scratch under ~/.claude/jobs
+    is the work's."""
+    return "/.claude/" in path and "/.claude/jobs/" not in path
+
+
 def sanitize(entries: list[dict]) -> list[dict]:
     """The entries a fixture keeps, each cleaned, re-parented past those it drops."""
     out = []
@@ -153,7 +160,8 @@ def sanitize(entries: list[dict]) -> list[dict]:
         if kind == "system":
             keep = entry.get("subtype") == "compact_boundary"
         elif kind == "attachment":
-            keep = entry["attachment"].get("type") in KEPT_ATTACHMENTS
+            attachment = entry["attachment"]
+            keep = attachment.get("type") in KEPT_ATTACHMENTS and not harness_file(attachment.get("filename", ""))
         elif kind == "assistant":
             blocks = [b for b in entry["message"]["content"] if b.get("type") not in ("thinking", "redacted_thinking")]
             entry = entry | {"message": entry["message"] | {"content": blocks}}

@@ -1,6 +1,6 @@
 # Evals
 
-These evals put sparkjoy's question to the model at 12 turn ends from my
+These evals put sparkjoy's question to the model at 16 turn ends from my
 Claude Code sessions on open-source work (Leaf, Worktrunk and tend),
 and score its verdict against a label chosen with hindsight, from what the
 session did next.
@@ -83,6 +83,10 @@ next) are in `cases.json`.
 | leaf-send-hover-fix | turn | 570k | keep | mid-iteration on a UI fix the user keeps faulting |
 | leaf-menu-design | turn | 551k | keep | a design exploration just rebuilt, awaiting reaction |
 | tend-eval-rerun-wait | turn | 519k | keep | waiting on an eval rerun to turn into a PR |
+| tend-sandbox-bind-ask | turn | 599k | keep | asks for a go-ahead before building more of a sandbox design |
+| leaf-escape-stack-ask | turn | 490k | keep | asks two design decisions before an experiment branch |
+| leaf-save-icon-merge-ask | turn | 479k | compact | asks whether to open and merge a finished branch's PR |
+| leaf-panzoom-drop-ask | turn | 403k | compact | asks whether to drop a library swap (a reset) or fix it |
 | leaf-data-attrs-merged | turn | 296k | keep | three changes landed: a natural break, but small |
 | worktrunk-repairs-merged | turn | 210k | keep | four repair PRs merged: a natural break, but small |
 | leaf-ui-fixes-idle | idle | 290k | compact | idle 55 minutes after everything landed |
@@ -119,7 +123,9 @@ asking only for fields the hook reads, as [Fields the hook doesn't
 read](#fields-the-hook-doesnt-read) describes. `reply-message` (20 November) is
 `fork-no-reply` run with `--keep-reply`, so the session ends with the turn's
 reply and the question follows it. `fork-no-reply` ran in three batches, which
-kept at the mid-task cases in 6 of 16, 0 of 16 and 23 of 32 runs ([Batches](#batches)).
+kept at the mid-task cases in 6 of 16, 0 of 16, 23 of 32 and 24 of 32 runs
+([Batches](#batches)). The four cases that stop to ask ran only in the last two
+batches, and its last batch ran as `power-law@929a9bd`, the same question.
 
 | case | recorded | replayed | expected | main | sized-question | detail | measured | model-costs | one-figure | noisy | goal-first | no-fields | fork | fork-no-fields | fork-no-reply | fork-neither | reply-message |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -128,12 +134,16 @@ kept at the mid-task cases in 6 of 16, 0 of 16 and 23 of 32 runs ([Batches](#bat
 | leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 | 2/2 |
 | leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 | 2/2 |
 | worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 | 2/2 |
-| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 | 0/2 | 1/2 | 0/2 | 0/4 | 1/2 | 0/2 | 0/4 | 0/4 | 4/16 | 0/4 | 1/8 |
-| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 1/2 | 0/4 | 0/2 | 0/2 | 0/4 | 0/4 | 10/16 | 0/4 | 8/8 |
-| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 2/2 | 2/2 | 4/4 | 2/2 | 0/2 | 4/4 | 2/4 | 11/16 | 0/4 | 8/8 |
-| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 0/2 | 1/4 | 0/2 | 0/2 | 0/4 | 0/4 | 4/16 | 0/4 | 7/8 |
+| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 | 0/2 | 1/2 | 0/2 | 0/4 | 1/2 | 0/2 | 0/4 | 0/4 | 9/24 | 0/4 | 1/8 |
+| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 1/2 | 0/4 | 0/2 | 0/2 | 0/4 | 0/4 | 18/24 | 0/4 | 8/8 |
+| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 2/2 | 2/2 | 4/4 | 2/2 | 0/2 | 4/4 | 2/4 | 19/24 | 0/4 | 8/8 |
+| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 0/2 | 1/4 | 0/2 | 0/2 | 0/4 | 0/4 | 7/24 | 0/4 | 7/8 |
 | leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 | 0/2 | | 0/2 | 0/2 | |
 | worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 | 0/2 | | 0/2 | 0/2 | |
+| tend-sandbox-bind-ask | 599k | | keep | | | | | | | | | | | | | | | 8/8 | | 6/8 |
+| leaf-escape-stack-ask | 490k | | keep | | | | | | | | | | | | | | | 8/8 | | 7/8 |
+| leaf-save-icon-merge-ask | 479k | | compact | | | | | | | | | | | | | | | 8/8 | | 8/8 |
+| leaf-panzoom-drop-ask | 403k | | compact | | | | | | | | | | | | | | | 0/8 | | 0/8 |
 | leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 | 2/2 |
 
 The first two questions said compact in all 73 runs. Their reasons agree: the
@@ -250,8 +260,8 @@ leaf-menu-design in 6 of 6 against 2 of 6 (p = 0.06).
 `fork-no-reply` gives the same verdicts as `fork` at every finished case, the
 idle one and both small breaks, and keeps in 6 of the 16 mid-task runs against
 4 (p = 0.7). Quoting the reply changes no verdict the evals can measure: in
-each case the tool calls and results before the reply already show where the
-work stands.
+each of the four mid-task cases the turn's tool calls and results already show
+where the work stands.
 
 `fork-neither` gives the same verdicts as `fork-no-reply` at every finished
 case, the idle one and both small breaks, but keeps in none of the 16 mid-task
@@ -289,7 +299,8 @@ runs, against 2 of 8 as two blocks in the same hour.
 The same question on the same transcripts keeps at the mid-task cases at very
 different rates from one batch of runs to the next. `fork-no-reply` kept in 6 of
 16 runs on the evening of 19 November, in none of 16 on the morning of 20
-November and in 23 of 32 that afternoon (p = 1e-6 between the last two). The
+November, and in 23 of 32 and 24 of 32 in two batches that afternoon (p = 1e-6
+between the morning and the first afternoon batch). The
 finished cases, the idle one and both small breaks gave the same verdict in
 every batch. A logged request from each batch shows the same messages, so the
 cause is likely on the server, but it isn't confirmed. A comparison between two
@@ -301,6 +312,23 @@ records the Claude Code version that ran it, from 20 November on.
 the same quarter hour, in 23 of 32 (p = 1.0). Ending the session with the
 turn's reply changed no verdict the evals can measure, as quoting the reply
 didn't. Both compacted at every finished case and the idle one.
+
+### Turn ends that stop to ask
+
+Four cases stop where the turn asks the user before going on. At
+`tend-sandbox-bind-ask` and `leaf-escape-stack-ask` the next turn drew on detail
+the ask doesn't restate, so they keep; at `leaf-save-icon-merge-ask` and
+`leaf-panzoom-drop-ask` the ask holds all the next turn needed, and a
+compaction keeps the turn's final reply word for word, so they compact. In the
+afternoon batch the question matched three of the four in all 8 runs. At
+`leaf-panzoom-drop-ask` it kept in all 8, with reasons such as "half-done
+Panzoom fix with six precise reviewer findings … needs exact detail"; the label
+rests on what the user did next, a `/compact` one turn later and then "do #3".
+
+`tend-sandbox-bind-ask`'s turn made no tool calls, so the replayed request
+ends on the user's message before it, and the model never sees the ask. Run
+with `--keep-reply`, so that it does, the question kept in 6 of 8 runs there,
+7 of 8 at `leaf-escape-stack-ask`, and as before at the other two.
 
 ## Against the live plugin
 
@@ -346,7 +374,7 @@ comparison waits until there are more under the question as it stands.
 
 ## Fixtures
 
-The 12 fixtures take 3.5 MB, gzipped. Before publishing, `build.py` removed:
+The 16 fixtures take 4.4 MB, gzipped. Before publishing, `build.py` removed:
 
 - everything the harness injected rather than the conversation said: system
   reminders, instruction files, memory, skill listings, skill and command

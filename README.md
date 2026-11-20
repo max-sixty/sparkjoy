@@ -90,8 +90,8 @@ and keeping the context each cost at the context's size.
 
 In the [evals](#evals), the question compacts at every turn end that finishes
 a piece of work. At turn ends in the middle of a task, where it should keep the
-context, it kept it in anywhere from none of 16 runs to 23 of 32, depending on
-the day the runs were made.
+context, it kept it in anywhere from none of 16 runs to 24 of 32, depending on
+the batch of runs.
 
 ### The prompt
 
@@ -164,7 +164,7 @@ Answer with one JSON object and nothing else, filling its fields in order:
 ### Evals
 
 <details>
-<summary>The question's verdicts at 12 turn ends from my sessions</summary>
+<summary>The question's verdicts at 16 turn ends from my sessions</summary>
 
 Each turn end's label is chosen from what the session did next, and each run
 asks the question above, on 19 and 20 November 2026[^evals]:
@@ -173,14 +173,16 @@ asks the question above, on 19 and 20 November 2026[^evals]:
 |---|---|---|---|
 | five that finished a piece of work | 479k–742k | compact | 10 of 10 |
 | one idle for 55 minutes after everything landed | 290k | compact | 2 of 2 |
-| four in the middle of a task | 519k–681k | keep | 29 of 64 |
+| four in the middle of a task | 519k–681k | keep | 53 of 96 |
+| two that stop to ask before going on, where the next turn needed detail the ask leaves out | 490k–599k | keep | 16 of 16 |
+| two that stop to ask, where the ask holds all the next turn needed | 403k–479k | compact | 8 of 16 |
 | two natural breaks, but small | 210k–296k | keep | 0 of 4 |
 
 At the two small natural breaks the [cost model](#cost-model) also says to
 compact. At the mid-task turn ends, the same question and transcripts kept the
 context in 6 of 16 runs on the evening of 19 November, in none of 16 on the
-morning of 20 November and in 23 of 32 that afternoon, so two versions of the
-question compare only when run in the same batch.
+morning of 20 November and in 47 of 64 over two batches that afternoon, so two
+versions of the question compare only when run in the same batch.
 
 The hook reads only `compact` and `reason`, yet the question asks for `next`
 and `needs_detail` first, because without them the model almost never keeps the
@@ -653,7 +655,7 @@ information](docs/cost-model.md#value-of-information).
 
 On the evals, sparkjoy's question compacted at every finished turn end. At the
 four mid-task turn ends it kept the context in anywhere from none of 16 runs to
-23 of 32, depending on the batch ([Batches](evals/README.md#batches)). Whether the live
+24 of 32, depending on the batch ([Batches](evals/README.md#batches)). Whether the live
 plugin's verdicts match the evals' is still open ([Against the live
 plugin](evals/README.md#against-the-live-plugin)). The lost detail costs
 only 2% in all because real sessions end, so they compact less often than in the
