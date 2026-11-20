@@ -255,8 +255,10 @@ costs](#request-and-compaction-costs), with the values above:
 
 A request's cost c(x) (top) and a compaction's F(x) (bottom) by part, against
 the context x. Every part except the read of the context is measured from
-36,249 requests. A compaction costs about \$1 at any context, and \$0.87 of
-that is the cache write of the context it leaves.
+36,249 requests. A compaction's cost hardly changes with the context it
+compacts, from \$1.01 at 142k to \$1.18 at 965k. Its only part that grows is the
+cache read of the context, at \$0.20 per million tokens. Most of the rest,
+\$0.87, is the cache write of the context it leaves, the same at any size.
 
 The larger the context, the sooner a compaction pays for itself. After a
 compaction at 700k, each later request reads 558k fewer tokens, and the

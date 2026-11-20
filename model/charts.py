@@ -287,6 +287,8 @@ def inputs(out, p, c):
         axis_name(low, "Cost per compaction F(x) by part ($)", t)
         mid.text(1, 1.04, "parts named in orange are fitted to the sessions", transform=mid.transAxes, ha="right",
                  va="bottom", fontsize=9, color=fit_c)
+        low.text(1, 1.04, "about $1 at any context, since only the cache read of the context grows with it",
+                 transform=low.transAxes, ha="right", va="bottom", fontsize=9, color=t["ink"])
         save(fig, out / f"model-inputs-{theme}.svg")
 
 

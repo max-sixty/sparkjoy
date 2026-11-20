@@ -369,6 +369,9 @@ L 538.82 332.915265
    <g id="text_23">
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="545.064974" y="224.096742" transform="rotate(-0 545.064974 224.096742)">cache read of the context</text>
    </g>
+   <g id="text_24">
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="538.82" y="191.750498" transform="rotate(-0 538.82 191.750498)">about $1 at any context, since only the cache read of the context grows with it</text>
+   </g>
   </g>
  </g>
  <defs>
