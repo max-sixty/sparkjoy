@@ -15,9 +15,9 @@ MCP servers and no user instructions, skills or plugins. Each result is
 appended to `results.jsonl` (or `--results`); `--report` prints the table
 README.md shows.
 
-The fixture stops at the turn's reply, and the question repeats that reply, as
-the plugin's does. The plugin's fork instead replays the turn's last request,
-which ends before the reply, so here the model reads its reply twice.
+The session stops before the turn's reply, as the plugin's fork does: the fork
+replays the turn's last request, which ends before the reply, and the question
+quotes the reply.
 
 Runs of one case go in sequence from one directory and share one cache write
 of its transcript, so each run after the first costs about a twentieth of it.
@@ -40,6 +40,7 @@ token): the macOS keychain item `Claude Code-credentials`, or
 import argparse
 import getpass
 import gzip
+import http.client
 import json
 import os
 import shutil
@@ -49,7 +50,9 @@ import tempfile
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Thread
 
 HERE = Path(__file__).parent
 RESULTS = HERE / "results.jsonl"
@@ -82,10 +85,60 @@ def access_token() -> dict[str, str]:
     return {"CLAUDE_CODE_OAUTH_TOKEN": token}
 
 
-def child_env(config: Path, credential: dict[str, str]) -> dict[str, str]:
-    """This environment without any Claude Code or Anthropic setting, pointed at `config`."""
+# The text of the message Claude Code puts after a resumed session's last
+# message when that message is the user's, such as a tool result.
+NO_RESPONSE = "No response requested."
+
+
+def added_on_resume(message: dict) -> bool:
+    content = message["content"]
+    if isinstance(content, list) and len(content) == 1 and content[0].get("type") == "text":
+        content = content[0]["text"]
+    return message["role"] == "assistant" and content == NO_RESPONSE
+
+
+class Proxy(BaseHTTPRequestHandler):
+    """Forwards the child's API requests, dropping the assistant message Claude Code
+    adds on resuming a session that ends with a tool result. The plugin's fork sends
+    no such message: its question follows the turn's last tool result."""
+
+    def do_POST(self):
+        body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        if self.path.split("?")[0] == "/v1/messages":
+            request = json.loads(body)
+            request["messages"] = [m for m in request["messages"] if not added_on_resume(m)]
+            body = json.dumps(request).encode()
+        headers = {k: v for k, v in self.headers.items() if k.lower() not in ("host", "content-length", "connection")}
+        upstream = http.client.HTTPSConnection("api.anthropic.com", timeout=900)
+        upstream.request("POST", self.path, body, headers | {"Content-Length": str(len(body))})
+        response = upstream.getresponse()
+        self.send_response(response.status)
+        for k, v in response.getheaders():
+            if k.lower() not in ("transfer-encoding", "connection", "content-length"):
+                self.send_header(k, v)
+        self.send_header("Connection", "close")
+        self.end_headers()
+        while chunk := response.read1(65536):
+            self.wfile.write(chunk)
+            self.wfile.flush()
+        upstream.close()
+
+    def log_message(self, *_):
+        pass
+
+
+def start_proxy() -> str:
+    """Serves `Proxy` on a free local port; returns its base URL."""
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Proxy)
+    Thread(target=server.serve_forever, daemon=True).start()
+    return f"http://127.0.0.1:{server.server_port}"
+
+
+def child_env(config: Path, credential: dict[str, str], proxy: str) -> dict[str, str]:
+    """This environment without any Claude Code or Anthropic setting, pointed at `config` and `proxy`."""
     env = {k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE", "ANTHROPIC"))}
     return env | credential | {
+        "ANTHROPIC_BASE_URL": proxy,
         "CLAUDE_CONFIG_DIR": str(config),
         "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
@@ -103,11 +156,12 @@ def load(case: dict) -> list[dict]:
         return [json.loads(line) for line in f]
 
 
-def reply_of(entries: list[dict]) -> str:
-    """The text of the assistant message the fixture ends with."""
+def split_reply(entries: list[dict]) -> tuple[list[dict], str]:
+    """The fixture without the assistant message it ends with, the turn's reply, and that reply's text."""
     last = entries[-1]["message"]["id"]
-    blocks = [b for e in entries if e["type"] == "assistant" and e["message"]["id"] == last for b in e["message"]["content"]]
-    return "\n\n".join(b["text"] for b in blocks if b.get("type") == "text")
+    first = next(i for i, e in enumerate(entries) if e["type"] == "assistant" and e["message"]["id"] == last)
+    blocks = [b for e in entries[first:] for b in e["message"]["content"]]
+    return entries[:first], "\n\n".join(b["text"] for b in blocks if b.get("type") == "text")
 
 
 def stage(entries: list[dict], case: dict, config: Path, cwd: Path) -> str:
@@ -175,7 +229,7 @@ def shared_opening(questions: list[str]) -> str:
     return "\n\n".join(common)
 
 
-def send(blocks: list[str], session: str, config: Path, cwd: Path, credential: dict[str, str]) -> dict:
+def send(blocks: list[str], session: str, config: Path, cwd: Path, credential: dict[str, str], proxy: str) -> dict:
     """One request on the staged session, its last message made of `blocks`; returns Claude Code's result."""
     message = {"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": b} for b in blocks]}}
     proc = subprocess.run(
@@ -186,7 +240,7 @@ def send(blocks: list[str], session: str, config: Path, cwd: Path, credential: d
         ],
         input=json.dumps(message) + "\n",
         cwd=cwd,
-        env=child_env(config, credential),
+        env=child_env(config, credential, proxy),
         capture_output=True,
         text=True,
         timeout=900,
@@ -218,11 +272,10 @@ def row_of(case: dict, source: Path, out: dict) -> dict:
 
 
 def run(cases: list[dict], sources: list[Path], repeat: int, jobs: int, results: Path) -> None:
-    credential = access_token()
+    credential, proxy = access_token(), start_proxy()
 
     def one_case(case: dict) -> list[dict]:
-        entries = load(case)
-        reply = reply_of(entries)
+        entries, reply = split_reply(load(case))
         questions = {source: render(source, reply, case) for source in sources}
         opening = shared_opening(list(questions.values()))
         # One fixed directory per case, so that every run of it gets the same
@@ -237,12 +290,12 @@ def run(cases: list[dict], sources: list[Path], repeat: int, jobs: int, results:
             cwd.mkdir(parents=True)
             session = stage(entries, case, config, cwd)
             if opening and len(sources) * repeat > 1:
-                primed = send([opening], session, config, cwd, credential).get("total_cost_usd") or 0.0
+                primed = send([opening], session, config, cwd, credential, proxy).get("total_cost_usd") or 0.0
             for source, question in questions.items():
                 blocks = [opening, question[len(opening):].lstrip("\n")] if opening else [question]
                 for _ in range(repeat):
                     try:
-                        row = row_of(case, source, send(blocks, session, config, cwd, credential))
+                        row = row_of(case, source, send(blocks, session, config, cwd, credential, proxy))
                     except (RuntimeError, subprocess.SubprocessError) as error:
                         print(f"ERROR {case['id']} [{label(source)}]: {error}", flush=True)
                         continue
