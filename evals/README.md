@@ -39,14 +39,21 @@ it in a second block.
 conversation from the last compaction to the turn's reply, which is what a
 resume sends the model, sanitized for publishing.
 
-`run.py` writes the fixture as a session into a scratch `CLAUDE_CONFIG_DIR`,
-with every `CLAUDE*` and `ANTHROPIC*` variable unset, and resumes it with
-`claude -p --resume <id> --fork-session` on `claude-opus-5-5` at `xhigh` effort,
-as the sessions ran, with no tools, MCP servers, skills or instructions.
+`run.py` writes the fixture, without the turn's reply, as a session into a
+scratch `CLAUDE_CONFIG_DIR`, with every `CLAUDE*` and `ANTHROPIC*` variable
+unset, and resumes it with `claude -p --resume <id> --fork-session` on
+`claude-opus-5-5` at `xhigh` effort, as the sessions ran, with no tools, MCP
+servers, skills or instructions.
 `question.ts` renders the question by calling `question()` from the chosen
 checkout's `hooks/register.ts`, so the evals ask exactly what the plugin asks.
 It passes the case's recorded context size as `tokens`, for a question that
 takes one. The model's reply is parsed as the plugin parses it.
+
+The plugin's fork sends the turn's last request, which ends before the reply,
+with the question after it. Claude Code resumes a session that ends with a tool
+result by adding a message of its own after it, "No response requested.", which
+the fork doesn't send. So `run.py` passes the child's requests through a local
+proxy that drops that message.
 
 A replay differs from the plugin's own fork in these ways:
 
@@ -56,8 +63,6 @@ A replay differs from the plugin's own fork in these ways:
   instructions, skills and tool listings, and Claude Code's `-p` system prompt
   is shorter than an interactive one. A question that states the size is told
   the recorded one; one that doesn't sees only the replayed transcript.
-- **The model reads its reply twice.** The fixture ends with the reply and the
-  question quotes it, where the plugin's fork ends before the reply.
 - **The model has no tools**, where the fork has the session's.
 - **The question comes in two blocks** when a case has more than one run: its
   opening through the quoted reply, then the rest (`run.py` says why).
@@ -102,22 +107,27 @@ one figure for what a compaction leaves; `noisy` (0465741, 18 November, run
 again on 19 November) opens the wasted-request figure with "It's very noisy and
 hard to judge, but as some indication"; `goal-first` (b4b3308, 19 November, the
 question now) opens with the request's goal and lists the costs; `no-fields` is
-`goal-first` asking only for `compact` and `reason`.
+`goal-first` asking only for `compact` and `reason`. From `fork` on (19
+November), the session stops before the reply, as the plugin's fork does
+([How a run works](#how-a-run-works)), where every earlier column ran with the
+reply at the end of the transcript as well as in the question. `fork` is
+`goal-first`; `fork-no-fields` is `no-fields`; `fork-no-reply` is `goal-first`
+without the quoted reply, so the model sees no reply at all.
 
-| case | recorded | replayed | expected | main | sized-question | detail | measured | model-costs | one-figure | noisy | goal-first | no-fields |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| leaf-scaling-closeout | 742k | 520k | compact | 4/4 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 |
-| leaf-hover-closeout | 736k | 488k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 |
-| leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 |
-| leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 |
-| worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 |
-| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 | 0/2 | 1/2 | 0/2 | 0/4 | 1/2 | 0/2 |
-| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 1/2 | 0/4 | 0/2 | 0/2 |
-| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 2/2 | 2/2 | 4/4 | 2/2 | 0/2 |
-| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 0/2 | 1/4 | 0/2 | 0/2 |
-| leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 |
-| worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 |
-| leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 |
+| case | recorded | replayed | expected | main | sized-question | detail | measured | model-costs | one-figure | noisy | goal-first | no-fields | fork | fork-no-fields | fork-no-reply |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| leaf-scaling-closeout | 742k | 520k | compact | 4/4 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 |
+| leaf-hover-closeout | 736k | 488k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 |
+| leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 |
+| leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 |
+| worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 |
+| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 | 0/2 | 1/2 | 0/2 | 0/4 | 1/2 | 0/2 | 0/4 | 0/4 | 0/4 |
+| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 1/2 | 0/4 | 0/2 | 0/2 | 0/4 | 0/4 | 2/4 |
+| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 2/2 | 2/2 | 4/4 | 2/2 | 0/2 | 4/4 | 2/4 | 4/4 |
+| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 0/2 | 1/4 | 0/2 | 0/2 | 0/4 | 0/4 | 0/4 |
+| leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 | 0/2 | | 0/2 |
+| worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 | 0/2 | | 0/2 |
+| leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 |
 
 The first two questions said compact in all 73 runs. Their reasons agree: the
 context is mostly finished work, and what the next step needs is in the
@@ -222,16 +232,29 @@ once at tend-eval-rerun-wait. Both compact at every other case.
 compacts in all 24 runs. At leaf-menu-design, which `model-costs`, `one-figure`,
 `noisy` and `goal-first` kept in all 10 of their runs, it compacts in both
 (Fisher's exact test, p = 0.015). Over the four mid-task cases it keeps in 0 of
-8 runs against 3 for `goal-first` (p = 0.2). So the question still asks what
-comes next and whether that needs the detail before the verdict.
+8 runs against 3 for `goal-first` (p = 0.2).
+
+With the session stopped before the reply, `fork` keeps in 4 of the 16 mid-task
+runs, all at leaf-menu-design, and `fork-no-fields` in 2, both there (p = 0.65).
+Pooled with the runs on 19 November above, the question with the fields keeps
+in 7 of 24 mid-task runs against 2 of 24 without them (p = 0.14), and at
+leaf-menu-design in 6 of 6 against 2 of 6 (p = 0.06). The fields lean toward
+keeping where a design awaits the user's reaction, but the evals don't settle
+whether they help.
+
+`fork-no-reply` gives the same verdicts as `fork` at every finished case, the
+idle one and both small breaks, and keeps in 6 of the 16 mid-task runs against
+4 (p = 0.7). Quoting the reply changes no verdict the evals can measure: in
+each case the tool calls and results before the reply already show where the
+work stands.
 
 ## Against the live plugin
 
 Whether the harness answers as the live plugin does is still open. Sanitizing
 isn't the difference on the one case tried: on tend-eval-rerun-wait, replaying
 the unsanitized transcript (its thinking, instructions and skills back in, 406k
-replayed), giving the model Claude Code's default tools, or cutting the fixture
-before the reply as the plugin's fork does each still compacted, in four runs.
+replayed) or giving the model Claude Code's default tools each still compacted,
+in four runs.
 
 The live plugin can't settle it yet, because until sparkjoy it wrote only its
 compactions into the transcript and sent each keep to a debug log that isn't
