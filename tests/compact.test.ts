@@ -1,4 +1,4 @@
-import type { On, TurnUsage } from 'claude-code'
+import type { ModelUsage, On, TurnUsage } from 'claude-code'
 import { type Engine, expect, mock, test } from 'claude-code/testing'
 import { messageKey } from '../hooks/register'
 
@@ -39,7 +39,8 @@ const FIGURES = `${HOME}/.claude/sparkjoy/figures.json`
 // `rateLimits` (a subscription's five-hour and weekly ones unless told
 // otherwise), turns that end reporting `usage` (`HOUR` unless told
 // otherwise), a fork that answers `verdict` after a turn and `idleVerdict`
-// after an idle wait, each after `forkMs` (`null`: an empty reply),
+// after an idle wait, each after `forkMs` (`null`: an empty reply) and
+// reporting `forkUsage`,
 // compactions that take `compactMs` and fail `compactFailures` times before
 // one succeeds, a turn whose end settles after `endMs`, a store holding
 // `stored` (what an earlier process left), a conversation of user messages
@@ -55,6 +56,7 @@ function engine(
     verdict = COMPACT as string | null,
     idleVerdict = COMPACT as string | null,
     forkMs = 0,
+    forkUsage = USAGE as ModelUsage,
     endMs = 0,
     compactMs = 0,
     compactFailures = 0,
@@ -112,8 +114,8 @@ function engine(
     forks.push(e.prompt)
     await clock.sleep(forkMs)
     const answer = e.prompt.includes('minutes ago') ? idleVerdict : verdict
-    if (answer === null) return { value: { isAnswered: false, reason: 'empty-reply', usage: USAGE } }
-    return { value: { isAnswered: true, text: answer, usage: USAGE } }
+    if (answer === null) return { value: { isAnswered: false, reason: 'empty-reply', usage: forkUsage } }
+    return { value: { isAnswered: true, text: answer, usage: forkUsage } }
   })
   // A plugin's `$.session.compact` reaches here as the plugin made it, with no
   // `trigger`; the engine stamps it `plugin`.
@@ -383,6 +385,31 @@ test('a fork with no answer says so', async ($, on) => {
 
   expect(compactions).toEqual([])
   expect(logs).toEqual(['No verdict at 500k tokens: empty-reply'])
+})
+
+// What the question at 500k read and wrote: on a hit, all but the question
+// itself from the cache; on a miss, only the system prompt and tools, which
+// sit in a cache shared across sessions, writing the rest again.
+const HIT = { ...USAGE, input_tokens: 1_500, cache_read_input_tokens: 500_000 }
+const MISS = { ...USAGE, input_tokens: 1_500, cache_read_input_tokens: 30_000, cache_creation_input_tokens: 470_000 }
+
+test('a question read from the prompt cache adds no line', async ($, on) => {
+  const { begin, logs, turn } = engine(on, { forkUsage: HIT })
+  await begin($)
+
+  await turn($, 't1')
+
+  expect(logs).toEqual(['Compacting at 500k tokens: the PR merged'])
+})
+
+test('a question that missed the prompt cache says so on a line of its own', async ($, on) => {
+  const { begin, compactions, logs, turn } = engine(on, { forkUsage: MISS })
+  await begin($)
+
+  await turn($, 't1')
+
+  expect(compactions).toEqual([''])
+  expect(logs).toEqual(['Missed the prompt cache at 500k tokens: read 30k of 502k from it', 'Compacting at 500k tokens: the PR merged'])
 })
 
 test('a compaction that fails says so, and is tried again once the session sits idle', async ($, on) => {
