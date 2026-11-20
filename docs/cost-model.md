@@ -435,7 +435,7 @@ information](#value-of-information).
 
 On the evals, sparkjoy's question compacted at every finished turn end. At the
 four mid-task turn ends it kept the context in anywhere from none of 16 runs to
-23 of 32, depending on the batch ([Batches](../evals/README.md#batches)). Whether the live
+24 of 32, depending on the batch ([Batches](../evals/README.md#batches)). Whether the live
 plugin's verdicts match the evals' is still open ([Against the live
 plugin](../evals/README.md#against-the-live-plugin)). The lost detail costs
 only 2% in all because real sessions end, so they compact less often than in the

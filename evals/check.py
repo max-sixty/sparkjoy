@@ -44,8 +44,9 @@ PRIVATE = {
 PUBLIC_EMAILS = {"user@example.com", "git@github.com", "noreply@anthropic.com", "noreply@github.com"}
 
 PATTERNS = {
-    # GitHub Actions' runner home is the same on every machine.
-    "home path": re.compile(r"/(?:Users|home)/(?!runner\b)[a-z][\w.-]*|-Users-(?!USER-)[a-z]\w*-"),
+    # GitHub Actions' runner home, and that of the account tend's sandbox runs
+    # as, are the same on every machine.
+    "home path": re.compile(r"/(?:Users|home)/(?!runner\b|tend-sandbox\b)[a-z][\w.-]*|-Users-(?!USER-)[a-z]\w*-"),
     "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b"),
     "api key": re.compile(r"\bsk-(?:ant-)?[A-Za-z0-9_-]{16,}"),
     "github token": re.compile(r"\b(?:ghp|gho|ghs|ghu|ghr)_[A-Za-z0-9]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}"),
