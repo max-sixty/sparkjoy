@@ -26,10 +26,7 @@ minimizes overall cost, under assumptions about how much past context is worth
 to the work[^x]. sparkjoy's default floors come from that replay. It asks
 whether to compact from 250k at turn ends and from 175k in an idle session.
 What the question adds depends on how much a compaction in the middle of a task
-loses, which my sessions measure poorly. If some of the work depends heavily on
-its history, a question that is always right saves 11% to 24% of the cost in
-the model. Counting only the wasted requests measured after a compaction, it
-saves 0.7%.
+loses, which my sessions measure poorly.
 
 The formulas count costs in cached reads, the price of reading one token from
 the prompt cache, and the text gives them in dollars at Opus 5.5's prices for
