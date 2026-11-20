@@ -11,7 +11,10 @@ const SUMMARY = { messages: [said('summary')] }
 // message `m0`.
 const ANNOUNCED = { 'compacting:s1': { at: '489k tokens', messages: [messageKey(said('m0'))] } }
 
+// How long a session sits idle before it is asked, on a one-hour cache and on
+// a five-minute one.
 const IDLE = 55 * 60_000
+const IDLE_5M = 4 * 60_000
 
 // What a turn's requests wrote to the prompt cache: all of it for an hour, as
 // on a subscription.
@@ -22,6 +25,9 @@ const HOUR = {
   ephemeral_1h_input_tokens: 3_000,
   model: 'claude-opus-5-5',
 }
+
+// All of it for five minutes, as on an API key.
+const FIVE_MINUTES = { ...HOUR, ephemeral_5m_input_tokens: 3_000, ephemeral_1h_input_tokens: 0 }
 
 // The user's home, and the figures file `/sparkjoy:report` saves in Claude
 // Code's configuration directory there.
@@ -662,10 +668,32 @@ test('an idle session on a one-hour cache is asked without a subscription', asyn
   expect(compactions).toEqual([''])
 })
 
+test('an idle session on a five-minute cache is asked after 4 minutes', async ($, on) => {
+  const { begin, clock, forks, logs, turn } = engine(on, { tokens: 200_000, usage: FIVE_MINUTES, idleVerdict: KEEP })
+  await begin($)
+
+  await turn($, 't1')
+  await clock.advance(IDLE_5M - 1)
+  expect(forks).toEqual([])
+
+  await clock.advance(1)
+  await clock.settle()
+  expect(forks.length).toBe(1)
+  expect(forks[0]).toContain('Your turn ended 4 minutes ago')
+  expect(forks[0]).toContain('The prompt cache holding the conversation lapses within a few minutes.')
+
+  // Kept, the context stays as it was, and nothing asks again at 55 minutes.
+  await clock.advance(IDLE)
+  await clock.settle()
+  expect(forks.length).toBe(1)
+  expect(logs).toEqual(['Kept at 200k tokens, idle 4 minutes: mid-debug'])
+})
+
 for (const [name, usage] of [
   // A turn that ran onto usage credits partway, whose later requests cached
   // for five minutes.
-  ['wrote some of the cache for five minutes', { ...HOUR, ephemeral_5m_input_tokens: 1_000, ephemeral_1h_input_tokens: 2_000 }],
+  ['wrote to the cache for both lifetimes', { ...HOUR, ephemeral_5m_input_tokens: 1_000, ephemeral_1h_input_tokens: 2_000 }],
+  ['wrote nothing to the cache', { ...USAGE, model: HOUR.model }],
   // A provider that names no lifetime reports only the whole write.
   ['named no cache lifetime', { ...USAGE, cache_creation_input_tokens: 3_000, model: HOUR.model }],
 ] as const) {

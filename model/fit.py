@@ -58,7 +58,7 @@ CHART_BETAS = tuple(i / 20 for i in range(21))
 THRESHOLDS = np.arange(50_000, 960_001, 10_000)
 DRAWS = 200  # bootstrap resamples of sessions
 FLOOR, IDLE_FLOOR = 250_000, 175_000  # where sparkjoy asks, at a turn end and in an idle session (hooks/register.ts)
-IDLE = 11 / 12  # share of the cache's lifetime a session sits idle before it is asked (55 of 60 minutes)
+IDLE = {3600: 55 * 60, 300: 4 * 60}  # seconds idle before sparkjoy asks, by cache lifetime (IDLE_MS, hooks/register.ts)
 # The line sparkjoy writes in the transcript for each verdict (`judge` and `afterTurn` in
 # hooks/register.ts), under its current name and the one it had before it was published.
 VERDICT = re.compile(r"(?P<plugin>sparkjoy|compact-when-done): (?:(?P<kind>Compacting|Kept|Unreadable verdict|No verdict|"
@@ -481,7 +481,7 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0):
     """One session's cost under a policy, with the context each request then carried.
     The policy compacts at the end of any turn (or with `every`, after any request) whose
     context reaches `threshold`, and with `idle`, at any turn end from that size after which
-    the session sits idle for IDLE of the cache's lifetime, as sparkjoy's timer does. Each
+    the session sits idle for IDLE[ttl] seconds, as sparkjoy's timer does. Each
     compaction the policy or Claude Code makes also costs `lost`, D in cached reads. Either of
     `threshold` and `lost` can instead hold one value per request: the threshold at a turn end
     after that request, and what a compaction after it costs."""
@@ -507,7 +507,7 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0):
             ctx = s.size[j]
             cost += s.read[j] + c.write * s.write[j] + c.input * inp + c.output * out
         else:
-            if pending or (idle is not None and ctx >= idle and s.idle[j] > IDLE * ttl):
+            if pending or (idle is not None and ctx >= idle and s.idle[j] > IDLE[ttl]):
                 cost += ctx + c.output * p.N + lost[j - 1]  # read from the cache, which the turn end left warm
                 # A compaction leaves K, or less where the context held less to begin with,
                 # which happens only below K, at a session's first turn ends.

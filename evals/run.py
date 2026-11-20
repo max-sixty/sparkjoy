@@ -60,7 +60,7 @@ MODEL = "claude-opus-5-5"
 # The effort Claude Code's own sessions ran at in the fixtures.
 EFFORT = "xhigh"
 # How long an idle case's session has sat untouched when it is asked: the
-# plugin's IDLE_MS.
+# plugin's wait on a one-hour cache (IDLE_MS).
 IDLE_MINUTES = 55
 
 

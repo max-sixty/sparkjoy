@@ -29,7 +29,8 @@ At the prompt of a Claude Code session:
 - **When a turn ends**, it asks the session's own model whether to compact now,
   and compacts if the model says to ([How it decides](#how-it-decides)).
 - **After 55 minutes idle**, it asks again before the one-hour prompt cache
-  lapses.
+  lapses. On the five-minute cache, which API keys use by default, it asks
+  after 4 minutes.
 - **Each verdict shows in the transcript** as a dim line with its reason. In
   the session above, it kept the context while a move was half done:
 
@@ -192,10 +193,10 @@ context in 6 of 16 runs on 19 November and in none of 16 on 20 November.
 - The report fits every figure the question states except the count of wasted
   requests after a compaction, which takes months of sessions to measure.
 - It leaves Claude Code's own compaction on, so Claude Code still compacts when
-  a turn fills the window. In a session you have open, Claude Code also
-  compacts an idle context of 200k or more without asking, a minute or more
-  before sparkjoy would ask. So sparkjoy's idle question comes mainly in
-  background sessions, below 200k, or with
+  a turn fills the window. In a session you have open on the one-hour cache,
+  Claude Code also compacts an idle context of 200k or more without asking, a
+  minute or more before sparkjoy would ask. So sparkjoy's idle question comes
+  mainly on the five-minute cache, in background sessions, below 200k, or with
   [`idleCompaction`](https://code.claude.com/docs/en/settings-reference#idlecompaction)
   set to `false`.
 - It acts only in sessions with a 1M-token context window, the size its floors
