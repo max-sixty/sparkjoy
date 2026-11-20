@@ -154,6 +154,11 @@ const IDLE_MS = { '1h': 55 * 60_000, '5m': 4 * 60_000 }
 // no test reaches this.
 const LATE_MS = 60_000
 
+// The share of the fork's input not read from the prompt cache past which the
+// question missed it: a hit leaves only the question uncached and a miss most
+// of the context, so any share between separates them.
+const MISSED = 0.1
+
 type Verdict = { compact: boolean; reason: string }
 
 type Watch = {
@@ -266,9 +271,10 @@ async function idle(
   }
 }
 
-// Asks the session's model whether to compact, and compacts if it says to.
-// The verdict stands only while `stands` holds once the model has answered;
-// `at` names the moment in each line.
+// Asks the session's model whether to compact, and compacts if it says to,
+// saying too when the question missed the prompt cache. The verdict stands
+// only while `stands` holds once the model has answered; `at` names the moment
+// in each line.
 async function judge(
   $: EngineInterface,
   say: (text: string) => void,
@@ -277,6 +283,14 @@ async function judge(
   prompt: string,
 ) {
   const answer = await $.model.fork({ prompt })
+  // A line of its own, so the verdict's line, which model/fit.py parses, keeps
+  // its reason clean. A fork that made no request reports no usage.
+  if ('usage' in answer) {
+    const { usage } = answer
+    const read = usage.cache_read_input_tokens
+    const input = usage.input_tokens + read + usage.cache_creation_input_tokens
+    if (input - read > MISSED * input) say(`Missed the prompt cache at ${at}: read ${thousands(read)} of ${thousands(input)} from it`)
+  }
   if (!(await stands())) return say(`Dropped the verdict at ${at}: the conversation moved on`)
   const verdict = answer.isAnswered ? parse(answer.text) : undefined
   if (verdict?.compact) {
