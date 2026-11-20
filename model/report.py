@@ -316,7 +316,7 @@ def page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit, saved
     if fitted:
         turn, idle = fitted["floors"]
         summary.append(f"<p><b>Asking from {tokens(turn)} at turn ends and {tokens(idle)} in idle sessions</b> "
-                       f"costs least for these sessions, {change(fitted['saved'])} than never compacting.</p>")
+                       f"minimizes the cost of these sessions, {change(fitted['saved'])} than never compacting.</p>")
     sections = ["Sessions", "Verdicts"] * bool(verdicts) + ["Idle returns", "Thresholds"] + ["Saved figures"] * bool(saved)
     summary.append("<p class=note>" + " · ".join(f'<a href="#{anchor(h)}">{h}</a>' for h in sections) + "</p>")
     parts.append(f'<div class="summary">{"".join(summary)}</div>')
