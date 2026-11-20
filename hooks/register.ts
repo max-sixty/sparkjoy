@@ -48,8 +48,8 @@ const COMPACTING = { plugin: 'sparkjoy', key: 'compacting' } as const
 // report saved falls back for it.
 const AUTHOR = {
   // The judge is asked at a turn end only from FLOOR context tokens, and in
-  // an idle session from IDLE_FLOOR: the pair of floors that costs least when
-  // docs/cost-model.md replays my sessions ("Idle sessions"), which
+  // an idle session from IDLE_FLOOR: the pair of floors that minimizes the cost
+  // of my sessions when docs/cost-model.md replays them ("Idle sessions"), which
   // the report finds for the user's (`floors` in model/fit.py). 250k also comes
   // within 0.2 points of the best turn-end threshold for any β up to 0.6
   // ("Does the model's simplification matter?"). Compacting just before the
@@ -397,8 +397,9 @@ function hash(text: string) {
 // made no measurable difference to the verdicts. The answer gives what most
 // likely comes next and whether that needs the transcript's detail before
 // `compact`, though the hook reads only `compact` and `reason`. In the evals,
-// the question without those two fields kept the context in none of 16 runs at
-// the four mid-task turn ends, against 6 of 16 with them.
+// questions with those two fields kept the context in 13 of 56 runs at the four
+// mid-task turn ends, and questions without them in 2 of 88, among them ones
+// that ask for `reason` first or ask the model to consider what comes next.
 function question(tokens: number, idleMinutes?: number, figures: Figures = AUTHOR) {
   const { WRITE, OUTPUT, SUMMARY, K, P, TURN_MEDIAN, TURN_MEAN } = figures
   const now = thousands(tokens)

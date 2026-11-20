@@ -31,8 +31,9 @@ At the prompt of a Claude Code session:
 - **After 55 minutes idle**, it asks again before the one-hour prompt cache
   lapses. On the five-minute cache, which API keys use by default, it asks
   after 4 minutes.
-- **Each verdict shows in the transcript** as a dim line with its reason. In
-  the session above, it kept the context while a move was half done:
+- **Each verdict shows in the transcript** as a dim line with its reason, and
+  a question that missed the prompt cache adds a line saying so. In the session
+  above, it kept the context while a move was half done:
 
   ```
   sparkjoy: Kept at 362k tokens: The README move is half done: unpushed files, a helper still running, and a page rebuild that hasn't been run yet
@@ -143,7 +144,7 @@ What a compaction costs:
 - A cache write costs as much as 40 cached reads, and an output token as much as 100.
 
 What keeping costs now:
-- The prompt cache holding the conversation lapses in a few minutes.
+- The prompt cache holding the conversation lapses within a few minutes.
 - The first request after that makes a cache write of all but 30k of its 500k tokens, against about 112k after a compaction.
 
 So compact unless the next turn continues work that needs the transcript's detail.
@@ -581,6 +582,11 @@ an hour's gap. Every pair of floors from 200k–250k at turn ends and 150k–175
 idle comes within 0.3 points of the default. Counting only the next request,
 compacting before the cache lapses pays from about 160k ([Compacting before the
 cache lapses](docs/cost-model.md#compacting-before-the-cache-lapses)).
+
+On the five-minute cache, priced at its own rates, the cache lapses after 52%
+of turn ends, and 95% of pauses past 4 minutes run past 5. There, compacting at
+turn ends from 250k saves 35.4% in the replay, and also asking after 4 minutes
+idle from 175k saves 37.0%.
 
 ### What a classifier saves
 

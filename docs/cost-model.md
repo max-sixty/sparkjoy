@@ -380,6 +380,11 @@ idle comes within 0.3 points of the default. Counting only the next request,
 compacting before the cache lapses pays from about 160k ([Compacting before the
 cache lapses](#compacting-before-the-cache-lapses)).
 
+On the five-minute cache, priced at its own rates, the cache lapses after 52%
+of turn ends, and 95% of pauses past 4 minutes run past 5. There, compacting at
+turn ends from 250k saves 35.4% in the replay, and also asking after 4 minutes
+idle from 175k saves 37.0%.
+
 ### What a classifier saves
 
 #### Work that differs in β
