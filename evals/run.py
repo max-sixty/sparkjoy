@@ -4,7 +4,7 @@
 # ///
 """Asks a checkout's question at each case's turn end, and scores the verdicts.
 
-    uv run --script evals/run.py [--question-from CHECKOUT ...] [--case ID ...] [--repeat N]
+    uv run --script evals/run.py [--question-from CHECKOUT ...] [--case ID ...] [--repeat N] [--keep-reply]
     uv run --script evals/run.py --report
 
 Each run rebuilds a case's fixture as a session in a scratch Claude Code
@@ -17,7 +17,9 @@ appended to `results.jsonl` (or `--results`); `--report` prints the table
 README.md shows.
 
 The session stops before the turn's reply, as the plugin's fork does: the fork
-replays the turn's last request, which ends before the reply.
+replays the turn's last request, which ends before the reply. `--keep-reply`
+ends it with the reply instead, so the question is the next message after the
+model's own last word.
 
 Runs of one case go in sequence from one directory and share one cache write
 of its transcript, so each run after the first costs about a twentieth of it.
@@ -254,7 +256,7 @@ def send(blocks: list[str], session: str, config: Path, cwd: Path, credential: d
     return out
 
 
-def row_of(case: dict, source: Path, out: dict) -> dict:
+def row_of(case: dict, source: Path, out: dict, claude: str) -> dict:
     usage = out.get("usage") or {}
     verdict = parse(out.get("result") or "")
     got = None if verdict is None else ("compact" if verdict["compact"] else "keep")
@@ -267,15 +269,23 @@ def row_of(case: dict, source: Path, out: dict) -> dict:
         "reason": verdict["reason"] if verdict else (out.get("result") or "")[:300],
         "context": sum(usage.get(k, 0) for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")),
         "cache_read": usage.get("cache_read_input_tokens", 0),
+        "output": usage.get("output_tokens", 0),
         "cost": out.get("total_cost_usd"),
+        "claude": claude,
     }
 
 
-def run(cases: list[dict], sources: list[Path], repeat: int, jobs: int, results: Path) -> None:
+def run(cases: list[dict], sources: list[Path], repeat: int, jobs: int, results: Path, keep_reply: bool) -> None:
     credential, proxy = access_token(), start_proxy()
+    # The mid-task verdicts have moved between batches of the same question and
+    # transcripts, so each row records the client that ran it.
+    claude = subprocess.run(["claude", "--version"], capture_output=True, text=True, check=True).stdout.split()[0]
 
     def one_case(case: dict) -> list[dict]:
-        entries, reply = split_reply(load(case))
+        entries = load(case)
+        before, reply = split_reply(entries)
+        if not keep_reply:
+            entries = before
         questions = {source: render(source, reply, case) for source in sources}
         opening = shared_opening(list(questions.values()))
         # One fixed directory per case, so that every run of it gets the same
@@ -295,7 +305,7 @@ def run(cases: list[dict], sources: list[Path], repeat: int, jobs: int, results:
                 blocks = [opening, question[len(opening):].lstrip("\n")] if opening else [question]
                 for _ in range(repeat):
                     try:
-                        row = row_of(case, source, send(blocks, session, config, cwd, credential, proxy))
+                        row = row_of(case, source, send(blocks, session, config, cwd, credential, proxy), claude)
                     except (RuntimeError, subprocess.SubprocessError) as error:
                         print(f"ERROR {case['id']} [{label(source)}]: {error}", flush=True)
                         continue
@@ -342,6 +352,7 @@ def main() -> None:
     parser.add_argument("--question-from", type=Path, action="append", help="checkout, or register.ts file, whose question to ask (default: this checkout)")
     parser.add_argument("--case", action="append", help="case id to run (default: all)")
     parser.add_argument("--repeat", type=int, default=1, help="runs per case and question")
+    parser.add_argument("--keep-reply", action="store_true", help="end the session with the turn's reply, so the question follows it")
     parser.add_argument("--jobs", type=int, default=3, help="cases run at once")
     parser.add_argument("--report", action="store_true", help="print the results table and exit")
     parser.add_argument("--results", type=Path, default=RESULTS, help="the file runs append to and --report reads")
@@ -355,7 +366,7 @@ def main() -> None:
     if args.report:
         return report(cases, args.results)
     sources = [p.expanduser().resolve() for p in args.question_from or [HERE.parent]]
-    run(cases, sources, args.repeat, args.jobs, args.results)
+    run(cases, sources, args.repeat, args.jobs, args.results, args.keep_reply)
 
 
 if __name__ == "__main__":

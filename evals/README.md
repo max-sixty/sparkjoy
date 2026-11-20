@@ -116,22 +116,25 @@ now) is `goal-first` without the quoted reply, so the model sees no reply at
 all; `fork-neither` is `fork-no-reply` asking only for `compact` and `reason`.
 `reason-first`, `why-first` and `consider` (20 November) are `fork-no-reply`
 asking only for fields the hook reads, as [Fields the hook doesn't
-read](#fields-the-hook-doesnt-read) describes.
+read](#fields-the-hook-doesnt-read) describes. `reply-message` (20 November) is
+`fork-no-reply` run with `--keep-reply`, so the session ends with the turn's
+reply and the question follows it. `fork-no-reply` ran in three batches, which
+kept at the mid-task cases in 6 of 16, 0 of 16 and 23 of 32 runs ([Batches](#batches)).
 
-| case | recorded | replayed | expected | main | sized-question | detail | measured | model-costs | one-figure | noisy | goal-first | no-fields | fork | fork-no-fields | fork-no-reply | fork-neither |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| leaf-scaling-closeout | 742k | 520k | compact | 4/4 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 |
-| leaf-hover-closeout | 736k | 488k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 |
-| leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 |
-| leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 |
-| worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 |
-| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 | 0/2 | 1/2 | 0/2 | 0/4 | 1/2 | 0/2 | 0/4 | 0/4 | 0/8 | 0/4 |
-| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 1/2 | 0/4 | 0/2 | 0/2 | 0/4 | 0/4 | 2/8 | 0/4 |
-| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 2/2 | 2/2 | 4/4 | 2/2 | 0/2 | 4/4 | 2/4 | 4/8 | 0/4 |
-| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 0/2 | 1/4 | 0/2 | 0/2 | 0/4 | 0/4 | 0/8 | 0/4 |
-| leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 | 0/2 | | 0/2 | 0/2 |
-| worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 | 0/2 | | 0/2 | 0/2 |
-| leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 |
+| case | recorded | replayed | expected | main | sized-question | detail | measured | model-costs | one-figure | noisy | goal-first | no-fields | fork | fork-no-fields | fork-no-reply | fork-neither | reply-message |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| leaf-scaling-closeout | 742k | 520k | compact | 4/4 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 | 2/2 |
+| leaf-hover-closeout | 736k | 488k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 | 2/2 |
+| leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 | 2/2 |
+| leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 | 2/2 |
+| worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 | 2/2 |
+| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 | 0/2 | 1/2 | 0/2 | 0/4 | 1/2 | 0/2 | 0/4 | 0/4 | 4/16 | 0/4 | 1/8 |
+| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 1/2 | 0/4 | 0/2 | 0/2 | 0/4 | 0/4 | 10/16 | 0/4 | 8/8 |
+| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 2/2 | 2/2 | 4/4 | 2/2 | 0/2 | 4/4 | 2/4 | 11/16 | 0/4 | 8/8 |
+| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 0/2 | 1/4 | 0/2 | 0/2 | 0/4 | 0/4 | 4/16 | 0/4 | 7/8 |
+| leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 | 0/2 | | 0/2 | 0/2 | |
+| worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 | 0/2 | | 0/2 | 0/2 | |
+| leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 | 2/2 |
 
 The first two questions said compact in all 73 runs. Their reasons agree: the
 context is mostly finished work, and what the next step needs is in the
@@ -270,18 +273,34 @@ asked for nothing else, each `fork-no-reply` with its answer paragraph changed:
   and `reason`.
 
 Each compacted at every finished case it ran, and at the four mid-task turn
-ends they kept in 1, 0 and 0 of 24 runs. `fork-no-reply`, run again beside
-them, kept in none of its 16 mid-task runs, against 6 of 16 on 19 November with
-the same question and transcripts (p = 0.02), so the mid-task rate moves
-between batches as much as between questions. Pooled over both days,
-`goal-first`, `fork` and `fork-no-reply` kept in 13 of 56 mid-task runs, and
-`no-fields`, `fork-no-fields`, `fork-neither`, `why-first` and `consider` in 2
-of 88 (p = 0.0001).
+ends they kept in 1, 0 and 0 of 24 runs. `fork-no-reply`, run beside them, kept
+in none of its 16. Comparing only runs made in the same batch, the questions
+with the fields kept at the mid-task cases in 16 of 64 runs and those without
+them in 3 of 96 (p = 0.03, an exact test within batches). In the batch of 20
+November's morning neither kept: 0 of 16 with the fields and 1 of 72 without.
 
 The runner sends each question as two text blocks, where the plugin sends one
 (`run.py` says why). Sending `fork-no-reply` as one block made no clear
 difference at leaf-menu-design and leaf-send-hover-fix: it kept in 1 of 8
 runs, against 2 of 8 as two blocks in the same hour.
+
+### Batches
+
+The same question on the same transcripts keeps at the mid-task cases at very
+different rates from one batch of runs to the next. `fork-no-reply` kept in 6 of
+16 runs on the evening of 19 November, in none of 16 on the morning of 20
+November and in 23 of 32 that afternoon (p = 1e-6 between the last two). The
+finished cases, the idle one and both small breaks gave the same verdict in
+every batch. A logged request from each batch shows the same messages, so the
+cause is likely on the server, but it isn't confirmed. A comparison between two
+questions therefore holds only between runs made in the same batch, and each
+batch should include the question as it stands. Each row of `results.jsonl`
+records the Claude Code version that ran it, from 20 November on.
+
+`reply-message` kept in 24 of the 32 mid-task runs, and `fork-no-reply`, run in
+the same quarter hour, in 23 of 32 (p = 1.0). Ending the session with the
+turn's reply changed no verdict the evals can measure, as quoting the reply
+didn't. Both compacted at every finished case and the idle one.
 
 ## Against the live plugin
 
@@ -312,8 +331,8 @@ few days of use will give live verdicts to compare the harness against.
 ## Where this leaves them
 
 The question as it stands compacts at every finished case and both small
-breaks, and keeps in 3 of the 8 mid-task runs. These cases can't say whether
-that is too few. Their mid-task keep labels encode a rule, that work in progress
+breaks. At the mid-task cases it keeps in anywhere from none of 16 runs to 23
+of 32, depending on the batch. These cases can't say which rate is right. Their mid-task keep labels encode a rule, that work in progress
 keeps, rather than a measured cost, while the
 [cost model](../docs/cost-model.md) finds compacting at any turn end
 from about 250k cheapest when a compaction loses nothing. What a compaction
