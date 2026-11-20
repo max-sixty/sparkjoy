@@ -1,0 +1,43 @@
+{
+  "since": "2026-11-07T12:00Z",
+  "until": "2026-11-16T00:00Z",
+  "sessions": 85,
+  "compactions": 135,
+  "first_request": {
+    "summary": 5070,
+    "skill_bodies": 22226,
+    "skill_listing": 15996,
+    "user_claude_md": 11603,
+    "project_instructions": 9669,
+    "memory_index": 4755,
+    "instructions_wrapper": 255,
+    "files": 4152,
+    "agent_listing": 3423,
+    "mcp_instructions": 2858,
+    "deferred_tools": 2659,
+    "kept_messages": 960,
+    "next_message": 1104,
+    "hooks": 520,
+    "other_reminders": 1799,
+    "system_prompt": 2994,
+    "unattributed": 3
+  },
+  "E": {
+    "response_before": 1736,
+    "read_across_compaction": 3214,
+    "read_since_compaction": 943,
+    "read_new_file": 2041,
+    "bash_printing_files": 3765,
+    "bash_searching": 2268,
+    "bash_git": 1511,
+    "bash_other": 1037,
+    "other_tools": -7,
+    "skill_bodies": 491,
+    "subdirectory_agents_md": 2945,
+    "leaf_hooks": -78,
+    "messages": -10,
+    "other_reminders": 137,
+    "unattributed": 280
+  },
+  "E_total": 20273
+}
