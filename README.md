@@ -28,6 +28,10 @@ figures come from, and only where a person types at the prompt, not in `-p`
 runs or SDK hosts. Sessions pick it up when they start. CI tests it on Claude
 Code's latest and stable releases.
 
+Claude Code updates a plugin from a marketplace like this one only once you turn
+on auto-update for it: in `/plugin`, open the Marketplaces tab, select sparkjoy,
+and turn auto-update on.
+
 ## What it does
 
 - **When a turn ends**, it asks the session's own model whether to compact now,
