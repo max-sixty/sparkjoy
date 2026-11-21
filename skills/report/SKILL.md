@@ -42,7 +42,9 @@ Reply with the summary it printed and the page's path. The page shows:
   a new message after an hour or more, and whether a compaction came in
   between.
 - **Thresholds**: the pair of floors, at turn ends and in idle sessions, that
-  costs least for these sessions, beside the author's 250k and 175k.
+  costs least for these sessions, beside the author's 250k and 175k, and what
+  each saves per unit of work against never compacting, at the cost model's
+  base case for how much past context is worth to the work.
 - **Saved figures**: the floors and figures it saved. A window without
   compactions has nothing to fit them to, and the plugin keeps the ones it
   had.

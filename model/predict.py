@@ -15,9 +15,9 @@ finished, where it loses D_lo, each turn end's kind drawn independently. A class
 turn end finished or mid-task: rightly with probability a, independently of the others. With the
 classifier, the policy compacts at a turn end it calls finished once the context reaches a floor, and
 at one it calls mid-task once it reaches a ceiling. Without it, the policy is fit.py's threshold,
-each compaction charged the average D. A replay of your sessions' requests and turn ends picks, for
-each β in BETAS, the floor and ceiling for each a and the threshold with the least cost per unit of
-effectiveness, J, and gives each saving as a share of the threshold's J. Neither arm compacts idle
+each compaction charged the average D. A replay of your sessions' requests and turn ends picks, at
+the base case for β (fit.BASE), the floor and ceiling for each a and the threshold with the least
+cost per unit of effectiveness, J, and gives each saving as a share of the threshold's J. Neither arm compacts idle
 sessions. Running the classifier costs a read of the context at each turn end it is asked at, which
 is reported beside the saving rather than counted in it.
 """
@@ -79,11 +79,8 @@ ACCURACIES = (0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
 RUNS = {"the evals pooled": (29, 64), "their lowest batch": (0, 16), "their highest batch": (23, 32)}
 EVALS = {name: (1.0, kept / runs) for name, (kept, runs) in RUNS.items()}
 CHECKS = (*((a, a) for a in ACCURACIES), *EVALS.values())  # (right at a finished turn end, at a mid-task one)
-# Three of fit.BETAS. At β = 1 no compaction short of Claude Code's own pays, and the grids would have to
-# span the window.
-BETAS = (0, 0.3, 0.6)
-# The threshold without the classifier, and the floors and ceilings with it, reach past the best at
-# every β: at β = 0.6 with D = $3.72 the best threshold is 500k and the best ceiling 750k.
+# The threshold without the classifier, and the floors and ceilings with it, reach past the best for
+# every mix.
 THRESHOLDS = np.arange(150_000, 900_001, 25_000)
 FLOORS = np.arange(150_000, 450_001, 25_000)
 CEILINGS = (*np.arange(150_000, 900_001, 25_000), np.inf)  # each paired with the floors at or below it
@@ -97,14 +94,13 @@ def init(state):
 
 def evaluate(task):
     """One arm over every session for one draw of the classifier's calls: its cost and the cost of
-    running the classifier, in cached reads, and its effectiveness at each β in BETAS. Which kind a turn
+    running the classifier, in cached reads, and its effectiveness at the base case. Which kind a turn
     end is changes only what a compaction there costs, not what the policy does, which sees only the
     call, so each compaction is charged the expected D given the call and only the calls are drawn."""
     S, p, c, ttl, U = STATE
     mix, fin, mid, floor, ceiling, d = task
     called, on_fin, on_mid = mix.given(fin, mid)
-    cost = checks = 0.0
-    effectiveness = np.zeros(len(BETAS))
+    cost = checks = effectiveness = 0.0
     for s, u in zip(S, U[d]):
         finished = u < called
         # Claude Code's compaction near the window comes inside a turn, where work is in progress.
@@ -114,12 +110,12 @@ def evaluate(task):
         asked = s.end & (held >= floor) & (held < ceiling)
         cost += total
         checks += (held[asked] + c.output * CHECK_OUTPUT).sum()
-        effectiveness += [fit.eta(trace, b).sum() for b in BETAS]
+        effectiveness += fit.eta(trace, fit.BASE).sum()
     return cost, checks, effectiveness
 
 
 def solve(S, p, c, ttl):
-    """For each mix and each β in BETAS: the best threshold without the classifier and its J, the lost
+    """For each mix: the best threshold without the classifier and its J, the lost
     detail's share of its cost, and for each classifier in CHECKS, every (floor, ceiling)'s J and the J of
     running the classifier, in each draw."""
     rng = np.random.default_rng(0)
@@ -134,15 +130,14 @@ def solve(S, p, c, ttl):
         done = dict(zip(tasks, pool.map(evaluate, tasks, chunksize=4)))
     out = []
     for mix in MIXES:
-        for i, beta in enumerate(BETAS):
-            # An arm's cost, or with n = 1 its checks', per unit of its effectiveness at this β.
-            per_unit = lambda arm, n=0, i=i: arm[n] / arm[2][i]
-            base = {t: per_unit(done[mix, 0.5, 0.5, t, t, 0]) for t in THRESHOLDS}
-            t = min(base, key=base.get)
-            lost = 1 - done[Mix(mix.share, 0, 0), 0.5, 0.5, t, t, 0][0] / done[mix, 0.5, 0.5, t, t, 0][0]
-            grid = {fm: {fk: np.array([[per_unit(done[mix, *fm, *fk, d], n) for n in (0, 1)] for d in range(DRAWS)])
-                         for fk in pairs} for fm in CHECKS}
-            out.append({"mix": mix, "beta": beta, "threshold": t, "base": base[t], "lost": lost, "grid": grid})
+        # An arm's cost, or with n = 1 its checks', per unit of its effectiveness.
+        per_unit = lambda arm, n=0: arm[n] / arm[2]
+        base = {t: per_unit(done[mix, 0.5, 0.5, t, t, 0]) for t in THRESHOLDS}
+        t = min(base, key=base.get)
+        lost = 1 - done[Mix(mix.share, 0, 0), 0.5, 0.5, t, t, 0][0] / done[mix, 0.5, 0.5, t, t, 0][0]
+        grid = {fm: {fk: np.array([[per_unit(done[mix, *fm, *fk, d], n) for n in (0, 1)] for d in range(DRAWS)])
+                     for fk in pairs} for fm in CHECKS}
+        out.append({"mix": mix, "threshold": t, "base": base[t], "lost": lost, "grid": grid})
     return out
 
 
@@ -165,7 +160,7 @@ def main():
     c = fit.prices(MODEL, ttl)
     p = fit.measure(S, ttl)
     print(f"{len(S)} sessions, {sum(s.end.sum() for s in S):,} turn ends, {since:%Y-%m-%d %H:%M}Z to "
-          f"{until:%Y-%m-%d %H:%M}Z; {MODEL} prices, {ttl // 60}-minute cache; {DRAWS} draws of the calls")
+          f"{until:%Y-%m-%d %H:%M}Z; {MODEL} prices, {ttl // 60}-minute cache; β = {fit.BASE:g}; {DRAWS} draws of the calls")
     rows = solve(S, p, c, ttl)
     show(rows)
 
@@ -173,10 +168,8 @@ def main():
 def show(rows):
     k = lambda x: "never" if x == np.inf else f"{x / 1e3:.0f}k"
     for row in rows:
-        if row["beta"] == BETAS[0]:
-            print(f"\n{row['mix']}")
-        print(f"  β = {row['beta']:g}: without the classifier, threshold {k(row['threshold'])}, its lost detail "
-              f"{row['lost']:.1%} of its cost")
+        print(f"\n{row['mix']}")
+        print(f"  without the classifier, threshold {k(row['threshold'])}, its lost detail {row['lost']:.1%} of its cost")
         print("    classifier (finished, mid-task)       floor   ceiling   saved (s.e.)   running it costs   net")
         names = {v: f"{name}, {RUNS[name][0]} of {RUNS[name][1]}" for name, v in EVALS.items()}
         for fin, mid in CHECKS:

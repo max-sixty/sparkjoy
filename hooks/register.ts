@@ -49,8 +49,9 @@ const COMPACTING = { plugin: 'sparkjoy', key: 'compacting' } as const
 const AUTHOR = {
   // The judge is asked at a turn end only from FLOOR context tokens, and in
   // an idle session from IDLE_FLOOR. In docs/cost-model.md's replay of my
-  // sessions ("Idle sessions"), this pair is the best at β = 0 and 0.3 and
-  // comes within 1.5 points of the best at 0.6. The report finds the pair that
+  // sessions ("Idle sessions"), this pair costs least, and it comes 0.8 points
+  // short of the best pair at the model's base case for β. The pair is fitted
+  // by cost alone, since the question decides above it. The report finds the pair that
   // minimizes the cost of the user's sessions (`floors` in model/fit.py). Compacting just before the
   // cache lapses pays from about 160k on a one-hour cache and 172k on a
   // five-minute one, counting only the next request, whose cache write it
