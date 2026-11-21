@@ -164,8 +164,9 @@ def cycles(out, p, c):
     """The trade a compaction makes, request by request: the context, and a request's cost with its
     share of the compaction that ends its cycle, at each of fit.points, which are also points on the
     average chart's curve. It assumes nothing about effectiveness. The doc draws it under The model, so
-    its axes carry the model's symbols, K and each column's X, and no figures; the shapes come from the
-    fitted values, and fit.py prints the numbers the doc's Trade-off table quotes."""
+    its axes carry the model's symbols and no figures; the shapes come from the fitted values, and fit.py
+    prints the numbers the doc's Trade-off table quotes. The column titles say where each column
+    compacts against X*, so the peaks carry no labels but the last, where Claude Code compacts."""
     h, c0, F0 = fit.terms(p, c)
     R = 600  # requests drawn
     X = fit.points(p, c)
@@ -173,7 +174,6 @@ def cycles(out, p, c):
 
     r = np.arange(R + 1)
     titles = ("Compact early", "Compact at X*", "Compact late", "Never compact")
-    marks = ("X", "X*", "X", "Claude Code compacts at X")
     for theme, t in THEMES.items():
         fig, axes = plt.subplots(2, len(X), figsize=(9.6, 4.8), sharex=True, sharey="row",
                                  gridspec_kw={"hspace": 0.55, "wspace": 0.08})
@@ -192,11 +192,10 @@ def cycles(out, p, c):
                 ax.set_xticks([])
             top.plot(at, ctx, color=t["ink"], lw=1.2)
             top.set_title(titles[col], color=t["ink"], fontsize=10, loc="left", pad=24, fontweight="bold")
-            # Each column's compaction point, named above the first peak of its sawtooth: centred on it,
-            # or ending at it where the name is long.
-            long = x == fit.AUTO
-            top.text(n + (10 if long else 0), x + 30_000, marks[col], fontsize=9, color=t["ink"], va="bottom",
-                     ha="right" if long else "center")
+            if x == fit.AUTO:
+                # The session never compacts, so the drop is Claude Code's: named above it, ending at it.
+                top.text(n + 10, x + 30_000, "Claude Code compacts", fontsize=9, color=t["ink"], va="bottom",
+                         ha="right")
             each = h * ctx + c0
             share = (x + F0) / n
             low.fill_between(at, 0, each, color=grey, lw=0, label="the request's own cost")
