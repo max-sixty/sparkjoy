@@ -153,8 +153,10 @@ def window_args(ap):
 
 
 def read(a):
-    """The sessions `window_args` chose, and the window, read at low priority."""
-    os.nice(10)
+    """The sessions `window_args` chose, and the window, read at low priority where the system has
+    one: Windows has no `os.nice`."""
+    if hasattr(os, "nice"):
+        os.nice(10)
     since = datetime.fromisoformat(a.since).astimezone(UTC) if a.since else datetime.now(UTC) - timedelta(days=14)
     until = datetime.fromisoformat(a.until).astimezone(UTC) if a.until else datetime.now(UTC)
     return load(a.projects, since, until), since, until

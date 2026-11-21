@@ -22,10 +22,9 @@ page's path.
 import argparse
 import html
 import json
-import subprocess
-import sys
 import tempfile
 import warnings
+import webbrowser
 from collections import Counter
 from dataclasses import replace
 from datetime import datetime
@@ -478,11 +477,8 @@ def main():
     elif a.figures:
         print(f"sparkjoy keeps the floors and figures it has: {kept}")
     print(path)
-    if not a.no_open:
-        try:
-            subprocess.run(["open" if sys.platform == "darwin" else "xdg-open", path], check=False)
-        except FileNotFoundError:  # no desktop to open it on; the path above is the way to it
-            pass
+    if not a.no_open:  # with no desktop to open it on, the path above is the way to it
+        webbrowser.open(Path(path).as_uri())
 
 
 if __name__ == "__main__":
