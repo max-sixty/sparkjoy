@@ -11,9 +11,9 @@ from one read of the sessions:
   bill           the sessions' cost by kind of token
   average        a request's mean cost over a cycle against the compaction point, with the marginal cost,
                  as a schematic
-  effectiveness  a request's effectiveness against its context, for each β in BETAS
-  cost           cost per unit of effectiveness against the compaction point, for each β in BETAS
-  sensitivity    how far the best compaction point moves with each measured parameter, at three values of β
+  effectiveness  a request's effectiveness against its context, at the base case for β (fit.BASE)
+  sensitivity    how far the best compaction point moves with each measured parameter and with β, at the
+                 base case
   threshold      the best compaction point against β, in the steady state and the replay
   voi            the expected value of a classifier's information, on three mixes of work
   voi-point      the compaction point of the work a classifier says to compact, on the same mixes
@@ -55,7 +55,6 @@ THEMES = {
              "with": "#3987e5", "without": "#d95926"},
 }
 RAMP = (0, 0.3, 0.6, 1, 2)  # the β each step of the "beta" ramp stands for
-BETAS = (0, 0.3, 0.6, 1)  # the β the effectiveness and cost charts draw
 
 
 def tint(color, page, share):
@@ -155,7 +154,7 @@ def save(fig, path, labels=None):
 def cycle(p, c, X):
     """A cycle compacting at X: its requests, and a request's mean cost, its share of the compaction
     included, which is J at β = 0."""
-    return (X - p.K) / p.g, fit.per_unit(p, c, X)
+    return (X - p.K) / p.g, fit.per_unit(p, c, X, 0)
 
 
 def cycles(out, p, c):
@@ -387,7 +386,7 @@ def average(out, p, c):
     compaction point X, a request's cost averaged over the cycle, its share of the compaction included,
     and the marginal cost, what one more request before compacting costs. The average is least where
     they cross, which a dot marks. The doc draws it under The model, so its axes carry K and X* and
-    no figures; fit.py prints the savings the doc's Average cost section quotes, at each β."""
+    no figures."""
     h, c0, _ = fit.terms(p, c)
     X, A = fit.curve(p, c, 0)  # with every request alike, cost per unit of effectiveness is cost per request
     # d/dX of the cycle's cost, g (X + F0) + h (X² - K²)/2 + c0 (X - K), over d/dX of its requests: the
@@ -424,121 +423,96 @@ def average(out, p, c):
         save(fig, out / f"model-average-{theme}.svg")
 
 
-def effectiveness_curve(out):
-    """A request's effectiveness against its context, (x / 1M)^β, for each β the cost chart draws."""
+def effectiveness_curve(out, p):
+    """A request's effectiveness against its context, (x / 1M)^β at the base case, with dots where a
+    compaction leaves the context, at K, and at 250k."""
     x = np.linspace(0, fit.WINDOW, 1_000)
-    names = {0: "β = 0, equally effective at any context", 1: "β = 1, all context equally valuable"}
+    b = fit.BASE
+    marks = {p.K: ", what a compaction leaves", 250_000: ""}
     for theme, t in THEMES.items():
         fig, ax = plt.subplots(figsize=(9, 3.2))
         style(ax, t)
-        for b in BETAS:
-            # Unclipped: each curve starts on the plot's left edge, where clipping would halve its line.
-            ax.plot(x, fit.eta(x, b), color=shade(t, b), lw=2, label=names.get(b, f"β = {b:g}"), clip_on=False)
+        color = shade(t, b)
+        # Unclipped: the curve starts on the plot's left edge, where clipping would halve its line.
+        ax.plot(x, fit.eta(x, b), color=color, lw=2, clip_on=False)
+        for m, what in marks.items():
+            y = fit.eta(m, b)
+            ax.plot([m], [y], "o", ms=6.5, mfc=color, mec=t["page"], mew=1.5, zorder=3)
+            ax.text(m + 14_000, y - 0.03, f"{y:.0%} at {tokens(m)}{what}", ha="left", va="top", fontsize=9,
+                    color=t["ink"])
+        ax.text(fit.WINDOW, 1.02, f"β = {b:g}", ha="right", va="bottom", fontsize=9, color=t["ink"])
         ax.set_xlim(0, fit.WINDOW)
         ax.xaxis.set_major_formatter(tokens)
         ax.set_xticks([0, 250_000, 500_000, 750_000, 1_000_000])
         ax.yaxis.set_major_formatter(percent)
         ax.set_yticks([0, 0.25, 0.5, 0.75, 1])
         ax.set_ylim(0, 1.04)
-        ax.legend(frameon=False, fontsize=9, labelcolor=t["ink"], loc="lower right")
         ax.set_xlabel("Context x (tokens)", color=t["muted"], fontsize=10)
         axis_name(ax, "Effectiveness η(x), relative to a request at 1M", t)
         save(fig, out / f"model-effectiveness-{theme}.svg")
 
 
-def cost_curve(out, p, c):
-    """The steady state's cost per unit of effectiveness against the compaction point, for each β: a
-    compaction can follow any request, and the context grows smoothly. Against never compacting, where
-    Claude Code compacts at AUTO. Each minimum is given rounded, as the text gives it."""
-    for theme, t in THEMES.items():
-        fig, ax = plt.subplots(figsize=(9, 3.4))
-        style(ax, t)
-        for b in BETAS:
-            color = shade(t, b)
-            X, J = fit.curve(p, c, b)
-            y = J / J[-1]
-            ax.plot(X, y, color=color, lw=2, label=f"β = {b:g}")
-            j = y.argmin()
-            if j == len(y) - 1:
-                continue  # no compaction short of Claude Code's own pays
-            ax.plot([X[j]], [y[j]], "o", ms=6.5, mfc=color, mec=t["page"], mew=1.5, zorder=3)
-            ax.text(X[j] + 14_000, y[j] - 0.015, f"lowest at {tokens(round(X[j], -4))}, {y[j]:.0%}", ha="left",
-                    va="top", fontsize=9, color=t["ink"])
-        ax.set_xlim(0, fit.AUTO)
-        ax.xaxis.set_major_formatter(tokens)
-        ax.set_xticks([0, 200_000, 400_000, 600_000, 800_000])
-        ax.yaxis.set_major_formatter(percent)
-        ax.set_ylim(0.4, 1.3)
-        ax.set_yticks([0.4, 0.6, 0.8, 1, 1.2])
-        ax.legend(frameon=False, fontsize=9, labelcolor=t["ink"], loc="lower right")
-        ax.set_xlabel("Compaction point X (tokens)", color=t["muted"], fontsize=10)
-        axis_name(ax, "Cost per unit of effectiveness, relative to never compacting", t)
-        save(fig, out / f"model-cost-{theme}.svg")
-
-
 def sensitivity(out, p, c, boot):
-    """How far the best compaction point moves when each parameter measured in the sessions is half or twice
-    its value, and across its 90% interval over `boot`, the sessions resampled (fit.sensitivity): a bar for
-    each β of 0, 0.3 and 0.6 in its step of the "beta" ramp, and a line at each β's best point with every
-    parameter as measured. At β = 1 no compaction short of Claude Code's own pays whatever the parameters,
-    so it is left out. Each bar is labelled for a reader to point at."""
-    betas = (0, 0.3, 0.6)
+    """How far the best compaction point moves at the base case for β when each parameter measured in the
+    sessions is half or twice its value, and across its 90% interval over `boot`, the sessions resampled,
+    and when β is half or twice the base case (fit.sensitivity), with a line at the best point with every
+    parameter as measured. β, which isn't measured, has no interval. Each bar is labelled for a reader to
+    point at."""
+    b = fit.BASE
     names = {"K": f"context after a compaction ({tokens(p.K)})", "g": f"growth of the context per request ({p.g / 1e3:.1f}k)",
              "P": f"size of the system prompt and tools ({p.P / 1e3:.1f}k)",
              "lapse": f"share of requests that find the cache lapsed ({p.lapse:.2%})",
-             "N": f"output of the compaction request ({p.N / 1e3:.1f}k)"}
-    rows = {b: fit.sensitivity(p, c, boot, b) for b in betas}
-    base = {b: fit.steady(p, c, b) for b in betas}
-    # The parameters from the bottom up, by how far halving and doubling them moves the point at β = 0.
-    order = sorted(fit.MEASURED, key=lambda f: abs(rows[0][f][1] - rows[0][f][0]))
+             "N": f"output of the compaction request ({p.N / 1e3:.1f}k)",
+             "β": f"growth of effectiveness with the context ({b:g}, not measured)"}
+    symbols = {**fit.MEASURED, "β": "β"}
+    rows = fit.sensitivity(p, c, boot, b)
+    base = fit.steady(p, c, b)
+    # The measured parameters from the bottom up by how far halving and doubling them moves the point, then β.
+    order = [*sorted(fit.MEASURED, key=lambda f: abs(rows[f][1] - rows[f][0])), "β"]
     k = lambda v: f"{v / 1e3:.0f}k"
-    labels = {f"sens-{f}-{b:g}": f"{fit.MEASURED[f]}, {names[f]}, at β = {b:g}: {k(lo)} at half, {k(hi)} at twice, "
-                                 f"{k(ends[0])}–{k(ends[1])} across its 90% interval"
-              for b in betas for f in order for lo, hi, ends in [rows[b][f]]}
-    gap = 0.27  # between the bars of one parameter, in rows
+    labels = {f"sens-{f}": f"{symbols[f]}, {names[f]}: {k(rows[f][0])} at half, {k(rows[f][1])} at twice"
+                           + ("" if rows[f][2] is None else f", {k(rows[f][2][0])}–{k(rows[f][2][1])} across its 90% interval")
+              for f in order}
 
     for theme, t in THEMES.items():
-        fig, ax = plt.subplots(figsize=(9, 5.4))
+        fig, ax = plt.subplots(figsize=(9, 3.9))
         style(ax, t)
         ax.grid(False)
         ax.grid(axis="x", color=t["grid"], lw=0.8)
-        for n, b in enumerate(betas):
-            color = shade(t, b)
-            # Each β's line a tint of its colour, so the labels it passes stay legible.
-            ax.axvline(base[b], color=tint(color, t["page"], 0.6), lw=1, zorder=1)
-            ax.text(base[b], len(order) - 0.45, k(round(base[b], -4)), ha="center", va="bottom", fontsize=9,
-                    color=t["ink"])
-            for y, f in enumerate(order):
-                y += gap * (1 - n)  # β = 0 on top
-                lo, hi, ends = rows[b][f]
-                # A thin line from halved to doubled, thick across the interval, all in the β's colour, since
-                # tints of three close blues would not tell them apart.
-                ax.plot([lo, hi], [y, y], color=color, lw=1.6, solid_capstyle="butt", zorder=2, gid=f"sens-{f}-{b:g}")
-                ax.plot(ends, [y, y], color=color, lw=6, solid_capstyle="butt", zorder=2)
-                ax.plot([lo], [y], "o", ms=6, mfc=t["page"], mec=color, mew=1.6, zorder=3)
-                ax.plot([hi], [y], "o", ms=6, mfc=color, mec=t["page"], mew=1, zorder=3)
-                ax.text(min(lo, hi) - 7_000, y, k(min(lo, hi)), ha="right", va="center", fontsize=8, color=t["ink"])
-                ax.text(max(lo, hi) + 7_000, y, k(max(lo, hi)), ha="left", va="center", fontsize=8, color=t["ink"])
-        ax.text(base[0] - 30_000, len(order) - 0.45, "with every parameter\nas measured", ha="right", va="bottom",
-                fontsize=9, color=t["muted"])
-        ax.set_yticks(range(len(order)), [f"{fit.MEASURED[f]}, {names[f]}" for f in order])
-        for label in ax.get_yticklabels():
-            label.set_color(t["fit"])
+        ink = t["ink"]
+        ax.axvline(base, color=t["muted"], lw=1, zorder=1)
+        ax.text(base, len(order) - 0.45, f"{k(base)}, with every parameter as measured", ha="center",
+                va="bottom", fontsize=9, color=t["ink"])
+        for y, f in enumerate(order):
+            lo, hi, ends = rows[f]
+            # A thin line from halved to doubled, thick across the interval.
+            ax.plot([lo, hi], [y, y], color=ink, lw=1.6, solid_capstyle="butt", zorder=2, gid=f"sens-{f}")
+            if ends is not None:
+                ax.plot(ends, [y, y], color=ink, lw=6, solid_capstyle="butt", zorder=2)
+            # Unclipped, so a dot on the plot's right edge, at Claude Code's own compaction, draws whole.
+            ax.plot([lo], [y], "o", ms=6, mfc=t["page"], mec=ink, mew=1.6, zorder=3, clip_on=False)
+            ax.plot([hi], [y], "o", ms=6, mfc=ink, mec=t["page"], mew=1, zorder=3, clip_on=False)
+            ax.text(min(lo, hi) - 9_000, y, k(min(lo, hi)), ha="right", va="center", fontsize=8, color=t["ink"])
+            right = max(lo, hi)
+            ax.text(right + 9_000, y, k(right) + (", where Claude Code compacts" if right >= fit.AUTO else ""),
+                    ha="left", va="center", fontsize=8, color=t["ink"])
+        ax.set_yticks(range(len(order)), [f"{symbols[f]}, {names[f]}" for f in order])
+        # Measured parameters' names in the fit colour; β's in ink, since it is assumed.
+        for label, f in zip(ax.get_yticklabels(), order):
+            label.set_color(t["fit"] if f in fit.MEASURED else t["ink"])
         ax.set_ylim(-0.6, len(order) - 0.1)
-        ax.set_xlim(100_000, 720_000)
-        ax.set_xticks(range(100_000, 700_001, 100_000))
+        ax.set_xlim(100_000, fit.AUTO)
+        ax.set_xticks(range(200_000, 900_001, 200_000))
         ax.xaxis.set_major_formatter(tokens)
-        ink = t["muted"]
-        keys = [plt.Line2D([], [], ls="", marker="o", ms=6, mfc=t["page"], mec=ink, mew=1.6),
-                plt.Line2D([], [], ls="", marker="o", ms=6, mfc=ink, mec=t["page"], mew=1),
-                Patch(color=ink, lw=0), *(plt.Line2D([], [], color=shade(t, b), lw=6) for b in betas)]
-        ax.legend(keys, ["parameter halved", "parameter doubled", "across its 90% interval",
-                         *(f"β = {b:g}" for b in betas)], frameon=False, fontsize=9, labelcolor=t["ink"], ncol=6,
-                  loc="lower right", bbox_to_anchor=(1, 1.0), handletextpad=0.4, columnspacing=1.0,
-                  handlelength=1.2)
-        ax.set_xlabel("Compaction point of lowest cost per unit of effectiveness (tokens)", color=t["muted"],
-                      fontsize=10)
-        # Every parameter here is measured, which its name's colour says, so the chart needs no key for it.
+        muted = t["muted"]
+        keys = [plt.Line2D([], [], ls="", marker="o", ms=6, mfc=t["page"], mec=muted, mew=1.6),
+                plt.Line2D([], [], ls="", marker="o", ms=6, mfc=muted, mec=t["page"], mew=1),
+                Patch(color=muted, lw=0)]
+        ax.legend(keys, ["halved", "doubled", "across its 90% interval"], frameon=False, fontsize=9,
+                  labelcolor=t["ink"], ncol=3, loc="lower right", bbox_to_anchor=(1, 1.06), handletextpad=0.4,
+                  columnspacing=1.0, handlelength=1.2)
+        ax.set_xlabel(f"Compaction point of lowest cost per unit of effectiveness at β = {b:g} (tokens)",
+                      color=t["muted"], fontsize=10)
         save(fig, out / f"model-sensitivity-{theme}.svg", labels)
 
 
@@ -555,6 +529,8 @@ def thresholds(out, cost, effectiveness, BT, BX, p, c):
         ax.axhline(fit.AUTO, color=t["muted"], lw=0.8)
         ax.text(bs[0] + 0.01, fit.AUTO + 15_000, f"Claude Code compacts at {tokens(fit.AUTO)}", ha="left",
                 fontsize=9, color=t["muted"])
+        ax.axvline(fit.BASE, color=t["muted"], lw=0.8)
+        ax.text(fit.BASE + 0.01, 60_000, f"base case, β = {fit.BASE:g}", ha="left", fontsize=9, color=t["muted"])
         ax.axhline(fit.FLOOR, color=t["muted"], lw=0.8)
         ax.text(bs[-1], fit.FLOOR + 15_000, f"sparkjoy's default floor, {tokens(fit.FLOOR)}", ha="right", fontsize=9,
                 color=t["muted"])
@@ -582,7 +558,7 @@ def thresholds(out, cost, effectiveness, BT, BX, p, c):
 
 def voi(out, p, c):
     """The expected value of a classifier's information on three mixes of work with the same mean β,
-    0.6: a share of the work at one β > 0, the rest at β = 0, where the context doesn't help. For each
+    the base case's: a share of the work at one β > 0, the rest at β = 0, where the context doesn't help. For each
     mix and each accuracy, the classifier splits the work into a group to keep and a group to compact,
     each compacting at its own best point; the saving is against the best single threshold, and the x
     axis is the mutual information between the classifier's verdict and the kind of work, as a share
@@ -590,17 +566,19 @@ def voi(out, p, c):
     group to compact against the same axis."""
     # Denser near 1, where a classifier's saving on rare, steep work climbs fastest.
     A = np.unique(np.round(np.concatenate([np.linspace(0.5, 1, 201), 1 - np.logspace(-4, -1.6, 80)]), 6))
-    running = 0.003  # what running the classifier costs, as a share of the cost: the replay's 0.28%, rounded
-    mixes = ((0.60, 1, 2), (0.30, 2, 3), (0.12, 5, 4))  # (share of the work at β, β, step of the β ramp)
+    running = 0.004  # what running the classifier costs, as a share of the cost: the replay's 0.43% at the base case, rounded
+    # (share of the work at β, β, step of the β ramp), each share giving a mean β of fit.BASE.
+    mixes = tuple((fit.BASE / beta, beta, step) for beta, step in ((1, 2), (2, 3), (5, 4)))
 
     def H(q):
         q = np.clip(q, 1e-12, 1 - 1e-12)
         return -(q * np.log2(q) + (1 - q) * np.log2(1 - q))
 
-    X, J0 = fit.curve(p, c, 0)
+    # On fit.steady's 100-token grid, so the best point of the work at β = 0 is the 262k the doc gives.
+    X, J0 = fit.curve(p, c, 0, step=100)
     lines = []
     for share, beta, step in mixes:
-        Js = np.array([J0, fit.curve(p, c, beta)[1]])
+        Js = np.array([J0, fit.curve(p, c, beta, step=100)[1]])
         w = np.array([1 - share, share])
         single = (w[:, None] * Js).sum(0).min()
         keep = np.array([1 - A, A]).T * w  # the classifier keeps the context for a share a of the β work, 1 - a of the rest
@@ -611,7 +589,7 @@ def voi(out, p, c):
         info = (H(share * A + (1 - share) * (1 - A)) - H(A)) / H(share)
         lines.append((share, beta, step, saved, info, point))
         at = [int(np.abs(A - a).argmin()) for a in (0.8, 0.9, 0.99, 1.0)]
-        print(f"model-voi, {share:.0%} at β = {beta}: " + ", ".join(
+        print(f"model-voi, {share:.0%} at β = {beta}: best single threshold {tokens(X[(w[:, None] * Js).sum(0).argmin()])}; " + ", ".join(
             f"right {A[i]:.0%}, saves {saved[i]:.1%} ({info[i]:.0%} of the information)" for i in at)
               + f"; pays for running it from {A[np.argmax(saved > running)]:.1%} right")
         print(f"model-voi-point, {share:.0%} at β = {beta}: compacts the group to compact at "
@@ -628,7 +606,7 @@ def voi(out, p, c):
             ends.append((saved[-1], f"{share:.0%} at β = {beta}", t["ink"]))
         # A band from 0 behind the savings: at this scale a line would sit on the axis and over the lines' starts.
         ax.fill_between([0, 1], 0, running, color=t["cost"], lw=0, zorder=1, clip_on=False)
-        ends.append((running, "Running the classifier, 0.3%", t["ink"]))
+        ends.append((running, f"Running the classifier, {running:.1%}", t["ink"]))
         label_ends(ax, ends, gap=0.02)
         ax.set_xlim(0, 1)
         ax.set_xticks([0, 0.25, 0.5, 0.75, 1])
@@ -668,8 +646,7 @@ def draw(out, S, p, c, boot, cost, effectiveness, BT, BX):
     payback(out, p, c)
     bill(out, S, p, c)
     average(out, p, c)
-    effectiveness_curve(out)
-    cost_curve(out, p, c)
+    effectiveness_curve(out, p)
     sensitivity(out, p, c, boot)
     thresholds(out, cost, effectiveness, BT, BX, p, c)
     voi(out, p, c)

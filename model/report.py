@@ -98,14 +98,15 @@ def usual_model(S):
 
 def thresholds(S, p, model, ttl):
     """The pair of floors, at turn ends and in idle sessions, that costs least for these sessions in
-    the replay with β = 0, at `model`'s prices, and what it and my floors save against
-    never compacting."""
+    the replay (fit.floors), at `model`'s prices, and what it and my floors save per unit of
+    effectiveness against never compacting, at the base case for β."""
     c = fit.prices(model, ttl)
-    floors, pairs = fit.floors(S, p, c, ttl)
-    never = sum(fit.replay(s, p, c, np.inf, ttl)[0] for s in S)
-    author = sum(fit.replay(s, p, c, fit.FLOOR, ttl, idle=fit.IDLE_FLOOR)[0] for s in S)
-    return {"model": model, "ttl": ttl, "floors": floors, "saved": 1 - pairs[floors] / never,
-            "saved_author": 1 - author / never, "steady": fit.steady(p, c),
+    floors, _ = fit.floors(S, p, c, ttl)
+    # Cost per unit of effectiveness, summed over the sessions, for each policy.
+    J = lambda threshold, idle=None: np.divide(*(v.sum() for v in fit.arm(S, p, c, ttl, threshold, idle=idle)))
+    never = J(np.inf)
+    return {"model": model, "ttl": ttl, "floors": floors, "saved": 1 - J(*floors) / never,
+            "saved_author": 1 - J(fit.FLOOR, fit.IDLE_FLOOR) / never, "steady": fit.steady(p, c, fit.BASE),
             "idle": fit.idle_break_even(p, c), "compactions": p.compactions}
 
 
@@ -375,14 +376,16 @@ def page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit, saved
             ("In idle sessions", tokens(fit.IDLE_FLOOR), tokens(idle)),
         ], numeric=(1, 2)) + "</div>")
         parts.append(
-            f"<p>Compacting from the fitted floors would cost {change(f['saved'])} than never compacting, and from "
-            f"the author's {change(f['saved_author'])}. These replays compact wherever the floors allow, as if every "
+            f"<p>Per unit of work, compacting from the fitted floors would cost {change(f['saved'])} than never "
+            f"compacting, and from the author's {change(f['saved_author'])}. These replays compact wherever the floors allow, as if every "
             f"question said to. In an idle session, compacting before the cache lapses breaks even from "
             f"{tokens(f['idle'])}. Compacting after any request rather than only at turn ends, the best point would "
             f"be {tokens(f['steady'])}.</p>"
             f"<p class=note>Fitted to {len(S)} sessions and {f['compactions']} compactions, at {model_name(f['model'])} "
-            f"prices with a {'5-minute' if f['ttl'] == 300 else '1-hour'} cache, taking a request to get as much "
-            f'done at any context size. The <a href="{DOC}">cost model</a> explains these figures.</p>')
+            f"prices with a {'5-minute' if f['ttl'] == 300 else '1-hour'} cache. The floors are fitted by cost alone, since "
+            f"sparkjoy only starts asking at them. The savings and the best point take a request at 250k to get half "
+            f"as much done as one at 1M, the cost model's base case, β = {fit.BASE:g}. The "
+            f'<a href="{DOC}">cost model</a> explains these figures.</p>')
     else:
         parts.append(f"<p>{unfit}</p>")
 
@@ -460,7 +463,7 @@ def main():
     if fitted:
         turn, idle = fitted["floors"]
         print(f"cheapest floors {tokens(turn)} at turn ends and {tokens(idle)} in idle sessions, "
-              f"{change(fitted['saved'])} than never compacting (the author's {tokens(fit.FLOOR)} and "
+              f"{change(fitted['saved'])} per unit of work than never compacting (the author's {tokens(fit.FLOOR)} and "
               f"{tokens(fit.IDLE_FLOOR)}: {change(fitted['saved_author'])})")
     if saved:
         print("sparkjoy now asks from these sessions' floors and states their figures: "

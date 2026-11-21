@@ -203,10 +203,10 @@ question.
 ## Limits
 
 - It asks only once the context reaches 250k at a turn end, or 175k in an idle
-  session. If every question leads to a compaction, these floors are the best
-  pair in a replay of my sessions, or within 1.5 points of it, under each
-  assumption the [cost model](#cost-model) makes about how much past context is
-  worth to the work. My sessions hold
+  session. If every question leads to a compaction, these floors are the pair
+  that costs least in a replay of my sessions, and they come 0.8 points short of
+  the best pair under the [cost model](#cost-model)'s base case for how much past
+  context is worth to the work. My sessions hold
   about 142k after a compaction, much of it my own instructions and skills, and
   sessions that hold less would do better with lower floors.
   `/sparkjoy:report` fits the floors to your own sessions.
@@ -379,20 +379,21 @@ full 1M window, so each doubling of the context multiplies it by $`2^\beta`$:
 
 $`\displaystyle \eta(x) = \left(\frac{x}{1\text{M}}\right)^\beta`$
 
+At β = 0, where a request gets as much done at any context, J is the average
+cost under [Best compaction point](docs/cost-model.md#best-compaction-point), and the condition
+above gives its closed form. That is an extreme simplification: it says a
+request at 150k gets as much done as one at 1M. No session measures β, so the
+results under [Fitted to my sessions](docs/cost-model.md#fitted-to-my-sessions) take a base case
+of β = 0.5, where a request at 250k gets half as much done as one at 1M, and
+[Sensitivity](docs/cost-model.md#sensitivity) shows how the best point moves with β.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-effectiveness-dark.svg">
-  <img alt="Effectiveness η(x), relative to a request at 1M, against the context x, for β of 0, 0.3, 0.6 and 1, on one blue ramp from light to dark. β = 0, equally effective at any context, is flat at 100%. The others rise from 0 to 100% at 1M, β = 1 in a straight line; at 142k they are at 56%, 31% and 14%." src="assets/model-effectiveness-light.svg">
+  <img alt="Effectiveness η(x), relative to a request at 1M, against the context x, at β = 0.5: a curve rising steeply from 0 and then more slowly to 100% at 1M, with dots at 38% at 142k, what a compaction leaves, and 50% at 250k." src="assets/model-effectiveness-light.svg">
 </picture>
 
 η depends only on the context's size, so a request right after a compaction, at
 K, counts as getting as much done as one at K before any compaction.
-
-At β = 0, where a request gets as much done at any context, J is the average
-cost under [Best compaction point](docs/cost-model.md#best-compaction-point), and the condition
-above gives its closed form. That is an extreme simplification: it says a
-request at 150k gets as much done as one at 1M. So each result under [Fitted to
-my sessions](docs/cost-model.md#fitted-to-my-sessions) is given at β = 0, 0.3 and 0.6, and [Best
-point](docs/cost-model.md#best-point) gives the best point for β up to 1.
 
 ### Compacting before the cache lapses
 
@@ -441,11 +442,11 @@ The model covers two ways in which work differs:
 | N, output of the compaction request | 5.6k | measured, 5.2–5.9k: the summary's text is a median 3.5k tokens, and requests with about 3.5k tokens of visible output produce 1.61 times that in all, thinking included |
 | w, price of a token's cache write | 40 cached reads | list price, for the one-hour cache; a write to the five-minute cache costs 25 |
 | o, price of an output token | 100 cached reads | list price |
-| β, growth of effectiveness with the context | 0, 0.3 and 0.6 | not measured: each result below is given at these three values |
+| β, growth of effectiveness with the context | 0.5 | assumed, since no session measures it: a request at 250k gets half as much done as one at 1M |
 | h, cost per request of a token in the context | 1.22 | derived |
 | c₀, fixed cost of a request | 134k cached reads, \$0.027 | derived |
 | F₀, fixed cost of a compaction | 4.93M cached reads, \$0.99 | derived |
-| X\*, best compaction point | 262k, 307k and 444k at β = 0, 0.3 and 0.6 | derived |
+| X\*, best compaction point | 376k | derived, 362–392k |
 
 ### What a request and a compaction cost
 
@@ -497,80 +498,62 @@ cached reads, and its context holds 335k tokens.
 
 ### Best point
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/model-cost-dark.svg">
-  <img alt="Cost per unit of effectiveness relative to never compacting, against the compaction point from 142k to 965k, for β of 0, 0.3, 0.6 and 1. The first three fall steeply from 142k to a minimum and rise to 100% at 965k; dots mark the minima: 55% at about 260k for β = 0, 72% at 310k for 0.3 and 92% at 440k for 0.6. β = 1 stays above 100% and falls to it at 965k." src="assets/model-cost-light.svg">
-</picture>
-
-| β | effectiveness at 150k, against 1M | best point | saved there, against never compacting | saved at 400k |
-|----|----|----|----|----|
-| 0 | 100% | 262k | 45% | 39% |
-| 0.3 | 55% | 307k | 28% | 26% |
-| 0.6 | 30% | 444k | 8% | 8% |
-| 1 | 15% | 965k, where Claude Code compacts | none | |
-
-At β = 0.6, compacting at 260k saves only 0.5%. At β = 0, the closed form under
-[Best compaction point](docs/cost-model.md#best-compaction-point) gives the best point from the
-values above:
+At β = 0.5, the best point is 376k. Compacting there costs 14.5% less per unit
+of work than never compacting, and compacting anywhere from 310k to 469k comes
+within a point of that. Counting cost alone, the closed form under [Best
+compaction point](docs/cost-model.md#best-compaction-point) puts the best point lower:
 
 $`\displaystyle X^* = 142\text{k} + \sqrt{\frac{2 \cdot 1706 \cdot (4.93\text{M} + 142\text{k})}{1.22}} = 142\text{k} + 119\text{k} = 262\text{k}`$
 
-At the four compaction points of the chart under [Request and compaction
-costs](docs/cost-model.md#request-and-compaction-costs), a request's mean cost doesn't depend on
-β, but what it gets done does:
+A request's mean cost over a cycle doesn't depend on β, but what it gets done
+does:
 
-| compact at | requests a cycle | mean cost per request | cost per unit of work against never compacting, β = 0 | β = 0.3 | β = 0.6 |
-|----|----|----|----|----|----|
-| 175k | 19 | \$0.119 | 73% | 103% | 150% |
-| 260k | 69 | \$0.091 | 55% | 74% | 99% |
-| 400k | 151 | \$0.100 | 61% | 74% | 92% |
-| never, leaving it to Claude Code at 965k | 482 | \$0.164 | 100% | 100% | 100% |
+| compact at | requests a cycle | mean cost per request | cost per unit of work, against never compacting |
+|----|----|----|----|
+| 175k | 19 | \$0.119 | 132.0% |
+| 262k, the best point counting cost alone | 70 | \$0.091 | 89.6% |
+| 376k, the best point | 137 | \$0.098 | 85.5% |
+| 600k | 268 | \$0.121 | 89.5% |
+| never, leaving it to Claude Code at 965k | 482 | \$0.164 | 100% |
 
 ### Sensitivity
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-sensitivity-dark.svg">
-  <img alt="Horizontal bars, three for each parameter measured in the sessions, one each at β = 0, 0.3 and 0.6 on one blue ramp, from the best compaction point with the parameter halved (open dot) to the point with it doubled (filled dot), with a thick segment where the point lies across the parameter's 90% interval, and a vertical line at each β's best point with every parameter as measured, 260k, 310k and 440k. K: 150k to 459k, 192k to 512k and 347k to 647k. g: 227k to 311k, 256k to 386k and 342k to 621k. P: 268k to 247k, 317k to 286k and 461k to 407k. ℓ: 267k to 252k, 318k to 291k and 473k to 400k. N: 258k to 268k, 303k to 316k and 437k to 457k." src="assets/model-sensitivity-light.svg">
+  <img alt="Horizontal bars at β = 0.5, one for each parameter measured in the sessions and one for β, from the best compaction point with the parameter halved (open dot) to the point with it doubled (filled dot), with a thick segment where the point lies across a measured parameter's 90% interval, and a vertical line at the best point with every parameter as measured, 376k. β: 297k to 965k, where Claude Code compacts. K: 266k to 583k. g: 299k to 503k. ℓ: 395k to 347k. P: 389k to 346k. N: 370k to 387k." src="assets/model-sensitivity-light.svg">
 </picture>
 
-Across their 90% intervals, K and g move the best point most, by up to 19k and
-20k. Each other parameter moves it by at most 11k.
+Across their 90% intervals, K and g move the best point most, by 18k and 15k.
+Each other parameter moves it by at most 7k. β moves it much further: at 0.25
+the best point is 297k, and at 1 no compaction short of Claude Code's own pays.
 
 That interval covers only my sessions, and K differs more between users, since
 most of it beyond the shared system prompt is the user's own instructions and
 skills. A published session with few of them
 ([anthropics/claude-code#87602](https://github.com/anthropics/claude-code/issues/87602))
 would have a K of roughly 60–70k on a 1M window, which puts the best point
-near 140k at β = 0, 180k at 0.3 and 340k at 0.6. So `/sparkjoy:report` fits K and the floors to each user's sessions.
+near 250k. So `/sparkjoy:report` fits K and the floors to each user's sessions.
 
-With no detail lost, the best point reaches 400k at β = 0.55, where a request
-at 200k gets 68% as much done as one at 400k. It also reaches 400k if each
-compaction loses \$3.72 of detail at β = 0, the cost of some 64 wasted requests,
-or \$1.51 at β = 0.3, some 26.
+The best point reaches 400k if each compaction loses \$0.25 of detail, the
+cost of some 4 wasted requests, or, with no detail lost, at β = 0.55.
 
 <details>
 <summary>Does the model's simplification matter?</summary>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-threshold-dark.svg">
-  <img alt="Best compaction point against β from 0 to 1, with 90% bands. The steady-state point, compacting at any request (grey), rises from about 260k at β = 0 to 310k at 0.3, crosses 400k at 0.55 and reaches 965k, where Claude Code compacts, from 0.85. The replay's best turn-end threshold (black) stays lower: 200k at β = 0, 240k to 250k from 0.1 to 0.45, 290k at 0.6 and 530k at 0.85, then 850k to 960k. A label marks 250k, sparkjoy's default floor." src="assets/model-threshold-light.svg">
+  <img alt="Best compaction point against β from 0 to 1, with 90% bands. The steady-state point, compacting at any request (grey), rises from 262k at β = 0 to 376k at 0.5, crosses 400k at 0.55 and reaches 965k, where Claude Code compacts, from 0.85. The replay's best turn-end threshold (black) stays lower: 200k at β = 0, 240k to 250k from 0.1 to 0.45, 280k at 0.5, 290k at 0.6 and 530k at 0.85, then 850k to 960k. A vertical line marks the base case, β = 0.5, and a horizontal one 250k, sparkjoy's default floor." src="assets/model-threshold-light.svg">
 </picture>
 
-When the replay may compact after any request, its best point is 260k against
-the model's 262k at β = 0, and 310k against 307k at 0.3, so there uneven growth,
-cache lapses and sessions ending move it little[^moves]. At 0.6 the replay's is
-490k against 444k. Its best
-turn-end threshold is lower, since turns run a median of 9 requests but a mean
-of 38, and one long turn can carry the context far past the best point before
-the next turn end.
+When the replay may compact after any request, its best point is 350k against
+the model's 376k, so uneven growth, cache lapses and sessions ending move it
+26k lower[^moves]. Its best turn-end threshold is lower still, 280k, since
+turns run a median of 9 requests but a mean of 38, and one long turn can carry
+the context far past the best point before the next turn end.
 
-| β | best point | best turn-end threshold | saved there | saved from 250k, sparkjoy's default floor | saved from 400k |
-|----|----|----|----|----|----|
-| 0   | 262k | 200k | 30.0% | 29.8% | 25.0% |
-| 0.3 | 307k | 250k | 20.1% | 20.1% | 17.2% |
-| 0.6 | 444k | 290k | 8.5%  | 8.3%  | 7.9%  |
-
-These savings are below the model's 45%, 28% and 8% because real sessions without
+Compacting at turn ends from 280k saves 12.5% against never compacting, and so
+does compacting from 250k, sparkjoy's default floor. From 400k it saves 11.2%.
+These savings are below the model's 14.5% because real sessions without
 compaction end before their context reaches 965k. Each saving assumes a
 classifier that always says to compact. sparkjoy's question instead decides at
 which turn ends past the floor to compact.
@@ -579,26 +562,29 @@ which turn ends past the floor to compact.
 
 ### Idle sessions
 
-| policy | saved, β = 0 | β = 0.3 | β = 0.6 |
-|----|----|----|----|
-| turn ends from 400k | 25.0% | 17.2% | 7.9% |
-| turn ends from 400k and idle sessions from 200k | 28.4% | 20.2% | 10.4% |
-| turn ends from the best threshold for each β alone: 200k, 250k and 290k | 30.0% | 20.1% | 8.5% |
-| turn ends from 250k and idle sessions from 175k, sparkjoy's default floors | 30.7% | 20.8% | 8.9% |
-| the best pair of floors | the default | the default | 10.4%, from 400k and 175k |
+| policy | saved |
+|----|----|
+| turn ends from 400k | 11.2% |
+| turn ends from 400k and idle sessions from 200k | 13.8% |
+| turn ends from 280k, the best threshold alone | 12.5% |
+| turn ends from 250k and idle sessions from 175k, sparkjoy's default floors | 13.1% |
+| turn ends from 400k and idle sessions from 175k, the best pair of floors | 13.9% |
 
 Compacting idle sessions gets much of the saving of a lower turn-end threshold,
-since 18% of turn ends are followed by an hour's gap. The default floors are the
-best pair at β = 0 and 0.3, and 1.5 points short of the best at 0.6, where
-compacting at turn ends from 400k does better. The best idle floor stays between
-125k and 225k at each β. Counting only the next request, compacting before the
-cache lapses pays from about 160k ([Compacting before the cache
-lapses](docs/cost-model.md#compacting-before-the-cache-lapses)).
+since 18% of turn ends are followed by an hour's gap. The default floors come
+0.8 points short of the best pair, and with idle sessions from 175k, every
+turn-end floor from 250k to 400k comes within a point of it. sparkjoy fits its
+floors by cost alone. A floor is where sparkjoy starts asking, and its question
+decides at which turn ends above the floor to compact, so the floor sits at the
+lowest best point, the one cost alone gives. For my sessions that is the default
+pair. Counting only the next
+request, compacting before the cache lapses pays from about 160k ([Compacting
+before the cache lapses](docs/cost-model.md#compacting-before-the-cache-lapses)).
 
 On the five-minute cache, priced at its own rates, the cache lapses after 52%
 of turn ends, and 95% of pauses past 4 minutes run past 5. There, compacting at
-turn ends from 250k saves 35.4%, 26.4% and 15.6% at β = 0, 0.3 and 0.6, and also
-asking after 4 minutes idle from 175k saves 37.0%, 27.7% and 16.4%.
+turn ends from 250k saves 19.4%, and also asking after 4 minutes idle from 175k
+saves 20.4%.
 
 ### What a classifier saves
 
@@ -606,32 +592,32 @@ asking after 4 minutes idle from 175k saves 37.0%, 27.7% and 16.4%.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-voi-dark.svg">
-  <img alt="What a classifier saves against the best single threshold, by its accuracy as a share of a perfect classifier's information, for 60% of the work at β = 1, 30% at β = 2 and 12% at β = 5, the rest at β = 0. A perfect classifier saves 11%, 20% and 24%. The β = 1 line climbs fastest at first, the β = 2 line is nearly straight, and the β = 5 line stays at 0 until about 30% of the information and reaches half its saving only at 90%. A thin band along 0 marks what running the classifier costs, 0.3%." src="assets/model-voi-light.svg">
+  <img alt="What a classifier saves against the best single threshold, by its accuracy as a share of a perfect classifier's information, for 50% of the work at β = 1, 25% at β = 2 and 10% at β = 5, the rest at β = 0. A perfect classifier saves 13.5%, 23% and 27%. The β = 1 line climbs fastest at first, the β = 2 line is nearly straight, and the β = 5 line stays near 0 until about 30% of the information and reaches half its saving only at about 90%. A thin band along 0 marks what running the classifier costs, 0.4%." src="assets/model-voi-light.svg">
 </picture>
 
-Each line is a mix of work with mean β 0.6, with one share at the β shown and
-the rest at β = 0. The band along 0 is the cost of running the classifier,
-about 0.3%.
+Each line is a mix of work with mean β 0.5, the base case, with one share at
+the β shown and the rest at β = 0. The band along 0 is the cost of running the classifier,
+about 0.4%.
 
 | mix | best single threshold | a perfect classifier saves | right 9 times in 10, a classifier saves | a classifier pays once right |
 |----|----|----|----|----|
-| all at β = 0.6 | 440k | 0 | 0 | |
-| 60% at β = 1 | 790k | 11% | 7% | 57% of the time |
-| 30% at β = 2 | never compacting | 20% | 7% | 71% |
-| 12% at β = 5, work that stalls without its history | never compacting | 24% | 1% | 87% |
+| all at β = 0.5 | 376k | 0 | 0 | |
+| 50% at β = 1 | 648k | 13.5% | 9% | 58% of the time |
+| 25% at β = 2 | never compacting | 23% | 10% | 67% |
+| 10% at β = 5, work that stalls without its history | never compacting | 27% | 2% | 85% |
 
 <details>
 <summary>Where a classifier compacts</summary>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-voi-point-dark.svg">
-  <img alt="The compaction point of the work a classifier says to compact, from 261k to 965k, against its accuracy as a share of a perfect classifier's information, for the same three mixes. For 60% at β = 1 it starts at 790k, the best single threshold, and falls to 344k at about half the information. For 30% at β = 2 it stays at 965k until 7% of the information, then falls to 501k at about half. For 12% at β = 5 it stays at 965k until 29%, and is still at 858k at 46%. All three reach 261k with a perfect classifier." src="assets/model-voi-point-light.svg">
+  <img alt="The compaction point of the work a classifier says to compact, from 262k to 965k, against its accuracy as a share of a perfect classifier's information, for the same three mixes. For 50% at β = 1 it starts at 648k, the best single threshold, and falls to 318k at about half the information. For 25% at β = 2 it stays at 965k until 3% of the information, then falls to 456k at about half. For 10% at β = 5 it stays at 965k until 22%, and is still at 826k at 45%. All three reach 262k with a perfect classifier." src="assets/model-voi-point-light.svg">
 </picture>
 
 The work a classifier says to keep compacts at 965k at all but the lowest
-accuracies. At β = 5, a unit of work compacted at 261k costs 208 times as much
+accuracies. At β = 5, a unit of work compacted at 262k costs 206 times as much
 as when the session never compacts, so compacting any of that mix pays only once
-a classifier has 29% of a perfect classifier's information.
+a classifier has 22% of a perfect classifier's information.
 
 </details>
 
@@ -653,28 +639,28 @@ A replay of the sessions marks 30% of turn ends mid-task and the rest finished,
 and gives its classifier a floor and a ceiling as under [Value of
 information](docs/cost-model.md#value-of-information).
 
-| with \$0.35 lost per compaction, as measured, about 6 wasted requests | share of the cost under the best threshold without a classifier, β = 0 | β = 0.3 | β = 0.6 |
-|----|----|----|----|
-| what a perfect classifier saves | 0.7% | 0.5% | 0.8% |
-| what a classifier saves that is right at every finished turn end and keeps at mid-task ones as often as sparkjoy's question on the evals, 29 of 64 runs pooled over their batches | 0.1% | 0.1% | 0.3% |
-| the same, at the evals' lowest and highest batch, 0 of 16 and 23 of 32 | 0 to 0.3% | 0 to 0.3% | 0 to 0.6% |
-| what running the classifier costs, for the pooled rate | 0.2% | 0.2% | 0.4% |
-| what sparkjoy's question saves as it runs, asking from 250k with no ceiling, at the pooled rate | −1.3% | −0.6% | −0.4% |
-| what the lost detail costs in all, the most any classifier can save | 2.0% | 2.0% | 1.5% |
+| with \$0.35 lost per compaction, as measured, about 6 wasted requests | share of the cost when compacting at every turn end from 300k, the best threshold without a classifier |
+|----|----|
+| what a perfect classifier saves | 0.9% |
+| what a classifier saves that is right at every finished turn end and keeps at mid-task ones as often as sparkjoy's question on the evals, 29 of 64 runs pooled over their batches | 0.2% |
+| the same, at the evals' lowest and highest batch, 0 of 16 and 23 of 32 | 0 to 0.5% |
+| what running the classifier costs, for the pooled rate | 0.3% |
+| what sparkjoy's question saves as it runs, asking from 250k with no ceiling, at the pooled rate | −0.2% |
+| what the lost detail costs in all, the most any classifier can save | 1.7% |
 
 The question as it runs costs more than the best threshold alone, and its own
 running cost of 0.5% comes on top. It keeps at mid-task turn ends at any size,
 and with the loss my sessions measure, the detail it keeps is worth less than
-the context it carries. The classifiers in the rows above it each have a
-ceiling too, above which the session compacts at every turn end, between 300k
-and 625k.
+the context it carries. Each classifier in the rows above it that keeps at
+some mid-task turn ends has a ceiling too, 475k or 500k, above which the
+session compacts at every turn end.
 
 On the evals, sparkjoy's question compacted at every finished turn end. At the
 four mid-task turn ends it kept the context in anywhere from none of 16 runs to
 24 of 32, depending on the batch ([Batches](evals/README.md#batches)). Whether the live
 plugin's verdicts match the evals' is still open ([Against the live
 plugin](evals/README.md#against-the-live-plugin)). The lost detail costs
-only 2% in all because real sessions end, so they compact less often than in the
+only 1.7% in all because real sessions end, so they compact less often than in the
 steady state.
 
 The replay's classifier doesn't see the context's size, so it needs the ceiling.
@@ -692,12 +678,12 @@ noisily.
 
 ### Prices by model
 
-| model | a cached read, per 1M tokens | a cache write, in cached reads | an output token, in cached reads | a compaction's fixed cost | best point, β = 0 | β = 0.3 | β = 0.6 |
-|----|----|----|----|----|----|----|----|
-| Opus 5.5 | \$0.20 | 40 | 100 | \$0.99 | 262k | 307k | 444k |
-| Sonnet 5.5 | \$0.10 | 40 | 100 | \$0.49 | 262k | 307k | 444k |
-| Fable 5.2 | \$0.20 | 80 | 200 | \$1.99 | 297k | 372k | 627k |
-| Haiku 5.5, above 100k | \$0.05 | 20 | 50 | \$0.12 | 231k | 259k | 332k |
+| model | a cached read, per 1M tokens | a cache write, in cached reads | an output token, in cached reads | a compaction's fixed cost | best point |
+|----|----|----|----|----|----|
+| Opus 5.5 | \$0.20 | 40 | 100 | \$0.99 | 376k |
+| Sonnet 5.5 | \$0.10 | 40 | 100 | \$0.49 | 376k |
+| Fable 5.2 | \$0.20 | 80 | 200 | \$1.99 | 496k |
+| Haiku 5.5, above 100k | \$0.05 | 20 | 50 | \$0.12 | 297k |
 
 Prices for the one-hour cache. Every other section's figures are for Opus 5.5.
 
@@ -722,10 +708,8 @@ never compacting:
 
 | what puts the best point at 700k | effectiveness right after a compaction, against 1M | effectiveness per dollar against never compacting |
 |----|----|----|
-| β = 0.75, with no detail lost (best point 690k) | 23% | +1.1% |
-| β = 0, and each compaction loses \$21 of detail, 364 requests' worth | 100% | +5.3% |
-| β = 0.3, and each compaction loses \$11, 191 requests' worth | 56% | +3.9% |
-| β = 0.6, and each compaction loses \$3.30, 57 requests' worth | 31% | +2.1% |
+| β = 0.76, with no detail lost (best point 721k) | 23% | +0.8% |
+| β = 0.5, and each compaction loses \$5.68 of detail, 98 requests' worth | 38% | +2.7% |
 
 </details>
 
@@ -741,8 +725,8 @@ At β above 0, a summary can do better than that. If it keeps everything the
 work needs, the requests after the compaction get as much done as with the whole
 transcript. The model counts them as getting less, so compacting pays more than
 the model says. A summary that drops detail the next turns need costs more, in a
-mistake, a correction from the user or a step run again. The model adds that cost as D per compaction, and the best points
-above are for D = 0.
+mistake, a correction from the user or a step run again. The model adds that cost as D per compaction, and the best point
+above is for D = 0.
 
 It's very noisy and hard to judge, but as some indication, my sessions had
 about 6 more wasted requests than usual after manual `/compact`s
@@ -751,12 +735,12 @@ repeated lookup or a correction. That makes D about \$0.35, with a 90%
 interval from −\$0.21 to +\$1.05. The count misses losses that waste no request,
 such as a design's rejected options or what the user likes.
 
-| D per compaction | best point, β = 0 | β = 0.3 | β = 0.6 | a perfect classifier saves, β = 0 | β = 0.3 | β = 0.6 |
-|----|----|----|----|----|----|----|
-| 0, a summary that keeps everything needed | 262k | 307k | 444k | 0 | 0 | 0 |
-| \$0.35, as measured | 281k | 333k | 483k | 0.7% | 0.5% | 0.8% |
-| \$1.12, near the top of its interval | 315k | 380k | 553k | 3.2% | 3.4% | 2.6% |
-| \$3.72, about 64 wasted requests | 400k | 493k | 723k | 12.5% | 10.8% | 7.4% |
+| D per compaction | best point | a perfect classifier saves |
+|----|----|----|
+| 0, a summary that keeps everything needed | 376k | 0 |
+| \$0.35, as measured | 409k | 0.9% |
+| \$1.12, near the top of its interval | 470k | 3.4% |
+| \$3.72, about 64 wasted requests | 616k | 8.6% |
 
 </details>
 
@@ -770,7 +754,10 @@ saturating form, levelling off once the context holds what the work needs,
 could serve as well. The two differ on one question: does doubling an agent's
 context from 400k to 800k improve its next steps about as much as doubling it
 from 100k to 200k? Under the power law, both doublings improve them by the same
-factor. Under a saturating form, the later doubling improves them less.
+factor. Under a saturating form, the later doubling improves them less. A
+logarithm, η = ln(x / 45k), gives a request at 150k as much against one at 1M
+as β = 0.5 does, and puts the best point at 398k, saving 16.8% against never
+compacting, where the power law puts it at 376k, saving 14.5%.
 
 </details>
 
@@ -796,13 +783,12 @@ prices the cache write, or limits compaction to turn ends.
 
 </details>
 
-[^x]: The replay's best turn-end threshold is 200k if a request gets as much
-done at any context size (β = 0), 250k at β = 0.3 and 290k at β = 0.6, where a
-request at 150k gets 30% as much done as one at 1M (under
-[Sensitivity](docs/cost-model.md#sensitivity)). Each assumes a compaction loses no detail the
-work needs. Compacting after any request rather than at
-turn ends, the best point is 262k, 307k and 444k at β = 0, 0.3 and 0.6, with
-90% intervals of 253–272k, 297–320k and 427–465k from resampling sessions.
+[^x]: The replay's best turn-end threshold is 280k at the base case, where a
+request at 250k gets half as much done as one at 1M, and 240k–290k for β from
+0.1 to 0.6 (under [Sensitivity](docs/cost-model.md#sensitivity)). It is 200k if a request gets as
+much done at any context size. Each assumes a compaction loses no detail the
+work needs. Compacting after any request rather than at turn ends, the best
+point is 376k, with a 90% interval of 362–392k from resampling sessions.
 
 [^sessions]: The measured parameters come from my sessions of 7 to 15 November,
     with 90% intervals from resampling sessions.

@@ -67,7 +67,6 @@ BINS = np.array([0, 200_000, 300_000, 400_000, 600_000, np.inf])
 REFERENCE = 3  # 400k to 600k, where most compactions happen
 # The half points searched for the saturating form, 1 - 2^(-x/s), which the comparison of forms fits
 # beside the power law.
-BETAS = (0, 0.3, 0.6)  # values of β, the cost model's effectiveness exponent, to replay with D at the top of its interval
 DRAWS = 200
 
 
@@ -316,10 +315,9 @@ def main():
     high = max(X["D"][1], X["D other"][1])
     wasted = price(m["post x"])  # a request after a compaction
     for x in (400_000, 700_000):
-        D = [fit.lost_for(p, c, x, beta) for beta in BETAS]
-        print(f"  X* reaches {x // 1000}k with D of, in wasted requests at ${wasted * c.read:.3f}: " + ", ".join(
-            f"β = {beta:g}: " + ("none" if d is None else f"${d * c.read:.2f}, {d / wasted:.0f}")
-            for beta, d in zip(BETAS, D)))
+        lost = fit.lost_for(p, c, x, fit.BASE)
+        print(f"  X* reaches {x // 1000}k at β = {fit.BASE:g} with D of, in wasted requests at ${wasted * c.read:.3f}: "
+              + ("none" if lost is None else f"${lost * c.read:.2f}, {lost / wasted:.0f}"))
     # A LangWatch-style comparison, without the session effects or the context.
     first, rest = d["tpost"] == 1, d["tpost"] == 0
     raw = lambda sel: ((d["corrected"][sel].mean() - (1 - SPECIFICITY)) / J, sel.sum())
@@ -327,16 +325,16 @@ def main():
     print(f"  corrections answering the first turn after a compaction: {r1:.0%} of {n1}; after other turns: {r0:.0%} of {n0}")
 
     k = lambda v: f"{v / 1e3:.0f}k"
-    print(f"\nsteady-state X* with D = 0, then with D at the top of its interval, ${high * c.read:.2f}: " + ", ".join(
-        f"β = {beta:g}: {k(fit.steady(p, c, beta))}, {k(fit.steady(p, c, beta, high))}" for beta in BETAS))
+    print(f"\nsteady-state X* at β = {fit.BASE:g} with D = 0, then with D at the top of its interval, "
+          f"${high * c.read:.2f}: {k(fit.steady(p, c, fit.BASE))}, {k(fit.steady(p, c, fit.BASE, high))}")
     if not a.no_replay:
         for lost, label in ((0.0, "D = 0"), (high, "D at the top of its interval")):
-            cost, effectiveness = fit.grid(C, p, c, ttl, betas=BETAS, lost=lost)
-            T, saved = fit.best(cost, effectiveness)
-            at = list(fit.THRESHOLDS).index(400_000)  # sparkjoy's first floor, which the doc compares against
-            floor = cost[:, at].sum() / effectiveness[:, at].sum(0) / (cost[:, -1].sum() / effectiveness[:, -1].sum(0))
-            print(f"best turn-end threshold, replayed, {label}: " + ", ".join(
-                f"β = {beta:g}: {k(T[i])}, saving {1 - saved[i]:.1%} (400k: {1 - floor[i]:.1%})" for i, beta in enumerate(BETAS)))
+            cost, effectiveness = fit.grid(C, p, c, ttl, betas=(fit.BASE,), lost=lost)
+            (T,), (saved,) = fit.best(cost, effectiveness)
+            at = list(fit.THRESHOLDS).index(fit.FLOOR)
+            floor = cost[:, at].sum() / effectiveness[:, at, 0].sum() / (cost[:, -1].sum() / effectiveness[:, -1, 0].sum())
+            print(f"best turn-end threshold at β = {fit.BASE:g}, replayed, {label}: {k(T)}, saving {1 - saved:.1%} "
+                  f"(from {k(fit.FLOOR)}: {1 - floor:.1%})")
 
 
 if __name__ == "__main__":
