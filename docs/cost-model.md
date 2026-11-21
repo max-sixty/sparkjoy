@@ -48,7 +48,7 @@ For my sessions on Opus 5.5[^prices]:
   costs least in the replay when it compacts wherever they allow, counting cost
   alone ([Idle sessions](#idle-sessions)).
 - What the question adds depends on how much detail a compaction in the middle
-  of a task loses, which my sessions measure poorly.
+  of a task loses, which is difficult to estimate.
 
 ## The model
 
@@ -438,7 +438,7 @@ never compacts, and no classifier lowers that part of the cost.
 | telling work apart pays when | in the measured sessions |
 |----|----|
 | work's β varies widely, and the classifier is right most of the time | Neither is measured. Grading sparkjoy's verdicts by what happened next, such as whether the turns after a compaction re-read files it dropped, would measure its accuracy. |
-| a compaction in the middle of a task loses detail worth more than keeping the context costs | My sessions measure it poorly. |
+| a compaction in the middle of a task loses detail worth more than keeping the context costs | It is difficult to estimate. |
 
 ### Prices by model
 
