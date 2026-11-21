@@ -479,16 +479,23 @@ def sensitivity(out, p, c, boot):
               for f in order}
 
     for theme, t in THEMES.items():
-        fig, ax = plt.subplots(figsize=(9, 3.9))
+        # Each bar's name sits above it rather than as a tick label beside it, so the drawing is no wider
+        # than the plot and its text keeps the size of the other charts' where the doc scales it to the column.
+        fig, ax = plt.subplots(figsize=(9, 4.6))
         style(ax, t)
         ax.grid(False)
         ax.grid(axis="x", color=t["grid"], lw=0.8)
         ink = t["ink"]
         ax.axvline(base, color=t["muted"], lw=1, zorder=1)
-        ax.text(base, len(order) - 0.45, f"{k(base)}, with every parameter as measured", ha="center",
+        ax.text(base + 8_000, len(order) - 0.3, f"{k(base)}, with every parameter as measured", ha="left",
                 va="bottom", fontsize=9, color=t["ink"])
         for y, f in enumerate(order):
             lo, hi, ends = rows[f]
+            # Measured parameters' names in the fit colour; β's in ink, since it is assumed. Each on the
+            # page's colour, which breaks the line at the measured point where the name crosses it.
+            ax.text(0, y + 0.24, f"{symbols[f]}, {names[f]}", transform=ax.get_yaxis_transform(), ha="left",
+                    va="bottom", fontsize=9, color=t["fit"] if f in fit.MEASURED else t["ink"], zorder=4,
+                    bbox={"facecolor": t["page"], "edgecolor": "none", "pad": 1.5})
             # A thin line from halved to doubled, thick across the interval.
             ax.plot([lo, hi], [y, y], color=ink, lw=1.6, solid_capstyle="butt", zorder=2, gid=f"sens-{f}")
             if ends is not None:
@@ -496,15 +503,16 @@ def sensitivity(out, p, c, boot):
             # Unclipped, so a dot on the plot's right edge, at Claude Code's own compaction, draws whole.
             ax.plot([lo], [y], "o", ms=6, mfc=t["page"], mec=ink, mew=1.6, zorder=3, clip_on=False)
             ax.plot([hi], [y], "o", ms=6, mfc=ink, mec=t["page"], mew=1, zorder=3, clip_on=False)
-            ax.text(min(lo, hi) - 9_000, y, k(min(lo, hi)), ha="right", va="center", fontsize=8, color=t["ink"])
+            ax.text(min(lo, hi) - 9_000, y, k(min(lo, hi)), ha="right", va="center", fontsize=9, color=t["ink"])
             right = max(lo, hi)
-            ax.text(right + 9_000, y, k(right) + (", where Claude Code compacts" if right >= fit.AUTO else ""),
-                    ha="left", va="center", fontsize=8, color=t["ink"])
-        ax.set_yticks(range(len(order)), [f"{symbols[f]}, {names[f]}" for f in order])
-        # Measured parameters' names in the fit colour; β's in ink, since it is assumed.
-        for label, f in zip(ax.get_yticklabels(), order):
-            label.set_color(t["fit"] if f in fit.MEASURED else t["ink"])
-        ax.set_ylim(-0.6, len(order) - 0.1)
+            if right >= fit.AUTO:
+                # At the plot's right edge, so named below the line's end rather than beside it.
+                ax.text(right, y - 0.2, f"{k(right)}, where Claude Code compacts", ha="right", va="top",
+                        fontsize=9, color=t["ink"])
+            else:
+                ax.text(right + 9_000, y, k(right), ha="left", va="center", fontsize=9, color=t["ink"])
+        ax.set_yticks([])
+        ax.set_ylim(-0.4, len(order))
         ax.set_xlim(100_000, fit.AUTO)
         ax.set_xticks(range(200_000, 900_001, 200_000))
         ax.xaxis.set_major_formatter(tokens)
@@ -513,7 +521,7 @@ def sensitivity(out, p, c, boot):
                 plt.Line2D([], [], ls="", marker="o", ms=6, mfc=muted, mec=t["page"], mew=1),
                 Patch(color=muted, lw=0)]
         ax.legend(keys, ["halved", "doubled", "across its 90% interval"], frameon=False, fontsize=9,
-                  labelcolor=t["ink"], ncol=3, loc="lower right", bbox_to_anchor=(1, 1.06), handletextpad=0.4,
+                  labelcolor=t["ink"], ncol=3, loc="lower right", bbox_to_anchor=(1, 1.0), handletextpad=0.4,
                   columnspacing=1.0, handlelength=1.2)
         ax.set_xlabel(f"Compaction point of lowest cost per unit of effectiveness at β = {b:g} (tokens)",
                       color=t["muted"], fontsize=10)
