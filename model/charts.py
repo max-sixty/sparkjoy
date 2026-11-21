@@ -14,7 +14,8 @@ from one read of the sessions:
   effectiveness  a request's effectiveness against its context, at the base case for β (fit.BASE),
                  at half and twice it, and at β = 0
   cost           the steady state's cost per unit of effectiveness against the compaction threshold, at the
-                 same four β, with each one's lowest point
+                 same four β, with each one's lowest point, under a request's mean cost and mean
+                 effectiveness, the averages it is the ratio of
   sensitivity    how far the lowest-cost threshold moves with each measured parameter and with β, at the
                  base case
   threshold      the lowest-cost threshold against β, in the steady state and the replay
@@ -166,14 +167,14 @@ def cycles(out, p, c):
     average chart's curve. It assumes nothing about effectiveness. The doc draws it under The model, so
     its axes carry the model's symbols and no figures; the shapes come from the fitted values, and fit.py
     prints the numbers the doc's Trade-off table quotes. The column titles say where each column
-    compacts against X*, so the peaks carry no labels but the last, where Claude Code compacts."""
+    compacts against X*(0), so the peaks carry no labels but the last, where Claude Code compacts."""
     h, c0, F0 = fit.terms(p, c)
     R = 600  # requests drawn
     X = fit.points(p, c)
     rows = [cycle(p, c, x) for x in X]
 
     r = np.arange(R + 1)
-    titles = ("Compact early", "Compact at X*", "Compact late", "Never compact")
+    titles = ("Compact early", "Compact at X*(0)", "Compact late", "Never compact")
     for theme, t in THEMES.items():
         fig, axes = plt.subplots(2, len(X), figsize=(9.6, 4.8), sharex=True, sharey="row",
                                  gridspec_kw={"hspace": 0.55, "wspace": 0.08})
@@ -387,8 +388,8 @@ def average(out, p, c):
     """Why the lowest-cost threshold sits where it does when context size doesn't matter: against the
     compaction threshold X, a request's cost averaged over the cycle, its share of the compaction included,
     and the marginal cost, what one more request before compacting costs. The average is least where
-    they cross, which a dot marks. The doc draws it under The model, so its axes carry K and X* and
-    no figures."""
+    they cross, which a dot marks. It draws the model in symbols, so its axes carry K and X*(0), the
+    lowest-cost threshold counting cost alone, and no figures."""
     h, c0, _ = fit.terms(p, c)
     X, A = fit.curve(p, c, 0)  # with every request alike, cost per unit of effectiveness is cost per request
     # d/dX of the cycle's cost, g (X + F0) + h (X² - K²)/2 + c0 (X - K), over d/dX of its requests: the
@@ -409,7 +410,7 @@ def average(out, p, c):
         ax.plot(X, M, color=t["muted"], lw=1.6)
         label_ends(ax, [(M[-1], "marginal", t["ink"]), (A[-1], "average", t["ink"])], gap=80_000)
         ax.plot([best], [least], "o", ms=7, mfc=t["cost"], mec=t["page"], mew=1.5, zorder=3)
-        ax.text(best + 20_000, least - 45_000, "min(cost) at X*", ha="left", va="top", fontsize=9,
+        ax.text(best + 20_000, least - 45_000, "min(cost) at X*(0)", ha="left", va="top", fontsize=9,
                 color=t["ink"])
         # Unclipped, so the dot on the plot's right edge draws whole.
         ax.plot([fit.AUTO], [default], "o", ms=6, mfc=t["page"], mec=t["cost"], mew=1.5, zorder=3,
@@ -417,7 +418,7 @@ def average(out, p, c):
         ax.text(fit.AUTO - 10_000, default - 150_000, "Claude Code's default,\nnear the window's end",
                 ha="right", va="top", fontsize=9, color=t["ink"])
         ax.set_xlim(0, fit.AUTO)
-        ax.set_xticks([0, p.K, best], ["0", "K", "X*"])
+        ax.set_xticks([0, p.K, best], ["0", "K", "X*(0)"])
         ax.set_ylim(0, 1_400_000)
         ax.set_yticks([0], ["0"])
         ax.set_xlabel("Compaction threshold X (tokens)", color=t["muted"], fontsize=10)
@@ -456,42 +457,74 @@ def effectiveness_curve(out):
 
 def cost_curve(out, p, c):
     """The steady state's cost per unit of effectiveness against the compaction threshold, relative to never
-    compacting, at the β the effectiveness chart draws, the base case thicker. A dot marks each β's lowest
-    point (fit.steady), and each line is named by its β alone, since the axes give the point's values."""
+    compacting, at the β the effectiveness chart draws, the base case thicker, under the two averages it is
+    the ratio of: a request's mean cost over a cycle, its share of the compaction included, which no β
+    changes, and its mean effectiveness, at each β. A dot marks the lowest point of the mean cost and of
+    each β's cost per unit (fit.steady), and each line is named by its β alone, since the axes give the
+    points' values."""
     betas = (0, fit.BASE / 2, fit.BASE, fit.BASE * 2)
     for theme, t in THEMES.items():
-        fig, ax = plt.subplots(figsize=(9, 3.8))
-        style(ax, t)
+        fig, (top, mid, low) = plt.subplots(3, 1, figsize=(9, 8.6), sharex=True,
+                                            gridspec_kw={"height_ratios": (1, 1, 1.4), "hspace": 0.42})
+        for ax in (top, mid, low):
+            style(ax, t)
+
+        # A request's mean cost, the same at every β, in dollars.
+        X, A = fit.curve(p, c, 0)
+        top.plot(X, A * c.read, color=t["cost"], lw=2.2)
+        best = fit.steady(p, c, 0)
+        top.plot([best], [float(fit.per_unit(p, c, best, 0)) * c.read], "o", ms=6.5, mfc=t["cost"],
+                 mec=t["page"], mew=1.5, zorder=4)
+        top.yaxis.set_major_formatter(dollars)
+        top.set_ylim(0, 0.2)
+        top.set_yticks([0, 0.05, 0.1, 0.15, 0.2])
+        axis_name(top, "Cost per request, averaged over a cycle ($)", t)
+
+        # A request's mean effectiveness at each β: the cycle's effectiveness over its requests.
+        for b in betas:
+            color = shade(t, b)
+            base = b == fit.BASE
+            mean = fit.cycle(p, c, X, b)[1] / (X - p.K)
+            mid.plot(X, mean, color=color, lw=2.6 if base else 1.6, zorder=3 if base else 2)
+            # Each name above its line at 700k, where the lines are far enough apart that none crosses it.
+            mid.text(700_000, float(np.interp(700_000, X, mean)) + 0.04, f"β = {b:g}", ha="left", va="bottom",
+                     fontsize=9, color=t["ink"])
+        mid.yaxis.set_major_formatter(percent)
+        mid.set_ylim(0, 1.12)
+        mid.set_yticks([0, 0.25, 0.5, 0.75, 1])
+        axis_name(mid, "Effectiveness per request, averaged over a cycle, relative to a request at 1M", t)
+
+        # Their ratio, relative to never compacting.
         for b in betas:
             color = shade(t, b)
             base = b == fit.BASE
             X, J = fit.curve(p, c, b)
             y = J / J[-1]
-            ax.plot(X, y, color=color, lw=2.6 if base else 1.6, zorder=3 if base else 2)
+            low.plot(X, y, color=color, lw=2.6 if base else 1.6, zorder=3 if base else 2)
             best = fit.steady(p, c, b)
             if best >= fit.AUTO:
                 # No compaction short of Claude Code's own pays, so the name sits above the line's descent.
                 x = 600_000
-                ax.text(x, float(np.interp(x, X, y)) + 0.03, f"β = {b:g}", ha="left", va="bottom", fontsize=9,
-                        color=t["ink"])
+                low.text(x, float(np.interp(x, X, y)) + 0.03, f"β = {b:g}", ha="left", va="bottom", fontsize=9,
+                         color=t["ink"])
                 continue
             least = float(J[X >= best][0] / J[-1])
-            ax.plot([best], [least], "o", ms=6.5, mfc=color, mec=t["page"], mew=1.5, zorder=4)
+            low.plot([best], [least], "o", ms=6.5, mfc=color, mec=t["page"], mew=1.5, zorder=4)
             # Each name below its dot, but the base case's above it, since below it the name would cross the
             # flatter β = 0.25 line.
             if base:
-                ax.text(best, least + 0.04, f"β = {b:g}, the base case", ha="center", va="bottom", fontsize=9,
-                        color=t["ink"])
+                low.text(best, least + 0.04, f"β = {b:g}, the base case", ha="center", va="bottom", fontsize=9,
+                         color=t["ink"])
             else:
-                ax.text(best + 14_000, least - 0.015, f"β = {b:g}", ha="left", va="top", fontsize=9, color=t["ink"])
-        ax.set_xlim(0, fit.AUTO)
-        ax.xaxis.set_major_formatter(tokens)
-        ax.set_xticks([0, 200_000, 400_000, 600_000, 800_000])
-        ax.yaxis.set_major_formatter(percent)
-        ax.set_ylim(0.4, 1.3)
-        ax.set_yticks([0.4, 0.6, 0.8, 1, 1.2])
-        ax.set_xlabel("Compaction threshold X (tokens)", color=t["muted"], fontsize=10)
-        axis_name(ax, "Cost per unit of effectiveness, relative to never compacting", t)
+                low.text(best + 14_000, least - 0.015, f"β = {b:g}", ha="left", va="top", fontsize=9, color=t["ink"])
+        low.set_xlim(0, fit.AUTO)
+        low.xaxis.set_major_formatter(tokens)
+        low.set_xticks([0, 200_000, 400_000, 600_000, 800_000])
+        low.yaxis.set_major_formatter(percent)
+        low.set_ylim(0.4, 1.3)
+        low.set_yticks([0.4, 0.6, 0.8, 1, 1.2])
+        low.set_xlabel("Compaction threshold X (tokens)", color=t["muted"], fontsize=10)
+        axis_name(low, "Cost per unit of effectiveness, relative to never compacting", t)
         save(fig, out / f"model-cost-{theme}.svg")
 
 

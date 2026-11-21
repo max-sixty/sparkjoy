@@ -91,7 +91,7 @@ For my sessions on Opus 5.5[^prices]:
 
 | symbol | what it is |
 |----|----|
-| X\* | Value of X that makes J lowest, in tokens. |
+| X\*(β) | Lowest-cost threshold, the value of X that makes J lowest at a given β, in tokens. X\*(0) counts cost alone. Where the β is clear, it is written X\*. |
 
 </details>
 
@@ -124,7 +124,7 @@ parameter and where it comes from.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-cycles-dark.svg">
-  <img alt="Eight panels, two rows by four columns, in symbols without figures. Columns: compact early, compact at X*, compact late, and never compact, where Claude Code compacts near the window's end. Top row, the context: a sawtooth rising from K to the column's X and dropping back to K, with many short teeth when compacting early and one long tooth when never compacting. Bottom row, cost per request: the request's own cost, rising with the context, with its share of the compaction ending its cycle on top, thick when compacting early and thin when late. A line marks each column's mean cost per request, lowest at X*." src="../assets/model-cycles-light.svg">
+  <img alt="Eight panels, two rows by four columns, in symbols without figures. Columns: compact early, compact at X*(0), compact late, and never compact, where Claude Code compacts near the window's end. Top row, the context: a sawtooth rising from K to the column's X and dropping back to K, with many short teeth when compacting early and one long tooth when never compacting. Bottom row, cost per request: the request's own cost, rising with the context, with its share of the compaction ending its cycle on top, thick when compacting early and thin when late. A line marks each column's mean cost per request, lowest at X*(0)." src="../assets/model-cycles-light.svg">
 </picture>
 
 ### What a request and a compaction cost
@@ -176,22 +176,23 @@ cached reads, and its context holds 335k tokens.
 
 A request's average cost over a cycle, its share of the compaction included, is
 lowest where it equals the marginal cost, the cost of one more request before
-compacting, as in Harris's economic order quantity. That threshold has a closed
-form:
+compacting, as in Harris's economic order quantity. That threshold, X\*(0), has
+a closed form:
 
 ```math
-X^* = K + \sqrt{\frac{2g\,(F_0 + K)}{h}}
+X^*(0) = K + \sqrt{\frac{2g\,(F_0 + K)}{h}}
 ```
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-average-dark.svg">
-  <img alt="Cost per request against the compaction threshold X, in symbols without figures. The average, a request's cost with its share of the compaction included, falls steeply from just above K to its minimum at X*, then rises slowly to Claude Code's default near the window's end, where a hollow dot marks it. The marginal cost, a straight grey line from K, rises through the minimum, where a filled dot labelled min(cost) at X* marks the crossing." src="../assets/model-average-light.svg">
+  <img alt="Cost per request against the compaction threshold X, in symbols without figures. The average, a request's cost with its share of the compaction included, falls steeply from just above K to its minimum at X*(0), then rises slowly to Claude Code's default near the window's end, where a hollow dot marks it. The marginal cost, a straight grey line from K, rises through the minimum, where a filled dot labelled min(cost) at X*(0) marks the crossing." src="../assets/model-average-light.svg">
 </picture>
 
-For my sessions, it is 262k, with a 90% interval of 253–272k:
+For my sessions, X\*(0) is 262k, with a 90% interval of 253–272k:
 
 ```math
-X^* = 142\text{k} + \sqrt{\frac{2 \cdot 1706 \cdot (4.93\text{M} + 142\text{k})}{1.22}} = 142\text{k} + 119\text{k} = 262\text{k}
+X^*(0) = 142\text{k} + \sqrt{\frac{2 \cdot 1706 \cdot (4.93\text{M} +
+142\text{k})}{1.22}} = 142\text{k} + 119\text{k} = 262\text{k}
 ```
 
 Compacting there, a request costs \$0.091 on average, its share of the
@@ -208,9 +209,9 @@ then minimizes J, a cycle's cost per unit of its effectiveness:
 J(X) = \frac{g\,F(X) + \int_K^X c(x)\,dx}{\int_K^X \eta(x)\,dx}
 ```
 
-J is lowest where one more request's cost, c(X) plus the g tokens it adds to
-the compaction's read, per unit of what that request gets done, equals the
-cycle's average:
+J is lowest at X\*(β), where one more request's cost, c(X) plus the g tokens it
+adds to the compaction's read, per unit of what that request gets done, equals
+the cycle's average:
 
 ```math
 \frac{c(X^*) + g}{\eta(X^*)} = J(X^*)
@@ -225,11 +226,11 @@ full 1M window, so each doubling of the context multiplies it by $`2^\beta`$:
 
 At β = 0, where a request gets as much done at any context, J is the average
 cost under [Cost alone](#cost-alone), and the condition above gives its closed
-form. That is an extreme simplification: it says a request at 150k gets as much
-done as one at 1M. No session measures β, so this document's figures take a base
-case of β = 0.5, where a request at 250k gets half as much done as one at 1M,
-and [Sensitivity](#sensitivity) shows how the lowest-cost threshold moves
-with β.
+form, X\*(0). That is an extreme simplification: it says a request at 150k gets
+as much done as one at 1M. No session measures β, so this document's figures
+take a base case of β = 0.5, where a request at 250k gets half as much done as
+one at 1M, and [Sensitivity](#sensitivity) shows how the lowest-cost threshold
+moves with β.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-effectiveness-dark.svg">
@@ -243,13 +244,13 @@ K, counts as getting as much done as one at K before any compaction.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-cost-dark.svg">
-  <img alt="Cost per unit of effectiveness, relative to never compacting, against the compaction threshold from 142k to 965k, for β of 0, 0.25, 0.5 and 1 on one blue ramp, the base case, β = 0.5, drawn thicker. The first three fall steeply from 142k to a minimum and rise to 100% at 965k; dots mark the minima: 55.4% at 262k for β = 0, 69.4% at 297k for 0.25 and 85.5% at 376k for 0.5. β = 1 stays above 100% and falls to it at 965k, where Claude Code compacts." src="../assets/model-cost-light.svg">
+  <img alt="Three panels against the compaction threshold from 142k to 965k. Top, a request's cost averaged over a cycle, its share of the compaction included, the same at any β: it falls steeply from 142k to its lowest, $0.091 at 262k, and rises to $0.164 at 965k. Middle, a request's effectiveness averaged over a cycle, relative to a request at 1M, for β of 0, 0.25, 0.5 and 1 on one blue ramp, the base case, β = 0.5, drawn thicker: flat at 100% for β = 0, and for the others rising with the threshold, from 61%, 38% and 14% at 142k to 85%, 73% and 55% at 965k. Bottom, their ratio, cost per unit of effectiveness relative to never compacting, for the same β. The first three fall steeply from 142k to a minimum and rise to 100% at 965k; dots mark the minima: 55.4% at 262k for β = 0, 69.4% at 297k for 0.25 and 85.5% at 376k for 0.5. β = 1 stays above 100% and falls to it at 965k, where Claude Code compacts." src="../assets/model-cost-light.svg">
 </picture>
 
-At β = 0.5, the lowest-cost threshold is 376k, with a 90% interval of 362–392k.
-Compacting there costs 14.5% less per unit of work than never compacting, and
-compacting anywhere from 310k to 469k comes within a point of that. Counting
-cost alone, it is 262k.
+At β = 0.5, the lowest-cost threshold X\*(0.5) is 376k, with a 90% interval of
+362–392k. Compacting there costs 14.5% less per unit of work than never
+compacting, and compacting anywhere from 310k to 469k comes within a point of
+that. Counting cost alone, X\*(0) is 262k.
 
 A request's mean cost over a cycle doesn't depend on β, but what it gets done
 does:
@@ -257,8 +258,8 @@ does:
 | compact at | requests a cycle | mean cost per request | cost per unit of work, against never compacting |
 |----|----|----|----|
 | 175k | 19 | \$0.119 | 132.0% |
-| 262k, the lowest-cost threshold counting cost alone | 70 | \$0.091 | 89.6% |
-| 376k, the lowest-cost threshold | 137 | \$0.098 | 85.5% |
+| 262k, X\*(0), the lowest-cost threshold counting cost alone | 70 | \$0.091 | 89.6% |
+| 376k, X\*(0.5), the lowest-cost threshold at the base case | 137 | \$0.098 | 85.5% |
 | 600k | 268 | \$0.121 | 89.5% |
 | never, leaving it to Claude Code at 965k | 482 | \$0.164 | 100% |
 
@@ -434,6 +435,9 @@ saves 20.4%.
 
 ## Parameter values
 
+<details>
+<summary>My sessions' value for each parameter, and its source</summary>
+
 | parameter | value | source |
 |----|----|----|
 | K, context after a compaction | 142k | measured[^sessions], 90% interval 137–147k: the first request after a compaction holds 122k, and the next few requests read 20k of files again |
@@ -448,9 +452,14 @@ saves 20.4%.
 | c₀, fixed cost of a request | 134k cached reads, \$0.027 | derived |
 | F₀, fixed cost of a compaction | 4.93M cached reads, \$0.99 | derived |
 
+</details>
+
 ## Prices by model
 
-| model | a cached read, per 1M tokens | a cache write, in cached reads | an output token, in cached reads | a compaction's fixed cost | lowest-cost threshold |
+<details>
+<summary>Each model's prices, its fixed cost of a compaction, and its lowest-cost threshold</summary>
+
+| model | a cached read, per 1M tokens | a cache write, in cached reads | an output token, in cached reads | a compaction's fixed cost | lowest-cost threshold, X\*(0.5) |
 |----|----|----|----|----|----|
 | Opus 5.5 | \$0.20 | 40 | 100 | \$0.99 | 376k |
 | Sonnet 5.5 | \$0.10 | 40 | 100 | \$0.49 | 376k |
@@ -458,6 +467,8 @@ saves 20.4%.
 | Haiku 5.5, above 100k | \$0.05 | 20 | 50 | \$0.12 | 297k |
 
 Prices for the one-hour cache. Every other section's figures are for Opus 5.5.
+
+</details>
 
 ## Fitting it to your sessions
 
