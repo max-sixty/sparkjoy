@@ -241,38 +241,54 @@ compacting it cost, fitted to my sessions.
 <details>
 <summary>The cost model</summary>
 
-Compacting trades one cost against another. Every request reads the whole
-context, so a session that compacts late pays to read a large context on every
-request. One that compacts early pays for more compactions, and its requests
-work with less of the session's history. A compaction costs about \$1 on Opus
-5.5 at any context size, most of it for the cache write of the context it leaves
-([What a request and a compaction cost](docs/cost-model.md#what-a-request-and-a-compaction-cost)).
+To understand what makes a good compaction policy, we can model how a policy
+affects what a session costs and how much context its requests have. Every
+request reads the whole context, so a session that compacts late pays to read a
+large context on every request. One that compacts early pays for more
+compactions, and its requests have less of the session's history to work with.
 
-The model finds the best compaction point in two steps. The first counts cost
-alone. It treats a session's context as growing by the same number of tokens
-with each request and dropping back to the same size at each compaction, which
-gives the best compaction point in closed form ([Best compaction
-point](docs/cost-model.md#best-compaction-point)). The second also counts what the context is
-worth to the work. A request's effectiveness, how much it gets done, grows as a
-power β of its context, and the best point minimizes the cost per unit of work
-done ([Context size and effectiveness](docs/cost-model.md#context-size-and-effectiveness)). The
-first step is the case β = 0. [Value of information](docs/cost-model.md#value-of-information) then
-asks what sparkjoy's question adds by letting finished work and work in progress
-compact at different points.
+As with any model, there's a trade-off between simplicity and completeness. A
+simple model gives a formula that shows which parameters matter, and a fuller
+one follows real sessions more closely. There are a few models, each in a
+section below:
 
-For my sessions, a threshold of 200k–300k at turn ends minimizes overall cost,
-under assumptions about how much past context is worth to the work[^x]. [Fitted
-to my sessions](docs/cost-model.md#fitted-to-my-sessions) fits the model to my sessions on Opus
-5.5 and tests its constant growth against a replay of them, and sparkjoy's
-default floors come from that replay. It asks whether to compact from 250k at
-turn ends and from 175k in an idle session. What the question adds depends on
-how much detail a compaction in the middle of a task loses, which my sessions
-measure poorly.
+- **Cost alone.** A session's context grows by the same number of tokens with
+  each request and drops back to the same size at each compaction. The best
+  compaction point, where a request's average cost is lowest, has a closed form
+  ([Best compaction point](docs/cost-model.md#best-compaction-point)).
+- **Cost and context.** A request gets more done with more context, by a power
+  β of its size. The best point is where the cost per unit of work done is
+  lowest, and cost alone is the case β = 0 ([Context size and
+  effectiveness](docs/cost-model.md#context-size-and-effectiveness)).
+- **Idle sessions.** Once the prompt cache lapses, an idle session's next
+  request makes a cache write of the whole context, so compacting before it
+  lapses pays at a smaller context ([Compacting before the cache
+  lapses](docs/cost-model.md#compacting-before-the-cache-lapses)).
+- **A classifier.** sparkjoy's question decides at each turn end whether to
+  compact. What it adds is what it saves against the best single threshold, when
+  work differs in how much the context helps it or in how much detail a
+  compaction loses ([Value of information](docs/cost-model.md#value-of-information)).
+- **A replay of my sessions.** It keeps every logged request and moves only the
+  compactions, so it includes what the other models leave out: uneven growth,
+  long turns, cache lapses and sessions that end ([Fitted to my
+  sessions](docs/cost-model.md#fitted-to-my-sessions)).
 
-The formulas count costs in cached reads, the price of reading one token from
-the prompt cache, and the text gives them in dollars at Opus 5.5's prices for
-the one-hour cache. [Prices by model](docs/cost-model.md#prices-by-model) gives other models'
-prices.
+For my sessions on Opus 5.5[^prices]:
+
+- A compaction costs about \$1 at any context size, most of it for the cache
+  write of the context it leaves ([What a request and a compaction
+  cost](docs/cost-model.md#what-a-request-and-a-compaction-cost)).
+- Compacting after any request, the best point is 262k counting cost alone, and
+  376k at the base case, β = 0.5, where a request at 250k gets half as much done
+  as one at 1M.
+- Compacting only at turn ends, the threshold that minimizes overall cost at the
+  base case is 280k[^x]. It is lower mostly because one long turn can carry the
+  context far past the best point before the next turn end.
+- sparkjoy's default floors, 250k at turn ends and 175k in an idle session, are
+  the pair that costs least in the replay, counting cost alone. Above them, its
+  question decides whether to compact.
+- What the question adds depends on how much detail a compaction in the middle
+  of a task loses, which my sessions measure poorly.
 
 ## The model
 
@@ -747,6 +763,11 @@ leaves out quality. None lets a request's effectiveness depend on its context,
 prices the cache write, or limits compaction to turn ends.
 
 </details>
+
+[^prices]: Dollars are at Opus 5.5's prices for the one-hour cache. The formulas
+    count costs in cached reads, the price of reading one token from the prompt
+    cache, \$0.20 per million tokens on Opus 5.5. [Prices by
+    model](docs/cost-model.md#prices-by-model) gives other models' prices.
 
 [^x]: The replay's best turn-end threshold is 280k at the base case, where a
 request at 250k gets half as much done as one at 1M, and 240k–290k for β from
