@@ -357,26 +357,13 @@ Claude Code keeps in a cache shared across sessions:
 
 $`\displaystyle F(X) = F_0 + X, \qquad F_0 = o\,N + (w - 1)(K - P)`$
 
+[Parameter values](docs/cost-model.md#parameter-values) gives my sessions' value for each
+parameter and where it comes from.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-cycles-dark.svg">
   <img alt="Eight panels, two rows by four columns, in symbols without figures. Columns: compact early, compact at X*, compact late, and never compact, where Claude Code compacts near the window's end. Top row, the context: a sawtooth rising from K to the column's X and dropping back to K, with many short teeth when compacting early and one long tooth when never compacting. Bottom row, cost per request: the request's own cost, rising with the context, with its share of the compaction ending its cycle on top, thick when compacting early and thin when late. A line marks each column's mean cost per request, lowest at X*." src="assets/model-cycles-light.svg">
 </picture>
-
-### Parameter values
-
-| parameter | value | source |
-|----|----|----|
-| K, context after a compaction | 142k | measured[^sessions], 90% interval 137–147k: the first request after a compaction holds 122k, and the next few requests read 20k of files again |
-| g, growth of the context per request | 1,706 | measured, 1,615–1,805: the mean over the sessions' requests except the first few after a compaction, since K counts the files those read again |
-| P, system prompt and tools | 30.4k | measured, 30.4–31.0k |
-| ℓ, share of requests that find the cache lapsed | 0.56% | measured, 0.51–0.63%: the one-hour cache expires after an hour idle |
-| N, output of the compaction request | 5.6k | measured, 5.2–5.9k: the summary's text is a median 3.5k tokens, and requests with about 3.5k tokens of visible output produce 1.61 times that in all, thinking included |
-| w, price of a token's cache write | 40 cached reads | list price, for the one-hour cache; a write to the five-minute cache costs 25 |
-| o, price of an output token | 100 cached reads | list price |
-| β, growth of effectiveness with the context | 0.5 | assumed, since no session measures it: a request at 250k gets half as much done as one at 1M |
-| h, cost per request of a token in the context | 1.22 | derived |
-| c₀, fixed cost of a request | 134k cached reads, \$0.027 | derived |
-| F₀, fixed cost of a compaction | 4.93M cached reads, \$0.99 | derived |
 
 ### What a request and a compaction cost
 
@@ -673,6 +660,22 @@ On the five-minute cache, priced at its own rates, the cache lapses after 52%
 of turn ends, and 95% of pauses past 4 minutes run past 5. There, compacting at
 turn ends from 250k saves 19.4%, and also asking after 4 minutes idle from 175k
 saves 20.4%.
+
+## Parameter values
+
+| parameter | value | source |
+|----|----|----|
+| K, context after a compaction | 142k | measured[^sessions], 90% interval 137–147k: the first request after a compaction holds 122k, and the next few requests read 20k of files again |
+| g, growth of the context per request | 1,706 | measured, 1,615–1,805: the mean over the sessions' requests except the first few after a compaction, since K counts the files those read again |
+| P, system prompt and tools | 30.4k | measured, 30.4–31.0k |
+| ℓ, share of requests that find the cache lapsed | 0.56% | measured, 0.51–0.63%: the one-hour cache expires after an hour idle |
+| N, output of the compaction request | 5.6k | measured, 5.2–5.9k: the summary's text is a median 3.5k tokens, and requests with about 3.5k tokens of visible output produce 1.61 times that in all, thinking included |
+| w, price of a token's cache write | 40 cached reads | list price, for the one-hour cache; a write to the five-minute cache costs 25 |
+| o, price of an output token | 100 cached reads | list price |
+| β, growth of effectiveness with the context | 0.5 | assumed, since no session measures it: a request at 250k gets half as much done as one at 1M |
+| h, cost per request of a token in the context | 1.22 | derived |
+| c₀, fixed cost of a request | 134k cached reads, \$0.027 | derived |
+| F₀, fixed cost of a compaction | 4.93M cached reads, \$0.99 | derived |
 
 ## Prices by model
 
