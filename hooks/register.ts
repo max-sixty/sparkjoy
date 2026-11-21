@@ -42,14 +42,14 @@ const COMPACTING = { plugin: 'sparkjoy', key: 'compacting' } as const
 // `/sparkjoy:report` fits the same figures to the user's own sessions and
 // saves them (`FIGURES`), and sparkjoy uses those instead (`fitted`), falling
 // back to these figure by figure. The costs follow that page's model and its table of
-// symbols ("Request and compaction costs"), which are those of `terms()` in
+// symbols ("Costs"), which are those of `terms()` in
 // model/fit.py, and each key is the name model/report.py saves its figure
 // under: a figure whose meaning changes takes a new name, so a file an older
 // report saved falls back for it.
 const AUTHOR = {
   // The judge is asked at a turn end only from FLOOR context tokens, and in
   // an idle session from IDLE_FLOOR. In docs/cost-model.md's replay of my
-  // sessions ("Idle sessions"), this pair costs least counting cost alone, and
+  // sessions ("Floors"), this pair costs least counting cost alone, and
   // at the model's base case for β it comes 0.8 points short of the lowest-cost
   // pair. The pair is fitted by cost alone, since the question decides above
   // it. The report finds the pair that minimizes the cost of the user's
