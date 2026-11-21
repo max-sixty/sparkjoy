@@ -379,11 +379,11 @@ def page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit, saved
             f"<p>Per unit of work, compacting from the fitted floors would cost {change(f['saved'])} than never "
             f"compacting, and from the author's {change(f['saved_author'])}. These replays compact wherever the floors allow, as if every "
             f"question said to. In an idle session, compacting before the cache lapses breaks even from "
-            f"{tokens(f['idle'])}. Compacting after any request rather than only at turn ends, the best point would "
+            f"{tokens(f['idle'])}. Compacting after any request rather than only at turn ends, the lowest-cost threshold would "
             f"be {tokens(f['steady'])}.</p>"
             f"<p class=note>Fitted to {len(S)} sessions and {f['compactions']} compactions, at {model_name(f['model'])} "
             f"prices with a {'5-minute' if f['ttl'] == 300 else '1-hour'} cache. The floors are fitted by cost alone, since "
-            f"sparkjoy only starts asking at them. The savings and the best point take a request at 250k to get half "
+            f"sparkjoy only starts asking at them. The savings and the lowest-cost threshold take a request at 250k to get half "
             f"as much done as one at 1M, the cost model's base case, β = {fit.BASE:g}. The "
             f'<a href="{DOC}">cost model</a> explains these figures.</p>')
     else:

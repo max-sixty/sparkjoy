@@ -2,24 +2,24 @@
 the doc quotes from them. fit.py's --charts draws each of these as model-<name>-{light,dark}.svg,
 from one read of the sessions:
 
-  cycles         the context and each request's cost over 600 requests, at four compaction points, as a
+  cycles         the context and each request's cost over 600 requests, at four compaction thresholds, as a
                  schematic: axes in the model's symbols
   inputs         a request's cost and a compaction's cost by part, against the context, the cache write
                  after a compaction split by what fills the context (context.py's context-parts.json)
   payback        how many later requests a compaction takes to pay for itself, against the context it
                  compacts, for the README's What it saves
   bill           the sessions' cost by kind of token
-  average        a request's mean cost over a cycle against the compaction point, with the marginal cost,
+  average        a request's mean cost over a cycle against the compaction threshold, with the marginal cost,
                  as a schematic
   effectiveness  a request's effectiveness against its context, at the base case for β (fit.BASE),
                  at half and twice it, and at β = 0
-  cost           the steady state's cost per unit of effectiveness against the compaction point, at the
+  cost           the steady state's cost per unit of effectiveness against the compaction threshold, at the
                  same four β, with each one's lowest point
-  sensitivity    how far the best compaction point moves with each measured parameter and with β, at the
+  sensitivity    how far the lowest-cost threshold moves with each measured parameter and with β, at the
                  base case
-  threshold      the best compaction point against β, in the steady state and the replay
+  threshold      the lowest-cost threshold against β, in the steady state and the replay
   voi            the expected value of a classifier's information, on three mixes of work
-  voi-point      the compaction point of the work a classifier says to compact, on the same mixes
+  voi-point      the compaction threshold of the work a classifier says to compact, on the same mixes
 """
 
 import html
@@ -384,8 +384,8 @@ def bill(out, S, p, c):
 
 
 def average(out, p, c):
-    """Why the best compaction point sits where it does when context size doesn't matter: against the
-    compaction point X, a request's cost averaged over the cycle, its share of the compaction included,
+    """Why the lowest-cost threshold sits where it does when context size doesn't matter: against the
+    compaction threshold X, a request's cost averaged over the cycle, its share of the compaction included,
     and the marginal cost, what one more request before compacting costs. The average is least where
     they cross, which a dot marks. The doc draws it under The model, so its axes carry K and X* and
     no figures."""
@@ -420,7 +420,7 @@ def average(out, p, c):
         ax.set_xticks([0, p.K, best], ["0", "K", "X*"])
         ax.set_ylim(0, 1_400_000)
         ax.set_yticks([0], ["0"])
-        ax.set_xlabel("Compaction point X (tokens)", color=t["muted"], fontsize=10)
+        ax.set_xlabel("Compaction threshold X (tokens)", color=t["muted"], fontsize=10)
         axis_name(ax, "Cost per request", t)
         save(fig, out / f"model-average-{theme}.svg")
 
@@ -455,7 +455,7 @@ def effectiveness_curve(out):
 
 
 def cost_curve(out, p, c):
-    """The steady state's cost per unit of effectiveness against the compaction point, relative to never
+    """The steady state's cost per unit of effectiveness against the compaction threshold, relative to never
     compacting, at the β the effectiveness chart draws, the base case thicker. A dot marks each β's lowest
     point (fit.steady), and each line is named by its β alone, since the axes give the point's values."""
     betas = (0, fit.BASE / 2, fit.BASE, fit.BASE * 2)
@@ -490,16 +490,16 @@ def cost_curve(out, p, c):
         ax.yaxis.set_major_formatter(percent)
         ax.set_ylim(0.4, 1.3)
         ax.set_yticks([0.4, 0.6, 0.8, 1, 1.2])
-        ax.set_xlabel("Compaction point X (tokens)", color=t["muted"], fontsize=10)
+        ax.set_xlabel("Compaction threshold X (tokens)", color=t["muted"], fontsize=10)
         axis_name(ax, "Cost per unit of effectiveness, relative to never compacting", t)
         save(fig, out / f"model-cost-{theme}.svg")
 
 
 def sensitivity(out, p, c, boot):
-    """How far the best compaction point moves at the base case for β when each parameter measured in the
+    """How far the lowest-cost threshold moves at the base case for β when each parameter measured in the
     sessions is half or twice its value, and across its 90% interval over `boot`, the sessions resampled,
-    and when β is half or twice the base case (fit.sensitivity), with a line at the best point with every
-    parameter as measured. β, which isn't measured, has no interval. Each bar is labelled for a reader to
+    and when β is half or twice the base case (fit.sensitivity), with a line at the lowest-cost threshold
+    with every parameter as measured. β, which isn't measured, has no interval. Each bar is labelled for a reader to
     point at."""
     b = fit.BASE
     names = {"K": f"context after a compaction ({tokens(p.K)})", "g": f"growth of the context per request ({p.g / 1e3:.1f}k)",
@@ -562,13 +562,13 @@ def sensitivity(out, p, c, boot):
         ax.legend(keys, ["halved", "doubled", "across its 90% interval"], frameon=False, fontsize=9,
                   labelcolor=t["ink"], ncol=3, loc="lower right", bbox_to_anchor=(1, 1.0), handletextpad=0.4,
                   columnspacing=1.0, handlelength=1.2)
-        ax.set_xlabel(f"Compaction point of lowest cost per unit of effectiveness at β = {b:g} (tokens)",
+        ax.set_xlabel(f"Lowest-cost threshold at β = {b:g} (tokens)",
                       color=t["muted"], fontsize=10)
         save(fig, out / f"model-sensitivity-{theme}.svg", labels)
 
 
 def thresholds(out, cost, effectiveness, BT, BX, p, c):
-    """The best compaction point against β: the steady-state model and the turn-end replay, with 90%
+    """The lowest-cost threshold against β: the steady-state model and the turn-end replay, with 90%
     bands. The replay's legend entry takes the fit colour, since it is measured in the sessions."""
     bs = np.array(fit.CHART_BETAS)
     X = [fit.steady(p, c, b) for b in bs]
@@ -600,7 +600,7 @@ def thresholds(out, cost, effectiveness, BT, BX, p, c):
         ax.yaxis.set_major_formatter(tokens)
         ax.set_yticks([0, 250_000, 500_000, 750_000])
         ax.set_xlabel("β, the exponent of the power law", color=t["muted"], fontsize=10)
-        axis_name(ax, "Best compaction point (tokens)", t)
+        axis_name(ax, "Lowest-cost threshold (tokens)", t)
         legend = ax.legend(frameon=False, fontsize=9, labelcolor=t["ink"], loc="upper left",
                            bbox_to_anchor=(0, 0.88))
         legend.get_texts()[1].set_color(t["fit"])
@@ -611,9 +611,9 @@ def voi(out, p, c):
     """The expected value of a classifier's information on three mixes of work with the same mean β,
     the base case's: a share of the work at one β > 0, the rest at β = 0, where the context doesn't help. For each
     mix and each accuracy, the classifier splits the work into a group to keep and a group to compact,
-    each compacting at its own best point; the saving is against the best single threshold, and the x
-    axis is the mutual information between the classifier's verdict and the kind of work, as a share
-    of a perfect classifier's. A second chart, model-voi-point, draws the best compaction point of the
+    each compacting at its own lowest-cost threshold; the saving is against the lowest-cost single
+    threshold, and the x axis is the mutual information between the classifier's verdict and the kind of work, as a share
+    of a perfect classifier's. A second chart, model-voi-point, draws the lowest-cost threshold of the
     group to compact against the same axis."""
     # Denser near 1, where a classifier's saving on rare, steep work climbs fastest.
     A = np.unique(np.round(np.concatenate([np.linspace(0.5, 1, 201), 1 - np.logspace(-4, -1.6, 80)]), 6))
@@ -625,7 +625,7 @@ def voi(out, p, c):
         q = np.clip(q, 1e-12, 1 - 1e-12)
         return -(q * np.log2(q) + (1 - q) * np.log2(1 - q))
 
-    # On fit.steady's 100-token grid, so the best point of the work at β = 0 is the 262k the doc gives.
+    # On fit.steady's 100-token grid, so the lowest-cost threshold of the work at β = 0 is the doc's 262k.
     X, J0 = fit.curve(p, c, 0, step=100)
     lines = []
     for share, beta, step in mixes:
@@ -640,7 +640,7 @@ def voi(out, p, c):
         info = (H(share * A + (1 - share) * (1 - A)) - H(A)) / H(share)
         lines.append((share, beta, step, saved, info, point))
         at = [int(np.abs(A - a).argmin()) for a in (0.8, 0.9, 0.99, 1.0)]
-        print(f"model-voi, {share:.0%} at β = {beta}: best single threshold {tokens(X[(w[:, None] * Js).sum(0).argmin()])}; " + ", ".join(
+        print(f"model-voi, {share:.0%} at β = {beta}: lowest-cost single threshold {tokens(X[(w[:, None] * Js).sum(0).argmin()])}; " + ", ".join(
             f"right {A[i]:.0%}, saves {saved[i]:.1%} ({info[i]:.0%} of the information)" for i in at)
               + f"; pays for running it from {A[np.argmax(saved > running)]:.1%} right")
         print(f"model-voi-point, {share:.0%} at β = {beta}: compacts the group to compact at "
@@ -682,14 +682,14 @@ def voi(out, p, c):
         ax.set_yticks([X[J0.argmin()], 500_000, 750_000, fit.AUTO])
         ax.yaxis.set_major_formatter(tokens)
         ax.set_xlabel("Accuracy (% of a perfect classifier's information)", color=t["muted"], fontsize=10)
-        axis_name(ax, "Compaction point of the work it says to compact (tokens)", t)
+        axis_name(ax, "Compaction threshold of the work it says to compact (tokens)", t)
         save(fig, out / f"model-voi-point-{theme}.svg")
 
 
 def draw(out, S, p, c, boot, cost, effectiveness, BT, BX):
     """Draw each chart the docstring lists into `out`, from fit.py's sessions S, their parameters p and
     `boot`, the parameters of each resample of them, the prices c, and the replay's cost and
-    effectiveness with BT and BX, the best turn-end threshold and steady-state point of each resample."""
+    effectiveness with BT and BX, the lowest-cost turn-end threshold and steady-state threshold of each resample."""
     out.mkdir(parents=True, exist_ok=True)
     print()
     cycles(out, p, c)
