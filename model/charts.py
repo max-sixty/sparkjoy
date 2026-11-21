@@ -428,7 +428,9 @@ def average(out, p, c):
 
 def effectiveness_curve(out):
     """A request's effectiveness against its context, (x / 1M)^β, at the base case and at the β the
-    sensitivity chart takes it to (halved and doubled), with β = 0 for reference, each curve named beside it."""
+    sensitivity chart takes it to (halved and doubled), with β = 0 for reference, each curve named beside it.
+    The base case is marked by its thicker line alone: "the base case" fits beside its curve nowhere that the
+    curve below leaves clear."""
     x = np.linspace(0, fit.WINDOW, 1_000)
     betas = (0, fit.BASE / 2, fit.BASE, fit.BASE * 2)
     for theme, t in THEMES.items():
@@ -439,11 +441,9 @@ def effectiveness_curve(out):
             base = b == fit.BASE
             # Unclipped: each curve starts on the plot's left edge, where clipping would halve its line.
             ax.plot(x, fit.eta(x, b), color=color, lw=2.6 if base else 1.6, clip_on=False, zorder=3 if base else 2)
-            # Each name below its curve at 150k, where the curves are far apart, on the page's colour, which
-            # breaks the steepest curve where the base case's second line meets it.
-            ax.text(164_000, float(fit.eta(150_000, b)) - 0.03, f"β = {b:g}" + ("\nthe base case" if base else ""),
-                    ha="left", va="top", fontsize=9, color=t["ink"], linespacing=1.3, zorder=5,
-                    bbox={"facecolor": t["page"], "edgecolor": "none", "pad": 1.5})
+            # Each name below its curve at 150k, where the curves are far apart enough that no curve crosses it.
+            ax.text(164_000, float(fit.eta(150_000, b)) - 0.03, f"β = {b:g}", ha="left", va="top", fontsize=9,
+                    color=t["ink"])
         ax.set_xlim(0, fit.WINDOW)
         ax.xaxis.set_major_formatter(tokens)
         ax.set_xticks([0, 250_000, 500_000, 750_000, 1_000_000])
@@ -478,10 +478,13 @@ def cost_curve(out, p, c):
                 continue
             least = float(J[X >= best][0] / J[-1])
             ax.plot([best], [least], "o", ms=6.5, mfc=color, mec=t["page"], mew=1.5, zorder=4)
-            name = f"β = {b:g}" + (", the base case" if base else "")
-            # On the page's colour, which breaks a flatter β's line where it passes under the name.
-            ax.text(best + 14_000, least - 0.015, name, ha="left", va="top", fontsize=9, color=t["ink"],
-                    linespacing=1.3, zorder=5, bbox={"facecolor": t["page"], "edgecolor": "none", "pad": 1.5})
+            # Each name below its dot, but the base case's above it, since below it the name would cross the
+            # flatter β = 0.25 line.
+            if base:
+                ax.text(best, least + 0.04, f"β = {b:g}, the base case", ha="center", va="bottom", fontsize=9,
+                        color=t["ink"])
+            else:
+                ax.text(best + 14_000, least - 0.015, f"β = {b:g}", ha="left", va="top", fontsize=9, color=t["ink"])
         ax.set_xlim(0, fit.AUTO)
         ax.xaxis.set_major_formatter(tokens)
         ax.set_xticks([0, 200_000, 400_000, 600_000, 800_000])
@@ -530,11 +533,10 @@ def sensitivity(out, p, c, boot):
                 va="bottom", fontsize=9, color=t["ink"])
         for y, f in enumerate(order):
             lo, hi, ends = rows[f]
-            # Measured parameters' names in the fit colour; β's in ink, since it is assumed. Each on the
-            # page's colour, which breaks the line at the measured point where the name crosses it.
+            # Measured parameters' names in the fit colour; β's in ink, since it is assumed. The line at the
+            # measured point is a tint light enough to pass behind a name.
             ax.text(0, y + 0.24, f"{symbols[f]}, {names[f]}", transform=ax.get_yaxis_transform(), ha="left",
-                    va="bottom", fontsize=9, color=t["fit"] if f in fit.MEASURED else t["ink"], zorder=4,
-                    bbox={"facecolor": t["page"], "edgecolor": "none", "pad": 1.5})
+                    va="bottom", fontsize=9, color=t["fit"] if f in fit.MEASURED else t["ink"], zorder=4)
             # A thin line from halved to doubled, thick across the interval.
             ax.plot([lo, hi], [y, y], color=ink, lw=1.6, solid_capstyle="butt", zorder=2, gid=f"sens-{f}")
             if ends is not None:
