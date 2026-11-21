@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
   "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="744.837891pt" height="369.898859pt" viewBox="0 0 744.837891 369.898859" xmlns="http://www.w3.org/2000/svg" version="1.1">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="745.307579pt" height="369.898859pt" viewBox="0 0 745.307579 369.898859" xmlns="http://www.w3.org/2000/svg" version="1.1">
  <metadata>
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
@@ -21,8 +21,8 @@
  <g id="figure_1">
   <g id="patch_1">
    <path d="M 0 369.898859 
-L 744.837891 369.898859 
-L 744.837891 0 
+L 745.307579 369.898859 
+L 745.307579 0 
 L 0 0 
 L 0 369.898859 
 z
@@ -325,96 +325,54 @@ z
    </g>
    <g id="FillBetweenPolyCollection_6">
     <defs>
-     <path id="mcad2cdbde6" d="M 37.140415 -52.662574 
+     <path id="m8c80e9bd23" d="M 37.140415 -65.96932 
 L 37.140415 -48.528676 
 L 52.460897 -48.528676 
 L 110.762019 -48.528676 
 L 400.910155 -48.528676 
 L 538.82 -48.528676 
-L 538.82 -52.662574 
-L 538.82 -52.662574 
-L 400.910155 -52.662574 
-L 110.762019 -52.662574 
-L 52.460897 -52.662574 
-L 37.140415 -52.662574 
+L 538.82 -65.96932 
+L 538.82 -65.96932 
+L 400.910155 -65.96932 
+L 110.762019 -65.96932 
+L 52.460897 -65.96932 
+L 37.140415 -65.96932 
 z
 " style="stroke: #0d1117; stroke-width: 1.2"/>
     </defs>
     <g clip-path="url(#p2a4c4a9af1)">
-     <use xlink:href="#mcad2cdbde6" x="0" y="369.898859" style="fill: #135844; stroke: #0d1117; stroke-width: 1.2"/>
+     <use xlink:href="#m8c80e9bd23" x="0" y="369.898859" style="fill: #135844; stroke: #0d1117; stroke-width: 1.2"/>
     </g>
    </g>
    <g id="FillBetweenPolyCollection_7">
     <defs>
-     <path id="mf7888adf7c" d="M 37.140415 -72.577848 
-L 37.140415 -52.662574 
-L 52.460897 -52.662574 
-L 110.762019 -52.662574 
-L 400.910155 -52.662574 
-L 538.82 -52.662574 
-L 538.82 -72.577848 
-L 538.82 -72.577848 
-L 400.910155 -72.577848 
-L 110.762019 -72.577848 
-L 52.460897 -72.577848 
-L 37.140415 -72.577848 
+     <path id="mec4e7b2f86" d="M 37.140415 -85.884594 
+L 37.140415 -65.96932 
+L 52.460897 -65.96932 
+L 110.762019 -65.96932 
+L 400.910155 -65.96932 
+L 538.82 -65.96932 
+L 538.82 -85.884594 
+L 538.82 -85.884594 
+L 400.910155 -85.884594 
+L 110.762019 -85.884594 
+L 52.460897 -85.884594 
+L 37.140415 -85.884594 
 z
 " style="stroke: #0d1117; stroke-width: 1.2"/>
     </defs>
     <g clip-path="url(#p2a4c4a9af1)">
-     <use xlink:href="#mf7888adf7c" x="0" y="369.898859" style="fill: #135844; stroke: #0d1117; stroke-width: 1.2"/>
+     <use xlink:href="#mec4e7b2f86" x="0" y="369.898859" style="fill: #135844; stroke: #0d1117; stroke-width: 1.2"/>
     </g>
    </g>
    <g id="FillBetweenPolyCollection_8">
     <defs>
-     <path id="m3f2ffb637d" d="M 37.140415 -94.007254 
-L 37.140415 -72.577848 
-L 52.460897 -72.577848 
-L 110.762019 -72.577848 
-L 400.910155 -72.577848 
-L 538.82 -72.577848 
-L 538.82 -94.007254 
-L 538.82 -94.007254 
-L 400.910155 -94.007254 
-L 110.762019 -94.007254 
-L 52.460897 -94.007254 
-L 37.140415 -94.007254 
-z
-" style="stroke: #0d1117; stroke-width: 1.2"/>
-    </defs>
-    <g clip-path="url(#p2a4c4a9af1)">
-     <use xlink:href="#m3f2ffb637d" x="0" y="369.898859" style="fill: #135844; stroke: #0d1117; stroke-width: 1.2"/>
-    </g>
-   </g>
-   <g id="FillBetweenPolyCollection_9">
-    <defs>
-     <path id="md9361361c2" d="M 37.140415 -125.17211 
-L 37.140415 -94.007254 
-L 52.460897 -94.007254 
-L 110.762019 -94.007254 
-L 400.910155 -94.007254 
-L 538.82 -94.007254 
-L 538.82 -125.17211 
-L 538.82 -125.17211 
-L 400.910155 -125.17211 
-L 110.762019 -125.17211 
-L 52.460897 -125.17211 
-L 37.140415 -125.17211 
-z
-" style="stroke: #0d1117; stroke-width: 1.2"/>
-    </defs>
-    <g clip-path="url(#p2a4c4a9af1)">
-     <use xlink:href="#md9361361c2" x="0" y="369.898859" style="fill: #135844; stroke: #0d1117; stroke-width: 1.2"/>
-    </g>
-   </g>
-   <g id="FillBetweenPolyCollection_10">
-    <defs>
-     <path id="mf0b806b832" d="M 37.140415 -138.478856 
-L 37.140415 -125.17211 
-L 52.460897 -125.17211 
-L 110.762019 -125.17211 
-L 400.910155 -125.17211 
-L 538.82 -125.17211 
+     <path id="m51eb6ae574" d="M 37.140415 -138.478856 
+L 37.140415 -85.884594 
+L 52.460897 -85.884594 
+L 110.762019 -85.884594 
+L 400.910155 -85.884594 
+L 538.82 -85.884594 
 L 538.82 -138.478856 
 L 538.82 -138.478856 
 L 400.910155 -138.478856 
@@ -425,10 +383,10 @@ z
 " style="stroke: #0d1117; stroke-width: 1.2"/>
     </defs>
     <g clip-path="url(#p2a4c4a9af1)">
-     <use xlink:href="#mf0b806b832" x="0" y="369.898859" style="fill: #135844; stroke: #0d1117; stroke-width: 1.2"/>
+     <use xlink:href="#m51eb6ae574" x="0" y="369.898859" style="fill: #135844; stroke: #0d1117; stroke-width: 1.2"/>
     </g>
    </g>
-   <g id="FillBetweenPolyCollection_11">
+   <g id="FillBetweenPolyCollection_9">
     <defs>
      <path id="mb9be8d573b" d="M 37.140415 -138.499444 
 L 37.140415 -138.478856 
@@ -449,16 +407,6 @@ z
      <use xlink:href="#mb9be8d573b" x="0" y="369.898859" style="fill: #189067; stroke: #0d1117; stroke-width: 1.2"/>
     </g>
    </g>
-   <g id="line2d_27">
-    <path d="M 541.942487 319.303234 
-L 554.432435 313.760655 
-" style="fill: none; stroke: #c3c2b7; stroke-width: 0.8; stroke-linecap: square"/>
-   </g>
-   <g id="line2d_28">
-    <path d="M 541.942487 307.278648 
-L 554.432435 300.378586 
-" style="fill: none; stroke: #c3c2b7; stroke-width: 0.8; stroke-linecap: square"/>
-   </g>
    <g id="patch_5">
     <path d="M 36.62 332.915265 
 L 538.82 332.915265 
@@ -468,21 +416,15 @@ L 538.82 332.915265
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="329.579755" transform="rotate(-0 557.554922 329.579755)">output of the compaction request</text>
    </g>
    <g id="text_22">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="316.170967" transform="rotate(-0 557.554922 316.170967)">cache write of the summary</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="315.060173" transform="rotate(-0 557.554922 315.060173)">cache write of the summary and the rest</text>
    </g>
    <g id="text_23">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="302.757961" transform="rotate(-0 557.554922 302.757961)">cache write of files, re-attached or read again</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="296.351277" transform="rotate(-0 557.554922 296.351277)">cache write of files, re-attached or read again</text>
    </g>
    <g id="text_24">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="289.016621" transform="rotate(-0 557.554922 289.016621)">cache write of instructions and memory</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="260.127446" transform="rotate(-0 557.554922 260.127446)">cache write of skills, instructions and memory</text>
    </g>
    <g id="text_25">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="262.688552" transform="rotate(-0 557.554922 262.688552)">cache write of skills and their listing</text>
-   </g>
-   <g id="text_26">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="240.683728" transform="rotate(-0 557.554922 240.683728)">cache write of the rest of the context</text>
-   </g>
-   <g id="text_27">
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="557.554922" y="224.096742" transform="rotate(-0 557.554922 224.096742)">cache read of the context</text>
    </g>
   </g>

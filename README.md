@@ -451,15 +451,17 @@ The model covers two ways in which work differs:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-inputs-dark.svg">
-  <img alt="Two panels against the context x, from 0 to 965k, in dollars; parts named in orange are fitted to the sessions. Top, c(x), a request's cost by part, the fixed parts at the bottom: output and uncached input, and the cache write of the new tokens, about $0.028 together; above them the cache write of the context after a lapse and the cache read of the context, both growing; $0.062 in all at 142k and $0.197 at 700k. Bottom, F(x), a compaction's cost by part, about $1 at any context: the compaction request's output, $0.11; the cache write of the context after it, $0.87, in five bands by source, the summary $0.04, files re-attached or read again $0.19, instructions and memory $0.21, skills and their listing $0.30, and the rest of the context $0.13; and the cache read of the context, the only part that grows; $1.13 at 700k." src="assets/model-inputs-light.svg">
+  <img alt="Two panels against the context x, from 0 to 965k, in dollars; parts named in orange are fitted to the sessions. Top, c(x), a request's cost by part, the fixed parts at the bottom: output and uncached input, and the cache write of the new tokens, about $0.028 together; above them the cache write of the context after a lapse and the cache read of the context, both growing; $0.062 in all at 142k and $0.197 at 700k. Bottom, F(x), a compaction's cost by part, about $1 at any context: the compaction request's output, $0.11; the cache write of the context after it, $0.87, in three bands by source, the summary and the rest of the context $0.17, files re-attached or read again $0.19, and skills, instructions and memory $0.51; and the cache read of the context, the only part that grows; $1.13 at 700k." src="assets/model-inputs-light.svg">
 </picture>
 
 A compaction's cost hardly changes with the context it compacts, from \$1.01 at
 142k to \$1.18 at 965k[^parts]. Its only part that grows is the cache read of
 the context, at \$0.20 per million tokens. Most of the rest, \$0.87, is the
-cache write of the context it leaves, the same at any size. My skills and their
-listing make up \$0.30 of that, my instruction files and memory \$0.21, and
-files re-attached or read again \$0.19. The summary is \$0.04.
+cache write of the context it leaves, the same at any size. My skills,
+instruction files and memory make up \$0.51 of that, and files re-attached or
+read again \$0.19. The summary is \$0.04. The system prompt and tools, P, stay
+in a cache Claude Code shares across sessions, so a compaction doesn't write
+them again.
 
 The larger the context, the sooner a compaction pays for itself. After a
 compaction at 700k, each later request reads 558k fewer tokens, and the
