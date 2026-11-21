@@ -22,10 +22,12 @@
 // at the prompt: a `-p` run or an SDK host keeps the engine's own compaction, so
 // no script pays for a judge or finds its conversation changed.
 //
-// The user's settings (`userConfig` in .claude-plugin/plugin.json) turn the mod
-// off, set the floors it asks from, and add instructions of their own to the
-// question. `/sparkjoy` shows them, turns the mod on and off, and runs the
-// report.
+// The user's settings (`userConfig` in .claude-plugin/plugin.json) set the mod's
+// mode, the floors it asks from, and instructions of their own for the
+// question. In the mode `classify` the mod asks as it does when on and shows
+// each verdict, but compacts nothing, so a user can watch what it would do
+// before letting it act. `/sparkjoy` shows the settings, sets the mode, and
+// runs the report.
 //
 // A compaction the mod announces still happens if the process ends before it
 // finishes. Claude Code's background daemon restarts a session's process when
@@ -143,13 +145,15 @@ const FIGURES = 'sparkjoy/figures.json'
 // .claude-plugin/plugin.json. Off, the mod asks nothing and compacts nothing,
 // and `/sparkjoy` still answers, so it can turn the mod back on. Claude Code
 // passes a number or text field left unset as "", which reads here as no floor
-// and no instructions.
-type Settings = { enabled: boolean; floor?: number; idleFloor?: number; instructions: string }
+// and no instructions, and a mode outside the field's options as unset, which
+// reads here as on.
+type Mode = 'on' | 'classify' | 'off'
+type Settings = { mode: Mode; floor?: number; idleFloor?: number; instructions: string }
 
 function settingsOf(options: PluginOptions): Settings {
   const number = (value: unknown) => (typeof value === 'number' ? value : undefined)
   return {
-    enabled: options.enabled !== false,
+    mode: options.mode === 'classify' || options.mode === 'off' ? options.mode : 'on',
     floor: number(options.floor),
     idleFloor: number(options.idle_floor),
     instructions: typeof options.instructions === 'string' ? options.instructions.trim() : '',
@@ -164,8 +168,24 @@ type Source = keyof typeof SOURCES
 // `/sparkjoy`, registered at each session's start whether the mod is on or off.
 const COMMAND = {
   name: 'sparkjoy',
-  description: "Show sparkjoy's settings, turn it on or off, or open its report",
-  argumentHint: '[on|off|report]',
+  description: "Show sparkjoy's settings, set its mode (on, classify or off), or open its report",
+  argumentHint: '[on|classify|off|report]',
+}
+
+// What `/sparkjoy` says of each mode: on setting it, as the word for it when a
+// setting is refused, and in its status, given the floors it asks from.
+const MODES: Record<Mode, { set: string; state: string; status: (floors: string) => string }> = {
+  on: { set: 'On from the next turn end.', state: 'on', status: floors => `On. It asks whether to compact ${floors}.` },
+  classify: {
+    set: 'Classifying from the next turn end: it shows each verdict and compacts nothing until /sparkjoy on.',
+    state: 'classifying',
+    status: floors => `Classifying. It asks whether to compact ${floors}, and shows each verdict without compacting.`,
+  },
+  off: {
+    set: 'Off. It asks nothing and compacts nothing until /sparkjoy on.',
+    state: 'off',
+    status: floors => `Off, so it asks nothing and compacts nothing. When on, it asks ${floors}.`,
+  },
 }
 
 // The mod acts only in a session whose model has a context window of at least
@@ -198,8 +218,8 @@ const MISSED = 0.1
 type Verdict = { compact: boolean; reason: string }
 
 type Watch = {
-  // Whether the mod acts in this session: it is on, and a person is at the
-  // prompt.
+  // Whether the mod asks in this session: it is on or classifying, and a
+  // person is at the prompt.
   isActive: boolean
   // Counts what extended or replaced the main conversation: a turn begun, a
   // `/compact`, a /clear or resume. A verdict stands only while the count is
@@ -212,9 +232,9 @@ export const register: Register = (on, options) => {
   const watch: Watch = { isActive: false, changes: 0 }
 
   on('session.start', async ($, e, next) => {
-    watch.isActive = settings.enabled && e.isInteractive
+    watch.isActive = settings.mode !== 'off' && e.isInteractive
     const result = await next(e)
-    if (watch.isActive) $.clock.after(0, () => void resume($))
+    if (watch.isActive && settings.mode === 'on') $.clock.after(0, () => void resume($))
     await $.command.register(COMMAND)
     return result
   })
@@ -284,7 +304,7 @@ async function afterTurn($: EngineInterface, settings: Settings, watch: Watch, c
     }
     if (tokens < figures.FLOOR) return
     const prompt = question(tokens, undefined, figures, settings.instructions)
-    await judge($, say, async () => isCurrent(), `${thousands(tokens)} tokens`, prompt)
+    await judge($, settings, say, async () => isCurrent(), `${thousands(tokens)} tokens`, prompt)
   } catch (error) {
     say(`Failed: ${error}`)
   }
@@ -308,18 +328,19 @@ async function idle(
   try {
     if ((await $.clock.now()) > due + LATE_MS || !(await isUntouched())) return
     const prompt = question(tokens, minutes, (await fitted($, settings)).figures, settings.instructions)
-    await judge($, say, isUntouched, `${thousands(tokens)} tokens, idle ${minutes} minutes`, prompt)
+    await judge($, settings, say, isUntouched, `${thousands(tokens)} tokens, idle ${minutes} minutes`, prompt)
   } catch (error) {
     say(`Failed: ${error}`)
   }
 }
 
-// Asks the session's model whether to compact, and compacts if it says to,
-// saying too when the question missed the prompt cache. The verdict stands
-// only while `stands` holds once the model has answered; `at` names the moment
-// in each line.
+// Asks the session's model whether to compact, and compacts if it says to and
+// the mod is on, saying too when the question missed the prompt cache. The
+// verdict stands only while `stands` holds once the model has answered; `at`
+// names the moment in each line.
 async function judge(
   $: EngineInterface,
+  { mode }: Settings,
   say: (text: string) => void,
   stands: () => Promise<boolean>,
   at: string,
@@ -336,7 +357,9 @@ async function judge(
   }
   if (!(await stands())) return say(`Dropped the verdict at ${at}: the conversation moved on`)
   const verdict = answer.isAnswered ? parse(answer.text) : undefined
-  if (verdict?.compact) {
+  if (verdict?.compact && mode === 'classify') {
+    say(`Would compact at ${at}: ${verdict.reason}`)
+  } else if (verdict?.compact) {
     // `$.session.compact` draws no `/compact` row, so neither the user nor
     // the model reads the compaction as one the user typed. A hook's veto
     // draws its own line. It rejects while a turn runs, which `stands` rules
@@ -580,8 +603,8 @@ async function fitted($: EngineInterface, settings: Settings) {
   return { figures, from }
 }
 
-// Answers `/sparkjoy`. Bare, it says how the mod stands. `on` and `off` change
-// the setting, and Claude Code then reloads the mod with it. `report` asks the
+// Answers `/sparkjoy`. Bare, it says how the mod stands. `on`, `classify` and
+// `off` set the mode, and Claude Code then reloads the mod with it. `report` asks the
 // model to run the report skill, which its frontmatter keeps out of the slash
 // menu, so this is the report's one entry there while the model still runs it
 // when the user asks what sparkjoy has done. A prompt submitted while the
@@ -591,22 +614,22 @@ async function fitted($: EngineInterface, settings: Settings) {
 async function command($: EngineInterface, args: string, settings: Settings): Promise<CommandRunResult> {
   const word = args.trim().split(/\s+/)[0]
   if (word === '') return { text: await status($, settings) }
-  if (word === 'on' || word === 'off') {
+  if (word === 'on' || word === 'classify' || word === 'off') {
     // `$.config` names a plugin's field `<plugin>.<field>`.
-    const { deny } = await $.config.set({ key: 'sparkjoy.enabled', value: word === 'on' })
-    if (deny) return { text: `Still ${settings.enabled ? 'on' : 'off'}: ${deny}` }
-    return { text: word === 'on' ? 'On from the next turn end.' : 'Off. It asks nothing and compacts nothing until /sparkjoy on.' }
+    const { deny } = await $.config.set({ key: 'sparkjoy.mode', value: word })
+    if (deny) return { text: `Still ${MODES[settings.mode].state}: ${deny}` }
+    return { text: MODES[word].set }
   }
   if (word === 'report') {
     const text = `The user typed /sparkjoy ${args.trim()}. Run the sparkjoy:report skill for them.`
     $.clock.after(0, () => void $.prompt.submit({ text }).catch(error => $.ui.log(`Failed: ${error}`)))
     return { text: 'Asking the model to run the report.' }
   }
-  return { text: `/sparkjoy takes on, off or report, not "${word}", or nothing to show its settings.` }
+  return { text: `/sparkjoy takes on, classify, off or report, not "${word}", or nothing to show its settings.` }
 }
 
-// What `/sparkjoy` says with no arguments: whether the mod is on, the floors it
-// asks from and where each comes from, whether the question carries the user's
+// What `/sparkjoy` says with no arguments: the mod's mode, the floors it asks
+// from and where each comes from, whether the question carries the user's
 // instructions, and how to change them.
 async function status($: EngineInterface, settings: Settings) {
   const { figures, from } = await fitted($, settings)
@@ -615,13 +638,13 @@ async function status($: EngineInterface, settings: Settings) {
     return `${thousands(figures[name])} (${SOURCES[from[name]]}${ignored})`
   }
   const floors = `at a turn end from ${floor('FLOOR', settings.floor)} and in an idle session from ${floor('IDLE_FLOOR', settings.idleFloor)}`
-  const { enabled, instructions } = settings
+  const { mode, instructions } = settings
   // The first 60 characters, cut at a space.
   const excerpt = instructions.length > 60 ? `${instructions.slice(0, 61).replace(/\s+\S*$/, '')}…` : instructions
   return [
-    enabled ? `On. It asks whether to compact ${floors}.` : `Off, so it asks nothing and compacts nothing. When on, it asks ${floors}.`,
+    MODES[mode].status(floors),
     instructions ? `Its question carries your instructions: "${excerpt}"` : 'Its question carries no instructions of yours.',
-    `/sparkjoy ${enabled ? 'off' : 'on'} turns it ${enabled ? 'off' : 'on'}, and /config sets the floors and instructions.`,
+    '/sparkjoy on compacts when the model says to, /sparkjoy classify only shows its verdicts, and /sparkjoy off asks nothing. /config sets the floors and instructions.',
   ].join('\n')
 }
 

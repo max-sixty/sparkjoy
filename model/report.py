@@ -41,6 +41,7 @@ DOC = "https://github.com/max-sixty/sparkjoy/blob/main/docs/cost-model.md"
 KINDS = list(fit.KINDS.values())
 # What each verdict means, from `judge` in hooks/register.ts.
 MEANING = {"compacted": "The model said to compact, and sparkjoy began compacting.",
+           "would compact": "The model said to compact, and sparkjoy, set to classify, left the context as it was.",
            "kept": "The model said to keep going.",
            "unreadable": "The model's reply wasn't the JSON the question asks for.",
            "no verdict": "The model gave no reply.",
@@ -262,6 +263,7 @@ td.wrap { white-space: normal; min-width: 160px; }
 .mark { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0;
   background: var(--muted); }
 .mark.compacted { background: var(--with); }
+.mark.would-compact { background: color-mix(in srgb, var(--with) 40%, var(--page)); }
 .mark.kept { background: none; box-shadow: inset 0 0 0 1.5px var(--with); }
 .spark { display: block; }
 .spark polyline { fill: none; stroke-width: 1.5; stroke-linejoin: round; }
@@ -270,6 +272,7 @@ td.wrap { white-space: normal; min-width: 160px; }
 .spark .floor { stroke: var(--muted); stroke-opacity: 0.5; stroke-dasharray: 3 3; }
 .spark .dot { fill: var(--muted); stroke: var(--page); stroke-width: 1.5; }
 .spark .dot.compacted { fill: var(--with); }
+.spark .dot.would-compact { fill: color-mix(in srgb, var(--with) 40%, var(--page)); }
 .spark .dot.kept { fill: var(--page); stroke: var(--with); }
 .legend { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin: 4px 0 8px; }
 .legend i { display: inline-block; width: 16px; height: 0; border-top: 2px solid; vertical-align: 4px; margin-right: 6px; }
@@ -338,10 +341,12 @@ def page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit, saved
 
     if verdicts:
         parts.append(h2("Sessions"))
+        # Only a user who set sparkjoy to classify has these.
+        would = f"{mark('would compact')}would compact " if counts["would compact"] else ""
         parts.append('<p class="legend"><span><i style="color: var(--with)"></i>with sparkjoy</span>'
                      '<span><i style="color: var(--without)"></i>without its compactions; Claude Code\'s and '
                      "yours still run</span>"
-                     f"<span>{mark('compacted')}compacted {mark('kept')}kept {mark('failed')}other verdict</span>"
+                     f"<span>{mark('compacted')}compacted {would}{mark('kept')}kept {mark('failed')}other verdict</span>"
                      f"<span>context per request, 0 to 1M, dashed at {tokens(fit.FLOOR)}</span></p>")
         acted = sorted((sr for sr in sessions if sr[0].verdicts),
                        key=lambda sr: -(sr[1][0][1] - sr[1][0][0]) if sr[1][0] else 0)

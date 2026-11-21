@@ -839,7 +839,7 @@ test('a session with a 200k context window is left as it is, idle or not', async
   expect(logs).toEqual([])
 })
 
-test('off, sparkjoy asks nothing and compacts nothing, and /sparkjoy still answers', { options: { enabled: false } }, async ($, on) => {
+test('off, sparkjoy asks nothing and compacts nothing, and /sparkjoy still answers', { options: { mode: 'off' } }, async ($, on) => {
   const { begin, clock, compactions, forks, logs, registered, turn } = engine(on, { stored: ANNOUNCED })
   await begin($)
   await clock.settle()
@@ -854,23 +854,56 @@ test('off, sparkjoy asks nothing and compacts nothing, and /sparkjoy still answe
   expect(registered).toEqual(['sparkjoy'])
 })
 
-test('/sparkjoy off sets the setting off', async ($, on) => {
+test('classifying, sparkjoy asks at turn ends and in idle sessions and shows each verdict, but compacts nothing', { options: { mode: 'classify' } }, async ($, on) => {
+  const { begin, clock, compactions, forks, logs, turn } = engine(on, { stored: ANNOUNCED })
+  await begin($)
+  await clock.settle()
+
+  await turn($, 't1')
+  await clock.advance(IDLE)
+  await clock.settle()
+
+  expect(forks.length).toBe(2)
+  expect(compactions).toEqual([])
+  expect(logs).toEqual(['Would compact at 500k tokens: the PR merged', 'Would compact at 500k tokens, idle 55 minutes: the PR merged'])
+})
+
+test('classifying, a verdict to keep reads as it does when on', { options: { mode: 'classify' } }, async ($, on) => {
+  const { begin, logs, turn } = engine(on, { verdict: KEEP })
+  await begin($)
+
+  await turn($, 't1')
+
+  expect(logs).toEqual(['Kept at 500k tokens: mid-debug'])
+})
+
+test('/sparkjoy off sets the mode off', async ($, on) => {
   const { begin, sets, type } = engine(on)
   await begin($)
 
   const { text } = await type($, 'sparkjoy', 'off')
 
-  expect(sets).toEqual([{ key: 'sparkjoy.enabled', value: false }])
+  expect(sets).toEqual([{ key: 'sparkjoy.mode', value: 'off' }])
   expect(text).toBe('Off. It asks nothing and compacts nothing until /sparkjoy on.')
 })
 
-test('/sparkjoy on sets the setting on', { options: { enabled: false } }, async ($, on) => {
+test('/sparkjoy classify sets the mode to classify', async ($, on) => {
+  const { begin, sets, type } = engine(on)
+  await begin($)
+
+  const { text } = await type($, 'sparkjoy', 'classify')
+
+  expect(sets).toEqual([{ key: 'sparkjoy.mode', value: 'classify' }])
+  expect(text).toBe('Classifying from the next turn end: it shows each verdict and compacts nothing until /sparkjoy on.')
+})
+
+test('/sparkjoy on sets the mode on', { options: { mode: 'off' } }, async ($, on) => {
   const { begin, sets, type } = engine(on)
   await begin($)
 
   const { text } = await type($, 'sparkjoy', 'on')
 
-  expect(sets).toEqual([{ key: 'sparkjoy.enabled', value: true }])
+  expect(sets).toEqual([{ key: 'sparkjoy.mode', value: 'on' }])
   expect(text).toBe('On from the next turn end.')
 })
 
@@ -885,12 +918,23 @@ test('/sparkjoy names each floor and where it comes from', { options: { floor: 3
   expect(text).toBe(
     "On. It asks whether to compact at a turn end from 300k (your setting) and in an idle session from 120k (the report's fit).\n" +
       'Its question carries no instructions of yours.\n' +
-      '/sparkjoy off turns it off, and /config sets the floors and instructions.',
+      '/sparkjoy on compacts when the model says to, /sparkjoy classify only shows its verdicts, and /sparkjoy off asks nothing. /config sets the floors and instructions.',
   )
   expect(authors.text).toContain("in an idle session from 175k (the default).")
 })
 
-test('/sparkjoy says sparkjoy is off and quotes the start of the user’s instructions', { options: { enabled: false, instructions: INSTRUCTIONS } }, async ($, on) => {
+test('/sparkjoy says sparkjoy is classifying', { options: { mode: 'classify' } }, async ($, on) => {
+  const { begin, type } = engine(on)
+  await begin($)
+
+  const { text } = await type($, 'sparkjoy')
+
+  expect(text.split('\n')[0]).toBe(
+    'Classifying. It asks whether to compact at a turn end from 250k (the default) and in an idle session from 175k (the default), and shows each verdict without compacting.',
+  )
+})
+
+test('/sparkjoy says sparkjoy is off and quotes the start of the user’s instructions', { options: { mode: 'off', instructions: INSTRUCTIONS } }, async ($, on) => {
   const { begin, type } = engine(on)
   await begin($)
 
@@ -899,7 +943,7 @@ test('/sparkjoy says sparkjoy is off and quotes the start of the user’s instru
   expect(text).toBe(
     "Off, so it asks nothing and compacts nothing. When on, it asks at a turn end from 250k (the default) and in an idle session from 175k (the default).\n" +
       'Its question carries your instructions: "Keep the context while a pull request awaits review, and…"\n' +
-      '/sparkjoy on turns it on, and /config sets the floors and instructions.',
+      '/sparkjoy on compacts when the model says to, /sparkjoy classify only shows its verdicts, and /sparkjoy off asks nothing. /config sets the floors and instructions.',
   )
 })
 
@@ -921,5 +965,5 @@ test('/sparkjoy with another word says what it takes', async ($, on) => {
   const { text } = await type($, 'sparkjoy', 'disable')
 
   expect(sets).toEqual([])
-  expect(text).toBe('/sparkjoy takes on, off or report, not "disable", or nothing to show its settings.')
+  expect(text).toBe('/sparkjoy takes on, classify, off or report, not "disable", or nothing to show its settings.')
 })
