@@ -139,9 +139,6 @@ L 143.709935 143.057647
 " style="fill: none; stroke: #c3c2b7; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
    <g id="text_4">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #f0efec" x="21.385536" y="122.07988" transform="rotate(-0 21.385536 122.07988)">X</text>
-   </g>
-   <g id="text_5">
     <text style="font-weight: 700; font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="17.370312" y="14.7" transform="rotate(-0 17.370312 14.7)">Compact early</text>
    </g>
   </g>
@@ -200,10 +197,7 @@ L 280.156728 121.630809
 L 280.156728 143.057647 
 " style="fill: none; stroke: #c3c2b7; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
-   <g id="text_6">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #f0efec" x="168.323109" y="114.01588" transform="rotate(-0 168.323109 114.01588)">X*</text>
-   </g>
-   <g id="text_7">
+   <g id="text_5">
     <text style="font-weight: 700; font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="153.817105" y="14.7" transform="rotate(-0 153.817105 14.7)">Compact at X*</text>
    </g>
   </g>
@@ -252,10 +246,7 @@ L 416.60352 105.724447
 L 416.60352 143.057647 
 " style="fill: none; stroke: #c3c2b7; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
-   <g id="text_8">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #f0efec" x="322.048834" y="100.733997" transform="rotate(-0 322.048834 100.733997)">X</text>
-   </g>
-   <g id="text_9">
+   <g id="text_6">
     <text style="font-weight: 700; font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="290.263897" y="14.7" transform="rotate(-0 290.263897 14.7)">Compact late</text>
    </g>
   </g>
@@ -300,10 +291,10 @@ L 553.050312 110.46176
 L 553.050312 143.057647 
 " style="fill: none; stroke: #c3c2b7; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
-   <g id="text_10">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #f0efec" x="530.334121" y="46.785474" transform="rotate(-0 530.334121 46.785474)">Claude Code compacts at X</text>
+   <g id="text_7">
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #f0efec" x="530.334121" y="46.785474" transform="rotate(-0 530.334121 46.785474)">Claude Code compacts</text>
    </g>
-   <g id="text_11">
+   <g id="text_8">
     <text style="font-weight: 700; font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="426.71069" y="14.7" transform="rotate(-0 426.71069 14.7)">Never compact</text>
    </g>
   </g>
@@ -326,11 +317,11 @@ L 143.709935 304.812
 " clip-path="url(#p6450ed40d7)" style="fill: none; stroke: #3a3936; stroke-width: 0.8; stroke-linecap: square"/>
      </g>
      <g id="line2d_22"/>
-     <g id="text_12">
+     <g id="text_9">
       <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #c3c2b7" x="13.870312" y="308.562" transform="rotate(-0 13.870312 308.562)">0</text>
      </g>
     </g>
-    <g id="text_13">
+    <g id="text_10">
      <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #c3c2b7" x="8.110312" y="194.195672" transform="rotate(-0 8.110312 194.195672)">Cost per request</text>
     </g>
    </g>
@@ -905,7 +896,7 @@ L 553.050312 304.812
 " style="fill: none; stroke: #c3c2b7; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
   </g>
-  <g id="text_14">
+  <g id="text_11">
    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #c3c2b7" x="276.570312" y="333.831625" transform="rotate(-0 276.570312 333.831625)">Requests</text>
   </g>
   <g id="legend_1">
@@ -917,7 +908,7 @@ L 15.102312 354.834
 z
 " style="fill: #114437"/>
    </g>
-   <g id="text_15">
+   <g id="text_12">
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="40.302312" y="361.134" transform="rotate(-0 40.302312 361.134)">the request's own cost</text>
    </g>
    <g id="patch_19">
@@ -928,7 +919,7 @@ L 15.102312 367.959937
 z
 " style="fill: #167b5a"/>
    </g>
-   <g id="text_16">
+   <g id="text_13">
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="40.302312" y="374.259937" transform="rotate(-0 40.302312 374.259937)">its share of the compaction ending its cycle</text>
    </g>
    <g id="line2d_33">
@@ -937,7 +928,7 @@ L 24.102312 384.351187
 L 33.102312 384.351187 
 " style="fill: none; stroke: #c3c2b7; stroke-width: 0.9; stroke-linecap: square"/>
    </g>
-   <g id="text_17">
+   <g id="text_14">
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="40.302312" y="387.501187" transform="rotate(-0 40.302312 387.501187)">mean over a cycle</text>
    </g>
   </g>

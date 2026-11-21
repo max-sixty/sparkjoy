@@ -293,32 +293,6 @@ For my sessions on Opus 5.5[^prices]:
 
 ## The model
 
-### Request and compaction costs
-
-In each cycle between compactions, the context starts at K, right after a
-compaction, and grows by g tokens with each request until the session compacts
-at X. A request with context x costs
-
-$`\displaystyle c(x) = h\,x + c_0, \qquad h = 1 + \ell\,(w - 1)`$
-
-Each token in the context costs one cached read. In the share ℓ of requests
-that find the cache lapsed, the token is a cache write instead, at w cached
-reads, w − 1 more than the read.
-c₀ is the part that doesn't grow with the context: the request's output, its
-uncached input, and the cache write of its g new tokens.
-
-A compaction at X reads the whole context and outputs N tokens of summary and
-thinking, at o cached reads each. The requests after it make a cache write of
-the K tokens left after it, all but the P tokens of system prompt and tools, which
-Claude Code keeps in a cache shared across sessions:
-
-$`\displaystyle F(X) = F_0 + X, \qquad F_0 = o\,N + (w - 1)(K - P)`$
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/model-cycles-dark.svg">
-  <img alt="Eight panels, two rows by four columns, in symbols without figures. Columns: compact early, compact at X*, compact late, and never compact, where Claude Code compacts at X near the window's end. Top row, the context: a sawtooth rising from K to the column's X and dropping back to K, with many short teeth when compacting early and one long tooth when never compacting. Bottom row, cost per request: the request's own cost, rising with the context, with its share of the compaction ending its cycle on top, thick when compacting early and thin when late. A line marks each column's mean cost per request, lowest at X*." src="assets/model-cycles-light.svg">
-</picture>
-
 <details>
 <summary>The model's symbols</summary>
 
@@ -361,6 +335,33 @@ $`\displaystyle F(X) = F_0 + X, \qquad F_0 = o\,N + (w - 1)(K - P)`$
 | X\* | Value of X that makes J lowest, in tokens. |
 
 </details>
+
+### Request and compaction costs
+
+In each cycle between compactions, the context starts at K, right after a
+compaction, and grows by g tokens with each request until the session compacts
+at X. A request with context x costs
+
+$`\displaystyle c(x) = h\,x + c_0, \qquad h = 1 + \ell\,(w - 1)`$
+
+Each token in the context costs one cached read. In the share ℓ of requests
+that find the cache lapsed, the token is a cache write instead, at w cached
+reads, w − 1 more than the read. So h is what one token in the context costs a
+request on average.
+c₀ is the part that doesn't grow with the context: the request's output, its
+uncached input, and the cache write of its g new tokens.
+
+A compaction at X reads the whole context and outputs N tokens of summary and
+thinking, at o cached reads each. The requests after it make a cache write of
+the K tokens left after it, all but the P tokens of system prompt and tools, which
+Claude Code keeps in a cache shared across sessions:
+
+$`\displaystyle F(X) = F_0 + X, \qquad F_0 = o\,N + (w - 1)(K - P)`$
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/model-cycles-dark.svg">
+  <img alt="Eight panels, two rows by four columns, in symbols without figures. Columns: compact early, compact at X*, compact late, and never compact, where Claude Code compacts near the window's end. Top row, the context: a sawtooth rising from K to the column's X and dropping back to K, with many short teeth when compacting early and one long tooth when never compacting. Bottom row, cost per request: the request's own cost, rising with the context, with its share of the compaction ending its cycle on top, thick when compacting early and thin when late. A line marks each column's mean cost per request, lowest at X*." src="assets/model-cycles-light.svg">
+</picture>
 
 ### Best compaction point
 
