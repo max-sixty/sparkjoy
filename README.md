@@ -44,7 +44,7 @@ At the prompt of a Claude Code session:
   sparkjoy: Compacting at 404k tokens: Move is finished and pushed; file paths, commands and conventions fit in a summary, and files can be re-read
   ```
 
-- **`/sparkjoy:report`** opens a page on your sessions of the last 14 days,
+- **`/sparkjoy report`** opens a page on your sessions of the last 14 days,
   with every verdict and what the compactions saved. It fits the [cost
   model](#cost-model) to those sessions, and sparkjoy uses the fit from then on.
   It needs [uv](https://docs.astral.sh/uv/).
@@ -58,6 +58,45 @@ At the prompt of a Claude Code session:
 </picture>
 
 </details>
+
+## Settings
+
+`/sparkjoy` says whether sparkjoy is on, the floors it asks from, where each
+floor comes from, and whether its question carries instructions of yours.
+
+- **`/sparkjoy off`** turns sparkjoy off, so it asks nothing and compacts
+  nothing, and `/sparkjoy on` turns it back on.
+- **`floor`** is the context, in tokens, from which sparkjoy asks at a turn
+  end, and **`idle_floor`** the context from which it asks in an idle session.
+  A floor you set wins over the one `/sparkjoy report` fitted, which wins over
+  the defaults of 250k and 175k. sparkjoy ignores a floor of 1M or more, and a
+  turn-end floor at or below the context a compaction leaves (142k, or the
+  report's fit), since no compaction there could pay for itself. `/sparkjoy`
+  says when it ignores one.
+- **`instructions`** adds your own guidance to sparkjoy's question, such as
+  "Keep the context while a pull request awaits review". It goes in a
+  paragraph of its own near the end of the question ([The
+  prompt](#the-prompt)).
+
+`/config` lists each of these under sparkjoy. An agent can set them in
+`~/.claude/settings.json`, under the id of the plugin as installed above.
+Claude Code reloads sparkjoy whenever they change, in sessions already open
+too.
+
+```json
+{
+  "pluginConfigs": {
+    "sparkjoy@sparkjoy": {
+      "options": {
+        "enabled": false,
+        "floor": 300000,
+        "idle_floor": 200000,
+        "instructions": "Keep the context while a pull request awaits review."
+      }
+    }
+  }
+}
+```
 
 ## What it saves
 
@@ -161,6 +200,11 @@ Answer with one JSON object and nothing else, filling its fields in order:
 
 </details>
 
+Your [`instructions`](#settings) go in both versions as a paragraph of their
+own, between "Weigh what keeping costs…" and "Answer with one JSON object…":
+the line "The user added these instructions for this decision:", then your
+text. Unset, the question is as shown.
+
 ### Evals
 
 <details>
@@ -209,8 +253,8 @@ question.
   much past context is worth to the work, they come 0.8 points short of the
   lowest-cost pair. My sessions hold about 142k after a compaction, much of it
   my own instructions and skills, and sessions that hold less would do better
-  with lower floors.
-  `/sparkjoy:report` fits the floors to your own sessions.
+  with lower floors. `/sparkjoy report` fits the floors to your own sessions,
+  and you can set them yourself ([Settings](#settings)).
 - The report fits every figure the question states except the count of wasted
   requests after a compaction, which takes months of sessions to measure.
 - It leaves Claude Code's own compaction on, so Claude Code still compacts when
@@ -508,7 +552,7 @@ most of it beyond the shared system prompt is the user's own instructions and
 skills. A published session with few of them
 ([anthropics/claude-code#87602](https://github.com/anthropics/claude-code/issues/87602))
 would have a K of roughly 60–70k on a 1M window, which puts the lowest-cost
-threshold near 250k. So `/sparkjoy:report` fits K and the floors to each user's
+threshold near 250k. So `/sparkjoy report` fits K and the floors to each user's
 sessions.
 
 The lowest-cost threshold reaches 400k if each compaction loses \$0.25 of
@@ -698,11 +742,12 @@ Prices for the one-hour cache. Every other section's figures are for Opus 5.5.
 
 ## Fitting it to your sessions
 
-`/sparkjoy:report` fits the model to your sessions of the last 14 days, and its
+`/sparkjoy report` fits the model to your sessions of the last 14 days, and its
 Thresholds section gives the pair of floors that minimizes their cost. From then
-on, sparkjoy asks once the context reaches those floors, and its question states
-the parameters the report measured in place of mine. The fit needs some
-compactions in those sessions, to measure K and N.
+on, sparkjoy asks once the context reaches those floors, unless you set floors
+of your own, and its question states the parameters the report measured in
+place of mine. The fit needs some compactions in those sessions, to measure K
+and N.
 
 ## Questions about the model
 

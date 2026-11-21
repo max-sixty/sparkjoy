@@ -653,7 +653,7 @@ def floors(S, p, c, ttl):
     compacting wherever they allow, and every pair's cost. A floor is where sparkjoy starts asking,
     and the question decides above it, so it is fitted by cost alone, which puts it at the lowest best
     point any β gives. sparkjoy's FLOOR and IDLE_FLOOR are this pair for my sessions, and
-    `/sparkjoy:report` fits it to the user's."""
+    `/sparkjoy report` fits it to the user's."""
     cost = {key: v[0] for key, v in pairs(S, p, c, ttl, betas=()).items()}
     return min(cost, key=cost.get), cost
 

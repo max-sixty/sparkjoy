@@ -5,10 +5,11 @@
 //
 // `question()` isn't exported, so this imports a copy of register.ts that
 // exports it. It passes each parameter by name: `reply`, `tokens` (the
-// context's size), `idleMinutes` and `figures`, so a checkout whose question
-// takes fewer of them is called with just those. `figures` is left out, so
-// the question states the figures in `AUTHOR`, which come from my sessions, as
-// the cases do.
+// context's size), `idleMinutes`, `figures` and `instructions`, so a checkout
+// whose question takes fewer of them is called with just those. `figures` and
+// `instructions` are left out, so the question states the figures in `AUTHOR`,
+// which come from my sessions, as the cases do, and carries no instructions of
+// a user's.
 
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -26,6 +27,7 @@ const values: Record<string, unknown> = {
   tokens: Number(tokens),
   idleMinutes: idleMinutes === undefined ? undefined : Number(idleMinutes),
   figures: undefined,
+  instructions: undefined,
 }
 const unknown = names.filter(name => !(name in values))
 if (unknown.length > 0) throw new Error(`question() takes parameters this script doesn't know: ${unknown}`)

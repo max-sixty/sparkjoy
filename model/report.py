@@ -391,8 +391,9 @@ def page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit, saved
 
     if saved:
         parts.append(h2("Saved figures"))
-        parts.append("<p>From the next turn end or idle session, sparkjoy asks from these floors and its question "
-                     "states these figures, fitted to these sessions, in place of its author's.</p>")
+        parts.append("<p>From the next turn end or idle session, sparkjoy asks from these floors, except where you "
+                     "set a floor of your own, and its question states these figures, fitted to these sessions, in "
+                     "place of its author's.</p>")
         parts.append('<div class="narrow">' + table(["Figure", "These sessions"], [
             (label.capitalize(), show(saved[key])) for key, label, show in FIGURES if key in saved], numeric=(1,))
                      + "</div>")
@@ -466,7 +467,8 @@ def main():
               f"{change(fitted['saved'])} per unit of work than never compacting (the author's {tokens(fit.FLOOR)} and "
               f"{tokens(fit.IDLE_FLOOR)}: {change(fitted['saved_author'])})")
     if saved:
-        print("sparkjoy now asks from these sessions' floors and states their figures: "
+        print("sparkjoy now asks from these sessions' floors, except where you set your own, and states their "
+              "figures: "
               + "; ".join(f"{label} {show(saved[key])}" for key, label, show in FIGURES if key in saved))
     elif a.figures:
         print(f"sparkjoy keeps the floors and figures it has: {kept}")

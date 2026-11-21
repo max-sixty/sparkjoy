@@ -6,5 +6,28 @@
   "repository": "https://github.com/max-sixty/sparkjoy",
   "license": "MIT",
   "keywords": ["compaction", "context", "prompt-cache", "cost"],
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Ask the session's model whether to compact at turn ends and in idle sessions.",
+      "default": true
+    },
+    "floor": {
+      "type": "number",
+      "title": "Floor at turn ends",
+      "description": "The context, in tokens, from which sparkjoy asks at a turn end: above the context a compaction leaves and below 1000000. Unset, it is the floor /sparkjoy report fitted, or 250000."
+    },
+    "idle_floor": {
+      "type": "number",
+      "title": "Floor in idle sessions",
+      "description": "The context, in tokens, from which sparkjoy asks before an idle session's prompt cache lapses: below 1000000. Unset, it is the floor /sparkjoy report fitted, or 175000."
+    },
+    "instructions": {
+      "type": "string",
+      "title": "Instructions",
+      "description": "Your own guidance for the decision, added to sparkjoy's question."
+    }
+  }
 }

@@ -18,9 +18,14 @@
 // depends on the work, and the fork reads it from cache. The question gives
 // the judge the costs and the saving, sized for the context it holds, to weigh
 // rather than a rule, and never names the floor. Its figures are the user's own
-// once `/sparkjoy:report` has fitted them. The mod runs only where a person is at the prompt: a `-p` run or
-// an SDK host keeps the engine's own compaction, so no script pays for a judge
-// or finds its conversation changed.
+// once `/sparkjoy report` has fitted them. The mod runs only where a person is
+// at the prompt: a `-p` run or an SDK host keeps the engine's own compaction, so
+// no script pays for a judge or finds its conversation changed.
+//
+// The user's settings (`userConfig` in .claude-plugin/plugin.json) turn the mod
+// off, set the floors it asks from, and add instructions of their own to the
+// question. `/sparkjoy` shows them, turns the mod on and off, and runs the
+// report.
 //
 // A compaction the mod announces still happens if the process ends before it
 // finishes. Claude Code's background daemon restarts a session's process when
@@ -30,7 +35,7 @@
 // announcement in `$.store` until the compaction settles, and the next process
 // finishes it if the conversation hasn't moved on.
 
-import type { EngineInterface, Register, SessionMessage, TurnUsage } from 'claude-code'
+import type { CommandRunResult, EngineInterface, PluginOptions, Register, SessionMessage, TurnUsage } from 'claude-code'
 
 // Set while this process compacts. `$.state` outlives a reload of the mod but
 // not the process, so a reload that finds a compaction announced leaves it to
@@ -39,9 +44,10 @@ const COMPACTING = { plugin: 'sparkjoy', key: 'compacting' } as const
 
 // The floors sparkjoy asks from and the figures the question states, as my
 // sessions measured them (docs/cost-model.md, 7-15 Nov 2026).
-// `/sparkjoy:report` fits the same figures to the user's own sessions and
+// `/sparkjoy report` fits the same figures to the user's own sessions and
 // saves them (`FIGURES`), and sparkjoy uses those instead (`fitted`), falling
-// back to these figure by figure. The costs follow that page's model and its table of
+// back to these figure by figure. A floor the user set in their settings wins
+// over both. The costs follow that page's model and its table of
 // symbols ("Costs"), which are those of `terms()` in
 // model/fit.py, and each key is the name model/report.py saves its figure
 // under: a figure whose meaning changes takes a new name, so a file an older
@@ -124,7 +130,7 @@ type Figures = typeof AUTHOR
 // size.
 const WASTED = 6
 
-// The file `/sparkjoy:report` saves the user's figures to, under Claude Code's
+// The file `/sparkjoy report` saves the user's figures to, under Claude Code's
 // configuration directory, as model/report.py names it. Its home would be the
 // plugin's data folder, but Claude Code before 2.1.326 gives a hooks module no
 // way to find that folder, and refuses at load a module that calls
@@ -132,6 +138,35 @@ const WASTED = 6
 // TODO: save and read it in that folder once every release CI tests has
 // `$.process.hookEnv()`.
 const FIGURES = 'sparkjoy/figures.json'
+
+// The user's settings, from the fields `userConfig` declares in
+// .claude-plugin/plugin.json. Off, the mod asks nothing and compacts nothing,
+// and `/sparkjoy` still answers, so it can turn the mod back on. Claude Code
+// passes a number or text field left unset as "", which reads here as no floor
+// and no instructions.
+type Settings = { enabled: boolean; floor?: number; idleFloor?: number; instructions: string }
+
+function settingsOf(options: PluginOptions): Settings {
+  const number = (value: unknown) => (typeof value === 'number' ? value : undefined)
+  return {
+    enabled: options.enabled !== false,
+    floor: number(options.floor),
+    idleFloor: number(options.idle_floor),
+    instructions: typeof options.instructions === 'string' ? options.instructions.trim() : '',
+  }
+}
+
+// Where each floor comes from, in the words `/sparkjoy` uses.
+const SOURCES = { setting: 'your setting', report: "the report's fit", author: 'the default' }
+
+type Source = keyof typeof SOURCES
+
+// `/sparkjoy`, registered at each session's start whether the mod is on or off.
+const COMMAND = {
+  name: 'sparkjoy',
+  description: "Show sparkjoy's settings, turn it on or off, or open its report",
+  argumentHint: '[on|off|report]',
+}
 
 // The mod acts only in a session whose model has a context window of at least
 // this many tokens. The floors and figures in `AUTHOR` come from sessions
@@ -163,22 +198,28 @@ const MISSED = 0.1
 type Verdict = { compact: boolean; reason: string }
 
 type Watch = {
-  isInteractive: boolean
+  // Whether the mod acts in this session: it is on, and a person is at the
+  // prompt.
+  isActive: boolean
   // Counts what extended or replaced the main conversation: a turn begun, a
   // `/compact`, a /clear or resume. A verdict stands only while the count is
   // the one its turn ended at.
   changes: number
 }
 
-export const register: Register = on => {
-  const watch: Watch = { isInteractive: false, changes: 0 }
+export const register: Register = (on, options) => {
+  const settings = settingsOf(options)
+  const watch: Watch = { isActive: false, changes: 0 }
 
   on('session.start', async ($, e, next) => {
-    watch.isInteractive = e.isInteractive
+    watch.isActive = settings.enabled && e.isInteractive
     const result = await next(e)
-    if (watch.isInteractive) $.clock.after(0, () => void resume($))
+    if (watch.isActive) $.clock.after(0, () => void resume($))
+    await $.command.register(COMMAND)
     return result
   })
+
+  on('command.run', { command: 'sparkjoy' }, ($, e) => command($, e.args, settings))
 
   on('turn.start', ($, e, next) => {
     if (e.agentId === undefined) watch.changes++
@@ -207,14 +248,14 @@ export const register: Register = on => {
     const result = await next(e)
     // The judge runs outside the turn, on a timer of its own, so the turn
     // ends without waiting for it.
-    if (watch.isInteractive && e.agentId === undefined && e.reason === 'answer') {
-      $.clock.after(0, () => void afterTurn($, watch, changes, e.usage))
+    if (watch.isActive && e.agentId === undefined && e.reason === 'answer') {
+      $.clock.after(0, () => void afterTurn($, settings, watch, changes, e.usage))
     }
     return result
   })
 }
 
-async function afterTurn($: EngineInterface, watch: Watch, changes: number, usage?: TurnUsage) {
+async function afterTurn($: EngineInterface, settings: Settings, watch: Watch, changes: number, usage?: TurnUsage) {
   // A line about a conversation that has moved on would land inside the turn
   // now running, so it goes to the debug log.
   const isCurrent = () => watch.changes === changes
@@ -223,7 +264,7 @@ async function afterTurn($: EngineInterface, watch: Watch, changes: number, usag
     const { context } = await $.session.usage()
     const tokens = context.tokens
     if (tokens === undefined || context.window < WINDOW || !isCurrent()) return
-    const figures = await fitted($)
+    const { figures } = await fitted($, settings)
 
     // An idle session is asked after a turn whose cache writes all had one
     // lifetime, an hour or five minutes, once it has sat idle for the wait
@@ -239,10 +280,10 @@ async function afterTurn($: EngineInterface, watch: Watch, changes: number, usag
     const wait = hour > 0 && fiveMinutes === 0 ? IDLE_MS['1h'] : fiveMinutes > 0 && hour === 0 ? IDLE_MS['5m'] : undefined
     if (tokens >= figures.IDLE_FLOOR && wait !== undefined) {
       const due = (await $.clock.now()) + wait
-      $.clock.after(wait, () => void idle($, isCurrent, say, tokens, due, wait / 60_000))
+      $.clock.after(wait, () => void idle($, settings, isCurrent, say, tokens, due, wait / 60_000))
     }
     if (tokens < figures.FLOOR) return
-    const prompt = question(tokens, undefined, figures)
+    const prompt = question(tokens, undefined, figures, settings.instructions)
     await judge($, say, async () => isCurrent(), `${thousands(tokens)} tokens`, prompt)
   } catch (error) {
     say(`Failed: ${error}`)
@@ -256,6 +297,7 @@ async function afterTurn($: EngineInterface, watch: Watch, changes: number, usag
 // `minutes` is how long it has sat idle.
 async function idle(
   $: EngineInterface,
+  settings: Settings,
   isCurrent: () => boolean,
   say: (text: string) => void,
   tokens: number,
@@ -265,7 +307,7 @@ async function idle(
   const isUntouched = async () => isCurrent() && (await $.session.usage()).context.tokens === tokens
   try {
     if ((await $.clock.now()) > due + LATE_MS || !(await isUntouched())) return
-    const prompt = question(tokens, minutes, await fitted($))
+    const prompt = question(tokens, minutes, (await fitted($, settings)).figures, settings.instructions)
     await judge($, say, isUntouched, `${thousands(tokens)} tokens, idle ${minutes} minutes`, prompt)
   } catch (error) {
     say(`Failed: ${error}`)
@@ -390,7 +432,9 @@ function hash(text: string) {
 // context and lost detail each cost. Asked of an idle session, it says the
 // prompt cache is about to lapse, so keeping costs the cache write that
 // follows. README.md shows both versions verbatim with the figures in `AUTHOR`,
-// for a 500k context.
+// for a 500k context. The user's `instructions` add a paragraph of their own
+// before the answer's format and change nothing else, so the question keeps
+// its figures and the format the hook parses whatever they say.
 //
 // The fork replays the turn's last request, which ends before the reply the
 // turn closed with, and the question doesn't quote the reply: the tool calls
@@ -405,7 +449,7 @@ function hash(text: string) {
 // result, such as how many compactions keeping the context through the next
 // turn costs, and leave the model mainly to judge whether the next turns need
 // the transcript's detail.
-function question(tokens: number, idleMinutes?: number, figures: Figures = AUTHOR) {
+function question(tokens: number, idleMinutes?: number, figures: Figures = AUTHOR, instructions = '') {
   const { WRITE, OUTPUT, SUMMARY, K, P, TURN_MEDIAN, TURN_MEAN } = figures
   const now = thousands(tokens)
   const isIdle = idleMinutes !== undefined
@@ -428,6 +472,7 @@ So compact unless the next turn continues work that needs the transcript's detai
 - Every later request reads all ${now} tokens, against about ${thousands(K)} after a compaction.
 - Keeping only puts the compaction off to a later turn end.
 - A turn runs a median of ${Math.round(TURN_MEDIAN)} requests and a mean of ${Math.round(TURN_MEAN)}, so keeping ${now} through one more turn costs as much as about ${turnCost(tokens, TURN_MEDIAN, figures)} compactions for a median turn and ${turnCost(tokens, TURN_MEAN, figures)} for a mean one.`
+  const added = instructions ? `\n\nThe user added these instructions for this decision:\n${instructions}` : ''
   return `${goal} It comes from the sparkjoy plugin, not from the user, and a program reads your answer. Use no tools.
 
 ${opening}
@@ -445,7 +490,7 @@ What lost detail costs:
 - It's very noisy and hard to judge, but as some indication, past sessions had about ${WASTED} more wasted requests than usual after a compaction: failed tool calls, repeated lookups and corrections.
 - That count misses detail lost without such a failure, such as a design's rejected options or what the user likes.
 
-Weigh what keeping costs against what losing the detail would cost the next turns. The larger the context, the more detail a compaction can drop and still pay.
+Weigh what keeping costs against what losing the detail would cost the next turns. The larger the context, the more detail a compaction can drop and still pay.${added}
 
 Answer with one JSON object and nothing else, filling its fields in order:
 {"next": "what most likely comes next, in a few words", "needs_detail": true or false, "compact": true or false, "reason": "one short line saying why"}`
@@ -479,41 +524,105 @@ function saving(tokens: number, { WRITE, K, LAPSE }: Figures) {
   return (1 + LAPSE * (WRITE - 1)) * (tokens - K)
 }
 
-// The floors and figures `/sparkjoy:report` last saved. Each is `AUTHOR`'s
-// where the file lacks it or holds a value the question's sums can't use: a
-// floor outside the window, a cache write no dearer than a read, a compaction
-// that leaves no more than the cached system prompt and tools or at least the
-// FLOOR the question is asked from at a turn end, a lapse share outside 0 to
-// 1, or a turn of under one request. Read for each question, so a report run mid-session
-// counts from the next one; a configuration directory or file that can't be
-// found or read leaves every figure at `AUTHOR`'s. The directory is
+// The floors and figures sparkjoy uses, and where each floor comes from. A
+// floor the user set wins over the one `/sparkjoy report` last saved, and each
+// figure the report saved wins over `AUTHOR`'s. A source whose value the
+// question's sums can't use gives way to the next: a floor outside the window,
+// a cache write no dearer than a read, a compaction that leaves no more than
+// the cached system prompt and tools or at least the FLOOR the question is
+// asked from at a turn end, a lapse share outside 0 to 1, or a turn of under
+// one request. The user's floor at a turn end must also lie above the context
+// a compaction leaves, where a compaction can pay for itself.
+// Read for each question, so a report run mid-session counts from the next one;
+// a configuration directory or file that can't be found or read leaves every
+// figure but the user's floors at `AUTHOR`'s. The directory is
 // $CLAUDE_CONFIG_DIR, or ~/.claude, as Claude Code and model/fit.py find it.
-async function fitted($: EngineInterface): Promise<Figures> {
+async function fitted($: EngineInterface, settings: Settings) {
   let saved: Record<string, unknown> | undefined
   try {
     const home = await $.env.get('HOME')
     const config = (await $.env.get('CLAUDE_CONFIG_DIR')) || (home && `${home}/.claude`)
     if (config) saved = JSON.parse(await $.fs.read(`${config}/${FIGURES}`))
   } catch {
-    return AUTHOR
+    saved = undefined
+  }
+  const sources = { report: saved, setting: { FLOOR: settings.floor, IDLE_FLOOR: settings.idleFloor } as Record<string, unknown> }
+  const value = (name: keyof Figures, isValid: (value: number) => boolean, source: 'report' | 'setting') => {
+    const v = sources[source]?.[name]
+    return typeof v === 'number' && Number.isFinite(v) && isValid(v) ? v : undefined
   }
   const figures = { ...AUTHOR }
-  // FLOOR before K, and K before P, so each is held below the one before.
-  const take = (name: keyof Figures, isValid: (value: number) => boolean) => {
-    const value = saved?.[name]
-    if (typeof value === 'number' && Number.isFinite(value) && isValid(value)) figures[name] = value
+  const from: Record<'FLOOR' | 'IDLE_FLOOR', Source> = { FLOOR: 'author', IDLE_FLOOR: 'author' }
+  const take = (name: keyof Figures, isValid: (value: number) => boolean, source: 'report' | 'setting' = 'report') => {
+    const v = value(name, isValid, source)
+    if (v === undefined) return
+    figures[name] = v
+    if (name === 'FLOOR' || name === 'IDLE_FLOOR') from[name] = source
   }
-  take('FLOOR', v => v > 0 && v < WINDOW)
-  take('IDLE_FLOOR', v => v > 0 && v < WINDOW)
+  const inWindow = (v: number) => v > 0 && v < WINDOW
+  const below = (floor: number) => (v: number) => v > 0 && v < floor
+  // The K the question states with the turn-end floor `floor`.
+  const leaves = (floor: number) => value('K', below(floor), 'report') ?? AUTHOR.K
+  // FLOOR before K, and K before P, so each is held below the one before; the
+  // user's FLOOR is held above the K it leaves.
+  take('FLOOR', inWindow)
+  take('FLOOR', v => inWindow(v) && v > leaves(v), 'setting')
+  take('IDLE_FLOOR', inWindow)
+  take('IDLE_FLOOR', inWindow, 'setting')
   take('WRITE', v => v > 1)
   take('OUTPUT', v => v > 0)
   take('SUMMARY', v => v > 0)
-  take('K', v => v > 0 && v < figures.FLOOR)
+  take('K', below(figures.FLOOR))
   take('P', v => v >= 0 && v < figures.K)
   take('LAPSE', v => v >= 0 && v <= 1)
   take('TURN_MEDIAN', v => v >= 1)
   take('TURN_MEAN', v => v >= 1)
-  return figures
+  return { figures, from }
+}
+
+// Answers `/sparkjoy`. Bare, it says how the mod stands. `on` and `off` change
+// the setting, and Claude Code then reloads the mod with it. `report` asks the
+// model to run the report skill, which its frontmatter keeps out of the slash
+// menu, so this is the report's one entry there while the model still runs it
+// when the user asks what sparkjoy has done. A prompt submitted while the
+// command's hook runs would wait on that hook, so it goes on a timer. Claude
+// Code shows each answer after the plugin's name, `sparkjoy:`, so no answer
+// names it again.
+async function command($: EngineInterface, args: string, settings: Settings): Promise<CommandRunResult> {
+  const word = args.trim().split(/\s+/)[0]
+  if (word === '') return { text: await status($, settings) }
+  if (word === 'on' || word === 'off') {
+    // `$.config` names a plugin's field `<plugin>.<field>`.
+    const { deny } = await $.config.set({ key: 'sparkjoy.enabled', value: word === 'on' })
+    if (deny) return { text: `Still ${settings.enabled ? 'on' : 'off'}: ${deny}` }
+    return { text: word === 'on' ? 'On from the next turn end.' : 'Off. It asks nothing and compacts nothing until /sparkjoy on.' }
+  }
+  if (word === 'report') {
+    const text = `The user typed /sparkjoy ${args.trim()}. Run the sparkjoy:report skill for them.`
+    $.clock.after(0, () => void $.prompt.submit({ text }).catch(error => $.ui.log(`Failed: ${error}`)))
+    return { text: 'Asking the model to run the report.' }
+  }
+  return { text: `/sparkjoy takes on, off or report, not "${word}", or nothing to show its settings.` }
+}
+
+// What `/sparkjoy` says with no arguments: whether the mod is on, the floors it
+// asks from and where each comes from, whether the question carries the user's
+// instructions, and how to change them.
+async function status($: EngineInterface, settings: Settings) {
+  const { figures, from } = await fitted($, settings)
+  const floor = (name: 'FLOOR' | 'IDLE_FLOOR', set: number | undefined) => {
+    const ignored = set !== undefined && from[name] !== 'setting' ? `, as your ${thousands(set)} is out of range` : ''
+    return `${thousands(figures[name])} (${SOURCES[from[name]]}${ignored})`
+  }
+  const floors = `at a turn end from ${floor('FLOOR', settings.floor)} and in an idle session from ${floor('IDLE_FLOOR', settings.idleFloor)}`
+  const { enabled, instructions } = settings
+  // The first 60 characters, cut at a space.
+  const excerpt = instructions.length > 60 ? `${instructions.slice(0, 61).replace(/\s+\S*$/, '')}…` : instructions
+  return [
+    enabled ? `On. It asks whether to compact ${floors}.` : `Off, so it asks nothing and compacts nothing. When on, it asks ${floors}.`,
+    instructions ? `Its question carries your instructions: "${excerpt}"` : 'Its question carries no instructions of yours.',
+    `/sparkjoy ${enabled ? 'off' : 'on'} turns it ${enabled ? 'off' : 'on'}, and /config sets the floors and instructions.`,
+  ].join('\n')
 }
 
 function parse(text: string): Verdict | undefined {
