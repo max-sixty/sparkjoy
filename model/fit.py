@@ -57,9 +57,9 @@ SPAN = 20  # requests over which re-reads after a compaction are counted
 # threshold chart draws the best point at each of CHART_BETAS.
 BASE = 0.5
 CHART_BETAS = tuple(i / 20 for i in range(21))
-# Values of D, the detail a compaction drops, in dollars: as measured after the user's and Claude Code's
-# compactions, near the top of its 90% interval (calibrate.py), and a large loss, about 64 wasted requests.
-LOST = (0.35, 1.12, 3.72)
+# Values of D, the detail a compaction drops, in dollars, for the table under "What does the model assume a
+# compaction loses?" in docs/cost-model.md. The doc fits no value of D.
+LOST = (0.25, 1, 4)
 # From below K, where every turn end compacts, to just short of AUTO.
 THRESHOLDS = np.arange(50_000, 960_001, 10_000)
 DRAWS = 200  # bootstrap resamples of sessions
