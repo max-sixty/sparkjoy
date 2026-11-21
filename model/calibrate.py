@@ -250,7 +250,7 @@ def main():
     ttl = fit.usual(s.ttl for s in C)
     c = fit.prices(a.model, ttl)
     p = fit.measure(C, ttl)
-    h, c0, F0 = fit.terms(p, c)
+    h, c0, _ = fit.terms(p, c)
     R = [rows(s) for s in S]
     d = frame(R)
     m = means(d)
@@ -314,9 +314,12 @@ def main():
     # of work ends. A threshold compacts anywhere, so the results take D as 0 or at the top of its
     # interval, where the user's and Claude Code's compactions reach.
     high = max(X["D"][1], X["D other"][1])
-    need = (400_000 - p.K) ** 2 * h / (2 * p.g) - p.K - F0
-    print(f"  X* reaches 400k at β = 0 with D = {need / 1e6:.1f}M reads (${need * c.read:.2f}), "
-          f"{need / price(m['post x']):.0f} wasted requests per compaction")
+    wasted = price(m["post x"])  # a request after a compaction
+    for x in (400_000, 700_000):
+        D = [fit.lost_for(p, c, x, beta) for beta in BETAS]
+        print(f"  X* reaches {x // 1000}k with D of, in wasted requests at ${wasted * c.read:.3f}: " + ", ".join(
+            f"β = {beta:g}: " + ("none" if d is None else f"${d * c.read:.2f}, {d / wasted:.0f}")
+            for beta, d in zip(BETAS, D)))
     # A LangWatch-style comparison, without the session effects or the context.
     first, rest = d["tpost"] == 1, d["tpost"] == 0
     raw = lambda sel: ((d["corrected"][sel].mean() - (1 - SPECIFICITY)) / J, sel.sum())
