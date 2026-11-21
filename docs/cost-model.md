@@ -25,8 +25,8 @@ to my sessions](#fitted-to-my-sessions) fits the model to my sessions on Opus
 5.5 and tests its constant growth against a replay of them, and sparkjoy's
 default floors come from that replay. It asks whether to compact from 250k at
 turn ends and from 175k in an idle session. What the question adds depends on
-how much a compaction in the middle of a task loses, which my sessions measure
-poorly.
+how much detail a compaction in the middle of a task loses, which isn't
+measured.
 
 The formulas count costs in cached reads, the price of reading one token from
 the prompt cache, and the text gives them in dollars at Opus 5.5's prices for
@@ -200,7 +200,10 @@ The model covers two ways in which work differs:
   detail, or finished, where it loses none. The classifier is right at some
   share of turn ends. Above a floor, the session compacts at each turn end the
   classifier calls finished. Above a higher ceiling, it compacts at every turn
-  end. The floor and ceiling are set where the cost is lowest.
+  end. The floor and ceiling are set where the cost is lowest. sparkjoy's
+  question has no ceiling. It states what keeping the context costs, so the
+  model it asks can compact at a mid-task turn end once keeping costs more than
+  the detail a compaction would lose.
 
 ## Fitted to my sessions
 
@@ -413,48 +416,12 @@ work has β around 5 to 10. With 2% of the work at β = 30 it saves 17%. A unit
 of that work's effectiveness costs 77 times one at β = 0 even when the session
 never compacts, and no classifier lowers that part of the cost.
 
-#### Turn ends that differ in lost detail
-
-A replay of the sessions marks 30% of turn ends mid-task and the rest finished,
-and gives its classifier a floor and a ceiling as under [Value of
-information](#value-of-information).
-
-| with \$0.35 lost per compaction, as measured, about 6 wasted requests | share of the cost when compacting at every turn end from 300k, the best threshold without a classifier |
-|----|----|
-| what a perfect classifier saves | 0.9% |
-| what a classifier saves that is right at every finished turn end and keeps at mid-task ones as often as sparkjoy's question on the evals, 29 of 64 runs pooled over their batches | 0.2% |
-| the same, at the evals' lowest and highest batch, 0 of 16 and 23 of 32 | 0 to 0.5% |
-| what running the classifier costs, for the pooled rate | 0.3% |
-| what sparkjoy's question saves as it runs, asking from 250k with no ceiling, at the pooled rate | −0.2% |
-| what the lost detail costs in all, the most any classifier can save | 1.7% |
-
-The question as it runs costs more than the best threshold alone, and its own
-running cost of 0.5% comes on top. It keeps at mid-task turn ends at any size,
-and with the loss my sessions measure, the detail it keeps is worth less than
-the context it carries. Each classifier in the rows above it that keeps at
-some mid-task turn ends has a ceiling too, 475k or 500k, above which the
-session compacts at every turn end.
-
-On the evals, sparkjoy's question compacted at every finished turn end. At the
-four mid-task turn ends it kept the context in anywhere from none of 16 runs to
-24 of 32, depending on the batch ([Batches](../evals/README.md#batches)). Whether the live
-plugin's verdicts match the evals' is still open ([Against the live
-plugin](../evals/README.md#against-the-live-plugin)). The lost detail costs
-only 1.7% in all because real sessions end, so they compact less often than in the
-steady state.
-
-The replay's classifier doesn't see the context's size, so it needs the ceiling.
-sparkjoy's question states what keeping the context costs, so the model can
-compact at a mid-task turn end once keeping costs more than the detail a
-compaction would lose. On the evals, its verdicts follow context size only
-noisily.
-
 #### Where a classifier pays
 
 | telling work apart pays when | in the measured sessions |
 |----|----|
 | work's β varies widely, and the classifier is right most of the time | Neither is measured. Grading sparkjoy's verdicts by what happened next, such as whether the turns after a compaction re-read files it dropped, would measure its accuracy. |
-| each compaction loses several times the \$0.35 of detail measured so far | Hard to judge ([What does the model assume a compaction loses?](#questions-about-the-model)). |
+| a compaction in the middle of a task loses detail worth more than keeping the context costs | Not measured. |
 
 ### Prices by model
 
@@ -508,19 +475,12 @@ the model says. A summary that drops detail the next turns need costs more, in a
 mistake, a correction from the user or a step run again. The model adds that cost as D per compaction, and the best point
 above is for D = 0.
 
-It's very noisy and hard to judge, but as some indication, my sessions had
-about 6 more wasted requests than usual after manual `/compact`s
-and Claude Code's own compactions. A wasted request is a failed tool call, a
-repeated lookup or a correction. That makes D about \$0.35, with a 90%
-interval from −\$0.21 to +\$1.05. The count misses losses that waste no request,
-such as a design's rejected options or what the user likes.
-
-| D per compaction | best point | a perfect classifier saves |
-|----|----|----|
-| 0, a summary that keeps everything needed | 376k | 0 |
-| \$0.35, as measured | 409k | 0.9% |
-| \$1.12, near the top of its interval | 470k | 3.4% |
-| \$3.72, about 64 wasted requests | 616k | 8.6% |
+| D per compaction | best point |
+|----|----|
+| 0, a summary that keeps everything needed | 376k |
+| \$0.25 | 400k |
+| \$1 | 461k |
+| \$4 | 629k |
 
 </details>
 
