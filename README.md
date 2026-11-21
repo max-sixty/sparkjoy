@@ -266,8 +266,8 @@ to my sessions](docs/cost-model.md#fitted-to-my-sessions) fits the model to my s
 5.5 and tests its constant growth against a replay of them, and sparkjoy's
 default floors come from that replay. It asks whether to compact from 250k at
 turn ends and from 175k in an idle session. What the question adds depends on
-how much detail a compaction in the middle of a task loses, which isn't
-measured.
+how much detail a compaction in the middle of a task loses, which my sessions
+measure poorly.
 
 The formulas count costs in cached reads, the price of reading one token from
 the prompt cache, and the text gives them in dollars at Opus 5.5's prices for
@@ -646,7 +646,7 @@ never compacts, and no classifier lowers that part of the cost.
 | telling work apart pays when | in the measured sessions |
 |----|----|
 | work's β varies widely, and the classifier is right most of the time | Neither is measured. Grading sparkjoy's verdicts by what happened next, such as whether the turns after a compaction re-read files it dropped, would measure its accuracy. |
-| a compaction in the middle of a task loses detail worth more than keeping the context costs | Not measured. |
+| a compaction in the middle of a task loses detail worth more than keeping the context costs | My sessions measure it poorly. |
 
 ### Prices by model
 
