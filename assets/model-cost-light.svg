@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
   "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="564.915111pt" height="272.994974pt" viewBox="0 0 564.915111 272.994974" xmlns="http://www.w3.org/2000/svg" version="1.1">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="546.02pt" height="272.994974pt" viewBox="0 0 546.02 272.994974" xmlns="http://www.w3.org/2000/svg" version="1.1">
  <metadata>
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
@@ -21,8 +21,8 @@
  <g id="figure_1">
   <g id="patch_1">
    <path d="M 0 272.994974 
-L 564.915111 272.994974 
-L 564.915111 0 
+L 546.02 272.994974 
+L 546.02 0 
 L 0 0 
 L 0 272.994974 
 z
@@ -328,7 +328,7 @@ L 538.82 95.56338
 " clip-path="url(#p2d166654ca)" style="fill: none; stroke: #2c74cc; stroke-width: 2.6; stroke-linecap: square"/>
    </g>
    <g id="text_13">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="348.868705" y="62.571099" transform="rotate(-0 348.868705 62.571099)">β = 1: lowest at 965k, where Claude Code compacts</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="348.868705" y="62.685006" transform="rotate(-0 348.868705 62.685006)">β = 1</text>
    </g>
    <g id="line2d_20">
     <defs>
@@ -387,36 +387,35 @@ z
    <g id="text_14">
     <g id="patch_4">
      <path d="M 178.551232 215.80933 
-L 295.419044 215.80933 
-L 295.419044 201.986244 
+L 202.370294 215.80933 
+L 202.370294 201.986244 
 L 178.551232 201.986244 
 z
 " style="fill: #ffffff"/>
     </g>
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="180.081232" y="211.275053" transform="rotate(-0 180.081232 211.275053)">β = 0: lowest at 262k, 55.4%</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="180.081232" y="211.275053" transform="rotate(-0 180.081232 211.275053)">β = 0</text>
    </g>
    <g id="text_15">
     <g id="patch_5">
      <path d="M 196.817781 183.050468 
-L 326.195594 183.050468 
-L 326.195594 169.227383 
+L 233.146844 183.050468 
+L 233.146844 169.227383 
 L 196.817781 169.227383 
 z
 " style="fill: #ffffff"/>
     </g>
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="198.347781" y="178.516191" transform="rotate(-0 198.347781 178.516191)">β = 0.25: lowest at 297k, 69.4%</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="198.347781" y="178.516191" transform="rotate(-0 198.347781 178.516191)">β = 0.25</text>
    </g>
    <g id="text_16">
     <g id="patch_6">
-     <path d="M 237.930527 156.082945 
-L 362.303496 156.082945 
-L 362.303496 131.496773 
+     <path d="M 237.930527 145.319859 
+L 330.290215 145.319859 
+L 330.290215 131.496773 
 L 237.930527 131.496773 
 z
 " style="fill: #ffffff"/>
     </g>
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(239.460527 140.785582)">β = 0.5: lowest at 376k, 85.5%</text>
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(239.460527 152.319996)">the base case</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="239.460527" y="140.785582" transform="rotate(-0 239.460527 140.785582)">β = 0.5, the base case</text>
    </g>
   </g>
  </g>
