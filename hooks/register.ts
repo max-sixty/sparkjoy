@@ -48,11 +48,10 @@ const COMPACTING = { plugin: 'sparkjoy', key: 'compacting' } as const
 // report saved falls back for it.
 const AUTHOR = {
   // The judge is asked at a turn end only from FLOOR context tokens, and in
-  // an idle session from IDLE_FLOOR: the pair of floors that minimizes the cost
-  // of my sessions when docs/cost-model.md replays them ("Idle sessions"), which
-  // the report finds for the user's (`floors` in model/fit.py). 250k also comes
-  // within 0.2 points of the best turn-end threshold for any β up to 0.6
-  // ("Does the model's simplification matter?"). Compacting just before the
+  // an idle session from IDLE_FLOOR. In docs/cost-model.md's replay of my
+  // sessions ("Idle sessions"), this pair is the best at β = 0 and 0.3 and
+  // comes within 1.5 points of the best at 0.6. The report finds the pair that
+  // minimizes the cost of the user's sessions (`floors` in model/fit.py). Compacting just before the
   // cache lapses pays from about 160k on a one-hour cache and 172k on a
   // five-minute one, counting only the next request, whose cache write it
   // shrinks. Claude Code's own idle compaction acts only from 200k, only on a
