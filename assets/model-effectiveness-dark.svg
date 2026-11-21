@@ -203,12 +203,6 @@ L 538.82 33.314024
 L 538.82 235.883255 
 " style="fill: none; stroke: #c3c2b7; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
-   <g id="text_13">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="115.197849" y="47.14991" transform="rotate(-0 115.197849 47.14991)">β = 0: 100%</text>
-   </g>
-   <g id="text_14">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="115.197849" y="125.267039" transform="rotate(-0 115.197849 125.267039)">β = 0.25: 61%</text>
-   </g>
    <g id="line2d_19">
     <path d="M 36.62 235.883255 
 L 37.122703 229.474248 
@@ -258,87 +252,50 @@ L 538.82 33.314024
 L 538.82 33.314024 
 " style="fill: none; stroke: #5c9cea; stroke-width: 2.6; stroke-linecap: square"/>
    </g>
+   <g id="text_13">
+    <g id="patch_4">
+     <path d="M 117.4508 51.684187 
+L 141.269863 51.684187 
+L 141.269863 37.861101 
+L 117.4508 37.861101 
+z
+" style="fill: #0d1117"/>
+    </g>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="118.9808" y="47.14991" transform="rotate(-0 118.9808 47.14991)">β = 0</text>
+   </g>
+   <g id="text_14">
+    <g id="patch_5">
+     <path d="M 117.4508 128.187905 
+L 153.779863 128.187905 
+L 153.779863 114.364819 
+L 117.4508 114.364819 
+z
+" style="fill: #0d1117"/>
+    </g>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="118.9808" y="123.653628" transform="rotate(-0 118.9808 123.653628)">β = 0.25</text>
+   </g>
    <g id="text_15">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #f0efec" transform="translate(115.197849 173.259723)">β = 0.5: 38%</text>
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #f0efec" transform="translate(115.197849 184.794137)">the base case</text>
+    <g id="patch_6">
+     <path d="M 117.4508 186.561778 
+L 176.545644 186.561778 
+L 176.545644 161.975606 
+L 117.4508 161.975606 
+z
+" style="fill: #0d1117"/>
+    </g>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #f0efec" transform="translate(118.9808 171.264415)">β = 0.5</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #f0efec" transform="translate(118.9808 182.798829)">the base case</text>
    </g>
    <g id="text_16">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="115.197849" y="220.859661" transform="rotate(-0 115.197849 220.859661)">β = 1: 14%</text>
-   </g>
-   <g id="text_17">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #c3c2b7" x="115.197849" y="230.968779" transform="rotate(-0 115.197849 230.968779)">dots at 142k, what a compaction leaves</text>
-   </g>
-   <g id="line2d_20">
-    <defs>
-     <path id="m44c12507e1" d="M 0 3.25 
-C 0.86191 3.25 1.688635 2.907559 2.298097 2.298097 
-C 2.907559 1.688635 3.25 0.86191 3.25 0 
-C 3.25 -0.86191 2.907559 -1.688635 2.298097 -2.298097 
-C 1.688635 -2.907559 0.86191 -3.25 0 -3.25 
-C -0.86191 -3.25 -1.688635 -2.907559 -2.298097 -2.298097 
-C -2.907559 -1.688635 -3.25 -0.86191 -3.25 0 
-C -3.25 0.86191 -2.907559 1.688635 -2.298097 2.298097 
-C -1.688635 2.907559 -0.86191 3.25 0 3.25 
+    <g id="patch_7">
+     <path d="M 117.4508 223.868033 
+L 141.269863 223.868033 
+L 141.269863 210.044947 
+L 117.4508 210.044947 
 z
-" style="stroke: #0d1117; stroke-width: 1.5"/>
-    </defs>
-    <g clip-path="url(#p0b7dc274f1)">
-     <use xlink:href="#m44c12507e1" x="108.167049" y="33.314024" style="fill: #256abf; stroke: #0d1117; stroke-width: 1.5"/>
+" style="fill: #0d1117"/>
     </g>
-   </g>
-   <g id="line2d_21">
-    <defs>
-     <path id="mf8135c795e" d="M 0 3.25 
-C 0.86191 3.25 1.688635 2.907559 2.298097 2.298097 
-C 2.907559 1.688635 3.25 0.86191 3.25 0 
-C 3.25 -0.86191 2.907559 -1.688635 2.298097 -2.298097 
-C 1.688635 -2.907559 0.86191 -3.25 0 -3.25 
-C -0.86191 -3.25 -1.688635 -2.907559 -2.298097 -2.298097 
-C -2.907559 -1.688635 -3.25 -0.86191 -3.25 0 
-C -3.25 0.86191 -2.907559 1.688635 -2.298097 2.298097 
-C -1.688635 2.907559 -0.86191 3.25 0 3.25 
-z
-" style="stroke: #0d1117; stroke-width: 1.5"/>
-    </defs>
-    <g clip-path="url(#p0b7dc274f1)">
-     <use xlink:href="#mf8135c795e" x="108.167049" y="111.431154" style="fill: #3682df; stroke: #0d1117; stroke-width: 1.5"/>
-    </g>
-   </g>
-   <g id="line2d_22">
-    <defs>
-     <path id="m4dec9228c2" d="M 0 3.25 
-C 0.86191 3.25 1.688635 2.907559 2.298097 2.298097 
-C 2.907559 1.688635 3.25 0.86191 3.25 0 
-C 3.25 -0.86191 2.907559 -1.688635 2.298097 -2.298097 
-C 1.688635 -2.907559 0.86191 -3.25 0 -3.25 
-C -0.86191 -3.25 -1.688635 -2.907559 -2.298097 -2.298097 
-C -2.907559 -1.688635 -3.25 -0.86191 -3.25 0 
-C -3.25 0.86191 -2.907559 1.688635 -2.298097 2.298097 
-C -1.688635 2.907559 -0.86191 3.25 0 3.25 
-z
-" style="stroke: #0d1117; stroke-width: 1.5"/>
-    </defs>
-    <g clip-path="url(#p0b7dc274f1)">
-     <use xlink:href="#m4dec9228c2" x="108.167049" y="159.423837" style="fill: #5c9cea; stroke: #0d1117; stroke-width: 1.5"/>
-    </g>
-   </g>
-   <g id="line2d_23">
-    <defs>
-     <path id="m7734310572" d="M 0 3.25 
-C 0.86191 3.25 1.688635 2.907559 2.298097 2.298097 
-C 2.907559 1.688635 3.25 0.86191 3.25 0 
-C 3.25 -0.86191 2.907559 -1.688635 2.298097 -2.298097 
-C 1.688635 -2.907559 0.86191 -3.25 0 -3.25 
-C -0.86191 -3.25 -1.688635 -2.907559 -2.298097 -2.298097 
-C -2.907559 -1.688635 -3.25 -0.86191 -3.25 0 
-C -3.25 0.86191 -2.907559 1.688635 -2.298097 2.298097 
-C -1.688635 2.907559 -0.86191 3.25 0 3.25 
-z
-" style="stroke: #0d1117; stroke-width: 1.5"/>
-    </defs>
-    <g clip-path="url(#p0b7dc274f1)">
-     <use xlink:href="#m7734310572" x="108.167049" y="207.023775" style="fill: #9ec5f4; stroke: #0d1117; stroke-width: 1.5"/>
-    </g>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="118.9808" y="219.333756" transform="rotate(-0 118.9808 219.333756)">β = 1</text>
    </g>
   </g>
  </g>
