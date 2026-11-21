@@ -29,7 +29,7 @@ const HOUR = {
 // All of it for five minutes, as on an API key.
 const FIVE_MINUTES = { ...HOUR, ephemeral_5m_input_tokens: 3_000, ephemeral_1h_input_tokens: 0 }
 
-// The user's home, and the figures file `/sparkjoy:report` saves in Claude
+// The user's home, and the figures file `/sparkjoy report` saves in Claude
 // Code's configuration directory there.
 const HOME = '/home/u'
 const FIGURES = `${HOME}/.claude/sparkjoy/figures.json`
@@ -47,7 +47,8 @@ const FIGURES = `${HOME}/.claude/sparkjoy/figures.json`
 // with the texts `conversation`, which a turn adds a message to and a
 // compaction its summary, a process environment of `env` (`HOME` unless told
 // otherwise), a file at `figuresAt` holding `saved` (none when undefined),
-// and a record of what it was asked.
+// settings that take each change the mod makes, and a record of what it was
+// asked.
 function engine(
   on: On,
   {
@@ -79,8 +80,12 @@ function engine(
   const forks: string[] = []
   // The instructions of each compaction the mod made, `''` for none.
   const compactions: string[] = []
-  // Each slash command run.
+  // Each slash command run, registered, and prompt submitted.
   const commands: string[] = []
+  const registered: string[] = []
+  const prompts: string[] = []
+  // Each change the mod made to its settings.
+  const sets: { key: string; value: unknown }[] = []
   const logs: string[] = []
 
   mock.store(on, stored)
@@ -132,6 +137,18 @@ function engine(
     commands.push(e.command)
     return { text: '' }
   })
+  on('command.register', (_, e) => {
+    registered.push(e.name)
+    return { value: { command: e.name } }
+  })
+  on('config.set', (_, e) => {
+    sets.push({ key: e.key, value: e.value })
+    return { value: e.value }
+  })
+  on('prompt.submit', (_, e) => {
+    prompts.push(e.text)
+    return { text: e.text }
+  })
 
   // Runs one main-loop turn to its answer and lets what it starts settle.
   async function turn($: Engine, turnId: string, answer = 'Merged #12. ✅') {
@@ -151,15 +168,15 @@ function engine(
   const save = (text: string | undefined) => (saved = text)
 
   // Runs a slash command as the person typing it at the prompt would.
-  const type = ($: Engine, command: string) =>
+  const type = ($: Engine, command: string, args = '') =>
     $.command.run({
       command,
-      args: '',
+      args,
       origin: { kind: 'composer' },
       presentation: { isFullscreen: false, columns: 80 },
     })
 
-  return { clock, forks, compactions, commands, logs, begin, turn, resize, save, type }
+  return { clock, forks, compactions, commands, registered, prompts, sets, logs, begin, turn, resize, save, type }
 }
 
 // Figures the report fitted to a user on a five-minute cache, whose
@@ -305,6 +322,80 @@ for (const [name, options] of [
     await turn($, 't1')
 
     for (const text of AUTHORS) expect(forks[0]).toContain(text)
+  })
+}
+
+test('the floors the user set win over the ones the report fitted', { options: { floor: 300_000, idle_floor: 250_000 } }, async ($, on) => {
+  const saved = JSON.stringify({ FLOOR: 150_000, IDLE_FLOOR: 120_000 })
+  const { begin, clock, forks, turn, resize } = engine(on, { verdict: KEEP, idleVerdict: KEEP, tokens: 280_000, saved })
+  await begin($)
+
+  // Above the fitted floor at a turn end and below the set one; above the set
+  // idle floor.
+  await turn($, 't1')
+  expect(forks).toEqual([])
+  await clock.advance(IDLE)
+  await clock.settle()
+  expect(forks.length).toBe(1)
+
+  // Above the fitted idle floor, below the set one.
+  resize(240_000)
+  await turn($, 't2')
+  await clock.advance(IDLE)
+  await clock.settle()
+  expect(forks.length).toBe(1)
+})
+
+test('a floor the user set at or below what a compaction leaves gives way to the default', { options: { floor: 140_000 } }, async ($, on) => {
+  const { begin, forks, turn, type } = engine(on, { verdict: KEEP, tokens: 200_000 })
+  await begin($)
+
+  // Below the author's 250k, above the 140k set, which is below the author's
+  // 142k after a compaction.
+  await turn($, 't1')
+  expect(forks).toEqual([])
+  const { text } = await type($, 'sparkjoy')
+  expect(text).toContain("at a turn end from 250k (the default, as your 140k is out of range)")
+})
+
+test('a floor the user set above what the report measured a compaction leaves keeps that measure', { options: { floor: 400_000 } }, async ($, on) => {
+  // A report that measured K, above the default floor, but fitted no floors.
+  const saved = JSON.stringify({ K: 300_000, P: 30_000 })
+  const { begin, forks, turn } = engine(on, { verdict: KEEP, saved })
+  await begin($)
+
+  await turn($, 't1')
+
+  expect(forks[0]).toContain('Afterwards the context holds about 300k tokens')
+})
+
+// What the question at 500k says between its costs and the answer's format.
+const INSTRUCTIONS = 'Keep the context while a pull request awaits review, and compact once it merges.'
+const ADDED = `still pay.\n\nThe user added these instructions for this decision:\n${INSTRUCTIONS}\n\nAnswer with one JSON object`
+
+test('the user’s instructions join both questions before the answer’s format', { options: { instructions: INSTRUCTIONS } }, async ($, on) => {
+  const { begin, clock, forks, turn } = engine(on, { verdict: KEEP, idleVerdict: KEEP })
+  await begin($)
+
+  await turn($, 't1')
+  await clock.advance(IDLE)
+  await clock.settle()
+
+  expect(forks.length).toBe(2)
+  for (const fork of forks) expect(fork).toContain(ADDED)
+})
+
+for (const [name, options] of [
+  ['unset', {}],
+  ['empty', { instructions: '' }],
+] as const) {
+  test(`instructions ${name} leave the question as it was`, { options }, async ($, on) => {
+    const { begin, forks, turn } = engine(on, { verdict: KEEP })
+    await begin($)
+
+    await turn($, 't1')
+
+    expect(forks[0]).toContain('still pay.\n\nAnswer with one JSON object')
   })
 }
 
@@ -746,4 +837,89 @@ test('a session with a 200k context window is left as it is, idle or not', async
 
   expect(forks).toEqual([])
   expect(logs).toEqual([])
+})
+
+test('off, sparkjoy asks nothing and compacts nothing, and /sparkjoy still answers', { options: { enabled: false } }, async ($, on) => {
+  const { begin, clock, compactions, forks, logs, registered, turn } = engine(on, { stored: ANNOUNCED })
+  await begin($)
+  await clock.settle()
+
+  await turn($, 't1')
+  await clock.advance(IDLE)
+  await clock.settle()
+
+  expect(forks).toEqual([])
+  expect(compactions).toEqual([])
+  expect(logs).toEqual([])
+  expect(registered).toEqual(['sparkjoy'])
+})
+
+test('/sparkjoy off sets the setting off', async ($, on) => {
+  const { begin, sets, type } = engine(on)
+  await begin($)
+
+  const { text } = await type($, 'sparkjoy', 'off')
+
+  expect(sets).toEqual([{ key: 'sparkjoy.enabled', value: false }])
+  expect(text).toBe('Off. It asks nothing and compacts nothing until /sparkjoy on.')
+})
+
+test('/sparkjoy on sets the setting on', { options: { enabled: false } }, async ($, on) => {
+  const { begin, sets, type } = engine(on)
+  await begin($)
+
+  const { text } = await type($, 'sparkjoy', 'on')
+
+  expect(sets).toEqual([{ key: 'sparkjoy.enabled', value: true }])
+  expect(text).toBe('On from the next turn end.')
+})
+
+test('/sparkjoy names each floor and where it comes from', { options: { floor: 300_000 } }, async ($, on) => {
+  const { begin, type, save } = engine(on, { saved: JSON.stringify({ IDLE_FLOOR: 120_000 }) })
+  await begin($)
+
+  const { text } = await type($, 'sparkjoy')
+  save(undefined)
+  const authors = await type($, 'sparkjoy')
+
+  expect(text).toBe(
+    "On. It asks whether to compact at a turn end from 300k (your setting) and in an idle session from 120k (the report's fit).\n" +
+      'Its question carries no instructions of yours.\n' +
+      '/sparkjoy off turns it off, and /config sets the floors and instructions.',
+  )
+  expect(authors.text).toContain("in an idle session from 175k (the default).")
+})
+
+test('/sparkjoy says sparkjoy is off and quotes the start of the user’s instructions', { options: { enabled: false, instructions: INSTRUCTIONS } }, async ($, on) => {
+  const { begin, type } = engine(on)
+  await begin($)
+
+  const { text } = await type($, 'sparkjoy')
+
+  expect(text).toBe(
+    "Off, so it asks nothing and compacts nothing. When on, it asks at a turn end from 250k (the default) and in an idle session from 175k (the default).\n" +
+      'Its question carries your instructions: "Keep the context while a pull request awaits review, and…"\n' +
+      '/sparkjoy on turns it on, and /config sets the floors and instructions.',
+  )
+})
+
+test('/sparkjoy report asks the model to run the report skill with what the user typed', async ($, on) => {
+  const { begin, clock, prompts, type } = engine(on)
+  await begin($)
+
+  const { text } = await type($, 'sparkjoy', 'report since Monday')
+  await clock.settle()
+
+  expect(text).toBe('Asking the model to run the report.')
+  expect(prompts).toEqual(['The user typed /sparkjoy report since Monday. Run the sparkjoy:report skill for them.'])
+})
+
+test('/sparkjoy with another word says what it takes', async ($, on) => {
+  const { begin, sets, type } = engine(on)
+  await begin($)
+
+  const { text } = await type($, 'sparkjoy', 'disable')
+
+  expect(sets).toEqual([])
+  expect(text).toBe('/sparkjoy takes on, off or report, not "disable", or nothing to show its settings.')
 })

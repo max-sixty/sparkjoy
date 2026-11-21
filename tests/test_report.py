@@ -121,9 +121,10 @@ def test_saves_the_figures_the_question_states(tmp_path):
     assert json.loads(figures.read_text()) == {"FLOOR": 350_000, "IDLE_FLOOR": 125_000, "K": 225_002, "P": 30_000,
                                                "SUMMARY": 1_500, "TURN_MEDIAN": 1, "TURN_MEAN": 1, "LAPSE": 0.5,
                                                "WRITE": 40, "OUTPUT": 100}
-    assert summary[-1].startswith("sparkjoy now asks from these sessions' floors and states their figures: floor at "
-                                  "turn ends 350k; floor in idle sessions 125k; context after a compaction 225k;")
-    assert "sparkjoy asks from these floors and its question states these figures" in page
+    assert summary[-1].startswith("sparkjoy now asks from these sessions' floors, except where you set your own, and "
+                                  "states their figures: floor at turn ends 350k; floor in idle sessions 125k; context "
+                                  "after a compaction 225k;")
+    assert "sparkjoy asks from these floors, except where you set a floor of your own, and its question" in page
 
 
 def test_saves_no_figures_without_compactions(tmp_path):
