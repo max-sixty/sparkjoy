@@ -389,7 +389,7 @@ of β = 0.5, where a request at 250k gets half as much done as one at 1M, and
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-effectiveness-dark.svg">
-  <img alt="Effectiveness η(x), relative to a request at 1M, against the context x, at β = 0.5: a curve rising steeply from 0 and then more slowly to 100% at 1M, with dots at 38% at 142k, what a compaction leaves, and 50% at 250k." src="assets/model-effectiveness-light.svg">
+  <img alt="Effectiveness η(x), relative to a request at 1M, against the context x, for β of 0, 0.25, 0.5 and 1 on one blue ramp, the base case, β = 0.5, drawn thicker. β = 0 is flat at 100%; the others rise from 0 to 100% at 1M, β = 1 in a straight line. Dots at 142k, what a compaction leaves, mark 100%, 61%, 38% and 14%." src="assets/model-effectiveness-light.svg">
 </picture>
 
 η depends only on the context's size, so a request right after a compaction, at

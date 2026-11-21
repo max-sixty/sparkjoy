@@ -11,7 +11,8 @@ from one read of the sessions:
   bill           the sessions' cost by kind of token
   average        a request's mean cost over a cycle against the compaction point, with the marginal cost,
                  as a schematic
-  effectiveness  a request's effectiveness against its context, at the base case for β (fit.BASE)
+  effectiveness  a request's effectiveness against its context, at the base case for β (fit.BASE),
+                 at half and twice it, and at β = 0
   sensitivity    how far the best compaction point moves with each measured parameter and with β, at the
                  base case
   threshold      the best compaction point against β, in the steady state and the replay
@@ -424,23 +425,26 @@ def average(out, p, c):
 
 
 def effectiveness_curve(out, p):
-    """A request's effectiveness against its context, (x / 1M)^β at the base case, with dots where a
-    compaction leaves the context, at K, and at 250k."""
+    """A request's effectiveness against its context, (x / 1M)^β, at the base case and at the β the
+    sensitivity chart takes it to (halved and doubled), with β = 0 for reference. A dot on each curve at
+    K, the context a compaction leaves, carries the curve's name."""
     x = np.linspace(0, fit.WINDOW, 1_000)
-    b = fit.BASE
-    marks = {p.K: ", what a compaction leaves", 250_000: ""}
+    betas = (0, fit.BASE / 2, fit.BASE, fit.BASE * 2)
     for theme, t in THEMES.items():
-        fig, ax = plt.subplots(figsize=(9, 3.2))
+        fig, ax = plt.subplots(figsize=(9, 3.8))
         style(ax, t)
-        color = shade(t, b)
-        # Unclipped: the curve starts on the plot's left edge, where clipping would halve its line.
-        ax.plot(x, fit.eta(x, b), color=color, lw=2, clip_on=False)
-        for m, what in marks.items():
-            y = fit.eta(m, b)
-            ax.plot([m], [y], "o", ms=6.5, mfc=color, mec=t["page"], mew=1.5, zorder=3)
-            ax.text(m + 14_000, y - 0.03, f"{y:.0%} at {tokens(m)}{what}", ha="left", va="top", fontsize=9,
-                    color=t["ink"])
-        ax.text(fit.WINDOW, 1.02, f"β = {b:g}", ha="right", va="bottom", fontsize=9, color=t["ink"])
+        for b in betas:
+            color = shade(t, b)
+            base = b == fit.BASE
+            # Unclipped: each curve starts on the plot's left edge, where clipping would halve its line.
+            ax.plot(x, fit.eta(x, b), color=color, lw=2.6 if base else 1.6, clip_on=False, zorder=3 if base else 2)
+            y = float(fit.eta(p.K, b))
+            ax.plot([p.K], [y], "o", ms=6.5, mfc=color, mec=t["page"], mew=1.5, zorder=4)
+            # The base case's name takes a second line, which ends before the steepest curve below it.
+            name = f"β = {b:g}: {y:.0%}" + ("\nthe base case" if base else "")
+            ax.text(p.K + 14_000, y - 0.03, name, ha="left", va="top", fontsize=9, color=t["ink"], linespacing=1.3)
+        ax.text(p.K + 14_000, 0.015, f"dots at {tokens(p.K)}, what a compaction leaves", ha="left", va="bottom",
+                fontsize=9, color=t["muted"])
         ax.set_xlim(0, fit.WINDOW)
         ax.xaxis.set_major_formatter(tokens)
         ax.set_xticks([0, 250_000, 500_000, 750_000, 1_000_000])
