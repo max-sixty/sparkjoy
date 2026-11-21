@@ -81,6 +81,8 @@ def session_with_compactions():
         line("15:00:20Z", "sparkjoy: Failed: Error: the fork failed"),
         line("15:00:39Z", "sparkjoy: Missed the prompt cache at 226k tokens: read 30k of 227k from it"),
         line("15:00:40Z", "sparkjoy: Compacting at 226k tokens: all done"),  # a compaction that never ran
+        # A verdict to compact in the mode `classify`, just before the user's own compaction.
+        line("15:29:50Z", "sparkjoy: Would compact at 226k tokens: the lexer is done"),
         prompt("15:30:00Z", "<command-name>/compact</command-name>"),
         boundary("15:31:00Z"),
         compact_summary("15:31:00Z"),
@@ -91,11 +93,12 @@ def session_with_compactions():
 
 def test_counts_verdicts_and_returns(tmp_path):
     summary, page = report(tmp_path, session_with_compactions())
-    assert summary[0] == ("6 verdicts in 1 of 1 sessions: 3 compacted, 1 kept, 0 unreadable, 1 no verdict, 0 dropped, "
-                          "1 failed; 1 missed the prompt cache")
+    assert summary[0] == ("7 verdicts in 1 of 1 sessions: 3 compacted, 1 would compact, 1 kept, 0 unreadable, "
+                          "1 no verdict, 0 dropped, 1 failed; 1 missed the prompt cache")
     assert "3 returns after an hour idle to sessions left at 175k or more, 2 compacted in between" in summary
     assert "Replayed at list prices" in page
     assert "1 by sparkjoy" in page and "1 by /compact" in page
+    assert '<span class="mark would-compact"' in page
     assert "Fix the parser" in page
     assert "hooks.json" not in page
     assert "1 missed the prompt cache" in page and "missed the cache (read 30k of 227k)" in page
@@ -104,8 +107,8 @@ def test_counts_verdicts_and_returns(tmp_path):
 def test_no_verdicts_yet(tmp_path):
     summary, page = report(tmp_path, [prompt("10:00:00Z", "hello"), request("10:00:10Z", 0, 20_000),
                                       prompt("10:01:00Z", "and again"), request("10:01:10Z", 20_000, 1_000)])
-    assert summary[0] == ("0 verdicts in 0 of 1 sessions: 0 compacted, 0 kept, 0 unreadable, 0 no verdict, 0 dropped, "
-                          "0 failed; 0 missed the prompt cache")
+    assert summary[0] == ("0 verdicts in 0 of 1 sessions: 0 compacted, 0 would compact, 0 kept, 0 unreadable, "
+                          "0 no verdict, 0 dropped, 0 failed; 0 missed the prompt cache")
     assert "No verdicts yet; sessions pick sparkjoy up when they restart." in page
 
 

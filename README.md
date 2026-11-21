@@ -61,11 +61,16 @@ At the prompt of a Claude Code session:
 
 ## Settings
 
-`/sparkjoy` says whether sparkjoy is on, the floors it asks from, where each
-floor comes from, and whether its question carries instructions of yours.
+`/sparkjoy` says which mode sparkjoy is in, the floors it asks from, where
+each floor comes from, and whether its question carries instructions of yours.
 
+- **`/sparkjoy classify`** sets sparkjoy to ask at turn ends and in idle
+  sessions and show each verdict, but compact nothing. A verdict to compact
+  reads `sparkjoy: Would compact at 404k tokens: …`, and `/sparkjoy report`
+  counts these apart from compactions.
 - **`/sparkjoy off`** turns sparkjoy off, so it asks nothing and compacts
-  nothing, and `/sparkjoy on` turns it back on.
+  nothing, and `/sparkjoy on` sets it back to compacting when the model says
+  to. These three commands set the **`mode`** setting.
 - **`floor`** is the context, in tokens, from which sparkjoy asks at a turn
   end, and **`idle_floor`** the context from which it asks in an idle session.
   A floor you set wins over the one `/sparkjoy report` fitted, which wins over
@@ -88,7 +93,7 @@ too.
   "pluginConfigs": {
     "sparkjoy@sparkjoy": {
       "options": {
-        "enabled": false,
+        "mode": "classify",
         "floor": 300000,
         "idle_floor": 200000,
         "instructions": "Keep the context while a pull request awaits review."

@@ -8,11 +8,12 @@
   "keywords": ["compaction", "context", "prompt-cache", "cost"],
   "types": "./types/index.d.ts",
   "userConfig": {
-    "enabled": {
-      "type": "boolean",
-      "title": "Enabled",
-      "description": "Ask the session's model whether to compact at turn ends and in idle sessions.",
-      "default": true
+    "mode": {
+      "type": "string",
+      "title": "Mode",
+      "description": "on asks the session's model whether to compact at turn ends and in idle sessions, and compacts when it says to; classify asks and shows each verdict but never compacts; off asks nothing.",
+      "options": ["on", "classify", "off"],
+      "default": "on"
     },
     "floor": {
       "type": "number",

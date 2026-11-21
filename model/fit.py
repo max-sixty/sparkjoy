@@ -67,15 +67,15 @@ FLOOR, IDLE_FLOOR = 250_000, 175_000  # where sparkjoy asks, at a turn end and i
 IDLE = {3600: 55 * 60, 300: 4 * 60}  # seconds idle before sparkjoy asks, by cache lifetime (IDLE_MS, hooks/register.ts)
 # The line sparkjoy writes in the transcript for each verdict (`judge` and `afterTurn` in
 # hooks/register.ts), under its current name and the one it had before it was published.
-VERDICT = re.compile(r"(?P<plugin>sparkjoy|compact-when-done): (?:(?P<kind>Compacting|Kept|Unreadable verdict|No verdict|"
-                     r"Dropped the verdict) at (?P<tokens>\d+)k tokens(?:, idle (?P<idle>\d+) minutes)?|Failed): "
+VERDICT = re.compile(r"(?P<plugin>sparkjoy|compact-when-done): (?:(?P<kind>Compacting|Would compact|Kept|Unreadable verdict|"
+                     r"No verdict|Dropped the verdict) at (?P<tokens>\d+)k tokens(?:, idle (?P<idle>\d+) minutes)?|Failed): "
                      r"(?P<reason>.*)", re.S)
 # The line it writes before a verdict whose question read less than nine tenths of its input from
 # the prompt cache (MISSED in hooks/register.ts).
 MISSED = re.compile(r"sparkjoy: Missed the prompt cache at \d+k tokens(?:, idle \d+ minutes)?: "
                     r"read (?P<read>\d+)k of (?P<input>\d+)k from it")
-KINDS = {"Compacting": "compacted", "Kept": "kept", "Unreadable verdict": "unreadable", "No verdict": "no verdict",
-         "Dropped the verdict": "dropped", None: "failed"}
+KINDS = {"Compacting": "compacted", "Would compact": "would compact", "Kept": "kept", "Unreadable verdict": "unreadable",
+         "No verdict": "no verdict", "Dropped the verdict": "dropped", None: "failed"}
 # Where a session's name comes from, in order of preference: one the user gave it, then
 # the ones Claude Code generates. Failing all three, its first prompt names it.
 TITLES = {"custom-title": "customTitle", "ai-title": "aiTitle", "agent-name": "agentName"}
