@@ -559,11 +559,12 @@ function saving(tokens: number, { WRITE, K, LAPSE }: Figures) {
 // Read for each question, so a report run mid-session counts from the next one;
 // a configuration directory or file that can't be found or read leaves every
 // figure but the user's floors at `AUTHOR`'s. The directory is
-// $CLAUDE_CONFIG_DIR, or ~/.claude, as Claude Code and model/fit.py find it.
+// $CLAUDE_CONFIG_DIR, or ~/.claude, as Claude Code and model/fit.py find it:
+// Windows names the home %USERPROFILE% and sets no HOME.
 async function fitted($: EngineInterface, settings: Settings) {
   let saved: Record<string, unknown> | undefined
   try {
-    const home = await $.env.get('HOME')
+    const home = (await $.env.get('HOME')) || (await $.env.get('USERPROFILE'))
     const config = (await $.env.get('CLAUDE_CONFIG_DIR')) || (home && `${home}/.claude`)
     if (config) saved = JSON.parse(await $.fs.read(`${config}/${FIGURES}`))
   } catch {
@@ -629,10 +630,14 @@ async function command($: EngineInterface, args: string, settings: Settings): Pr
 }
 
 // What `/sparkjoy` says with no arguments: the mod's mode, the floors it asks
-// from and where each comes from, whether the question carries the user's
-// instructions, and how to change them.
+// from and where each comes from, whether this session's window leaves it
+// nothing to ask, whether the question carries the user's instructions, and
+// how to change them. A user whose sessions run on a smaller window would
+// otherwise see the mod on and never see it act.
 async function status($: EngineInterface, settings: Settings) {
   const { figures, from } = await fitted($, settings)
+  const { window } = (await $.session.usage()).context
+  const windowLine = window < WINDOW ? [`This session's context window is ${thousands(window)}, and sparkjoy acts only in sessions with a 1M window, so it asks nothing here.`] : []
   const floor = (name: 'FLOOR' | 'IDLE_FLOOR', set: number | undefined) => {
     const ignored = set !== undefined && from[name] !== 'setting' ? `, as your ${thousands(set)} is out of range` : ''
     return `${thousands(figures[name])} (${SOURCES[from[name]]}${ignored})`
@@ -643,6 +648,7 @@ async function status($: EngineInterface, settings: Settings) {
   const excerpt = instructions.length > 60 ? `${instructions.slice(0, 61).replace(/\s+\S*$/, '')}…` : instructions
   return [
     MODES[mode].status(floors),
+    ...windowLine,
     instructions ? `Its question carries your instructions: "${excerpt}"` : 'Its question carries no instructions of yours.',
     '/sparkjoy on compacts when the model says to, /sparkjoy classify only shows its verdicts, and /sparkjoy off asks nothing. /config sets the floors and instructions.',
   ].join('\n')

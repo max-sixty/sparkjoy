@@ -923,6 +923,31 @@ test('/sparkjoy names each floor and where it comes from', { options: { floor: 3
   expect(authors.text).toContain("in an idle session from 175k (the default).")
 })
 
+test('/sparkjoy says when the session’s window leaves it nothing to ask', async ($, on) => {
+  const { begin, type } = engine(on, { tokens: 180_000, window: 200_000 })
+  await begin($)
+
+  const { text } = await type($, 'sparkjoy')
+
+  expect(text.split('\n')[1]).toBe(
+    "This session's context window is 200k, and sparkjoy acts only in sessions with a 1M window, so it asks nothing here.",
+  )
+})
+
+test('on Windows, sparkjoy finds the report’s figures under %USERPROFILE%', async ($, on) => {
+  const profile = '/Users/u'
+  const { begin, type } = engine(on, {
+    env: { USERPROFILE: profile },
+    figuresAt: `${profile}/.claude/sparkjoy/figures.json`,
+    saved: JSON.stringify({ IDLE_FLOOR: 120_000 }),
+  })
+  await begin($)
+
+  const { text } = await type($, 'sparkjoy')
+
+  expect(text).toContain("in an idle session from 120k (the report's fit).")
+})
+
 test('/sparkjoy says sparkjoy is classifying', { options: { mode: 'classify' } }, async ($, on) => {
   const { begin, type } = engine(on)
   await begin($)
