@@ -222,14 +222,13 @@ def written(p):
     m = json.loads(Path(__file__).with_name("context-parts.json").read_text())
     first = m["first_request"]
     groups = {
-        "the summary": ("summary",),
         "files, re-attached or read again": ("files", "E"),
-        "instructions and memory": ("user_claude_md", "project_instructions", "memory_index", "instructions_wrapper"),
-        "skills and their listing": ("skill_bodies", "skill_listing"),
+        "skills, instructions and memory": ("skill_bodies", "skill_listing", "user_claude_md", "project_instructions",
+                                            "memory_index", "instructions_wrapper"),
     }
     sizes = {what: sum(m["E_total"] if k == "E" else first[k] for k in keys) for what, keys in groups.items()}
     taken = {k for keys in groups.values() for k in keys}
-    sizes["the rest of the context"] = sum(v for k, v in first.items() if k not in taken)
+    sizes = {"the summary and the rest": sum(v for k, v in first.items() if k not in taken), **sizes}
     total = sum(sizes.values())
     return [(what, (p.K - p.P) * v / total) for what, v in sizes.items()]
 
