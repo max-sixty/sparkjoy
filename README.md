@@ -23,6 +23,11 @@ At the prompt of a Claude Code session:
 /plugin install sparkjoy --marketplace max-sixty/sparkjoy
 ```
 
+It acts in sessions with a 1M-token context window, the size its floors and
+figures come from, and only where a person types at the prompt, not in `-p`
+runs or SDK hosts. Sessions pick it up when they start. CI tests it on Claude
+Code's latest and stable releases.
+
 ## What it does
 
 - **When a turn ends**, it asks the session's own model whether to compact now,
@@ -270,8 +275,6 @@ question.
   mainly on the five-minute cache, in background sessions, below 200k, or with
   [`idleCompaction`](https://code.claude.com/docs/en/settings-reference#idlecompaction)
   set to `false`.
-- It acts only in sessions with a 1M-token context window, the size its floors
-  and figures come from.
 
 [^evals]: The [evals](evals/README.md) put the question to the model at turn
     ends from my sessions.
@@ -281,7 +284,8 @@ question.
     removes them and lets Claude Code compact at its own threshold, near 965k.
     Both price each request at Opus 5.5 list prices with the session's own cache
     lifetime, and "with sparkjoy" comes within 2% of the cost the transcripts log
-    ($4,013 against $3,943).
+    ($4,013 against $3,943). On a subscription, the same tokens count against
+    usage limits rather than a bill.
 
 # Cost model
 
@@ -825,14 +829,18 @@ Yes, with β below 1: a token at 400k adds less than one at 100k, half as much a
 <details>
 <summary>Has anyone modelled this before?</summary>
 
-The closest published studies, from August to October 2026, sweep the
-threshold on benchmarks ([Satish et al.](https://arxiv.org/abs/2609.32961),
-[CliffCompaction](https://arxiv.org/abs/2609.26779)) or measure what a
-compaction drops ([Salle et al.](https://arxiv.org/abs/2610.31778),
-[Liu](https://arxiv.org/abs/2608.16370)). The closest cost rule,
+The closest cost model, [Cheng's](https://doi.org/10.5281/zenodo.21236704)
+from July 2026, treats when to restart a prompt-cached session as an economic
+order quantity and as ski rental, and prices the rebuild at the cache-write
+rate. It and the closest cost rule,
 [Nadir's](https://getnadir.com/blog/mask-dont-summarize-agent-context-cache-cost/),
-leaves out quality. None lets a request's effectiveness depend on its context,
-prices the cache write, or limits compaction to turn ends.
+leave out quality. The closest studies, from August to October 2026, sweep the
+threshold on benchmarks ([Satish et al.](https://arxiv.org/abs/2609.32961),
+[Nguyen et al.](https://arxiv.org/abs/2609.26779)) or measure what a compaction
+drops ([Salle et al.](https://arxiv.org/abs/2610.31778),
+[Liu](https://arxiv.org/abs/2608.16370)). Salle et al. also find accuracy
+similar across thresholds from 160k to 380k. None lets a request's
+effectiveness depend on its context or limits compaction to turn ends.
 
 </details>
 
