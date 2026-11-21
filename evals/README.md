@@ -302,11 +302,18 @@ different rates from one batch of runs to the next. `fork-no-reply` kept in 6 of
 November, and in 23 of 32 and 24 of 32 in two batches that afternoon (p = 1e-6
 between the morning and the first afternoon batch). The
 finished cases, the idle one and both small breaks gave the same verdict in
-every batch. A logged request from each batch shows the same messages, so the
-cause is likely on the server, but it isn't confirmed. A comparison between two
-questions therefore holds only between runs made in the same batch, and each
-batch should include the question as it stands. Each row of `results.jsonl`
-records the Claude Code version that ran it, from 20 November on.
+every batch.
+
+The cause isn't known. Claude Code updated from 2.1.329 to 2.1.330 between the
+morning batch and the first afternoon one, but the client doesn't explain the
+swing: run alternately in one batch an hour later, the two versions kept at the
+mid-task cases in 14 and 13 of 32 runs. In the runs that record output tokens, a
+keep comes with a median of about 85, the answer alone, and a compaction with
+about 340, so the model compacts when it thinks before answering, and batches
+differ in how often it does. A comparison between two questions therefore holds
+only between runs made in the same batch, and each batch should include the
+question as it stands. From 20 November on, each row of `results.jsonl` records
+the Claude Code version that ran it and the answer's output tokens.
 
 `reply-message` kept in 24 of the 32 mid-task runs, and `fork-no-reply`, run in
 the same quarter hour, in 23 of 32 (p = 1.0). Ending the session with the
