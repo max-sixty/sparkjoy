@@ -58,7 +58,7 @@ z
      </g>
     </g>
     <g id="text_4">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #c3c2b7" x="267.56" y="240.519434" transform="rotate(-0 267.56 240.519434)">Compaction point X (tokens)</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #c3c2b7" x="267.56" y="240.519434" transform="rotate(-0 267.56 240.519434)">Compaction threshold X (tokens)</text>
     </g>
    </g>
    <g id="matplotlib.axis_2">

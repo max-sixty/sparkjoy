@@ -177,7 +177,7 @@ The labels at those two cases deserve a second look:
 
 The [cost model](../docs/cost-model.md) goes further:
 a compaction repays over every request until the context grows back, so at a
-natural break both cases should compact, and the best threshold at turn ends
+natural break both cases should compact, and the lowest-cost threshold at turn ends
 is about 200k.
 
 The mid-task keep labels encode the rule that mid-task moments keep, not an

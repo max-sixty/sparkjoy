@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
   "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="519.6pt" height="319.186891pt" viewBox="0 0 519.6 319.186891" xmlns="http://www.w3.org/2000/svg" version="1.1">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="519.6pt" height="319.143141pt" viewBox="0 0 519.6 319.143141" xmlns="http://www.w3.org/2000/svg" version="1.1">
  <metadata>
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
@@ -20,11 +20,11 @@
  </defs>
  <g id="figure_1">
   <g id="patch_1">
-   <path d="M 0 319.186891 
-L 519.6 319.186891 
+   <path d="M 0 319.143141 
+L 519.6 319.143141 
 L 519.6 0 
 L 0 0 
-L 0 319.186891 
+L 0 319.143141 
 z
 " style="fill: none"/>
   </g>
@@ -43,7 +43,7 @@ z
      <g id="line2d_1">
       <path d="M 65.257803 282.203297 
 L 65.257803 27.179297 
-" clip-path="url(#pe9c3cb578a)" style="fill: none; stroke: #3a3936; stroke-width: 0.8; stroke-linecap: square"/>
+" clip-path="url(#pea10e40f83)" style="fill: none; stroke: #3a3936; stroke-width: 0.8; stroke-linecap: square"/>
      </g>
      <g id="line2d_2"/>
      <g id="text_1">
@@ -54,7 +54,7 @@ L 65.257803 27.179297
      <g id="line2d_3">
       <path d="M 181.37341 282.203297 
 L 181.37341 27.179297 
-" clip-path="url(#pe9c3cb578a)" style="fill: none; stroke: #3a3936; stroke-width: 0.8; stroke-linecap: square"/>
+" clip-path="url(#pea10e40f83)" style="fill: none; stroke: #3a3936; stroke-width: 0.8; stroke-linecap: square"/>
      </g>
      <g id="line2d_4"/>
      <g id="text_2">
@@ -65,7 +65,7 @@ L 181.37341 27.179297
      <g id="line2d_5">
       <path d="M 297.489017 282.203297 
 L 297.489017 27.179297 
-" clip-path="url(#pe9c3cb578a)" style="fill: none; stroke: #3a3936; stroke-width: 0.8; stroke-linecap: square"/>
+" clip-path="url(#pea10e40f83)" style="fill: none; stroke: #3a3936; stroke-width: 0.8; stroke-linecap: square"/>
      </g>
      <g id="line2d_6"/>
      <g id="text_3">
@@ -76,7 +76,7 @@ L 297.489017 27.179297
      <g id="line2d_7">
       <path d="M 413.604624 282.203297 
 L 413.604624 27.179297 
-" clip-path="url(#pe9c3cb578a)" style="fill: none; stroke: #3a3936; stroke-width: 0.8; stroke-linecap: square"/>
+" clip-path="url(#pea10e40f83)" style="fill: none; stroke: #3a3936; stroke-width: 0.8; stroke-linecap: square"/>
      </g>
      <g id="line2d_8"/>
      <g id="text_4">
@@ -84,69 +84,69 @@ L 413.604624 27.179297
      </g>
     </g>
     <g id="text_5">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #c3c2b7" x="258.3" y="309.902516" transform="rotate(-0 258.3 309.902516)">Compaction point of lowest cost per unit of effectiveness at β = 0.5 (tokens)</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #c3c2b7" x="258.3" y="309.902516" transform="rotate(-0 258.3 309.902516)">Lowest-cost threshold at β = 0.5 (tokens)</text>
     </g>
    </g>
    <g id="matplotlib.axis_2"/>
    <g id="line2d_9">
     <path d="M 167.304403 282.203297 
 L 167.304403 27.179297 
-" clip-path="url(#pe9c3cb578a)" style="fill: none; stroke: #3c6496; stroke-linecap: square"/>
+" clip-path="url(#pea10e40f83)" style="fill: none; stroke: #3c6496; stroke-linecap: square"/>
    </g>
    <g id="sens-N" aria-label="N, output of the compaction request (5.6k): 370k at half, 387k at twice, 375k–376k across its 90% interval">
     <path d="M 163.878993 266.264297 
 L 173.922993 266.264297 
-" clip-path="url(#pe9c3cb578a)" style="fill: none; stroke: #5c9cea; stroke-width: 1.6"/>
+" clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 1.6"/>
    </g>
    <g id="line2d_10">
     <path d="M 166.897999 266.264297 
 L 167.65275 266.264297 
-" clip-path="url(#pe9c3cb578a)" style="fill: none; stroke: #5c9cea; stroke-width: 6"/>
+" clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 6"/>
    </g>
    <g id="sens-P" aria-label="P, size of the system prompt and tools (30.4k): 389k at half, 346k at twice, 375k–376k across its 90% interval">
     <path d="M 175.258322 226.416797 
 L 150.177351 226.416797 
-" clip-path="url(#pe9c3cb578a)" style="fill: none; stroke: #5c9cea; stroke-width: 1.6"/>
+" clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 1.6"/>
    </g>
    <g id="line2d_11">
     <path d="M 167.014114 226.416797 
 L 167.362461 226.416797 
-" clip-path="url(#pe9c3cb578a)" style="fill: none; stroke: #5c9cea; stroke-width: 6"/>
+" clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 6"/>
    </g>
    <g id="sens-lapse" aria-label="ℓ, share of requests that find the cache lapsed (0.56%): 395k at half, 347k at twice, 372k–379k across its 90% interval">
     <path d="M 178.393444 186.569297 
 L 150.46764 186.569297 
-" clip-path="url(#pe9c3cb578a)" style="fill: none; stroke: #5c9cea; stroke-width: 1.6"/>
+" clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 1.6"/>
    </g>
    <g id="line2d_12">
     <path d="M 164.982091 186.569297 
 L 169.336426 186.569297 
-" clip-path="url(#pe9c3cb578a)" style="fill: none; stroke: #5c9cea; stroke-width: 6"/>
+" clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 6"/>
    </g>
    <g id="sens-g" aria-label="g, growth of the context per request (1.7k): 299k at half, 503k at twice, 369k–384k across its 90% interval">
     <path d="M 122.890184 146.721797 
 L 241.095871 146.721797 
-" clip-path="url(#pe9c3cb578a)" style="fill: none; stroke: #5c9cea; stroke-width: 1.6"/>
+" clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 1.6"/>
    </g>
    <g id="line2d_13">
     <path d="M 163.240357 146.721797 
 L 172.123201 146.721797 
-" clip-path="url(#pe9c3cb578a)" style="fill: none; stroke: #5c9cea; stroke-width: 6"/>
+" clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 6"/>
    </g>
    <g id="sens-K" aria-label="K, context after a compaction (142k): 266k at half, 583k at twice, 367k–385k across its 90% interval">
     <path d="M 103.653531 106.874297 
 L 287.465038 106.874297 
-" clip-path="url(#pe9c3cb578a)" style="fill: none; stroke: #5c9cea; stroke-width: 1.6"/>
+" clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 1.6"/>
    </g>
    <g id="line2d_14">
     <path d="M 162.263696 106.874297 
 L 172.62186 106.874297 
-" clip-path="url(#pe9c3cb578a)" style="fill: none; stroke: #5c9cea; stroke-width: 6"/>
+" clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 6"/>
    </g>
    <g id="sens-β" aria-label="β, growth of effectiveness with the context (0.5, not measured): 297k at half, 965k at twice">
     <path d="M 121.438738 67.026797 
 L 509.4 67.026797 
-" clip-path="url(#pe9c3cb578a)" style="fill: none; stroke: #5c9cea; stroke-width: 1.6"/>
+" clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 1.6"/>
    </g>
    <g id="patch_3">
     <path d="M 7.2 282.203297 
@@ -328,7 +328,7 @@ z
   </g>
  </g>
  <defs>
-  <clipPath id="pe9c3cb578a">
+  <clipPath id="pea10e40f83">
    <rect x="7.2" y="27.179297" width="502.2" height="255.024"/>
   </clipPath>
  </defs>

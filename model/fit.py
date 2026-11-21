@@ -12,7 +12,7 @@
 It reads the main thread of each interactive session (`claude -p` runs are
 left out), measures the model's parameters, and prints them with 90% intervals
 from resampling sessions. Then, at the base case BASE for β, the exponent by which a
-request's effectiveness grows with its context, it prints the compaction point the
+request's effectiveness grows with its context, it prints the compaction threshold the
 steady-state model gives and how it moves with each parameter and with β, the turn-end
 threshold and the pair of floors that a replay of the sessions finds cheapest per
 unit of effectiveness, and both at each model's prices. Only transcripts modified since
@@ -54,7 +54,7 @@ SPAN = 20  # requests over which re-reads after a compaction are counted
 # context makes a request 2^β times as effective, and at 0 every request is equally effective. No
 # session measures it, so every figure takes this base case, where a request at 250k gets half as
 # much done as one at 1M, and the sensitivity to β is reported beside the measured parameters'. The
-# threshold chart draws the best point at each of CHART_BETAS.
+# threshold chart draws the lowest-cost threshold at each of CHART_BETAS.
 BASE = 0.5
 CHART_BETAS = tuple(i / 20 for i in range(21))
 # Values of D, the detail a compaction drops, in dollars, for the table under "What does the model assume a
@@ -484,17 +484,18 @@ def curve(p, c, beta, lost=0.0, step=1_000):
 
 
 def steady(p, c, beta, lost=0.0):
-    """The compaction point that minimises cost per unit of effectiveness, to 100 tokens, which at β = 0
+    """The compaction threshold that minimises cost per unit of effectiveness, to 100 tokens, which at β = 0
     is the closed form's; AUTO means not before Claude Code."""
     X, J = curve(p, c, beta, lost, step=100)
     return float(X[J.argmin()])
 
 
 def lost_for(p, c, X, beta):
-    """D, in cached reads, that puts the steady-state best point at X, or None where none does. At the
-    best point one more request's cost, c(X) + g, per unit of its effectiveness η(X), equals J(X), which
-    solved for D gives this; it is negative where the point lies beyond X with no lost detail. Near
-    β = 1 that condition marks J's maximum rather than its minimum, and no D puts the point at X."""
+    """D, in cached reads, that puts the steady-state lowest-cost threshold at X, or None where none
+    does. At the lowest-cost threshold one more request's cost, c(X) + g, per unit of its effectiveness
+    η(X), equals J(X), which solved for D gives this; it is negative where the threshold lies beyond X
+    with no lost detail. Near β = 1 that condition marks J's maximum rather than its minimum, and no D
+    puts the threshold at X."""
     h, c0, _ = terms(p, c)
     cost, effectiveness = cycle(p, c, X, beta)
     D = ((h * X + c0 + p.g) * effectiveness / eta(X, beta) - cost) / p.g
@@ -502,18 +503,18 @@ def lost_for(p, c, X, beta):
 
 
 def points(p, c):
-    """The compaction points the cycles chart draws, which counts cost alone: 175k, the best point
+    """The compaction thresholds the cycles chart draws, which counts cost alone: 175k, the lowest-cost threshold
     counting cost alone, rounded, 400k, and Claude Code's own."""
     return (175_000, round(closed_form(p, c), -4), 400_000, AUTO)
 
 
-# The parameters measured in the sessions that the best point depends on, with their symbols. The prices
+# The parameters measured in the sessions that the lowest-cost threshold depends on, with their symbols. The prices
 # are list prices.
 MEASURED = {"K": "K", "g": "g", "P": "P", "lapse": "ℓ", "N": "N"}
 
 
 def sensitivity(p, c, boot, beta):
-    """For each of MEASURED, the steady-state best point with the parameter halved and doubled, and at
+    """For each of MEASURED, the steady-state lowest-cost threshold with the parameter halved and doubled, and at
     each end of its 90% interval over `boot`, the sessions resampled, in order; then the same for β,
     under "β", with None for the interval, since β isn't measured."""
     rows = {}
@@ -529,7 +530,7 @@ def sensitivity(p, c, boot, beta):
 def log_steady(p, c, beta, at=150_000):
     """The steady state with η = ln(x / x0) in place of the power law, x0 set so that a request at `at`
     gets as much done against one at the full window as under the power law with exponent `beta`:
-    x0, the best point, and J there against never compacting."""
+    x0, the lowest-cost threshold, and J there against never compacting."""
     target = (at / WINDOW) ** beta
     lo, hi = 1.0, float(at)
     for _ in range(100):  # ln(at / x0) / ln(WINDOW / x0) falls from near 1 to 0 as x0 rises to `at`
@@ -709,7 +710,7 @@ def main():
     J0 = lambda x, d=0.0: per_unit(p, c, x, BASE, d) / per_unit(p, c, AUTO, BASE, d)  # J against never compacting
     print(f"\nthe steady state at β = {BASE:g}, compacting at any request; a request at 250k gets "
           f"{eta(250_000, BASE):.0%} as much done as one at 1M, at 150k {eta(150_000, BASE):.0%}, at K {eta(p.K, BASE):.0%}")
-    print(f"  best point X* {k(X0)} ({span(np.percentile(BX[:, ib], [5, 95]))}), saving {1 - J0(X0):.1%} against never "
+    print(f"  lowest-cost threshold X* {k(X0)} ({span(np.percentile(BX[:, ib], [5, 95]))}), saving {1 - J0(X0):.1%} against never "
           f"compacting; within a point of that from {k(min(x for x in range(150_000, AUTO, 1_000) if J0(x) <= J0(X0) + 0.01))} "
           f"to {k(max(x for x in range(150_000, AUTO, 1_000) if J0(x) <= J0(X0) + 0.01))}")
     print(f"  without lapses {k(steady(replace(p, lapse=0), c, BASE))}; with twice the summary "
@@ -726,19 +727,19 @@ def main():
         f"{k(x)} has {(x - p.K) / p.g:.0f} requests at ${per_unit(p, c, x, 0) * c.read:.3f} each on average, "
         f"J {J0(x):.1%} of never compacting" for x in (175_000, closed_form(p, c), X0, 600_000, AUTO)))
     for d in LOST:
-        print(f"  with each compaction losing ${d:.2f} of detail: best point {k(steady(p, c, BASE, d / c.read))}")
+        print(f"  with each compaction losing ${d:.2f} of detail: lowest-cost threshold {k(steady(p, c, BASE, d / c.read))}")
     for x in (400_000, 700_000):
         d = lost_for(p, c, x, BASE)
-        print(f"  D, the detail a compaction loses, that puts the best point at {k(x)}: "
+        print(f"  D, the detail a compaction loses, that puts the lowest-cost threshold at {k(x)}: "
               + ("none" if d is None else f"${d * c.read:.2f}, effectiveness per dollar there "
                  f"{1 / J0(x, d) - 1:+.1%} against never compacting"))
     for level in (300_000, 400_000, 600_000, 700_000, AUTO):
         beta = next((b for b in np.arange(0, 5.001, 0.01) if steady(p, c, b) >= level), None)
         if beta is None:
-            print(f"  the best point reaches {k(level)} at no β below 5")
+            print(f"  the lowest-cost threshold reaches {k(level)} at no β below 5")
             continue
         X = steady(p, c, beta)
-        print(f"  the best point reaches {k(level)} at β = {beta:.2f} ({k(X)}): effectiveness after a compaction "
+        print(f"  the lowest-cost threshold reaches {k(level)} at β = {beta:.2f} ({k(X)}): effectiveness after a compaction "
               f"{eta(p.K, beta):.0%} of 1M's, effectiveness per dollar {per_unit(p, c, AUTO, beta) / per_unit(p, c, X, beta) - 1:+.1%} "
               f"against never compacting")
 
@@ -753,8 +754,8 @@ def main():
     Jb = J[:, ib] / J[-1, ib]  # at the base case, against never compacting
     tlo, thi = np.percentile(BT[:, ib], [5, 95], method="nearest")
     print(f"\nthe replay at β = {BASE:g}")
-    print(f"  compacting after any request, best point {k(Tr[0])}, against the steady state's {k(X0)}")
-    print(f"  at turn ends, best threshold {k(T[ib])} ({k(tlo)}-{k(thi)}*), saving {1 - saved[ib]:.1%}; from 250k "
+    print(f"  compacting after any request, lowest-cost threshold {k(Tr[0])}, against the steady state's {k(X0)}")
+    print(f"  at turn ends, lowest-cost threshold {k(T[ib])} ({k(tlo)}-{k(thi)}*), saving {1 - saved[ib]:.1%}; from 250k "
           f"{1 - Jb[at[250_000]]:.1%}; from 400k {1 - Jb[at[400_000]]:.1%}")
     print("  * resampling sessions with K, P and N held at their fitted values")
     print(f"  thresholds within a point of the best: {span(THRESHOLDS[Jb[:-1] <= Jb[:-1].min() + 0.01])}")
@@ -762,10 +763,10 @@ def main():
         print(f"  compacting at {k(x)} costs more than the best, in the steady state "
               f"{per_unit(p, c, x, BASE) / per_unit(p, c, X0, BASE) - 1:.1%}, in the replay at turn ends "
               f"{Jb[at[x]] / Jb.min() - 1:.1%}")
-    print("  best turn-end threshold, by β: " + ", ".join(f"{b:g} {k(t)}" for b, t in zip(CHART_BETAS, T)))
+    print("  lowest-cost turn-end threshold, by β: " + ", ".join(f"{b:g} {k(t)}" for b, t in zip(CHART_BETAS, T)))
     gave = lambda x: (J[at[x]] / J[-1] - saved) * 100  # points of saving a turn-end threshold of x gives up, by β
     for x in (250_000, 400_000):
-        print(f"  points {k(x)} gives up against the best turn-end threshold, by β: "
+        print(f"  points {k(x)} gives up against the lowest-cost turn-end threshold, by β: "
               + ", ".join(f"{beta:g} {v:.1f}" for beta, v in zip(CHART_BETAS, gave(x))))
     print("\n  context   pays back after   grows back in   (requests, counting cost alone)")
     for x in (200_000, 250_000, 300_000, 400_000, 600_000):
@@ -788,7 +789,7 @@ def main():
                           ((200_000, None), "turn ends from 200k")):
         print(f"  {label:58s} {pct(kept[t, i])}")
     print(f"  {'turn ends from the replay best alone, ' + k(T[ib]):58s} {pct(1 - saved[ib])}")
-    print(f"  {'the best pair of floors, ' + k(top[0]) + ' and ' + (k(top[1]) if top[1] else '-'):58s} {pct(kept[top])}")
+    print(f"  {'the lowest-cost pair of floors, ' + k(top[0]) + ' and ' + (k(top[1]) if top[1] else '-'):58s} {pct(kept[top])}")
     print(f"  points sparkjoy's floors give up against it: {short[FLOOR, IDLE_FLOOR]:.2f}")
     print(f"  pairs within a point of it: turn-end floors {span([t for t, _ in near])}, idle floors "
           f"{span([i or np.inf for _, i in near])} ('never' for none)")
@@ -811,7 +812,7 @@ def main():
                   f"({q.lapse_turn_end:.0%} at turn ends); h {terms(q, cq)[0]:.2f}; F0 ${terms(q, cq)[2] * cq.read:.2f}; "
                   f"idle break-even {k(idle_break_even(q, cq))}; the cache lapses after {q.idle_turns:.0%} of turn ends, "
                   f"and {np.mean(gaps[gaps > IDLE[t]] > t):.0%} of pauses past {IDLE[t] // 60} minutes outlive it")
-            print(f"  steady X* {k(steady(q, cq, BASE))}; replay at turn ends, best threshold {k(tt)}, saving "
+            print(f"  steady X* {k(steady(q, cq, BASE))}; replay at turn ends, lowest-cost threshold {k(tt)}, saving "
                   f"{1 - sv:.1%}; from {k(FLOOR)} at turn ends {1 - floor_q[None]:.1%}, and idle sessions from "
                   f"{k(IDLE_FLOOR)} {1 - floor_q[IDLE_FLOOR]:.1%}")
 

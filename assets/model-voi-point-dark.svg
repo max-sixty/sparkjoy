@@ -119,7 +119,7 @@ L 479.42 30.056389
      </g>
     </g>
     <g id="text_11">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #c3c2b7" x="7.2" y="14.7" transform="rotate(-0 7.2 14.7)">Compaction point of the work it says to compact (tokens)</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #c3c2b7" x="7.2" y="14.7" transform="rotate(-0 7.2 14.7)">Compaction threshold of the work it says to compact (tokens)</text>
     </g>
    </g>
    <g id="line2d_14">
