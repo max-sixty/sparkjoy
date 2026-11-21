@@ -660,6 +660,21 @@ def floors(S, p, c, ttl):
     return min(cost, key=cost.get), cost
 
 
+def moments(S, p, c, ttl, betas, thresholds=THRESHOLDS[::5]):
+    """Compacting after any request past a threshold, as `/autocompact` does, against compacting only
+    at turn ends past it, both also compacting idle sessions from IDLE_FLOOR. Keyed (every, threshold):
+    the cost summed over the sessions, the compactions made in the middle of a turn, Claude Code's own
+    included, and the effectiveness at each β in `betas`. Cost grows by D with each mid-turn compaction,
+    so a caller charges D, what a mid-turn compaction loses beyond one at a turn end, as cost + D * mid."""
+    out = {}
+    for every in (True, False):
+        for t in thresholds:
+            cost, effectiveness = arm(S, p, c, ttl, t, betas, every=every, idle=IDLE_FLOOR)
+            counted = sum(replay(s, p, c, t, ttl, every=every, idle=IDLE_FLOOR, lost=(~s.end).astype(float))[0] for s in S)
+            out[every, t] = cost.sum(), counted - cost.sum(), effectiveness.sum(0)
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     window_args(ap)
@@ -800,6 +815,23 @@ def main():
     print("        " + " ".join(f"{x:>6}" for x in ("-", *map(k, IDLE_FLOORS))))
     for t in turns:
         print(f"  {k(t):>5} " + " ".join(f"{kept[t, j]:6.1%}" for j in idles))
+
+    # Mid-turn or at a turn end: each policy at its lowest-cost threshold, with each mid-turn compaction
+    # charged D wasted requests beyond what one at a turn end loses, each priced as a request at K.
+    betas = (0.0, BASE)
+    mo = moments(S, p, c, ttl, betas)
+    wasted = h * p.K + c0
+    unit = lambda key, i, D: (mo[key][0] + D * wasted * mo[key][1]) / mo[key][2][i]  # cost per unit of work
+    nothing = [cost[:, -1].sum() / effectiveness[:, -1, list(CHART_BETAS).index(b)].sum() for b in betas]
+    lowest = lambda every, i, D: min((key for key in mo if key[0] == every), key=lambda key: unit(key, i, D))
+    print(f"\nafter any request or only at turn ends, both compacting idle sessions from {k(IDLE_FLOOR)}, each at its "
+          f"lowest-cost threshold; a wasted request ${wasted * c.read:.3f}")
+    for i, b in enumerate(betas):
+        cells = [f"{name} from {k(key[1])}, saving {1 - unit(key, i, 0) / nothing[i]:.1%} with {mo[key][1]:.0f} mid-turn compactions"
+                 for name, key in (("after any request", lowest(True, i, 0)), ("at turn ends", lowest(False, i, 0)))]
+        even = next((D for D in np.arange(0, 100.5, 0.5) if unit(lowest(False, i, D), i, D) <= unit(lowest(True, i, D), i, D)), None)
+        print(f"  β = {b:g}: " + "; ".join(cells) + "; turn ends cost as little once a mid-turn compaction loses "
+              + ("over 100" if even is None else f"{even:g} wasted requests (${even * wasted * c.read:.2f})"))
 
     gaps = np.concatenate([np.append(s.gap[1:], 0)[s.end] for s in S])  # from each turn end to the next request
     measured = {t: measure(S, t) for t in (3600, 300)}

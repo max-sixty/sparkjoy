@@ -1,10 +1,20 @@
 # Cost model
 
-To understand what makes a good compaction policy, we can model how a policy
-affects what a session costs and how much context its requests have. Every
-request reads the whole context, so a session that compacts late pays to read a
-large context on every request. One that compacts early pays for more
-compactions, and its requests have less of the session's history to work with.
+A compaction policy decides when a session compacts: at what size of context,
+and at which moment in the work. To understand what makes a good one, we can
+model how a policy affects what a session costs and how much context its
+requests have. Every request reads the whole context, so a session that compacts
+late pays to read a large context on every request. One that compacts early pays
+for more compactions, and its requests have less of the session's history to
+work with.
+
+The moment matters in two ways. Just before an idle session's prompt cache
+lapses, a compaction saves the cache write of the whole context that the next
+request would make. And a compaction in the middle of a task can drop detail the
+next requests need, where one at a turn end that finishes a piece of work drops
+less. Claude Code compacts when the window fills, and `/autocompact` once the
+context reaches a set size, wherever in a turn either falls. sparkjoy compacts
+only at a turn end, or just before an idle session's cache lapses.
 
 As with any model, there's a trade-off between simplicity and completeness. A
 simple model gives a formula that shows which parameters matter, and a fuller
@@ -21,6 +31,10 @@ section below:
 - **[Idle sessions](#idle-sessions).** Once the prompt cache lapses, an idle
   session's next request makes a cache write of the whole context, so compacting
   before it lapses pays at a smaller context.
+- **[Mid-turn or at a turn end](#mid-turn-or-at-a-turn-end).** Compacting only
+  at turn ends lets a long turn carry the context past the lowest-cost
+  threshold, which costs tokens. It pays if a compaction in the middle of a turn
+  loses more detail than one at a turn end.
 - **[A classifier](#a-classifier).** sparkjoy's question decides at each turn
   end whether to compact. What it adds is what it saves against the lowest-cost
   single threshold, when work differs in how much the context helps it or in how
@@ -31,12 +45,21 @@ section below:
 
 For my sessions on Opus 5.5[^prices]:
 
+- Waiting for a turn end to compact gives up 8.8 points of saving against
+  compacting after any request, as `/autocompact` does, counting cost alone. At
+  the base case for how much context helps the work, β = 0.5, where a request at
+  250k gets half as much done as one at 1M, it gives up 0.9 points. Waiting pays
+  once a compaction in the middle of a turn wastes more requests than one at a
+  turn end: 33 more counting cost alone, or 5 at the base case. No session of
+  mine measures how many more it wastes ([Mid-turn or at a turn
+  end](#mid-turn-or-at-a-turn-end)).
+- Just before an idle session's cache lapses, compacting pays from about 160k
+  ([Idle sessions](#idle-sessions)).
 - A compaction costs about \$1 at any context size, most of it for the cache
   write of the context it leaves ([What a request and a compaction
   cost](#what-a-request-and-a-compaction-cost)).
 - Compacting after any request, the lowest-cost threshold is 262k counting cost
-  alone ([Cost alone](#cost-alone)), and 376k at the base case, β = 0.5, where a
-  request at 250k gets half as much done as one at 1M ([Cost and
+  alone ([Cost alone](#cost-alone)), and 376k at the base case ([Cost and
   context](#cost-and-context)).
 - Compacting only at turn ends, the lowest-cost threshold at the base case is
   280k. It is lower mostly because one long turn can carry the context far past
@@ -46,8 +69,8 @@ For my sessions on Opus 5.5[^prices]:
   turn end or 175k in an idle session. The default floors are the pair that
   costs least in the replay when it compacts wherever they allow, counting cost
   alone ([Floors](#floors)).
-- What the question adds depends on how much detail a compaction in the middle
-  of a task loses, which is difficult to estimate ([A
+- At turn ends in the middle of a task, what the question adds depends on how
+  much detail a compaction there loses, which is difficult to estimate ([A
   classifier](#a-classifier)).
 
 ## Costs
@@ -302,6 +325,40 @@ x > \frac{o\,N + w\,K}{w - 1}
 For my sessions, compacting first pays from about 160k, or from 172k on the
 five-minute cache, where a cache write costs 25 cached reads.
 
+## Mid-turn or at a turn end
+
+`/autocompact` compacts after any request whose context reaches its threshold,
+and so does Claude Code when the window fills, so most of their compactions fall
+in the middle of a turn. sparkjoy compacts only at a turn end. A turn runs a
+median of 9 requests but a mean of 38, so one long turn can carry the context far
+past the lowest-cost threshold before the next turn end, and every request until
+then reads the larger context.
+
+In the [replay](#a-replay-of-my-sessions), with each policy at its lowest-cost
+threshold and both also compacting idle sessions from 175k, against never
+compacting:
+
+| β | after any request | only at turn ends | turn ends cost as little once a compaction mid-turn wastes |
+|----|----|----|----|
+| 0, counting cost alone | from 250k, saving 39.5%, with 442 compactions mid-turn | from 250k, saving 30.7% | 33 more requests than one at a turn end, \$2.00 |
+| 0.5, the base case | from 400k, saving 14.8%, with 143 mid-turn | from 400k, saving 13.9% | 5 more, \$0.31 |
+
+Each wasted request, such as a failed tool call, a repeated lookup or a
+correction, is priced as a request at K, \$0.062. The last column charges each
+compaction mid-turn that many wasted requests, and moves the threshold after any
+request to where it then costs least. Counting cost alone, compacting after any
+request pays most at 250k, so it compacts often and mostly mid-turn. At the base
+case it pays most at 400k, since the requests after a compaction get less done,
+and waiting for a turn end then gives up less than a point.
+
+Whether waiting pays turns on how much more detail a compaction in the middle of
+a turn drops, which no session of mine measures. My sessions had about 6 more
+wasted requests than usual after a compaction, the figure sparkjoy's question
+states, but only 17 of their 1,399 compactions from 22 September to 21 November
+came in the middle of a turn, too few to measure. On a benchmark where a
+threshold chose when to compact, [Liu](https://arxiv.org/abs/2608.16370) found
+that compaction raised GPT-5.5's retrieval calls from 21 to 64.
+
 ## A classifier
 
 A single threshold compacts all work at the same context size. A classifier that
@@ -488,7 +545,7 @@ A request at 700k costs about \$0.20, against about \$0.06 at 150k, so a
 compaction there pays for its \$1.13 within 9 requests, the length of a
 median turn. The lowest-cost threshold reaches 700k only if the requests after a
 compaction get much less done, and even then compacting at 700k barely beats
-never compacting:
+compacting:
 
 | what puts the lowest-cost threshold at 700k | effectiveness right after a compaction, against 1M | effectiveness per dollar against never compacting |
 |----|----|----|
