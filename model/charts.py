@@ -458,7 +458,7 @@ def effectiveness_curve(out):
 def cost_curve(out, p, c):
     """The steady state's cost per unit of effectiveness against the compaction point, relative to never
     compacting, at the β the effectiveness chart draws, the base case thicker. A dot marks each β's lowest
-    point, named beside it to the 1k the text gives (fit.steady)."""
+    point (fit.steady), and each line is named by its β alone, since the axes give the point's values."""
     betas = (0, fit.BASE / 2, fit.BASE, fit.BASE * 2)
     for theme, t in THEMES.items():
         fig, ax = plt.subplots(figsize=(9, 3.8))
@@ -473,12 +473,12 @@ def cost_curve(out, p, c):
             if best >= fit.AUTO:
                 # No compaction short of Claude Code's own pays, so the name sits above the line's descent.
                 x = 600_000
-                ax.text(x, float(np.interp(x, X, y)) + 0.03, f"β = {b:g}: lowest at {tokens(fit.AUTO)}, where "
-                        "Claude Code compacts", ha="left", va="bottom", fontsize=9, color=t["ink"])
+                ax.text(x, float(np.interp(x, X, y)) + 0.03, f"β = {b:g}", ha="left", va="bottom", fontsize=9,
+                        color=t["ink"])
                 continue
             least = float(J[X >= best][0] / J[-1])
             ax.plot([best], [least], "o", ms=6.5, mfc=color, mec=t["page"], mew=1.5, zorder=4)
-            name = f"β = {b:g}: lowest at {best / 1e3:.0f}k, {least:.1%}" + ("\nthe base case" if base else "")
+            name = f"β = {b:g}" + (", the base case" if base else "")
             # On the page's colour, which breaks a flatter β's line where it passes under the name.
             ax.text(best + 14_000, least - 0.015, name, ha="left", va="top", fontsize=9, color=t["ink"],
                     linespacing=1.3, zorder=5, bbox={"facecolor": t["page"], "edgecolor": "none", "pad": 1.5})
