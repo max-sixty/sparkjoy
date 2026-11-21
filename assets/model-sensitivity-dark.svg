@@ -279,69 +279,21 @@ z
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #f0efec" x="509.4" y="81.746297" transform="rotate(-0 509.4 81.746297)">965k, where Claude Code compacts</text>
    </g>
    <g id="text_19">
-    <g id="patch_4">
-     <path d="M 5.67 258.230897 
-L 176.807813 258.230897 
-L 176.807813 246.544959 
-L 5.67 246.544959 
-z
-" style="fill: #0d1117"/>
-    </g>
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="7.2" y="254.824959" transform="rotate(-0 7.2 254.824959)">N, output of the compaction request (5.6k)</text>
    </g>
    <g id="text_20">
-    <g id="patch_5">
-     <path d="M 5.67 218.383397 
-L 190.638281 218.383397 
-L 190.638281 206.644022 
-L 5.67 206.644022 
-z
-" style="fill: #0d1117"/>
-    </g>
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="7.2" y="214.924022" transform="rotate(-0 7.2 214.924022)">P, size of the system prompt and tools (30.4k)</text>
    </g>
    <g id="text_21">
-    <g id="patch_6">
-     <path d="M 5.67 178.535897 
-L 225.250313 178.535897 
-L 225.250313 166.849959 
-L 5.67 166.849959 
-z
-" style="fill: #0d1117"/>
-    </g>
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="7.2" y="175.129959" transform="rotate(-0 7.2 175.129959)">ℓ, share of requests that find the cache lapsed (0.56%)</text>
    </g>
    <g id="text_22">
-    <g id="patch_7">
-     <path d="M 5.67 138.688397 
-L 175.805156 138.688397 
-L 175.805156 126.887147 
-L 5.67 126.887147 
-z
-" style="fill: #0d1117"/>
-    </g>
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="7.2" y="135.167147" transform="rotate(-0 7.2 135.167147)">g, growth of the context per request (1.7k)</text>
    </g>
    <g id="text_23">
-    <g id="patch_8">
-     <path d="M 5.67 98.840897 
-L 153.291094 98.840897 
-L 153.291094 87.154959 
-L 5.67 87.154959 
-z
-" style="fill: #0d1117"/>
-    </g>
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="7.2" y="95.434959" transform="rotate(-0 7.2 95.434959)">K, context after a compaction (142k)</text>
    </g>
    <g id="text_24">
-    <g id="patch_9">
-     <path d="M 5.67 58.993397 
-L 257.175 58.993397 
-L 257.175 47.192147 
-L 5.67 47.192147 
-z
-" style="fill: #0d1117"/>
-    </g>
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="7.2" y="55.472147" transform="rotate(-0 7.2 55.472147)">β, growth of effectiveness with the context (0.5, not measured)</text>
    </g>
    <g id="legend_1">
@@ -361,7 +313,7 @@ z
     <g id="text_26">
      <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="355.840313" y="17.55" transform="rotate(-0 355.840313 17.55)">doubled</text>
     </g>
-    <g id="patch_10">
+    <g id="patch_4">
      <path d="M 396.869063 17.55 
 L 407.669063 17.55 
 L 407.669063 11.25 

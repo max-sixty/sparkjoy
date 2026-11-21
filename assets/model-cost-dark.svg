@@ -277,6 +277,12 @@ L 538.82 95.56338
 L 538.82 236.01138 
 " style="fill: none; stroke: #c3c2b7; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
+   <g id="text_13">
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="180.081232" y="210.266244" transform="rotate(-0 180.081232 210.266244)">β = 0</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="198.347781" y="177.507383" transform="rotate(-0 198.347781 177.507383)">β = 0.25</text>
+   </g>
    <g id="line2d_19">
     <path d="M 125.471573 -1 
 L 126.894869 13.639805 
@@ -327,7 +333,10 @@ L 538.82 95.56338
 L 538.82 95.56338 
 " clip-path="url(#p2d166654ca)" style="fill: none; stroke: #5c9cea; stroke-width: 2.6; stroke-linecap: square"/>
    </g>
-   <g id="text_13">
+   <g id="text_15">
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #f0efec" x="232.174724" y="118.390342" transform="rotate(-0 232.174724 118.390342)">β = 0.5, the base case</text>
+   </g>
+   <g id="text_16">
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="348.868705" y="62.685006" transform="rotate(-0 348.868705 62.685006)">β = 1</text>
    </g>
    <g id="line2d_20">
@@ -383,39 +392,6 @@ z
     <g clip-path="url(#p2d166654ca)">
      <use xlink:href="#m4dec9228c2" x="232.174724" y="129.515573" style="fill: #5c9cea; stroke: #0d1117; stroke-width: 1.5"/>
     </g>
-   </g>
-   <g id="text_14">
-    <g id="patch_4">
-     <path d="M 178.551232 215.80933 
-L 202.370294 215.80933 
-L 202.370294 201.986244 
-L 178.551232 201.986244 
-z
-" style="fill: #0d1117"/>
-    </g>
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="180.081232" y="211.275053" transform="rotate(-0 180.081232 211.275053)">β = 0</text>
-   </g>
-   <g id="text_15">
-    <g id="patch_5">
-     <path d="M 196.817781 183.050468 
-L 233.146844 183.050468 
-L 233.146844 169.227383 
-L 196.817781 169.227383 
-z
-" style="fill: #0d1117"/>
-    </g>
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="198.347781" y="178.516191" transform="rotate(-0 198.347781 178.516191)">β = 0.25</text>
-   </g>
-   <g id="text_16">
-    <g id="patch_6">
-     <path d="M 237.930527 145.319859 
-L 330.290215 145.319859 
-L 330.290215 131.496773 
-L 237.930527 131.496773 
-z
-" style="fill: #0d1117"/>
-    </g>
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="239.460527" y="140.785582" transform="rotate(-0 239.460527 140.785582)">β = 0.5, the base case</text>
    </g>
   </g>
  </g>
