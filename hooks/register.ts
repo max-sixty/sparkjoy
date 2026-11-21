@@ -399,6 +399,11 @@ function hash(text: string) {
 // `compact`, though the hook reads only `compact` and `reason`. Without those
 // two fields the model almost never keeps the context mid-task, even when asked
 // for `reason` first or told to consider what comes next (README.md, "Evals").
+// TODO: try a shorter question. This one gives the model every figure behind
+// the costs. Code could do that arithmetic beforehand and state only its
+// result, such as how many compactions keeping the context through the next
+// turn costs, and leave the model mainly to judge whether the next turns need
+// the transcript's detail.
 function question(tokens: number, idleMinutes?: number, figures: Figures = AUTHOR) {
   const { WRITE, OUTPUT, SUMMARY, K, P, TURN_MEDIAN, TURN_MEAN } = figures
   const now = thousands(tokens)
