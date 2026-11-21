@@ -15,7 +15,7 @@ from one read of the sessions:
                  at half and twice it, and at β = 0
   cost           the steady state's cost per unit of effectiveness against the compaction threshold, at the
                  same four β, with each one's lowest point, under a request's mean cost and mean
-                 effectiveness, the averages it is the ratio of
+                 effectiveness, the averages it is the ratio of, on one panel, all relative to never compacting
   sensitivity    how far the lowest-cost threshold moves with each measured parameter and with β, at the
                  base case
   threshold      the lowest-cost threshold against β, in the steady state and the replay
@@ -458,41 +458,36 @@ def effectiveness_curve(out):
 def cost_curve(out, p, c):
     """The steady state's cost per unit of effectiveness against the compaction threshold, relative to never
     compacting, at the β the effectiveness chart draws, the base case thicker, under the two averages it is
-    the ratio of: a request's mean cost over a cycle, its share of the compaction included, which no β
-    changes, and its mean effectiveness, at each β. A dot marks the lowest point of the mean cost and of
+    the ratio of, on one panel and relative to never compacting too: a request's mean cost over a cycle, its
+    share of the compaction included, which no β changes, and its mean effectiveness, at each β. Dividing
+    both by never compacting compares an average with an average, and puts the cost line below a β's line
+    wherever compacting there costs less per unit than never compacting. A dot marks the lowest point of
     each β's cost per unit (fit.steady), and each line is named by its β alone, since the axes give the
     points' values."""
     betas = (0, fit.BASE / 2, fit.BASE, fit.BASE * 2)
     for theme, t in THEMES.items():
-        fig, (top, mid, low) = plt.subplots(3, 1, figsize=(9, 8.6), sharex=True,
-                                            gridspec_kw={"height_ratios": (1, 1, 1.4), "hspace": 0.42})
-        for ax in (top, mid, low):
+        fig, (top, low) = plt.subplots(2, 1, figsize=(9, 6.8), sharex=True,
+                                       gridspec_kw={"height_ratios": (1.3, 1.4), "hspace": 0.3})
+        for ax in (top, low):
             style(ax, t)
 
-        # A request's mean cost, the same at every β, in dollars.
+        # A request's mean effectiveness at each β, the cycle's effectiveness over its requests, and its mean
+        # cost, the same at every β, each relative to never compacting.
         X, A = fit.curve(p, c, 0)
-        top.plot(X, A * c.read, color=t["cost"], lw=2.2)
-        best = fit.steady(p, c, 0)
-        top.plot([best], [float(fit.per_unit(p, c, best, 0)) * c.read], "o", ms=6.5, mfc=t["cost"],
-                 mec=t["page"], mew=1.5, zorder=4)
-        top.yaxis.set_major_formatter(dollars)
-        top.set_ylim(0, 0.2)
-        top.set_yticks([0, 0.05, 0.1, 0.15, 0.2])
-        axis_name(top, "Cost per request, averaged over a cycle ($)", t)
-
-        # A request's mean effectiveness at each β: the cycle's effectiveness over its requests.
         for b in betas:
-            color = shade(t, b)
             base = b == fit.BASE
             mean = fit.cycle(p, c, X, b)[1] / (X - p.K)
-            mid.plot(X, mean, color=color, lw=2.6 if base else 1.6, zorder=3 if base else 2)
-            # Each name above its line at 700k, where the lines are far enough apart that none crosses it.
-            mid.text(700_000, float(np.interp(700_000, X, mean)) + 0.04, f"β = {b:g}", ha="left", va="bottom",
-                     fontsize=9, color=t["ink"])
-        mid.yaxis.set_major_formatter(percent)
-        mid.set_ylim(0, 1.12)
-        mid.set_yticks([0, 0.25, 0.5, 0.75, 1])
-        axis_name(mid, "Effectiveness per request, averaged over a cycle, relative to a request at 1M", t)
+            top.plot(X, mean / mean[-1], color=shade(t, b), lw=2.6 if base else 1.6, zorder=3 if base else 2)
+            # Each name left of its line's start, where the lines are furthest apart; they all end at 100%.
+            top.text(X[0] - 10_000, float(mean[0] / mean[-1]), f"β = {b:g}", ha="right", va="center", fontsize=9,
+                     color=t["ink"])
+        top.plot(X, A / A[-1], color=t["cost"], lw=2.6, zorder=4)
+        # The name right of the cost line's steep fall, above every other line.
+        top.text(172_000, 1.2, "cost", ha="left", va="center", fontsize=9, color=t["ink"])
+        top.yaxis.set_major_formatter(percent)
+        top.set_ylim(0, 1.3)
+        top.set_yticks([0, 0.25, 0.5, 0.75, 1, 1.25])
+        axis_name(top, "Cost and effectiveness per request, averaged over a cycle, relative to never compacting", t)
 
         # Their ratio, relative to never compacting.
         for b in betas:
