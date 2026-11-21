@@ -136,7 +136,10 @@ likely finishes with a turn, and again if the session then sits idle until just
 before its prompt cache lapses. It forks the conversation for one request, which
 asks the session's own model whether to compact now. The fork reads the whole
 transcript from the prompt cache and outputs about a hundred tokens, a verdict
-and a one-line reason.
+and a one-line reason. The fork is one more request from Claude Code to the
+session's own model, so it sends the conversation nowhere the session doesn't
+already. `/sparkjoy report` reads your transcripts on your machine and sends
+nothing; `uv` fetches Python and numpy the first time it runs.
 
 The question asks whether the next turns will need detail a summary drops, such
 as failed attempts or a design still taking shape, and gives what a compaction
@@ -279,6 +282,9 @@ question.
   mainly on the five-minute cache, in background sessions, below 200k, or with
   [`idleCompaction`](https://code.claude.com/docs/en/settings-reference#idlecompaction)
   set to `false`.
+- If you set `/autocompact`, keep it above sparkjoy's turn-end floor. At or
+  below the floor, Claude Code compacts mid-turn before any turn end reaches it,
+  so sparkjoy never asks at a turn end.
 
 [^evals]: The [evals](evals/README.md) put the question to the model at turn
     ends from my sessions.
