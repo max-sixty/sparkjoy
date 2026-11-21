@@ -135,13 +135,10 @@ parameter and where it comes from.
 </picture>
 
 A compaction's cost hardly changes with the context it compacts, from \$1.01 at
-142k to \$1.18 at 965k[^parts]. Its only part that grows is the cache read of
-the context, at \$0.20 per million tokens. Most of the rest, \$0.87, is the
-cache write of the context it leaves, the same at any size. My skills,
-instruction files and memory make up \$0.51 of that, and files re-attached or
-read again \$0.19. The summary is \$0.04. The system prompt and tools, P, stay
-in a cache Claude Code shares across sessions, so a compaction doesn't write
-them again.
+142k to \$1.18 at 965k[^parts], since most of it, \$0.87, is the cache write of
+the context it leaves. My skills, instruction files and memory make up \$0.51
+of that write. The system prompt and tools, P, stay in a cache Claude Code
+shares across sessions, so a compaction doesn't write them again.
 
 The larger the context, the sooner a compaction pays for itself. After a
 compaction at 700k, each later request reads 558k fewer tokens, and the
