@@ -13,6 +13,8 @@ from one read of the sessions:
                  as a schematic
   effectiveness  a request's effectiveness against its context, at the base case for β (fit.BASE),
                  at half and twice it, and at β = 0
+  cost           the steady state's cost per unit of effectiveness against the compaction point, at the
+                 same four β, with each one's lowest point
   sensitivity    how far the best compaction point moves with each measured parameter and with β, at the
                  base case
   threshold      the best compaction point against β, in the steady state and the replay
@@ -424,10 +426,9 @@ def average(out, p, c):
         save(fig, out / f"model-average-{theme}.svg")
 
 
-def effectiveness_curve(out, p):
+def effectiveness_curve(out):
     """A request's effectiveness against its context, (x / 1M)^β, at the base case and at the β the
-    sensitivity chart takes it to (halved and doubled), with β = 0 for reference. A dot on each curve at
-    K, the context a compaction leaves, carries the curve's name."""
+    sensitivity chart takes it to (halved and doubled), with β = 0 for reference, each curve named beside it."""
     x = np.linspace(0, fit.WINDOW, 1_000)
     betas = (0, fit.BASE / 2, fit.BASE, fit.BASE * 2)
     for theme, t in THEMES.items():
@@ -438,13 +439,11 @@ def effectiveness_curve(out, p):
             base = b == fit.BASE
             # Unclipped: each curve starts on the plot's left edge, where clipping would halve its line.
             ax.plot(x, fit.eta(x, b), color=color, lw=2.6 if base else 1.6, clip_on=False, zorder=3 if base else 2)
-            y = float(fit.eta(p.K, b))
-            ax.plot([p.K], [y], "o", ms=6.5, mfc=color, mec=t["page"], mew=1.5, zorder=4)
-            # The base case's name takes a second line, which ends before the steepest curve below it.
-            name = f"β = {b:g}: {y:.0%}" + ("\nthe base case" if base else "")
-            ax.text(p.K + 14_000, y - 0.03, name, ha="left", va="top", fontsize=9, color=t["ink"], linespacing=1.3)
-        ax.text(p.K + 14_000, 0.015, f"dots at {tokens(p.K)}, what a compaction leaves", ha="left", va="bottom",
-                fontsize=9, color=t["muted"])
+            # Each name below its curve at 150k, where the curves are far apart, on the page's colour, which
+            # breaks the steepest curve where the base case's second line meets it.
+            ax.text(164_000, float(fit.eta(150_000, b)) - 0.03, f"β = {b:g}" + ("\nthe base case" if base else ""),
+                    ha="left", va="top", fontsize=9, color=t["ink"], linespacing=1.3, zorder=5,
+                    bbox={"facecolor": t["page"], "edgecolor": "none", "pad": 1.5})
         ax.set_xlim(0, fit.WINDOW)
         ax.xaxis.set_major_formatter(tokens)
         ax.set_xticks([0, 250_000, 500_000, 750_000, 1_000_000])
@@ -454,6 +453,44 @@ def effectiveness_curve(out, p):
         ax.set_xlabel("Context x (tokens)", color=t["muted"], fontsize=10)
         axis_name(ax, "Effectiveness η(x), relative to a request at 1M", t)
         save(fig, out / f"model-effectiveness-{theme}.svg")
+
+
+def cost_curve(out, p, c):
+    """The steady state's cost per unit of effectiveness against the compaction point, relative to never
+    compacting, at the β the effectiveness chart draws, the base case thicker. A dot marks each β's lowest
+    point, named beside it to the 1k the text gives (fit.steady)."""
+    betas = (0, fit.BASE / 2, fit.BASE, fit.BASE * 2)
+    for theme, t in THEMES.items():
+        fig, ax = plt.subplots(figsize=(9, 3.8))
+        style(ax, t)
+        for b in betas:
+            color = shade(t, b)
+            base = b == fit.BASE
+            X, J = fit.curve(p, c, b)
+            y = J / J[-1]
+            ax.plot(X, y, color=color, lw=2.6 if base else 1.6, zorder=3 if base else 2)
+            best = fit.steady(p, c, b)
+            if best >= fit.AUTO:
+                # No compaction short of Claude Code's own pays, so the name sits above the line's descent.
+                x = 600_000
+                ax.text(x, float(np.interp(x, X, y)) + 0.03, f"β = {b:g}: lowest at {tokens(fit.AUTO)}, where "
+                        "Claude Code compacts", ha="left", va="bottom", fontsize=9, color=t["ink"])
+                continue
+            least = float(J[X >= best][0] / J[-1])
+            ax.plot([best], [least], "o", ms=6.5, mfc=color, mec=t["page"], mew=1.5, zorder=4)
+            name = f"β = {b:g}: lowest at {best / 1e3:.0f}k, {least:.1%}" + ("\nthe base case" if base else "")
+            # On the page's colour, which breaks a flatter β's line where it passes under the name.
+            ax.text(best + 14_000, least - 0.015, name, ha="left", va="top", fontsize=9, color=t["ink"],
+                    linespacing=1.3, zorder=5, bbox={"facecolor": t["page"], "edgecolor": "none", "pad": 1.5})
+        ax.set_xlim(0, fit.AUTO)
+        ax.xaxis.set_major_formatter(tokens)
+        ax.set_xticks([0, 200_000, 400_000, 600_000, 800_000])
+        ax.yaxis.set_major_formatter(percent)
+        ax.set_ylim(0.4, 1.3)
+        ax.set_yticks([0.4, 0.6, 0.8, 1, 1.2])
+        ax.set_xlabel("Compaction point X (tokens)", color=t["muted"], fontsize=10)
+        axis_name(ax, "Cost per unit of effectiveness, relative to never compacting", t)
+        save(fig, out / f"model-cost-{theme}.svg")
 
 
 def sensitivity(out, p, c, boot):
@@ -485,8 +522,10 @@ def sensitivity(out, p, c, boot):
         style(ax, t)
         ax.grid(False)
         ax.grid(axis="x", color=t["grid"], lw=0.8)
-        ink = t["ink"]
-        ax.axvline(base, color=t["muted"], lw=1, zorder=1)
+        # The bars in the base case's blue, the colour the effectiveness and cost charts give it; the line
+        # at the measured point a tint of it, so the names it passes stay legible.
+        ink = shade(t, b)
+        ax.axvline(base, color=tint(ink, t["page"], 0.6), lw=1, zorder=1)
         ax.text(base + 8_000, len(order) - 0.3, f"{k(base)}, with every parameter as measured", ha="left",
                 va="bottom", fontsize=9, color=t["ink"])
         for y, f in enumerate(order):
@@ -516,10 +555,9 @@ def sensitivity(out, p, c, boot):
         ax.set_xlim(100_000, fit.AUTO)
         ax.set_xticks(range(200_000, 900_001, 200_000))
         ax.xaxis.set_major_formatter(tokens)
-        muted = t["muted"]
-        keys = [plt.Line2D([], [], ls="", marker="o", ms=6, mfc=t["page"], mec=muted, mew=1.6),
-                plt.Line2D([], [], ls="", marker="o", ms=6, mfc=muted, mec=t["page"], mew=1),
-                Patch(color=muted, lw=0)]
+        keys = [plt.Line2D([], [], ls="", marker="o", ms=6, mfc=t["page"], mec=ink, mew=1.6),
+                plt.Line2D([], [], ls="", marker="o", ms=6, mfc=ink, mec=t["page"], mew=1),
+                Patch(color=ink, lw=0)]
         ax.legend(keys, ["halved", "doubled", "across its 90% interval"], frameon=False, fontsize=9,
                   labelcolor=t["ink"], ncol=3, loc="lower right", bbox_to_anchor=(1, 1.0), handletextpad=0.4,
                   columnspacing=1.0, handlelength=1.2)
@@ -658,7 +696,8 @@ def draw(out, S, p, c, boot, cost, effectiveness, BT, BX):
     payback(out, p, c)
     bill(out, S, p, c)
     average(out, p, c)
-    effectiveness_curve(out, p)
+    effectiveness_curve(out)
+    cost_curve(out, p, c)
     sensitivity(out, p, c, boot)
     thresholds(out, cost, effectiveness, BT, BX, p, c)
     voi(out, p, c)

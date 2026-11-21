@@ -160,7 +160,7 @@ of β = 0.5, where a request at 250k gets half as much done as one at 1M, and
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-effectiveness-dark.svg">
-  <img alt="Effectiveness η(x), relative to a request at 1M, against the context x, for β of 0, 0.25, 0.5 and 1 on one blue ramp, the base case, β = 0.5, drawn thicker. β = 0 is flat at 100%; the others rise from 0 to 100% at 1M, β = 1 in a straight line. Dots at 142k, what a compaction leaves, mark 100%, 61%, 38% and 14%." src="../assets/model-effectiveness-light.svg">
+  <img alt="Effectiveness η(x), relative to a request at 1M, against the context x, for β of 0, 0.25, 0.5 and 1 on one blue ramp, the base case, β = 0.5, drawn thicker. β = 0 is flat at 100%; the others rise from 0 to 100% at 1M, β = 1 in a straight line." src="../assets/model-effectiveness-light.svg">
 </picture>
 
 η depends only on the context's size, so a request right after a compaction, at
@@ -270,6 +270,11 @@ cached reads, and its context holds 335k tokens.
 </details>
 
 ### Best point
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/model-cost-dark.svg">
+  <img alt="Cost per unit of effectiveness, relative to never compacting, against the compaction point from 142k to 965k, for β of 0, 0.25, 0.5 and 1 on one blue ramp, the base case, β = 0.5, drawn thicker. The first three fall steeply from 142k to a minimum and rise to 100% at 965k; dots mark the minima: 55.4% at 262k for β = 0, 69.4% at 297k for 0.25 and 85.5% at 376k for 0.5. β = 1 stays above 100% and falls to it at 965k, where Claude Code compacts." src="../assets/model-cost-light.svg">
+</picture>
 
 At β = 0.5, the best point is 376k. Compacting there costs 14.5% less per unit
 of work than never compacting, and compacting anywhere from 310k to 469k comes
