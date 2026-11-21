@@ -284,9 +284,10 @@ For my sessions on Opus 5.5[^prices]:
 - Compacting only at turn ends, the threshold that minimizes overall cost at the
   base case is 280k[^x]. It is lower mostly because one long turn can carry the
   context far past the best point before the next turn end.
-- sparkjoy's default floors, 250k at turn ends and 175k in an idle session, are
-  the pair that costs least in the replay, counting cost alone. Above them, its
-  question decides whether to compact.
+- sparkjoy asks its question only once the context reaches a floor, 250k at a
+  turn end or 175k in an idle session. The default floors are the pair that
+  costs least in the replay when it compacts wherever they allow, counting cost
+  alone ([Idle sessions](docs/cost-model.md#idle-sessions)).
 - What the question adds depends on how much detail a compaction in the middle
   of a task loses, which my sessions measure poorly.
 
