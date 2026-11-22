@@ -74,7 +74,9 @@ tab, select sparkjoy, and turn on auto-update.
 - **`/sparkjoy report`** opens a page on your sessions of the last 14 days,
   with every verdict and what the compactions saved. It fits the [cost
   model](#cost-model) to those sessions, and sparkjoy uses the fit from then on.
-  It needs [uv](https://docs.astral.sh/uv/).
+  It reads your transcripts on your machine and sends nothing. It needs
+  [uv](https://docs.astral.sh/uv/), which fetches Python and numpy the first
+  time it runs.
 
 <details>
 <summary>Sample report</summary>
@@ -149,47 +151,40 @@ reached 400k at a turn end; it now asks from 250k:
 
 ### Compared with `/autocompact`
 
-`/autocompact` compacts after whichever request brings the context to the size
-you set, so it never lets a long turn run on with a large context, as waiting
-for a turn end does. I replayed the same sessions both ways, each at the size
-that cost least, and each also compacting idle sessions from 175k:
+`/autocompact` compacts every session once its context reaches the size you
+set. sparkjoy compacts only where the session's model judges that the work ahead
+no longer needs the context, and only between turns.
 
-|                                                | `/autocompact`           | compacting at every turn end |
-| ---------------------------------------------- | ------------------------ | ---------------------------- |
-| saved, counting tokens alone                   | 40%, at 270k             | 31%, from 240k               |
-| saved, counting the work a larger context does | 15%, at 370k             | 14%, from 390k               |
-| compactions in the middle of a turn            | 362 at 270k, 169 at 370k | 1                            |
+That judgment pays where work differs in how much it needs its context: a design
+taking shape over many turns needs more of it than a finished fix, and a turn
+end in the middle of a task needs more than one that finishes it. Across the
+cases the [cost model](#a-classifier) works through, a judgment right 9 times in
+10 saves 2% to 10% against the best single size. Where work doesn't differ, one
+size suits all of it, and `/autocompact` at its best size saves a little more,
+since a long turn can carry the context past that size before it ends. In a
+replay of my sessions, `/autocompact` saves 15%, against 14% for compacting at
+every turn end[^autocompact]. No session yet measures how widely work differs,
+or how often sparkjoy's judgment is right.
 
-The second row follows the [cost model](#cost-model)'s base case, which takes a
-request with 250k of context to get half as much work done as one with the full
-1M.
+`/autocompact` also compacts in the middle of a turn, 169 times in that replay,
+where a summary is the most likely to drop what the turn is working on. If each
+such compaction wastes 7 more requests than one at a turn end, that alone closes
+the gap.
 
-Neither row counts what a compaction in the middle of a turn drops, which the
-turn's next requests then read again, run again or get wrong. If each such
-compaction wastes 7 more requests than one at a turn end, the two cost the same
-in the second row. My sessions can't measure that yet: only 17 of their 1,399
-compactions came in the middle of a turn ([Mid-turn or at a turn
-end](docs/cost-model.md#mid-turn-or-at-a-turn-end)). A replay can't price
-sparkjoy's own judgment either, since what keeping the context at some turn ends
-saves depends on the same loss.
-
-I run sparkjoy without `/autocompact`, since a compaction in the middle of a
-turn is the one most likely to drop what the turn is working on, and in the
-second row the two differ by less than a percentage point. If you set
-`/autocompact` as well, keep it above sparkjoy's turn-end floor
-([Limits](#limits)).
+I run sparkjoy without `/autocompact`. If you set both, keep `/autocompact`
+above sparkjoy's turn-end floor ([Limits](#limits)).
 
 ## How it decides
 
-sparkjoy's question fires at each turn end from 250k, since a piece of work most
-likely finishes with a turn, and again if the session then sits idle until just
-before its prompt cache lapses. It forks the conversation for one request, which
-asks the session's own model whether to compact now. The fork reads the whole
-transcript from the prompt cache and outputs about a hundred tokens, a verdict
-and a one-line reason. The fork is one more request from Claude Code to the
-session's own model, so the conversation goes only where the session already
-sends it. `/sparkjoy report` reads your transcripts on your machine and sends
-nothing, and `uv` fetches Python and numpy the first time it runs.
+At each turn end from 250k, sparkjoy forks the conversation for one request that
+asks the session's own model whether now is a good time to compact. The fork
+reads the whole conversation, which is already in the prompt cache, so a
+question costs about as much as one more request. In my sessions, the questions
+cost $22 in all, against $4,013 for the sessions. The model answers in about a
+hundred tokens, a verdict and a one-line reason. If the session then sits idle,
+sparkjoy asks again just before the cache lapses. The fork is one more request
+from Claude Code to the session's own model, so the conversation goes only where
+the session already sends it.
 
 The question asks whether the next turns will need detail a summary drops, such
 as failed attempts or a design still taking shape, and gives what a compaction
@@ -197,8 +192,11 @@ and keeping the context each cost at the context's size.
 
 In the [evals](#evals), the question compacts at every turn end that finishes
 a piece of work. At turn ends in the middle of a task, where it should keep the
-context, it kept it in 80 of 160 runs, from none of 16 in one batch of runs to
-24 of 32 in another.
+context, its verdict isn't stable: the same question on the same transcripts
+kept the context in none of 16 runs one morning and in 24 of 32 that afternoon,
+80 of 160 in all. It keeps mostly when it answers without thinking first, and
+how often it thinks varied from one batch of runs to the next, for a reason not
+yet found.
 
 ### The prompt
 
@@ -361,6 +359,15 @@ size.
 [^evals]:
     The [evals](evals/README.md) put the question to the model at turn
     ends from my sessions.
+
+[^autocompact]:
+    Each policy compacts at the size that cost least, and also compacts idle
+    sessions from 175k. The replay takes the cost model's base case, where a
+    request with 250k of context gets half as much done as one with the full 1M.
+    Counting tokens alone, `/autocompact` at 270k saves 40% and compacting at
+    every turn end from 240k saves 31%, and turn ends break even once a
+    compaction in the middle of a turn wastes 35 more requests than one at a
+    turn end.
 
 [^replay]:
     The replay keeps every logged request fixed and moves only the
