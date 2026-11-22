@@ -168,6 +168,8 @@ def days(since, until):
 
 
 def duration(seconds):
+    if round(seconds) < 60:
+        return f"{round(seconds)} s"
     h, m = divmod(round(seconds / 60), 60)
     return f"{h} h {m:02d} min" if h else f"{m} min"
 
