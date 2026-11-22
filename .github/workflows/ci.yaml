@@ -26,7 +26,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: npm install --global @anthropic-ai/claude-code@${{ matrix.channel }}
-      - run: claude --version && claude plugin test
+      - run: claude --version && claude plugin validate . && claude plugin test
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pre-commit/action@v3.0.1
 
   report:
     runs-on: ubuntu-latest

@@ -1,0 +1,4 @@
+# A hook that rewrites (ruff, oxfmt, the whitespace fixers) fails the merge and
+# leaves the rewrite uncommitted in the worktree; `wt merge` again sweeps it in.
+[pre-merge]
+lint = "pre-commit run --all-files"

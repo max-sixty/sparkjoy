@@ -30,5 +30,6 @@ const values: Record<string, unknown> = {
   instructions: undefined,
 }
 const unknown = names.filter(name => !(name in values))
-if (unknown.length > 0) throw new Error(`question() takes parameters this script doesn't know: ${unknown}`)
+if (unknown.length > 0)
+  throw new Error(`question() takes parameters this script doesn't know: ${unknown}`)
 process.stdout.write(question(...names.map(name => values[name])))

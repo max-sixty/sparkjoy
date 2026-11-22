@@ -1,0 +1,13 @@
+target-version = "py312"
+
+[lint]
+select = [
+  "F", "E", "W", "I", "UP", "B", "RUF",
+  "ASYNC", "LOG", "PLE",
+  # Pytest mistakes: invalid fixture arguments, missing exception types,
+  # duplicate cases, always-failing asserts, ineffective marks and parameters.
+  "PT002", "PT010", "PT014", "PT015", "PT024", "PT025", "PT026", "PT028",
+]
+# The formatter owns line wrapping, and a lambda may name a small local function.
+# Charts and printed figures use typographic characters such as − and – on purpose.
+ignore = ["E501", "E731", "RUF001", "RUF002", "RUF003"]
