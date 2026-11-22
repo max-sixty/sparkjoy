@@ -163,8 +163,8 @@ end from 390k saved 14%.
 Neither figure counts the detail a compaction in the middle of a turn drops,
 which the turn's next requests then read again, run again or get wrong.
 `/autocompact` at 270k compacted in the middle of a turn 362 times. At the base
-case, turn ends come out ahead once each compaction in the middle of a turn
-wastes 7 more requests than one at a turn end. My sessions can't measure that
+case, turn ends break even once each compaction in the middle of a turn wastes
+7 more requests than one at a turn end. My sessions can't measure that
 yet: only 17 of their 1,399 compactions came in the middle of a turn ([Mid-turn
 or at a turn end](docs/cost-model.md#mid-turn-or-at-a-turn-end)).
 
@@ -399,7 +399,7 @@ lapses, compacting spares the next request a cache write of the whole context.
 
 If β and D were each one number for all work, one threshold would suit all of
 it, and a policy could compact after whichever request reached it, as
-`/autocompact` does. Because they vary, a policy that tells the cases apart can
+`/autocompact` does once the context reaches the size you set. Because they vary, a policy that tells the cases apart can
 compact each where it costs least. sparkjoy compacts only at a turn end, where
 it asks the session's model whether the next turns need detail a summary would
 drop, or just before an idle session's cache lapses.
@@ -408,8 +408,8 @@ Each section below takes one case of the model, from the simplest, whose formula
 shows which parameters matter, to a replay that follows real sessions:
 
 - **[Cost alone](docs/cost-model.md#cost-alone).** β = 0 and D = 0, and the context grows by the
-  same number of tokens with each request. The lowest-cost threshold has a
-  closed form.
+  same number of tokens with each request. The lowest-cost threshold, the
+  context at which compacting costs least, has a closed form.
 - **[Cost and context](docs/cost-model.md#cost-and-context).** One β for all work, and D = 0. The
   lowest-cost threshold is the one where the cost per unit of work done is
   lowest.
@@ -441,12 +441,12 @@ For my sessions on Opus 5.5[^prices]:
   run a median of 9 requests but a mean of 38, so one long turn can carry the
   context far past where compacting pays before it ends. In the replay, at each
   policy's lowest-cost threshold, compacting at every turn end saves 9.1
-  percentage points less than compacting after any request counting cost alone,
-  and 0.9 less at the base case, β = 0.5, where a request at 250k gets half as
-  much done as one at 1M. It costs as little once a compaction in the middle of
-  a turn wastes 35 more requests than one at a turn end counting cost alone, or
-  7 more at the base case. No session of mine measures that ([Mid-turn or at a
-  turn end](docs/cost-model.md#mid-turn-or-at-a-turn-end)).
+  percentage points less than compacting after any request, counting cost
+  alone, and 0.9 less at the base case, β = 0.5, where a request at 250k gets half as
+  much done as one at 1M. Turn ends break even once a compaction in the middle
+  of a turn wastes 35 more requests than one at a turn end, counting cost alone,
+  or 7 more at the base case. No session of mine measures that ([Mid-turn or at
+  a turn end](docs/cost-model.md#mid-turn-or-at-a-turn-end)).
 - Just before an idle session's cache lapses, compacting pays from about 160k
   ([Idle sessions](docs/cost-model.md#idle-sessions)).
 - A compaction costs about \$1 at any context size, most of it for the cache
@@ -457,8 +457,8 @@ For my sessions on Opus 5.5[^prices]:
   context](docs/cost-model.md#cost-and-context)).
 - sparkjoy asks its question only once the context reaches a floor, 250k at a
   turn end or 175k in an idle session. The default floors are the pair that
-  costs least in the replay when it compacts wherever they allow, counting cost
-  alone ([Floors](docs/cost-model.md#floors)).
+  costs least, counting cost alone, in a replay that compacts wherever they
+  allow ([Floors](docs/cost-model.md#floors)).
 
 ## Costs
 
@@ -657,13 +657,13 @@ that. Counting cost alone, X\*(0) is 262k.
 A request's mean cost over a cycle doesn't depend on β, but what it gets done
 does:
 
-| compact at                                                  | requests a cycle | mean cost per request | cost per unit of work, against never compacting |
-| ----------------------------------------------------------- | ---------------- | --------------------- | ----------------------------------------------- |
-| 175k                                                        | 19               | \$0.119               | 132.0%                                          |
-| 262k, X\*(0), the lowest-cost threshold counting cost alone | 70               | \$0.091               | 89.6%                                           |
-| 376k, X\*(0.5), the lowest-cost threshold at the base case  | 137              | \$0.098               | 85.5%                                           |
-| 600k                                                        | 268              | \$0.121               | 89.5%                                           |
-| never, leaving it to Claude Code at 965k                    | 482              | \$0.164               | 100%                                            |
+| compact at                                                  | requests a cycle | mean cost per request | cost per unit of work at β = 0.5, against never compacting |
+| ----------------------------------------------------------- | ---------------- | --------------------- | ---------------------------------------------------------- |
+| 175k                                                        | 19               | \$0.119               | 132.0%                                                     |
+| 262k, X\*(0), the lowest-cost threshold counting cost alone | 70               | \$0.091               | 89.6%                                                      |
+| 376k, X\*(0.5), the lowest-cost threshold at the base case  | 137              | \$0.098               | 85.5%                                                      |
+| 600k                                                        | 268              | \$0.121               | 89.5%                                                      |
+| never, leaving it to Claude Code at 965k                    | 482              | \$0.164               | 100%                                                       |
 
 ### Sensitivity
 
@@ -734,14 +734,14 @@ times, and saves 35.0% counting cost alone and 14.5% at the base case.
 11.6%.
 
 None of these savings counts the detail a compaction in the middle of a turn
-drops. Let each such compaction waste D more requests than one at a turn end,
+drops. Let each such compaction waste ΔD more requests than one at a turn end,
 each priced as a request at K, \$0.062, and move each policy's thresholds to
-where they then cost least. Compacting only at turn ends then costs as little as
-compacting after any request once D reaches 35 counting cost alone, or 7 at the
-base case. Turn ends with a backstop cost as little once D reaches 1 counting
-cost alone, and at the base case they cost less even at D = 0.
+where they then cost least. Compacting only at turn ends then breaks even with
+compacting after any request once ΔD reaches 35, counting cost alone, or 7 at
+the base case. Turn ends with a backstop break even once ΔD reaches 1, counting
+cost alone, and at the base case they cost less even at ΔD = 0.
 
-No session of mine measures D. After a compaction, nearly always at a turn end
+No session of mine measures ΔD. After a compaction, nearly always at a turn end
 or in an idle session, my sessions had about 6 more wasted requests than usual,
 and sparkjoy's question gives the model that figure for what lost detail costs.
 Only 17 of their 1,399 compactions from 22 September to 21 November came in the
