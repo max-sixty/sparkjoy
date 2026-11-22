@@ -41,25 +41,42 @@ PRIVATE = {
 }
 
 # Addresses that name no person; `build.py` writes the first for every other.
-PUBLIC_EMAILS = {"user@example.com", "git@github.com", "noreply@anthropic.com", "noreply@github.com"}
+PUBLIC_EMAILS = {
+    "user@example.com",
+    "git@github.com",
+    "noreply@anthropic.com",
+    "noreply@github.com",
+}
 
 PATTERNS = {
     # GitHub Actions' runner home, and that of the account tend's sandbox runs
     # as, are the same on every machine.
-    "home path": re.compile(r"/(?:Users|home)/(?!runner\b|tend-sandbox\b)[a-z][\w.-]*|-Users-(?!USER-)[a-z]\w*-"),
-    "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b"),
+    "home path": re.compile(
+        r"/(?:Users|home)/(?!runner\b|tend-sandbox\b)[a-z][\w.-]*|-Users-(?!USER-)[a-z]\w*-"
+    ),
+    "email": re.compile(
+        r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b"
+    ),
     "api key": re.compile(r"\bsk-(?:ant-)?[A-Za-z0-9_-]{16,}"),
-    "github token": re.compile(r"\b(?:ghp|gho|ghs|ghu|ghr)_[A-Za-z0-9]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}"),
+    "github token": re.compile(
+        r"\b(?:ghp|gho|ghs|ghu|ghr)_[A-Za-z0-9]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}"
+    ),
     "slack token": re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}"),
     "aws key": re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
     "bearer token": re.compile(r"\bBearer\s+(?!<)[A-Za-z0-9._~+/-]{20,}"),
     "1Password reference": re.compile(r"\bop://"),
-    "private hostname": re.compile(r"\.ts\.net\b|\.tail[0-9a-f]{4,}\b|https?://[\w-]+\.local\b"),
+    "private hostname": re.compile(
+        r"\.ts\.net\b|\.tail[0-9a-f]{4,}\b|https?://[\w-]+\.local\b"
+    ),
     # Claude Code ships as a bundle under its own license; a session that
     # greps the installed binary pulls minified source into the transcript.
-    "Claude Code source": re.compile(r"\btengu_\w+|\bstrings\b[^\n]{0,60}\bclaude\b|\bcc\.strings\b"),
+    "Claude Code source": re.compile(
+        r"\btengu_\w+|\bstrings\b[^\n]{0,60}\bclaude\b|\bcc\.strings\b"
+    ),
     "page token": re.compile(r"[?&]t=(?!<)[A-Za-z0-9_-]{16,}"),
-    "phone number": re.compile(r"(?<![\w.])(?:\+\d{1,3}[ .-])?\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4}(?![\w.])"),
+    "phone number": re.compile(
+        r"(?<![\w.])(?:\+\d{1,3}[ .-])?\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4}(?![\w.])"
+    ),
 }
 
 WORD = re.compile(r"[a-z0-9]+")

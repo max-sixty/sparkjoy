@@ -1,0 +1,12 @@
+{
+  // Ruff's default width, so Python and everything else wrap at the same length.
+  "printWidth": 88,
+  // The mod's TypeScript keeps the style of Claude Code's own mod examples.
+  "singleQuote": true,
+  "semi": false,
+  "arrowParens": "avoid",
+  "ignorePatterns": [
+    // TOML keeps its authors' layout: Ruff's rule selections are grouped by line.
+    "**/*.toml",
+  ],
+}
