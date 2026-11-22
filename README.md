@@ -187,13 +187,6 @@ The question asks whether the next turns will need detail a summary drops, such
 as failed attempts or a design still taking shape, and gives what a compaction
 and keeping the context each cost at the context's size.
 
-In the [evals](#evals), the question compacts at every turn end that finishes a
-piece of work. At turn ends in the middle of a task, where it should keep the
-context, its verdict isn't stable: over five batches of the same question on the
-same transcripts, it kept the context in 80 of 160 runs, from none of 16 in one
-batch to 24 of 32 in another, for a reason not yet found
-([Batches](evals/README.md#batches)).
-
 ### The prompt
 
 <details>
