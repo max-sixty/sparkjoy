@@ -10,14 +10,14 @@ cache write of the whole context that the next request would make. At each turn
 end, sparkjoy puts Marie Kondo's question to the session's own model: does this
 transcript spark joy? That is, does the work ahead still need it, or can it go?
 
-|                | When it compacts                                                                                                                        |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `/compact`     | when you type it                                                                                                                        |
-| Claude Code    | when the context nears the end of its 1M window, at about 965k tokens, even in the middle of a turn                                     |
-| Claude Code    | just before an idle session's prompt cache expires, from 200k, if the session is on the one-hour cache and you have it open             |
-| `/autocompact` | after any request once the context reaches the size you set, even in the middle of a turn                                               |
-| sparkjoy       | at a turn end from 250k, if the session's own model says to                                                                             |
-| sparkjoy       | just before an idle session's prompt cache expires, from 175k, on the one-hour or five-minute cache, if the session's own model says to |
+|                | When it compacts                                                          |
+| -------------- | ------------------------------------------------------------------------- |
+| `/compact`     | when you type it                                                          |
+| Claude Code    | at about 965k, even mid-turn                                              |
+| Claude Code    | when idle, just before the one-hour cache expires, from 200k              |
+| `/autocompact` | at the size you set, even mid-turn                                        |
+| sparkjoy       | at a turn end, from 250k, if the model says to                            |
+| sparkjoy       | when idle, just before the cache expires, from 175k, if the model says to |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/session-dark.svg">
