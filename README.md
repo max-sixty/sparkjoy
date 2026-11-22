@@ -2,15 +2,22 @@
 
 A Claude Code plugin that compacts the conversation at the best time to
 compact: at the end of a turn that finishes a piece of work, or just before an
-idle session's prompt cache lapses. Claude Code compacts when the context window
-fills, and `/autocompact` once the context reaches a set size, wherever in a turn
-either falls.
+idle session's prompt cache lapses.
 
 At a turn end that finishes a piece of work, a summary is least likely to drop
 what the next turns need. Just before the cache lapses, compacting saves the
 cache write of the whole context that the next request would make. At each turn
 end, sparkjoy puts Marie Kondo's question to the session's own model: does this
 transcript spark joy? That is, does the work ahead still need it, or can it go?
+
+| | When it compacts |
+|---|---|
+| `/compact` | when you type it |
+| Claude Code | when the context nears the end of its 1M window, at about 965k tokens, even in the middle of a turn |
+| Claude Code | just before an idle session's prompt cache expires, from 200k, if the session is on the one-hour cache and you have it open |
+| `/autocompact` | after any request once the context reaches the size you set, even in the middle of a turn |
+| sparkjoy | at a turn end from 250k, if the session's own model says to |
+| sparkjoy | just before an idle session's prompt cache expires, from 175k, on the one-hour or five-minute cache, if the session's own model says to |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/session-dark.svg">
