@@ -151,25 +151,22 @@ reached 400k at a turn end; it now asks from 250k:
 
 ### Compared with `/autocompact`
 
-`/autocompact` compacts every session once its context reaches the size you
-set. sparkjoy compacts only where the session's model judges that the work ahead
-no longer needs the context, and only between turns.
+`/autocompact` compacts every session at the size you set. sparkjoy compacts
+only where the session's model judges that the work ahead no longer needs the
+context, and only between turns.
 
 That judgment pays where work differs in how much it needs its context: a design
-taking shape over many turns needs more of it than a finished fix, and a turn
-end in the middle of a task needs more than one that finishes it. Across the
-cases the [cost model](#a-classifier) works through, a judgment right 9 times in
-10 saves 2% to 10% against the best single size. Where work doesn't differ, one
-size suits all of it, and `/autocompact` at its best size saves a little more,
-since a long turn can carry the context past that size before it ends. In a
-replay of my sessions, `/autocompact` saves 15%, against 14% for compacting at
+still taking shape needs more of it than a finished fix. In the [cost
+model](#a-classifier)'s cases, a judgment right 9 times in 10 saves 2% to 10%
+against compacting all work at whichever single size costs least. Where work
+doesn't differ, waiting for a turn end costs a little, since a long turn can
+carry the context past that size before it ends. In a replay of my sessions,
+`/autocompact` at its best size saves about a point more than compacting at
 every turn end[^autocompact]. No session yet measures how widely work differs,
-or how often sparkjoy's judgment is right.
+or how often the judgment is right.
 
 `/autocompact` also compacts in the middle of a turn, 169 times in that replay,
-where a summary is the most likely to drop what the turn is working on. If each
-such compaction wastes 7 more requests than one at a turn end, that alone closes
-the gap.
+where a summary is the most likely to drop what the turn is working on.
 
 I run sparkjoy without `/autocompact`. If you set both, keep `/autocompact`
 above sparkjoy's turn-end floor ([Limits](#limits)).
@@ -190,13 +187,12 @@ The question asks whether the next turns will need detail a summary drops, such
 as failed attempts or a design still taking shape, and gives what a compaction
 and keeping the context each cost at the context's size.
 
-In the [evals](#evals), the question compacts at every turn end that finishes
-a piece of work. At turn ends in the middle of a task, where it should keep the
-context, its verdict isn't stable: the same question on the same transcripts
-kept the context in none of 16 runs one morning and in 24 of 32 that afternoon,
-80 of 160 in all. It keeps mostly when it answers without thinking first, and
-how often it thinks varied from one batch of runs to the next, for a reason not
-yet found.
+In the [evals](#evals), the question compacts at every turn end that finishes a
+piece of work. At turn ends in the middle of a task, where it should keep the
+context, its verdict isn't stable: over five batches of the same question on the
+same transcripts, it kept the context in 80 of 160 runs, from none of 16 in one
+batch to 24 of 32 in another, for a reason not yet found
+([Batches](evals/README.md#batches)).
 
 ### The prompt
 
@@ -336,7 +332,9 @@ size.
   session. In a replay of my sessions that compacts wherever the floors allow,
   this is the pair that costs least counting tokens alone. At the [cost
   model](#cost-model)'s base case, asking at a turn end from 400k instead would
-  save 0.8 percentage points more. My sessions hold about 142k after a compaction, much of it my own
+  save 0.8 percentage points more. The floors stay at the lower pair because a
+  floor only sets where sparkjoy starts asking, and above it the question
+  decides. My sessions hold about 142k after a compaction, much of it my own
   instructions and skills, and sessions that hold less would do better with
   lower floors. `/sparkjoy report` fits the floors to your own sessions, and you
   can set them yourself ([Settings](#settings)).
@@ -361,13 +359,13 @@ size.
     ends from my sessions.
 
 [^autocompact]:
-    Each policy compacts at the size that cost least, and also compacts idle
-    sessions from 175k. The replay takes the cost model's base case, where a
-    request with 250k of context gets half as much done as one with the full 1M.
-    Counting tokens alone, `/autocompact` at 270k saves 40% and compacting at
-    every turn end from 240k saves 31%, and turn ends break even once a
-    compaction in the middle of a turn wastes 35 more requests than one at a
-    turn end.
+    At the cost model's base case, where a request with 250k of context gets
+    half as much done as one with the full 1M, and with each policy at the size
+    that cost least and compacting idle sessions from 175k, `/autocompact` at
+    370k saves 15% and compacting at every turn end from 390k saves 14%.
+    Counting tokens alone, at 270k and from 240k, they save 40% and 31%. Turn
+    ends break even once a compaction in the middle of a turn wastes 7 more
+    requests than one at a turn end, or 35 counting tokens alone.
 
 [^replay]:
     The replay keeps every logged request fixed and moves only the
