@@ -1,10 +1,9 @@
 # sparkjoy
 
-A Claude Code plugin that compacts a session at the best moments: when a turn
-finishes a piece of work, and just before an idle session's prompt cache
-expires. At each turn end it puts Marie Kondo's question to the session's own
-model: does this transcript spark joy? That is, does the work ahead still need
-it, or can it go?
+A Claude Code plugin that asks the session's own model whether the work ahead
+still needs the context, and compacts if the model says no[^name]. It asks when
+each turn ends, so that it compacts once a piece of work is finished, and again
+just before an idle session's prompt cache expires.
 
 When a piece of work is done, the next turns rarely need the detail a summary
 drops. Just before the cache expires, compacting spares the next request a cache
@@ -361,6 +360,10 @@ size.
 - If you set `/autocompact`, keep it above sparkjoy's turn-end floor. At or
   below the floor, Claude Code compacts mid-turn before any turn end reaches it,
   so sparkjoy never asks at a turn end.
+
+[^name]:
+    The name is Marie Kondo's test for what to keep when tidying: does it spark
+    joy?
 
 [^autocompact]:
     At the cost model's base case, where a request with 250k of context gets
