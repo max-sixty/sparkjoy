@@ -5,15 +5,15 @@
 // plugin's marketplace: when the user asks, or, for a marketplace with auto-update
 // on, in the background after a session's first message. Auto-update is off by
 // default for every marketplace but Anthropic's own, and a marketplace can't turn
-// it on. Claude Code says nothing when a newer version is out, so an install with
-// auto-update off stays at the commit it was installed at
+// it on. Otherwise Claude Code doesn't look for a newer version, so an install
+// with auto-update off stays at the commit it was installed at
 // (https://code.claude.com/docs/en/plugins/loading.md, "When auto-update runs").
 //
-// So when a session with a person at the prompt starts, sparkjoy asks GitHub for
-// the commit on main. If that isn't the commit the session runs, and auto-update
-// is off for sparkjoy's marketplace, it says so in the transcript, with the
-// command that updates it and how to turn auto-update on. It asks at most once a
-// day across sessions, so it says so at most once a day.
+// So when a session with a person at the prompt starts, and auto-update is off
+// for sparkjoy's marketplace, sparkjoy asks GitHub for the commit on main. If
+// that isn't the commit the session runs, it says so in the transcript, with the
+// command that updates it and how to turn auto-update on. It checks at most once
+// a day across sessions, so it says so at most once a day.
 
 import type { EngineInterface } from 'claude-code'
 
@@ -25,7 +25,6 @@ const CHECKED = 'update-check'
 
 const DAY = 24 * 60 * 60_000
 
-// Run when a session with a person at the prompt starts.
 export async function checkForUpdate($: EngineInterface) {
   try {
     const install = installOf($.plugin.root)
@@ -39,7 +38,7 @@ export async function checkForUpdate($: EngineInterface) {
     if (latest.startsWith(install.commit)) return
     const { commit, marketplace } = install
     $.ui.log(
-      `A newer version is out: https://github.com/${REPOSITORY}/compare/${commit}...main. /plugin marketplace update ${marketplace} updates it. To keep it up to date, select ${marketplace} on the tab that command opens and turn on auto-update.`,
+      `A newer version is out. /plugin marketplace update ${marketplace} updates it. To keep it up to date, select ${marketplace} on the tab that command opens and turn on auto-update. What changed: https://github.com/${REPOSITORY}/compare/${commit}...main`,
     )
   } catch (error) {
     $.ui.log(`Checking for a newer version failed: ${error}`, { to: 'debug' })
@@ -51,7 +50,9 @@ export async function checkForUpdate($: EngineInterface) {
 // sets no version, so the version is the first 12 characters of the commit
 // installed (https://code.claude.com/docs/en/plugins/loading.md, "Find plugins
 // on disk" and "How Claude Code computes the version"). Null for a copy that
-// Claude Code reads from a folder, as with `--plugin-dir`, which no update moves.
+// Claude Code reads from a folder, as with `--plugin-dir`, which no update moves,
+// and for an install named by a version the manifest sets: setting one turns the
+// check off until it compares versions.
 const INSTALL = /^(.*)[\\/]cache[\\/]([^\\/]+)[\\/][^\\/]+[\\/]([0-9a-f]{12})$/
 
 export function installOf(root: string) {
