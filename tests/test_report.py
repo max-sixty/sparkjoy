@@ -141,7 +141,7 @@ def session_with_compactions():
         line(
             "13:25:19Z",
             "sparkjoy: Missed the prompt cache at 260k tokens, idle 55 minutes: read 30k of 262k "
-            "from it. An idle session's cache can lapse before sparkjoy asks.",
+            "from it. Signing in to another account while idle drops the cache.",
         ),
         line(
             "13:25:20Z",
