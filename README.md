@@ -6,12 +6,12 @@ expires. At each turn end it puts Marie Kondo's question to the session's own
 model: does this transcript spark joy? That is, does the work ahead still need
 it, or can it go?
 
-When a piece of work is done, a summary drops least of what the next turns
-need. Just before the cache expires, compacting spares the next request a cache
+When a piece of work is done, the next turns need little that a summary would
+drop. Just before the cache expires, compacting spares the next request a cache
 write of the whole context. Claude Code compacts when the window fills, and
-`/autocompact` once the context reaches the size you set, whether or not the
-turn has ended. A summary written in the middle of a turn is the most likely to
-drop what the turn's next requests need.
+`/autocompact` compacts once the context reaches the size you set, whether or
+not the turn has ended. A summary written in the middle of a turn is the most
+likely to drop what the turn's next requests need.
 
 |                | When it compacts                                                          |
 | -------------- | ------------------------------------------------------------------------- |
@@ -40,9 +40,9 @@ At the prompt of a Claude Code session:
 /plugin install sparkjoy --marketplace max-sixty/sparkjoy
 ```
 
-It acts only in interactive sessions with a 1M-token context window, the size
-its defaults are fitted to, so not in `-p` runs or SDK hosts. A session picks it
-up when it starts. To see its verdicts before it compacts anything, run
+It acts only in sessions with a 1M-token context window, the size its defaults
+are fitted to, and only in interactive ones, not in `-p` runs or SDK hosts. A
+session picks it up when it starts. To see its verdicts before it compacts anything, run
 `/sparkjoy classify` ([Settings](#settings)). CI tests it on Claude Code's
 latest and stable releases.
 
@@ -151,22 +151,27 @@ their 36,251 requests[^replay]. It asked from 400k at a turn end then, against
 
 Set to its cheapest size, `/autocompact` saves more tokens than compacting at
 turn ends, since one long turn can carry the context far past where compacting
-pays before the turn ends. In a replay of the same sessions, each policy also
-compacting idle sessions from 175k, counting tokens alone, `/autocompact` at
-270k saved 40%, and compacting at every turn end from 240k saved 31%. The [cost
-model](#cost-model)'s base case also counts what the context does for the work,
-taking a request at 250k to get half as much done as one at 1M. There,
-`/autocompact` at 370k saved 15%, and compacting at every turn end from 390k
-saved 14%.
+pays before the turn ends. I replayed the same sessions under each policy, each
+also compacting idle sessions from 175k. Counting tokens alone, `/autocompact`
+at 270k saved 40%, and compacting at every turn end from 240k saved 31%.
+
+The [cost model](#cost-model) also counts what a larger context does for the
+work. In its base case, a request at 250k gets half as much done as one at 1M.
+Counted that way, `/autocompact` at 370k saved 15%, and compacting at every turn
+end from 390k saved 14%.
 
 Neither figure counts the detail a compaction in the middle of a turn drops,
 which the turn's next requests then read again, run again or get wrong.
 `/autocompact` at 270k compacted in the middle of a turn 362 times. At the base
-case, compacting only at turn ends costs as little as `/autocompact` once each
-compaction in the middle of a turn wastes 7 more requests than one at a turn
-end. My sessions can't measure that yet: only 17 of their 1,399 compactions
-came in the middle of a turn ([Mid-turn or at a turn
-end](docs/cost-model.md#mid-turn-or-at-a-turn-end)).
+case, turn ends come out ahead once each compaction in the middle of a turn
+wastes 7 more requests than one at a turn end. My sessions can't measure that
+yet: only 17 of their 1,399 compactions came in the middle of a turn ([Mid-turn
+or at a turn end](docs/cost-model.md#mid-turn-or-at-a-turn-end)).
+
+I run sparkjoy without `/autocompact`. A compaction in the middle of a turn is
+the one most likely to drop what the turn is working on, and at the base case
+the gap is under a point. If you set `/autocompact` as well, keep it above
+sparkjoy's turn-end floor ([Limits](#limits)).
 
 ## How it decides
 
@@ -326,8 +331,8 @@ size.
 - It asks only once the context reaches 250k at a turn end, or 175k in an idle
   session. In a replay of my sessions that compacts wherever the floors allow,
   this is the pair that costs least counting tokens alone. At the [cost
-  model](#cost-model)'s base case, it saves 0.8 percentage points less than the
-  best pair. My sessions hold about 142k after a compaction, much of it my own
+  model](#cost-model)'s base case, asking at a turn end from 400k instead would
+  save 0.8 percentage points more. My sessions hold about 142k after a compaction, much of it my own
   instructions and skills, and sessions that hold less would do better with
   lower floors. `/sparkjoy report` fits the floors to your own sessions, and you
   can set them yourself ([Settings](#settings)).
