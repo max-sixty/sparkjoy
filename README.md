@@ -46,9 +46,9 @@ session picks it up when it starts. To see its verdicts before it compacts anyth
 `/sparkjoy classify` ([Settings](#settings)). CI tests it on Claude Code's
 latest and stable releases.
 
-By default, Claude Code auto-updates only the plugins from its official
-marketplace. To keep sparkjoy up to date, open `/plugin`, go to the Marketplaces
-tab, select sparkjoy, and turn on auto-update.
+Auto-update is off by default for the sparkjoy marketplace. To keep sparkjoy up
+to date, open `/plugin`, go to the Marketplaces tab, select sparkjoy, and turn on
+auto-update.
 
 ## What it does
 
