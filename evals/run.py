@@ -73,7 +73,15 @@ def access_token() -> dict[str, str]:
             return {name: os.environ[name]}
     if sys.platform == "darwin":
         found = subprocess.run(
-            ["security", "find-generic-password", "-s", "Claude Code-credentials", "-a", os.environ.get("USER") or getpass.getuser(), "-w"],
+            [
+                "security",
+                "find-generic-password",
+                "-s",
+                "Claude Code-credentials",
+                "-a",
+                os.environ.get("USER") or getpass.getuser(),
+                "-w",
+            ],
             capture_output=True,
             text=True,
         )
@@ -81,9 +89,15 @@ def access_token() -> dict[str, str]:
     else:
         path = Path.home() / ".claude/.credentials.json"
         blob = path.read_text() if path.is_file() else None
-    token = (json.loads(blob).get("claudeAiOauth") or {}).get("accessToken") if blob else None
+    token = (
+        (json.loads(blob).get("claudeAiOauth") or {}).get("accessToken")
+        if blob
+        else None
+    )
     if not token:
-        sys.exit("No credentials: set CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY, or log in to Claude Code.")
+        sys.exit(
+            "No credentials: set CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY, or log in to Claude Code."
+        )
     return {"CLAUDE_CODE_OAUTH_TOKEN": token}
 
 
@@ -94,7 +108,11 @@ NO_RESPONSE = "No response requested."
 
 def added_on_resume(message: dict) -> bool:
     content = message["content"]
-    if isinstance(content, list) and len(content) == 1 and content[0].get("type") == "text":
+    if (
+        isinstance(content, list)
+        and len(content) == 1
+        and content[0].get("type") == "text"
+    ):
         content = content[0]["text"]
     return message["role"] == "assistant" and content == NO_RESPONSE
 
@@ -108,11 +126,19 @@ class Proxy(BaseHTTPRequestHandler):
         body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
         if self.path.split("?")[0] == "/v1/messages":
             request = json.loads(body)
-            request["messages"] = [m for m in request["messages"] if not added_on_resume(m)]
+            request["messages"] = [
+                m for m in request["messages"] if not added_on_resume(m)
+            ]
             body = json.dumps(request).encode()
-        headers = {k: v for k, v in self.headers.items() if k.lower() not in ("host", "content-length", "connection")}
+        headers = {
+            k: v
+            for k, v in self.headers.items()
+            if k.lower() not in ("host", "content-length", "connection")
+        }
         upstream = http.client.HTTPSConnection("api.anthropic.com", timeout=900)
-        upstream.request("POST", self.path, body, headers | {"Content-Length": str(len(body))})
+        upstream.request(
+            "POST", self.path, body, headers | {"Content-Length": str(len(body))}
+        )
         response = upstream.getresponse()
         self.send_response(response.status)
         for k, v in response.getheaders():
@@ -138,14 +164,20 @@ def start_proxy() -> str:
 
 def child_env(config: Path, credential: dict[str, str], proxy: str) -> dict[str, str]:
     """This environment without any Claude Code or Anthropic setting, pointed at `config` and `proxy`."""
-    env = {k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE", "ANTHROPIC"))}
-    return env | credential | {
-        "ANTHROPIC_BASE_URL": proxy,
-        "CLAUDE_CONFIG_DIR": str(config),
-        "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
-        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-        "FORCE_PROMPT_CACHING_5M": "1",
+    env = {
+        k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE", "ANTHROPIC"))
     }
+    return (
+        env
+        | credential
+        | {
+            "ANTHROPIC_BASE_URL": proxy,
+            "CLAUDE_CONFIG_DIR": str(config),
+            "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "FORCE_PROMPT_CACHING_5M": "1",
+        }
+    )
 
 
 def project_dir(path: Path) -> str:
@@ -161,9 +193,15 @@ def load(case: dict) -> list[dict]:
 def split_reply(entries: list[dict]) -> tuple[list[dict], str]:
     """The fixture without the assistant message it ends with, the turn's reply, and that reply's text."""
     last = entries[-1]["message"]["id"]
-    first = next(i for i, e in enumerate(entries) if e["type"] == "assistant" and e["message"]["id"] == last)
+    first = next(
+        i
+        for i, e in enumerate(entries)
+        if e["type"] == "assistant" and e["message"]["id"] == last
+    )
     blocks = [b for e in entries[first:] for b in e["message"]["content"]]
-    return entries[:first], "\n\n".join(b["text"] for b in blocks if b.get("type") == "text")
+    return entries[:first], "\n\n".join(
+        b["text"] for b in blocks if b.get("type") == "text"
+    )
 
 
 def stage(entries: list[dict], case: dict, config: Path, cwd: Path) -> str:
@@ -176,9 +214,21 @@ def stage(entries: list[dict], case: dict, config: Path, cwd: Path) -> str:
     folder.mkdir(parents=True, exist_ok=True)
     with (folder / f"{session}.jsonl").open("w") as f:
         for entry in entries:
-            stamp = (datetime.fromisoformat(entry["timestamp"]) + shift).isoformat().replace("+00:00", "Z")
-            extra = {"sessionId": session, "cwd": str(cwd), "userType": "external", "isSidechain": False}
-            f.write(json.dumps(entry | extra | {"timestamp": stamp}, ensure_ascii=False) + "\n")
+            stamp = (
+                (datetime.fromisoformat(entry["timestamp"]) + shift)
+                .isoformat()
+                .replace("+00:00", "Z")
+            )
+            extra = {
+                "sessionId": session,
+                "cwd": str(cwd),
+                "userType": "external",
+                "isSidechain": False,
+            }
+            f.write(
+                json.dumps(entry | extra | {"timestamp": stamp}, ensure_ascii=False)
+                + "\n"
+            )
     return session
 
 
@@ -187,10 +237,17 @@ def register(source: Path) -> Path:
 
 
 def render(source: Path, reply: str, case: dict) -> str:
-    args = ["bun", str(HERE / "question.ts"), str(register(source)), str(case["tokens"])]
+    args = [
+        "bun",
+        str(HERE / "question.ts"),
+        str(register(source)),
+        str(case["tokens"]),
+    ]
     if case["kind"] == "idle":
         args.append(str(IDLE_MINUTES))
-    return subprocess.run(args, input=reply, capture_output=True, text=True, check=True).stdout
+    return subprocess.run(
+        args, input=reply, capture_output=True, text=True, check=True
+    ).stdout
 
 
 def parse(text: str) -> dict | None:
@@ -199,7 +256,11 @@ def parse(text: str) -> dict | None:
         value = json.loads(text[text.index("{") : text.rindex("}") + 1])
     except ValueError:
         return None
-    ok = isinstance(value, dict) and isinstance(value.get("compact"), bool) and isinstance(value.get("reason"), str)
+    ok = (
+        isinstance(value, dict)
+        and isinstance(value.get("compact"), bool)
+        and isinstance(value.get("reason"), str)
+    )
     return value if ok else None
 
 
@@ -210,7 +271,9 @@ def label(source: Path) -> str:
     checkout = source
 
     def git(*args):
-        return subprocess.run(["git", "-C", str(checkout), *args], capture_output=True, text=True).stdout.strip()
+        return subprocess.run(
+            ["git", "-C", str(checkout), *args], capture_output=True, text=True
+        ).stdout.strip()
 
     return f"{git('rev-parse', '--abbrev-ref', 'HEAD')}@{git('rev-parse', '--short', 'HEAD')}"
 
@@ -231,14 +294,43 @@ def shared_opening(questions: list[str]) -> str:
     return "\n\n".join(common)
 
 
-def send(blocks: list[str], session: str, config: Path, cwd: Path, credential: dict[str, str], proxy: str) -> dict:
+def send(
+    blocks: list[str],
+    session: str,
+    config: Path,
+    cwd: Path,
+    credential: dict[str, str],
+    proxy: str,
+) -> dict:
     """One request on the staged session, its last message made of `blocks`; returns Claude Code's result."""
-    message = {"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": b} for b in blocks]}}
+    message = {
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": [{"type": "text", "text": b} for b in blocks],
+        },
+    }
     proc = subprocess.run(
         [
-            "claude", "-p", "--resume", session, "--fork-session", "--no-session-persistence",
-            "--model", MODEL, "--effort", EFFORT, "--tools", "", "--strict-mcp-config",
-            "--disable-slash-commands", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
+            "claude",
+            "-p",
+            "--resume",
+            session,
+            "--fork-session",
+            "--no-session-persistence",
+            "--model",
+            MODEL,
+            "--effort",
+            EFFORT,
+            "--tools",
+            "",
+            "--strict-mcp-config",
+            "--disable-slash-commands",
+            "--input-format",
+            "stream-json",
+            "--output-format",
+            "stream-json",
+            "--verbose",
         ],
         input=json.dumps(message) + "\n",
         cwd=cwd,
@@ -247,12 +339,16 @@ def send(blocks: list[str], session: str, config: Path, cwd: Path, credential: d
         text=True,
         timeout=900,
     )
-    events = [json.loads(line) for line in proc.stdout.splitlines() if line.startswith("{")]
+    events = [
+        json.loads(line) for line in proc.stdout.splitlines() if line.startswith("{")
+    ]
     # A resumed session can report a result for a notification it replays before
     # taking the message, so the answer is the last result.
     out = next((e for e in reversed(events) if e.get("type") == "result"), {})
     if out.get("is_error") or "result" not in out:
-        raise RuntimeError((out.get("result") or proc.stderr or proc.stdout).strip()[:500])
+        raise RuntimeError(
+            (out.get("result") or proc.stderr or proc.stdout).strip()[:500]
+        )
     return out
 
 
@@ -267,7 +363,14 @@ def row_of(case: dict, source: Path, out: dict, claude: str) -> dict:
         "expected": case["expected"],
         "got": got,
         "reason": verdict["reason"] if verdict else (out.get("result") or "")[:300],
-        "context": sum(usage.get(k, 0) for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")),
+        "context": sum(
+            usage.get(k, 0)
+            for k in (
+                "input_tokens",
+                "cache_read_input_tokens",
+                "cache_creation_input_tokens",
+            )
+        ),
         "cache_read": usage.get("cache_read_input_tokens", 0),
         "output": usage.get("output_tokens", 0),
         "cost": out.get("total_cost_usd"),
@@ -275,11 +378,20 @@ def row_of(case: dict, source: Path, out: dict, claude: str) -> dict:
     }
 
 
-def run(cases: list[dict], sources: list[Path], repeat: int, jobs: int, results: Path, keep_reply: bool) -> None:
+def run(
+    cases: list[dict],
+    sources: list[Path],
+    repeat: int,
+    jobs: int,
+    results: Path,
+    keep_reply: bool,
+) -> None:
     credential, proxy = access_token(), start_proxy()
     # The mid-task verdicts have moved between batches of the same question and
     # transcripts, so each row records the client that ran it.
-    claude = subprocess.run(["claude", "--version"], capture_output=True, text=True, check=True).stdout.split()[0]
+    claude = subprocess.run(
+        ["claude", "--version"], capture_output=True, text=True, check=True
+    ).stdout.split()[0]
 
     def one_case(case: dict) -> list[dict]:
         entries = load(case)
@@ -300,14 +412,30 @@ def run(cases: list[dict], sources: list[Path], repeat: int, jobs: int, results:
             cwd.mkdir(parents=True)
             session = stage(entries, case, config, cwd)
             if opening and len(sources) * repeat > 1:
-                primed = send([opening], session, config, cwd, credential, proxy).get("total_cost_usd") or 0.0
+                primed = (
+                    send([opening], session, config, cwd, credential, proxy).get(
+                        "total_cost_usd"
+                    )
+                    or 0.0
+                )
             for source, question in questions.items():
-                blocks = [opening, question[len(opening):].lstrip("\n")] if opening else [question]
+                blocks = (
+                    [opening, question[len(opening) :].lstrip("\n")]
+                    if opening
+                    else [question]
+                )
                 for _ in range(repeat):
                     try:
-                        row = row_of(case, source, send(blocks, session, config, cwd, credential, proxy), claude)
+                        row = row_of(
+                            case,
+                            source,
+                            send(blocks, session, config, cwd, credential, proxy),
+                            claude,
+                        )
                     except (RuntimeError, subprocess.SubprocessError) as error:
-                        print(f"ERROR {case['id']} [{label(source)}]: {error}", flush=True)
+                        print(
+                            f"ERROR {case['id']} [{label(source)}]: {error}", flush=True
+                        )
                         continue
                     # The first run carries the cache write.
                     if primed:
@@ -315,8 +443,11 @@ def run(cases: list[dict], sources: list[Path], repeat: int, jobs: int, results:
                     with results.open("a") as f:
                         f.write(json.dumps(row) + "\n")
                     mark = "PASS" if row["got"] == row["expected"] else "FAIL"
-                    print(f"{mark} {row['case']} [{row['question']}] expected {row['expected']}, got {row['got']} "
-                          f"at {row['context'] // 1000}k (${row['cost'] or 0:.2f}): {row['reason']}", flush=True)
+                    print(
+                        f"{mark} {row['case']} [{row['question']}] expected {row['expected']}, got {row['got']} "
+                        f"at {row['context'] // 1000}k (${row['cost'] or 0:.2f}): {row['reason']}",
+                        flush=True,
+                    )
                     rows.append(row)
         finally:
             shutil.rmtree(scratch, ignore_errors=True)
@@ -324,14 +455,20 @@ def run(cases: list[dict], sources: list[Path], repeat: int, jobs: int, results:
 
     with ThreadPoolExecutor(jobs) as pool:
         rows = [row for rows in pool.map(one_case, cases) for row in rows]
-    print(f"{sum(r['got'] == r['expected'] for r in rows)}/{len(rows)} passed, ${sum(r['cost'] or 0 for r in rows):.2f}")
+    print(
+        f"{sum(r['got'] == r['expected'] for r in rows)}/{len(rows)} passed, ${sum(r['cost'] or 0 for r in rows):.2f}"
+    )
 
 
 def report(cases: list[dict], results: Path) -> None:
     """The results table: per case and question, how many runs matched the label."""
     rows = [json.loads(line) for line in results.open()] if results.exists() else []
     questions = list(dict.fromkeys(r["question"] for r in rows))
-    print("| case | kind | recorded | replayed | expected | " + " | ".join(questions) + " |")
+    print(
+        "| case | kind | recorded | replayed | expected | "
+        + " | ".join(questions)
+        + " |"
+    )
     print("|---|---|---|---|---|" + "---|" * len(questions))
     for case in cases:
         mine = [r for r in rows if r["case"] == case["id"]]
@@ -341,21 +478,45 @@ def report(cases: list[dict], results: Path) -> None:
             runs = [r for r in mine if r["question"] == q]
             passed = sum(r["got"] == case["expected"] for r in runs)
             cells.append(f"{passed}/{len(runs)}" if runs else "")
-        print(f"| {case['id']} | {case['kind']} | {case['tokens'] // 1000}k | {replayed // 1000}k | {case['expected']} | " + " | ".join(cells) + " |")
+        print(
+            f"| {case['id']} | {case['kind']} | {case['tokens'] // 1000}k | {replayed // 1000}k | {case['expected']} | "
+            + " | ".join(cells)
+            + " |"
+        )
     for q in questions:
         runs = [r for r in rows if r["question"] == q]
-        print(f"\n{q}: {sum(r['got'] == r['expected'] for r in runs)}/{len(runs)} runs passed, ${sum(r['cost'] or 0 for r in runs):.2f}")
+        print(
+            f"\n{q}: {sum(r['got'] == r['expected'] for r in runs)}/{len(runs)} runs passed, ${sum(r['cost'] or 0 for r in runs):.2f}"
+        )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--question-from", type=Path, action="append", help="checkout, or register.ts file, whose question to ask (default: this checkout)")
+    parser.add_argument(
+        "--question-from",
+        type=Path,
+        action="append",
+        help="checkout, or register.ts file, whose question to ask (default: this checkout)",
+    )
     parser.add_argument("--case", action="append", help="case id to run (default: all)")
-    parser.add_argument("--repeat", type=int, default=1, help="runs per case and question")
-    parser.add_argument("--keep-reply", action="store_true", help="end the session with the turn's reply, so the question follows it")
+    parser.add_argument(
+        "--repeat", type=int, default=1, help="runs per case and question"
+    )
+    parser.add_argument(
+        "--keep-reply",
+        action="store_true",
+        help="end the session with the turn's reply, so the question follows it",
+    )
     parser.add_argument("--jobs", type=int, default=3, help="cases run at once")
-    parser.add_argument("--report", action="store_true", help="print the results table and exit")
-    parser.add_argument("--results", type=Path, default=RESULTS, help="the file runs append to and --report reads")
+    parser.add_argument(
+        "--report", action="store_true", help="print the results table and exit"
+    )
+    parser.add_argument(
+        "--results",
+        type=Path,
+        default=RESULTS,
+        help="the file runs append to and --report reads",
+    )
     args = parser.parse_args()
     cases = json.loads((HERE / "cases.json").read_text())
     if args.case:

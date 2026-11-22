@@ -13,43 +13,95 @@ ids = count()
 
 def request(time, read, write, model="claude-opus-5-5", text="Done.", output=500):
     """A main-thread request that ends its turn, with `read + write` tokens of context."""
-    usage = {"input_tokens": 2, "cache_read_input_tokens": read, "cache_creation_input_tokens": write,
-             "cache_creation": {"ephemeral_1h_input_tokens": write}, "output_tokens": output}
-    return {"type": "assistant", "timestamp": DAY + time, "isSidechain": False, "entrypoint": "cli",
-            "message": {"model": model, "id": f"msg_{next(ids)}", "usage": usage, "stop_reason": "end_turn",
-                        "content": [{"type": "text", "text": text}]}}
+    usage = {
+        "input_tokens": 2,
+        "cache_read_input_tokens": read,
+        "cache_creation_input_tokens": write,
+        "cache_creation": {"ephemeral_1h_input_tokens": write},
+        "output_tokens": output,
+    }
+    return {
+        "type": "assistant",
+        "timestamp": DAY + time,
+        "isSidechain": False,
+        "entrypoint": "cli",
+        "message": {
+            "model": model,
+            "id": f"msg_{next(ids)}",
+            "usage": usage,
+            "stop_reason": "end_turn",
+            "content": [{"type": "text", "text": text}],
+        },
+    }
 
 
 def prompt(time, text):
-    return {"type": "user", "timestamp": DAY + time, "isSidechain": False, "message": {"role": "user", "content": text}}
+    return {
+        "type": "user",
+        "timestamp": DAY + time,
+        "isSidechain": False,
+        "message": {"role": "user", "content": text},
+    }
 
 
 def compact_summary(time):
     """The summary Claude Code writes after a compaction: 1,000 tokens at 4 characters each."""
-    return {"type": "user", "timestamp": DAY + time, "isSidechain": False, "isCompactSummary": True,
-            "message": {"role": "user", "content": "x" * 4_000}}
+    return {
+        "type": "user",
+        "timestamp": DAY + time,
+        "isSidechain": False,
+        "isCompactSummary": True,
+        "message": {"role": "user", "content": "x" * 4_000},
+    }
 
 
 def line(time, text):
     """A dim line in the transcript, as a mod's `$.ui.log` writes it."""
-    return {"type": "system", "subtype": "informational", "timestamp": DAY + time, "isSidechain": False,
-            "content": text}
+    return {
+        "type": "system",
+        "subtype": "informational",
+        "timestamp": DAY + time,
+        "isSidechain": False,
+        "content": text,
+    }
 
 
 def boundary(time, trigger="manual"):
-    return {"type": "system", "subtype": "compact_boundary", "timestamp": DAY + time, "isSidechain": False,
-            "compactMetadata": {"trigger": trigger, "durationMs": 60_000}}
+    return {
+        "type": "system",
+        "subtype": "compact_boundary",
+        "timestamp": DAY + time,
+        "isSidechain": False,
+        "compactMetadata": {"trigger": trigger, "durationMs": 60_000},
+    }
 
 
 def report(tmp_path, entries, *args):
     session = tmp_path / "projects" / "project" / "session.jsonl"
     session.parent.mkdir(parents=True)
-    session.write_text("".join(json.dumps(e, separators=(",", ":")) + "\n" for e in entries))  # as Claude Code writes it
+    session.write_text(
+        "".join(json.dumps(e, separators=(",", ":")) + "\n" for e in entries)
+    )  # as Claude Code writes it
     run = subprocess.run(
-        ["uv", "run", "--script", ROOT / "model/report.py", "--projects", tmp_path / "projects",
-         "--since", "2026-11-01T00:00Z", "--until", "2026-11-03T00:00Z", "--no-open", *args],
-        capture_output=True, text=True, env={"PATH": os.environ["PATH"], "TMPDIR": str(tmp_path)},
-        check=True)
+        [
+            "uv",
+            "run",
+            "--script",
+            ROOT / "model/report.py",
+            "--projects",
+            tmp_path / "projects",
+            "--since",
+            "2026-11-01T00:00Z",
+            "--until",
+            "2026-11-03T00:00Z",
+            "--no-open",
+            *args,
+        ],
+        capture_output=True,
+        text=True,
+        env={"PATH": os.environ["PATH"], "TMPDIR": str(tmp_path)},
+        check=True,
+    )
     *summary, page = run.stdout.splitlines()
     return summary, Path(page).read_text()
 
@@ -66,7 +118,9 @@ def session_with_compactions():
         prompt("10:01:00Z", "now test it"),
         # A reply the summary's size, which prices the compaction request's thinking.
         request("10:01:10Z", 300_000, 150_000, text="y" * 4_000, output=1_500),
-        line("10:01:20Z", "compact-when-done: Compacting at 450k tokens: the fix landed"),
+        line(
+            "10:01:20Z", "compact-when-done: Compacting at 450k tokens: the fix landed"
+        ),
         boundary("10:02:00Z"),
         compact_summary("10:02:00Z"),
         prompt("10:05:00Z", "next, the lexer"),
@@ -74,14 +128,22 @@ def session_with_compactions():
         line("10:05:20Z", "sparkjoy: No verdict at 240k tokens: empty-reply"),
         prompt("12:30:00Z", "back again"),  # after two and a half hours, at 240k
         request("12:30:10Z", 30_000, 230_000),
-        line("13:25:20Z", "sparkjoy: Compacting at 260k tokens, idle 55 minutes: the lexer is done"),
+        line(
+            "13:25:20Z",
+            "sparkjoy: Compacting at 260k tokens, idle 55 minutes: the lexer is done",
+        ),
         boundary("13:26:00Z"),
         compact_summary("13:26:00Z"),
         prompt("15:00:00Z", "one more thing"),  # after sparkjoy's compaction
         request("15:00:10Z", 30_000, 195_000),
         line("15:00:20Z", "sparkjoy: Failed: Error: the fork failed"),
-        line("15:00:39Z", "sparkjoy: Missed the prompt cache at 226k tokens: read 30k of 227k from it"),
-        line("15:00:40Z", "sparkjoy: Compacting at 226k tokens: all done"),  # a compaction that never ran
+        line(
+            "15:00:39Z",
+            "sparkjoy: Missed the prompt cache at 226k tokens: read 30k of 227k from it",
+        ),
+        line(
+            "15:00:40Z", "sparkjoy: Compacting at 226k tokens: all done"
+        ),  # a compaction that never ran
         # A verdict to compact in the mode `classify`, just before the user's own compaction.
         line("15:29:50Z", "sparkjoy: Would compact at 226k tokens: the lexer is done"),
         prompt("15:30:00Z", "<command-name>/compact</command-name>"),
@@ -94,22 +156,39 @@ def session_with_compactions():
 
 def test_counts_verdicts_and_returns(tmp_path):
     summary, page = report(tmp_path, session_with_compactions())
-    assert summary[0] == ("7 verdicts in 1 of 1 sessions: 3 compacted, 1 would compact, 1 kept, 0 unreadable, "
-                          "1 no verdict, 0 dropped, 1 failed; 1 missed the prompt cache")
-    assert "3 returns after an hour idle to sessions left at 175k or more, 2 compacted in between" in summary
+    assert summary[0] == (
+        "7 verdicts in 1 of 1 sessions: 3 compacted, 1 would compact, 1 kept, 0 unreadable, "
+        "1 no verdict, 0 dropped, 1 failed; 1 missed the prompt cache"
+    )
+    assert (
+        "3 returns after an hour idle to sessions left at 175k or more, 2 compacted in between"
+        in summary
+    )
     assert "Replayed at list prices" in page
     assert "1 by sparkjoy" in page and "1 by /compact" in page
     assert '<span class="mark would-compact"' in page
     assert "Fix the parser" in page
     assert "hooks.json" not in page
-    assert "1 missed the prompt cache" in page and "missed the cache (read 30k of 227k)" in page
+    assert (
+        "1 missed the prompt cache" in page
+        and "missed the cache (read 30k of 227k)" in page
+    )
 
 
 def test_no_verdicts_yet(tmp_path):
-    summary, page = report(tmp_path, [prompt("10:00:00Z", "hello"), request("10:00:10Z", 0, 20_000),
-                                      prompt("10:01:00Z", "and again"), request("10:01:10Z", 20_000, 1_000)])
-    assert summary[0] == ("0 verdicts in 0 of 1 sessions: 0 compacted, 0 would compact, 0 kept, 0 unreadable, "
-                          "0 no verdict, 0 dropped, 0 failed; 0 missed the prompt cache")
+    summary, page = report(
+        tmp_path,
+        [
+            prompt("10:00:00Z", "hello"),
+            request("10:00:10Z", 0, 20_000),
+            prompt("10:01:00Z", "and again"),
+            request("10:01:10Z", 20_000, 1_000),
+        ],
+    )
+    assert summary[0] == (
+        "0 verdicts in 0 of 1 sessions: 0 compacted, 0 would compact, 0 kept, 0 unreadable, "
+        "0 no verdict, 0 dropped, 0 failed; 0 missed the prompt cache"
+    )
     assert "No verdicts yet; sessions pick sparkjoy up when they restart." in page
 
 
@@ -122,26 +201,54 @@ def test_saves_the_figures_the_question_states(tmp_path):
     # its turn, and two of the four between the first request and the user's compaction came more than
     # an hour after the one before, past the cache's lifetime. Opus 5.5 prices that hour-long cache.
     # The floors are the replay's cheapest pair on fit.py's grids.
-    assert json.loads(figures.read_text()) == {"FLOOR": 350_000, "IDLE_FLOOR": 125_000, "K": 225_002, "P": 30_000,
-                                               "SUMMARY": 1_500, "TURN_MEDIAN": 1, "TURN_MEAN": 1, "LAPSE": 0.5,
-                                               "WRITE": 40, "OUTPUT": 100}
-    assert summary[-1].startswith("sparkjoy now asks from these sessions' floors, except where you set your own, and "
-                                  "states their figures: floor at turn ends 350k; floor in idle sessions 125k; context "
-                                  "after a compaction 225k;")
-    assert "sparkjoy asks from these floors, except where you set a floor of your own, and its question" in page
+    assert json.loads(figures.read_text()) == {
+        "FLOOR": 350_000,
+        "IDLE_FLOOR": 125_000,
+        "K": 225_002,
+        "P": 30_000,
+        "SUMMARY": 1_500,
+        "TURN_MEDIAN": 1,
+        "TURN_MEAN": 1,
+        "LAPSE": 0.5,
+        "WRITE": 40,
+        "OUTPUT": 100,
+    }
+    assert summary[-1].startswith(
+        "sparkjoy now asks from these sessions' floors, except where you set your own, and "
+        "states their figures: floor at turn ends 350k; floor in idle sessions 125k; context "
+        "after a compaction 225k;"
+    )
+    assert (
+        "sparkjoy asks from these floors, except where you set a floor of your own, and its question"
+        in page
+    )
 
 
 def test_saves_no_figures_without_compactions(tmp_path):
     figures = tmp_path / "figures.json"
-    summary, page = report(tmp_path, [prompt("10:00:00Z", "hello"), request("10:00:10Z", 0, 20_000)],
-                           "--figures", figures)
+    summary, page = report(
+        tmp_path,
+        [prompt("10:00:00Z", "hello"), request("10:00:10Z", 0, 20_000)],
+        "--figures",
+        figures,
+    )
     assert not figures.exists()
-    assert summary[-1] == "sparkjoy keeps the floors and figures it has: the window holds no compactions to fit them to"
+    assert (
+        summary[-1]
+        == "sparkjoy keeps the floors and figures it has: the window holds no compactions to fit them to"
+    )
     assert "its question states these figures" not in page
 
 
 def test_a_figures_file_it_cannot_save_leaves_the_page(tmp_path):
     (tmp_path / "data").write_text("")  # a file where the figures' folder would go
-    summary, page = report(tmp_path, session_with_compactions(), "--figures", tmp_path / "data" / "figures.json")
-    assert summary[-1].startswith("sparkjoy keeps the floors and figures it has: saving them failed: ")
+    summary, page = report(
+        tmp_path,
+        session_with_compactions(),
+        "--figures",
+        tmp_path / "data" / "figures.json",
+    )
+    assert summary[-1].startswith(
+        "sparkjoy keeps the floors and figures it has: saving them failed: "
+    )
     assert "its question states these figures" not in page and "Fix the parser" in page

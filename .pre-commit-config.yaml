@@ -1,0 +1,49 @@
+# Tools own their exclusions (.ruff.toml, .oxfmtrc.jsonc, .typos.toml); only hooks
+# without native ignore configuration filter here. Re-stage any files a hook rewrites.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        # The charts keep the bytes matplotlib writes.
+        exclude: &generated ^assets/
+      - id: end-of-file-fixer
+        exclude: *generated
+      - id: mixed-line-ending
+        exclude: *generated
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        # A recorded session is about 500 KB compressed.
+        exclude: ^evals/fixtures/
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.5
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+  # Keep the formatter pinned: its releases change the layout it prints.
+  - repo: local
+    hooks:
+      - id: oxfmt
+        name: oxfmt
+        language: node
+        additional_dependencies: [oxfmt@0.78.0]
+        entry: oxfmt --no-error-on-unmatched-pattern
+        types: [text]
+        require_serial: true
+      - id: oxlint
+        name: oxlint
+        language: node
+        additional_dependencies: [oxlint@1.93.0]
+        entry: oxlint --deny-warnings
+        types_or: [ts, tsx, javascript]
+  - repo: https://github.com/adhtruong/mirrors-typos
+    rev: v1.52.2
+    hooks:
+      - id: typos
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint

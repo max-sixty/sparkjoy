@@ -2,14 +2,21 @@ import type { ModelUsage, On, TurnUsage } from 'claude-code'
 import { type Engine, expect, mock, test } from 'claude-code/testing'
 import { messageKey } from '../hooks/register'
 
-const USAGE = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }
+const USAGE = {
+  input_tokens: 0,
+  output_tokens: 0,
+  cache_creation_input_tokens: 0,
+  cache_read_input_tokens: 0,
+}
 const COMPACT = '{"compact": true, "reason": "the PR merged"}'
 const KEEP = '{"compact": false, "reason": "mid-debug"}'
 const said = (text: string) => ({ role: 'user' as const, text, toolUses: [] })
 const SUMMARY = { messages: [said('summary')] }
 // The announcement of a compaction made while the conversation was the one
 // message `m0`.
-const ANNOUNCED = { 'compacting:s1': { at: '489k tokens', messages: [messageKey(said('m0'))] } }
+const ANNOUNCED = {
+  'compacting:s1': { at: '489k tokens', messages: [messageKey(said('m0'))] },
+}
 
 // How long a session sits idle before it is asked, on a one-hour cache and on
 // a five-minute one.
@@ -27,7 +34,11 @@ const HOUR = {
 }
 
 // All of it for five minutes, as on an API key.
-const FIVE_MINUTES = { ...HOUR, ephemeral_5m_input_tokens: 3_000, ephemeral_1h_input_tokens: 0 }
+const FIVE_MINUTES = {
+  ...HOUR,
+  ephemeral_5m_input_tokens: 3_000,
+  ephemeral_1h_input_tokens: 0,
+}
 
 // The user's home, and the figures file `/sparkjoy report` saves in Claude
 // Code's configuration directory there.
@@ -92,7 +103,8 @@ function engine(
   on('session.id', () => ({ value: 's1' }))
   on('env.get', (_, e) => ({ value: env[e.name] }))
   on('fs.read', (_, e) => {
-    if (e.path !== figuresAt || saved === undefined) throw new Error(`ENOENT: no such file or directory, open '${e.path}'`)
+    if (e.path !== figuresAt || saved === undefined)
+      throw new Error(`ENOENT: no such file or directory, open '${e.path}'`)
     return { value: saved }
   })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
@@ -119,7 +131,8 @@ function engine(
     forks.push(e.prompt)
     await clock.sleep(forkMs)
     const answer = e.prompt.includes('minutes ago') ? idleVerdict : verdict
-    if (answer === null) return { value: { isAnswered: false, reason: 'empty-reply', usage: forkUsage } }
+    if (answer === null)
+      return { value: { isAnswered: false, reason: 'empty-reply', usage: forkUsage } }
     return { value: { isAnswered: true, text: answer, usage: forkUsage } }
   })
   // A plugin's `$.session.compact` reaches here as the plugin made it, with no
@@ -127,7 +140,8 @@ function engine(
   on('session.compact', async (_, e) => {
     if (compactMs > 0) await clock.sleep(compactMs)
     if (failures-- > 0) throw new Error('summary unavailable')
-    if (e.trigger === undefined || e.trigger === 'plugin') compactions.push(e.instructions ?? '')
+    if (e.trigger === undefined || e.trigger === 'plugin')
+      compactions.push(e.instructions ?? '')
     // Claude Code measures the context again only at the next request.
     size = undefined
     messages.push(`summary ${compactions.length}`)
@@ -153,13 +167,24 @@ function engine(
   // Runs one main-loop turn to its answer and lets what it starts settle.
   async function turn($: Engine, turnId: string, answer = 'Merged #12. ✅') {
     await $.turn.start({ text: 'go', turnId })
-    await $.turn.complete({ answer, durationMs: 1, isAborted: false, turnId, reason: 'answer', usage })
+    await $.turn.complete({
+      answer,
+      durationMs: 1,
+      isAborted: false,
+      turnId,
+      reason: 'answer',
+      usage,
+    })
     await clock.settle()
   }
 
   // Starts the session the mod hears, under the REPL unless told otherwise.
   async function begin($: Engine, isInteractive = true) {
-    await $.session.start({ cwd: '/', surface: isInteractive ? 'terminal' : null, isInteractive })
+    await $.session.start({
+      cwd: '/',
+      surface: isInteractive ? 'terminal' : null,
+      isInteractive,
+    })
   }
 
   const resize = (to: number | undefined) => (size = to)
@@ -176,7 +201,21 @@ function engine(
       presentation: { isFullscreen: false, columns: 80 },
     })
 
-  return { clock, forks, compactions, commands, registered, prompts, sets, logs, begin, turn, resize, save, type }
+  return {
+    clock,
+    forks,
+    compactions,
+    commands,
+    registered,
+    prompts,
+    sets,
+    logs,
+    begin,
+    turn,
+    resize,
+    save,
+    type,
+  }
 }
 
 // Figures the report fitted to a user on a five-minute cache, whose
@@ -222,11 +261,19 @@ test('the question sizes the saving for the context it asks about', async ($, on
 
   // (500k read + 100 × 5.6k output + 39 × (142k − 30k) cache write) over the
   // 1.22 × (500k − 142k) each later request saves, rounded up.
-  expect(forks[0]).toContain('At 500k a compaction pays for itself after about 13 more requests')
-  expect(forks[1]).toContain('At 250k a compaction pays for itself after about 40 more requests')
+  expect(forks[0]).toContain(
+    'At 500k a compaction pays for itself after about 13 more requests',
+  )
+  expect(forks[1]).toContain(
+    'At 250k a compaction pays for itself after about 40 more requests',
+  )
   // 9 and 38 requests × that saving, over what a compaction costs.
-  expect(forks[0]).toContain('keeping 500k through one more turn costs as much as about 0.7 compactions for a median turn and 3 for a mean one')
-  expect(forks[1]).toContain('keeping 250k through one more turn costs as much as about 0.2 compactions for a median turn and 1.0 for a mean one')
+  expect(forks[0]).toContain(
+    'keeping 500k through one more turn costs as much as about 0.7 compactions for a median turn and 3 for a mean one',
+  )
+  expect(forks[1]).toContain(
+    'keeping 250k through one more turn costs as much as about 0.2 compactions for a median turn and 1.0 for a mean one',
+  )
 })
 
 test('the question states the figures the report fitted to the user’s sessions', async ($, on) => {
@@ -235,14 +282,22 @@ test('the question states the figures the report fitted to the user’s sessions
 
   await turn($, 't1')
 
-  expect(forks[0]).toContain('outputs about 8k tokens, thinking included.\n- Afterwards the context holds about 120k tokens')
-  expect(forks[0]).toContain('all of it but the 20k of system prompt and tools, which stay cached.\n- A cache write costs as much as 25 cached reads, and an output token as much as 100.')
+  expect(forks[0]).toContain(
+    'outputs about 8k tokens, thinking included.\n- Afterwards the context holds about 120k tokens',
+  )
+  expect(forks[0]).toContain(
+    'all of it but the 20k of system prompt and tools, which stay cached.\n- A cache write costs as much as 25 cached reads, and an output token as much as 100.',
+  )
   // (500k read + 100 × 8k output + 24 × (120k − 20k) cache write) over the
   // 1.24 × (500k − 120k) each later request saves, rounded up.
-  expect(forks[0]).toContain('At 500k a compaction pays for itself after about 8 more requests')
+  expect(forks[0]).toContain(
+    'At 500k a compaction pays for itself after about 8 more requests',
+  )
   // 12 and 49.6 requests × that saving, over what a compaction costs: 1.53
   // and 6.3.
-  expect(forks[0]).toContain('A turn runs a median of 12 requests and a mean of 50, so keeping 500k through one more turn costs as much as about 2 compactions for a median turn and 6 for a mean one')
+  expect(forks[0]).toContain(
+    'A turn runs a median of 12 requests and a mean of 50, so keeping 500k through one more turn costs as much as about 2 compactions for a median turn and 6 for a mean one',
+  )
 })
 
 test('an idle session’s question states the fitted figures too', async ($, on) => {
@@ -253,22 +308,35 @@ test('an idle session’s question states the fitted figures too', async ($, on)
   await clock.advance(IDLE)
   await clock.settle()
 
-  expect(forks[0]).toContain('makes a cache write of all but 20k of its 200k tokens, against about 100k after a compaction')
+  expect(forks[0]).toContain(
+    'makes a cache write of all but 20k of its 200k tokens, against about 100k after a compaction',
+  )
 })
 
 test('the figures are read from $CLAUDE_CONFIG_DIR where it is set', async ($, on) => {
   const env = { HOME, CLAUDE_CONFIG_DIR: '/work/claude' }
-  const { begin, forks, turn } = engine(on, { verdict: KEEP, env, figuresAt: '/work/claude/sparkjoy/figures.json', saved: FITTED })
+  const { begin, forks, turn } = engine(on, {
+    verdict: KEEP,
+    env,
+    figuresAt: '/work/claude/sparkjoy/figures.json',
+    saved: FITTED,
+  })
   await begin($)
 
   await turn($, 't1')
 
-  expect(forks[0]).toContain('At 500k a compaction pays for itself after about 8 more requests')
+  expect(forks[0]).toContain(
+    'At 500k a compaction pays for itself after about 8 more requests',
+  )
 })
 
 test('the floors the report fitted decide where sparkjoy asks', async ($, on) => {
   const saved = JSON.stringify({ FLOOR: 150_000, IDLE_FLOOR: 120_000 })
-  const { begin, clock, forks, turn, resize } = engine(on, { verdict: KEEP, tokens: 200_000, saved })
+  const { begin, clock, forks, turn, resize } = engine(on, {
+    verdict: KEEP,
+    tokens: 200_000,
+    saved,
+  })
   await begin($)
 
   // Below the author's 250k at a turn end, above the fitted 150k.
@@ -293,13 +361,21 @@ test('a report saved mid-session counts from the next question', async ($, on) =
   await turn($, 't2')
 
   for (const text of AUTHORS) expect(forks[0]).toContain(text)
-  expect(forks[1]).toContain('At 500k a compaction pays for itself after about 8 more requests')
+  expect(forks[1]).toContain(
+    'At 500k a compaction pays for itself after about 8 more requests',
+  )
 })
 
 test('each figure the file lacks, or holds where the sums can’t use it, stays the author’s', async ($, on) => {
   // K at the floor, where no compaction asked about at a turn end would pay;
   // P above the author's K; the summary as text; the median turn kept.
-  const saved = JSON.stringify({ K: 250_000, P: 150_000, SUMMARY: '8k', LAPSE: null, TURN_MEDIAN: 12 })
+  const saved = JSON.stringify({
+    K: 250_000,
+    P: 150_000,
+    SUMMARY: '8k',
+    LAPSE: null,
+    TURN_MEDIAN: 12,
+  })
   const { begin, forks, turn } = engine(on, { verdict: KEEP, saved })
   await begin($)
 
@@ -307,7 +383,9 @@ test('each figure the file lacks, or holds where the sums can’t use it, stays 
 
   for (const text of AUTHORS.slice(0, 3)) expect(forks[0]).toContain(text)
   // 12 requests × the author's saving, over what a compaction costs: 0.96.
-  expect(forks[0]).toContain('A turn runs a median of 12 requests and a mean of 38, so keeping 500k through one more turn costs as much as about 1.0 compactions for a median turn and 3 for a mean one')
+  expect(forks[0]).toContain(
+    'A turn runs a median of 12 requests and a mean of 38, so keeping 500k through one more turn costs as much as about 1.0 compactions for a median turn and 3 for a mean one',
+  )
 })
 
 for (const [name, options] of [
@@ -325,78 +403,109 @@ for (const [name, options] of [
   })
 }
 
-test('the floors the user set win over the ones the report fitted', { options: { floor: 300_000, idle_floor: 250_000 } }, async ($, on) => {
-  const saved = JSON.stringify({ FLOOR: 150_000, IDLE_FLOOR: 120_000 })
-  const { begin, clock, forks, turn, resize } = engine(on, { verdict: KEEP, idleVerdict: KEEP, tokens: 280_000, saved })
-  await begin($)
+test(
+  'the floors the user set win over the ones the report fitted',
+  { options: { floor: 300_000, idle_floor: 250_000 } },
+  async ($, on) => {
+    const saved = JSON.stringify({ FLOOR: 150_000, IDLE_FLOOR: 120_000 })
+    const { begin, clock, forks, turn, resize } = engine(on, {
+      verdict: KEEP,
+      idleVerdict: KEEP,
+      tokens: 280_000,
+      saved,
+    })
+    await begin($)
 
-  // Above the fitted floor at a turn end and below the set one; above the set
-  // idle floor.
-  await turn($, 't1')
-  expect(forks).toEqual([])
-  await clock.advance(IDLE)
-  await clock.settle()
-  expect(forks.length).toBe(1)
+    // Above the fitted floor at a turn end and below the set one; above the set
+    // idle floor.
+    await turn($, 't1')
+    expect(forks).toEqual([])
+    await clock.advance(IDLE)
+    await clock.settle()
+    expect(forks.length).toBe(1)
 
-  // Above the fitted idle floor, below the set one.
-  resize(240_000)
-  await turn($, 't2')
-  await clock.advance(IDLE)
-  await clock.settle()
-  expect(forks.length).toBe(1)
-})
+    // Above the fitted idle floor, below the set one.
+    resize(240_000)
+    await turn($, 't2')
+    await clock.advance(IDLE)
+    await clock.settle()
+    expect(forks.length).toBe(1)
+  },
+)
 
-test('a floor the user set at or below what a compaction leaves gives way to the default', { options: { floor: 140_000 } }, async ($, on) => {
-  const { begin, forks, turn, type } = engine(on, { verdict: KEEP, tokens: 200_000 })
-  await begin($)
+test(
+  'a floor the user set at or below what a compaction leaves gives way to the default',
+  { options: { floor: 140_000 } },
+  async ($, on) => {
+    const { begin, forks, turn, type } = engine(on, { verdict: KEEP, tokens: 200_000 })
+    await begin($)
 
-  // Below the author's 250k, above the 140k set, which is below the author's
-  // 142k after a compaction.
-  await turn($, 't1')
-  expect(forks).toEqual([])
-  const { text } = await type($, 'sparkjoy')
-  expect(text).toContain("at a turn end from 250k (the default, as your 140k is out of range)")
-})
+    // Below the author's 250k, above the 140k set, which is below the author's
+    // 142k after a compaction.
+    await turn($, 't1')
+    expect(forks).toEqual([])
+    const { text } = await type($, 'sparkjoy')
+    expect(text).toContain(
+      'at a turn end from 250k (the default, as your 140k is out of range)',
+    )
+  },
+)
 
-test('a floor the user set above what the report measured a compaction leaves keeps that measure', { options: { floor: 400_000 } }, async ($, on) => {
-  // A report that measured K, above the default floor, but fitted no floors.
-  const saved = JSON.stringify({ K: 300_000, P: 30_000 })
-  const { begin, forks, turn } = engine(on, { verdict: KEEP, saved })
-  await begin($)
+test(
+  'a floor the user set above what the report measured a compaction leaves keeps that measure',
+  { options: { floor: 400_000 } },
+  async ($, on) => {
+    // A report that measured K, above the default floor, but fitted no floors.
+    const saved = JSON.stringify({ K: 300_000, P: 30_000 })
+    const { begin, forks, turn } = engine(on, { verdict: KEEP, saved })
+    await begin($)
 
-  await turn($, 't1')
+    await turn($, 't1')
 
-  expect(forks[0]).toContain('Afterwards the context holds about 300k tokens')
-})
+    expect(forks[0]).toContain('Afterwards the context holds about 300k tokens')
+  },
+)
 
 // What the question at 500k says between its costs and the answer's format.
-const INSTRUCTIONS = 'Keep the context while a pull request awaits review, and compact once it merges.'
+const INSTRUCTIONS =
+  'Keep the context while a pull request awaits review, and compact once it merges.'
 const ADDED = `still pay.\n\nThe user added these instructions for this decision:\n${INSTRUCTIONS}\n\nAnswer with one JSON object`
 
-test('the user’s instructions join both questions before the answer’s format', { options: { instructions: INSTRUCTIONS } }, async ($, on) => {
-  const { begin, clock, forks, turn } = engine(on, { verdict: KEEP, idleVerdict: KEEP })
-  await begin($)
+test(
+  'the user’s instructions join both questions before the answer’s format',
+  { options: { instructions: INSTRUCTIONS } },
+  async ($, on) => {
+    const { begin, clock, forks, turn } = engine(on, {
+      verdict: KEEP,
+      idleVerdict: KEEP,
+    })
+    await begin($)
 
-  await turn($, 't1')
-  await clock.advance(IDLE)
-  await clock.settle()
+    await turn($, 't1')
+    await clock.advance(IDLE)
+    await clock.settle()
 
-  expect(forks.length).toBe(2)
-  for (const fork of forks) expect(fork).toContain(ADDED)
-})
+    expect(forks.length).toBe(2)
+    for (const fork of forks) expect(fork).toContain(ADDED)
+  },
+)
 
 for (const [name, options] of [
   ['unset', {}],
   ['empty', { instructions: '' }],
 ] as const) {
-  test(`instructions ${name} leave the question as it was`, { options }, async ($, on) => {
-    const { begin, forks, turn } = engine(on, { verdict: KEEP })
-    await begin($)
+  test(
+    `instructions ${name} leave the question as it was`,
+    { options },
+    async ($, on) => {
+      const { begin, forks, turn } = engine(on, { verdict: KEEP })
+      await begin($)
 
-    await turn($, 't1')
+      await turn($, 't1')
 
-    expect(forks[0]).toContain('still pay.\n\nAnswer with one JSON object')
-  })
+      expect(forks[0]).toContain('still pay.\n\nAnswer with one JSON object')
+    },
+  )
 }
 
 test('a verdict to keep leaves the conversation alone and says why', async ($, on) => {
@@ -430,7 +539,13 @@ test('the judge waits for every hook of the turn’s end', async ($, on) => {
   await begin($)
 
   await $.turn.start({ text: 'go', turnId: 't1' })
-  const ended = $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
+  const ended = $.turn.complete({
+    answer: 'done',
+    durationMs: 1,
+    isAborted: false,
+    turnId: 't1',
+    reason: 'answer',
+  })
   await clock.advance(499)
   expect(forks).toEqual([])
 
@@ -445,7 +560,13 @@ test('a turn begun while the turn’s end hooks run asks no judge', async ($, on
   await begin($)
 
   await $.turn.start({ text: 'go', turnId: 't1' })
-  const ended = $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
+  const ended = $.turn.complete({
+    answer: 'done',
+    durationMs: 1,
+    isAborted: false,
+    turnId: 't1',
+    reason: 'answer',
+  })
   await clock.advance(100)
   await $.turn.start({ text: 'a notification', turnId: 't2' })
   await clock.advance(400)
@@ -482,7 +603,12 @@ test('a fork with no answer says so', async ($, on) => {
 // itself from the cache; on a miss, only the system prompt and tools, which
 // sit in a cache shared across sessions, writing the rest again.
 const HIT = { ...USAGE, input_tokens: 1_500, cache_read_input_tokens: 500_000 }
-const MISS = { ...USAGE, input_tokens: 1_500, cache_read_input_tokens: 30_000, cache_creation_input_tokens: 470_000 }
+const MISS = {
+  ...USAGE,
+  input_tokens: 1_500,
+  cache_read_input_tokens: 30_000,
+  cache_creation_input_tokens: 470_000,
+}
 
 test('a question read from the prompt cache adds no line', async ($, on) => {
   const { begin, logs, turn } = engine(on, { forkUsage: HIT })
@@ -500,7 +626,10 @@ test('a question that missed the prompt cache says so on a line of its own', asy
   await turn($, 't1')
 
   expect(compactions).toEqual([''])
-  expect(logs).toEqual(['Missed the prompt cache at 500k tokens: read 30k of 502k from it', 'Compacting at 500k tokens: the PR merged'])
+  expect(logs).toEqual([
+    'Missed the prompt cache at 500k tokens: read 30k of 502k from it',
+    'Compacting at 500k tokens: the PR merged',
+  ])
 })
 
 test('a compaction that fails says so, and is tried again once the session sits idle', async ($, on) => {
@@ -529,7 +658,9 @@ test('a compaction whose process ended first is finished when the next process s
 
   expect(forks).toEqual([])
   expect(compactions).toEqual([''])
-  expect(logs).toEqual(['Finishing the compaction at 489k tokens: Claude Code restarted before it landed'])
+  expect(logs).toEqual([
+    'Finishing the compaction at 489k tokens: Claude Code restarted before it landed',
+  ])
 
   // Settled, it leaves nothing for a later start to finish.
   await begin($)
@@ -538,7 +669,10 @@ test('a compaction whose process ended first is finished when the next process s
 })
 
 test('an announcement a turn has moved past is dropped', async ($, on) => {
-  const { begin, clock, compactions, logs } = engine(on, { stored: ANNOUNCED, conversation: ['m0', 't1'] })
+  const { begin, clock, compactions, logs } = engine(on, {
+    stored: ANNOUNCED,
+    conversation: ['m0', 't1'],
+  })
 
   await begin($)
   await clock.settle()
@@ -550,7 +684,10 @@ test('an announcement a turn has moved past is dropped', async ($, on) => {
 test('an announcement whose compaction landed is dropped, though it kept the newest message', async ($, on) => {
   // As a reload of the mod during a compaction leaves it: the next process
   // reads the compaction's summary and the message it kept.
-  const { begin, clock, compactions, logs } = engine(on, { stored: ANNOUNCED, conversation: ['summary', 'm0'] })
+  const { begin, clock, compactions, logs } = engine(on, {
+    stored: ANNOUNCED,
+    conversation: ['summary', 'm0'],
+  })
 
   await begin($)
   await clock.settle()
@@ -620,9 +757,22 @@ test('an interrupted turn and a subagent’s turn ask no judge', async ($, on) =
   await begin($)
 
   await $.turn.start({ text: 'go', turnId: 't1' })
-  await $.turn.complete({ answer: '', durationMs: 1, isAborted: true, turnId: 't1', reason: 'aborted' })
+  await $.turn.complete({
+    answer: '',
+    durationMs: 1,
+    isAborted: true,
+    turnId: 't1',
+    reason: 'aborted',
+  })
   await $.turn.start({ text: 'go', turnId: 's1', agentId: 'a1' })
-  await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 's1', agentId: 'a1', reason: 'answer' })
+  await $.turn.complete({
+    answer: 'done',
+    durationMs: 1,
+    isAborted: false,
+    turnId: 's1',
+    agentId: 'a1',
+    reason: 'answer',
+  })
   await clock.settle()
 
   expect(forks).toEqual([])
@@ -638,7 +788,9 @@ test('a session with nobody at the prompt asks no judge', async ($, on) => {
 })
 
 test('a session left idle is asked again before its prompt cache lapses', async ($, on) => {
-  const { begin, clock, compactions, forks, logs, turn } = engine(on, { tokens: 200_000 })
+  const { begin, clock, compactions, forks, logs, turn } = engine(on, {
+    tokens: 200_000,
+  })
   await begin($)
 
   await turn($, 't1')
@@ -648,14 +800,19 @@ test('a session left idle is asked again before its prompt cache lapses', async 
   await clock.advance(1)
   await clock.settle()
   expect(forks.length).toBe(1)
-  expect(forks[0]).toContain('makes a cache write of all but 30k of its 200k tokens, against about 112k after a compaction')
+  expect(forks[0]).toContain(
+    'makes a cache write of all but 30k of its 200k tokens, against about 112k after a compaction',
+  )
   expect(forks[0]).not.toContain('pays for itself')
   expect(compactions).toEqual([''])
   expect(logs).toEqual(['Compacting at 200k tokens, idle 55 minutes: the PR merged'])
 })
 
 test('an idle session the model keeps is left as it is', async ($, on) => {
-  const { begin, clock, compactions, logs, turn } = engine(on, { tokens: 200_000, idleVerdict: KEEP })
+  const { begin, clock, compactions, logs, turn } = engine(on, {
+    tokens: 200_000,
+    idleVerdict: KEEP,
+  })
   await begin($)
 
   await turn($, 't1')
@@ -675,11 +832,17 @@ test('a session kept at its turn’s end is asked again once it sits idle', asyn
   await clock.settle()
 
   expect(compactions).toEqual([''])
-  expect(logs).toEqual(['Kept at 500k tokens: mid-debug', 'Compacting at 500k tokens, idle 55 minutes: the PR merged'])
+  expect(logs).toEqual([
+    'Kept at 500k tokens: mid-debug',
+    'Compacting at 500k tokens, idle 55 minutes: the PR merged',
+  ])
 })
 
 test('a compaction while the idle question runs drops its verdict', async ($, on) => {
-  const { begin, clock, compactions, logs, turn, resize } = engine(on, { tokens: 200_000, forkMs: 1_000 })
+  const { begin, clock, compactions, logs, turn, resize } = engine(on, {
+    tokens: 200_000,
+    forkMs: 1_000,
+  })
   await begin($)
 
   await turn($, 't1')
@@ -689,7 +852,9 @@ test('a compaction while the idle question runs drops its verdict', async ($, on
   await clock.settle()
 
   expect(compactions).toEqual([])
-  expect(logs).toEqual(['Dropped the verdict at 200k tokens, idle 55 minutes: the conversation moved on'])
+  expect(logs).toEqual([
+    'Dropped the verdict at 200k tokens, idle 55 minutes: the conversation moved on',
+  ])
 })
 
 test('a compaction at the turn’s end leaves nothing for idleness to do', async ($, on) => {
@@ -733,7 +898,10 @@ test('a turn still running at the deadline is left alone', async ($, on) => {
 })
 
 test('the idle wait runs from the turn’s end, however long the judge takes', async ($, on) => {
-  const { begin, clock, forks, turn } = engine(on, { verdict: KEEP, forkMs: 10 * 60_000 })
+  const { begin, clock, forks, turn } = engine(on, {
+    verdict: KEEP,
+    forkMs: 10 * 60_000,
+  })
   await begin($)
 
   await turn($, 't1')
@@ -776,7 +944,10 @@ test('an idle session below 175k is left as it is', async ($, on) => {
 
 test('an idle session on a one-hour cache is asked without a subscription', async ($, on) => {
   // An API key that opted in to the one-hour cache reports no rate limits.
-  const { begin, clock, compactions, turn } = engine(on, { tokens: 200_000, rateLimits: [] })
+  const { begin, clock, compactions, turn } = engine(on, {
+    tokens: 200_000,
+    rateLimits: [],
+  })
   await begin($)
 
   await turn($, 't1')
@@ -787,7 +958,11 @@ test('an idle session on a one-hour cache is asked without a subscription', asyn
 })
 
 test('an idle session on a five-minute cache is asked after 4 minutes', async ($, on) => {
-  const { begin, clock, forks, logs, turn } = engine(on, { tokens: 200_000, usage: FIVE_MINUTES, idleVerdict: KEEP })
+  const { begin, clock, forks, logs, turn } = engine(on, {
+    tokens: 200_000,
+    usage: FIVE_MINUTES,
+    idleVerdict: KEEP,
+  })
   await begin($)
 
   await turn($, 't1')
@@ -798,7 +973,9 @@ test('an idle session on a five-minute cache is asked after 4 minutes', async ($
   await clock.settle()
   expect(forks.length).toBe(1)
   expect(forks[0]).toContain('Your turn ended 4 minutes ago')
-  expect(forks[0]).toContain('The prompt cache holding the conversation lapses within a few minutes.')
+  expect(forks[0]).toContain(
+    'The prompt cache holding the conversation lapses within a few minutes.',
+  )
 
   // Kept, the context stays as it was, and nothing asks again at 55 minutes.
   await clock.advance(IDLE)
@@ -810,10 +987,16 @@ test('an idle session on a five-minute cache is asked after 4 minutes', async ($
 for (const [name, usage] of [
   // A turn that ran onto usage credits partway, whose later requests cached
   // for five minutes.
-  ['wrote to the cache for both lifetimes', { ...HOUR, ephemeral_5m_input_tokens: 1_000, ephemeral_1h_input_tokens: 2_000 }],
+  [
+    'wrote to the cache for both lifetimes',
+    { ...HOUR, ephemeral_5m_input_tokens: 1_000, ephemeral_1h_input_tokens: 2_000 },
+  ],
   ['wrote nothing to the cache', { ...USAGE, model: HOUR.model }],
   // A provider that names no lifetime reports only the whole write.
-  ['named no cache lifetime', { ...USAGE, cache_creation_input_tokens: 3_000, model: HOUR.model }],
+  [
+    'named no cache lifetime',
+    { ...USAGE, cache_creation_input_tokens: 3_000, model: HOUR.model },
+  ],
 ] as const) {
   test(`an idle session whose turn ${name} is left as it is`, async ($, on) => {
     const { begin, clock, forks, turn } = engine(on, { tokens: 200_000, usage })
@@ -828,7 +1011,10 @@ for (const [name, usage] of [
 }
 
 test('a session with a 200k context window is left as it is, idle or not', async ($, on) => {
-  const { begin, clock, forks, logs, turn } = engine(on, { tokens: 180_000, window: 200_000 })
+  const { begin, clock, forks, logs, turn } = engine(on, {
+    tokens: 180_000,
+    window: 200_000,
+  })
   await begin($)
 
   await turn($, 't1')
@@ -839,43 +1025,62 @@ test('a session with a 200k context window is left as it is, idle or not', async
   expect(logs).toEqual([])
 })
 
-test('off, sparkjoy asks nothing and compacts nothing, and /sparkjoy still answers', { options: { mode: 'off' } }, async ($, on) => {
-  const { begin, clock, compactions, forks, logs, registered, turn } = engine(on, { stored: ANNOUNCED })
-  await begin($)
-  await clock.settle()
+test(
+  'off, sparkjoy asks nothing and compacts nothing, and /sparkjoy still answers',
+  { options: { mode: 'off' } },
+  async ($, on) => {
+    const { begin, clock, compactions, forks, logs, registered, turn } = engine(on, {
+      stored: ANNOUNCED,
+    })
+    await begin($)
+    await clock.settle()
 
-  await turn($, 't1')
-  await clock.advance(IDLE)
-  await clock.settle()
+    await turn($, 't1')
+    await clock.advance(IDLE)
+    await clock.settle()
 
-  expect(forks).toEqual([])
-  expect(compactions).toEqual([])
-  expect(logs).toEqual([])
-  expect(registered).toEqual(['sparkjoy'])
-})
+    expect(forks).toEqual([])
+    expect(compactions).toEqual([])
+    expect(logs).toEqual([])
+    expect(registered).toEqual(['sparkjoy'])
+  },
+)
 
-test('classifying, sparkjoy asks at turn ends and in idle sessions and shows each verdict, but compacts nothing', { options: { mode: 'classify' } }, async ($, on) => {
-  const { begin, clock, compactions, forks, logs, turn } = engine(on, { stored: ANNOUNCED })
-  await begin($)
-  await clock.settle()
+test(
+  'classifying, sparkjoy asks at turn ends and in idle sessions and shows each verdict, but compacts nothing',
+  { options: { mode: 'classify' } },
+  async ($, on) => {
+    const { begin, clock, compactions, forks, logs, turn } = engine(on, {
+      stored: ANNOUNCED,
+    })
+    await begin($)
+    await clock.settle()
 
-  await turn($, 't1')
-  await clock.advance(IDLE)
-  await clock.settle()
+    await turn($, 't1')
+    await clock.advance(IDLE)
+    await clock.settle()
 
-  expect(forks.length).toBe(2)
-  expect(compactions).toEqual([])
-  expect(logs).toEqual(['Would compact at 500k tokens: the PR merged', 'Would compact at 500k tokens, idle 55 minutes: the PR merged'])
-})
+    expect(forks.length).toBe(2)
+    expect(compactions).toEqual([])
+    expect(logs).toEqual([
+      'Would compact at 500k tokens: the PR merged',
+      'Would compact at 500k tokens, idle 55 minutes: the PR merged',
+    ])
+  },
+)
 
-test('classifying, a verdict to keep reads as it does when on', { options: { mode: 'classify' } }, async ($, on) => {
-  const { begin, logs, turn } = engine(on, { verdict: KEEP })
-  await begin($)
+test(
+  'classifying, a verdict to keep reads as it does when on',
+  { options: { mode: 'classify' } },
+  async ($, on) => {
+    const { begin, logs, turn } = engine(on, { verdict: KEEP })
+    await begin($)
 
-  await turn($, 't1')
+    await turn($, 't1')
 
-  expect(logs).toEqual(['Kept at 500k tokens: mid-debug'])
-})
+    expect(logs).toEqual(['Kept at 500k tokens: mid-debug'])
+  },
+)
 
 test('/sparkjoy off sets the mode off', async ($, on) => {
   const { begin, sets, type } = engine(on)
@@ -894,7 +1099,9 @@ test('/sparkjoy classify sets the mode to classify', async ($, on) => {
   const { text } = await type($, 'sparkjoy', 'classify')
 
   expect(sets).toEqual([{ key: 'sparkjoy.mode', value: 'classify' }])
-  expect(text).toBe('Classifying from the next turn end: it shows each verdict and compacts nothing until /sparkjoy on.')
+  expect(text).toBe(
+    'Classifying from the next turn end: it shows each verdict and compacts nothing until /sparkjoy on.',
+  )
 })
 
 test('/sparkjoy on sets the mode on', { options: { mode: 'off' } }, async ($, on) => {
@@ -907,45 +1114,59 @@ test('/sparkjoy on sets the mode on', { options: { mode: 'off' } }, async ($, on
   expect(text).toBe('On from the next turn end.')
 })
 
-test('/sparkjoy names each floor and where it comes from', { options: { floor: 300_000 } }, async ($, on) => {
-  const { begin, type, save } = engine(on, { saved: JSON.stringify({ IDLE_FLOOR: 120_000 }) })
-  await begin($)
+test(
+  '/sparkjoy names each floor and where it comes from',
+  { options: { floor: 300_000 } },
+  async ($, on) => {
+    const { begin, type, save } = engine(on, {
+      saved: JSON.stringify({ IDLE_FLOOR: 120_000 }),
+    })
+    await begin($)
 
-  const { text } = await type($, 'sparkjoy')
-  save(undefined)
-  const authors = await type($, 'sparkjoy')
+    const { text } = await type($, 'sparkjoy')
+    save(undefined)
+    const authors = await type($, 'sparkjoy')
 
-  expect(text).toBe(
-    "On. It asks whether to compact at a turn end from 300k (your setting) and in an idle session from 120k (the report's fit).\n" +
-      'Its question carries no instructions of yours.\n' +
-      '/sparkjoy on compacts when the model says to, /sparkjoy classify only shows its verdicts, and /sparkjoy off asks nothing. /config sets the floors and instructions.',
-  )
-  expect(authors.text).toContain("in an idle session from 175k (the default).")
-})
+    expect(text).toBe(
+      "On. It asks whether to compact at a turn end from 300k (your setting) and in an idle session from 120k (the report's fit).\n" +
+        'Its question carries no instructions of yours.\n' +
+        '/sparkjoy on compacts when the model says to, /sparkjoy classify only shows its verdicts, and /sparkjoy off asks nothing. /config sets the floors and instructions.',
+    )
+    expect(authors.text).toContain('in an idle session from 175k (the default).')
+  },
+)
 
-test('/sparkjoy says sparkjoy is classifying', { options: { mode: 'classify' } }, async ($, on) => {
-  const { begin, type } = engine(on)
-  await begin($)
+test(
+  '/sparkjoy says sparkjoy is classifying',
+  { options: { mode: 'classify' } },
+  async ($, on) => {
+    const { begin, type } = engine(on)
+    await begin($)
 
-  const { text } = await type($, 'sparkjoy')
+    const { text } = await type($, 'sparkjoy')
 
-  expect(text?.split('\n')[0]).toBe(
-    'Classifying. It asks whether to compact at a turn end from 250k (the default) and in an idle session from 175k (the default), and shows each verdict without compacting.',
-  )
-})
+    expect(text?.split('\n')[0]).toBe(
+      'Classifying. It asks whether to compact at a turn end from 250k (the default) and in an idle session from 175k (the default), and shows each verdict without compacting.',
+    )
+  },
+)
 
-test('/sparkjoy says sparkjoy is off and quotes the start of the user’s instructions', { options: { mode: 'off', instructions: INSTRUCTIONS } }, async ($, on) => {
-  const { begin, type } = engine(on)
-  await begin($)
+test(
+  '/sparkjoy says sparkjoy is off and quotes the start of the user’s instructions',
+  { options: { mode: 'off', instructions: INSTRUCTIONS } },
+  async ($, on) => {
+    const { begin, type } = engine(on)
+    await begin($)
 
-  const { text } = await type($, 'sparkjoy')
+    const { text } = await type($, 'sparkjoy')
 
-  expect(text).toBe(
-    "Off, so it asks nothing and compacts nothing. When on, it asks at a turn end from 250k (the default) and in an idle session from 175k (the default).\n" +
-      'Its question carries your instructions: "Keep the context while a pull request awaits review, and…"\n' +
-      '/sparkjoy on compacts when the model says to, /sparkjoy classify only shows its verdicts, and /sparkjoy off asks nothing. /config sets the floors and instructions.',
-  )
-})
+    expect(text).toBe(
+      'Off, so it asks nothing and compacts nothing. When on, it asks at a turn end from 250k (the default) and in an idle session from 175k (the default).\n' +
+        'Its question carries your instructions: "Keep the context while a pull request awaits review, and…"\n' +
+        '/sparkjoy on compacts when the model says to, /sparkjoy classify only shows its verdicts, and /sparkjoy off asks nothing. /config sets the floors and instructions.',
+    )
+  },
+)
 
 test('/sparkjoy report asks the model to run the report skill with what the user typed', async ($, on) => {
   const { begin, clock, prompts, type } = engine(on)
@@ -955,7 +1176,9 @@ test('/sparkjoy report asks the model to run the report skill with what the user
   await clock.settle()
 
   expect(text).toBe('Asking the model to run the report.')
-  expect(prompts).toEqual(['The user typed /sparkjoy report since Monday. Run the sparkjoy:report skill for them.'])
+  expect(prompts).toEqual([
+    'The user typed /sparkjoy report since Monday. Run the sparkjoy:report skill for them.',
+  ])
 })
 
 test('/sparkjoy with another word says what it takes', async ($, on) => {
@@ -965,5 +1188,7 @@ test('/sparkjoy with another word says what it takes', async ($, on) => {
   const { text } = await type($, 'sparkjoy', 'disable')
 
   expect(sets).toEqual([])
-  expect(text).toBe('/sparkjoy takes on, classify, off or report, not "disable", or nothing to show its settings.')
+  expect(text).toBe(
+    '/sparkjoy takes on, classify, off or report, not "disable", or nothing to show its settings.',
+  )
 })

@@ -30,7 +30,10 @@ from charts import plt
 
 PLUGIN = "sparkjoy"
 LONG = 600_000  # the size the README counts requests at or above
-ARMS = (("without", "no mod", "without (replayed)"), ("with", "as run", f"with {PLUGIN}"))
+ARMS = (
+    ("without", "no mod", "without (replayed)"),
+    ("with", "as run", f"with {PLUGIN}"),
+)
 
 
 def total(arm):
@@ -72,14 +75,32 @@ def session_chart(s, t, path):
     for i, compacted in s["checks"]:
         ax.plot([i], [ys[i]], zorder=3, clip_on=False, **marker(t, compacted))
     # The line ends sit close together, so a legend names the arms, each beside a swatch of its line.
-    lines = [(plt.Line2D([], [], color=t[key], lw=2), label)
-             for key, label in (("with", f"with {PLUGIN}"), ("without", f"without {PLUGIN}, replayed"))]
-    dots = [(plt.Line2D([], [], ls="", **marker(t, c)), label)
-            for c, label in ((False, "turn end, kept going"), (True, "turn end, compacted"))]
+    lines = [
+        (plt.Line2D([], [], color=t[key], lw=2), label)
+        for key, label in (
+            ("with", f"with {PLUGIN}"),
+            ("without", f"without {PLUGIN}, replayed"),
+        )
+    ]
+    dots = [
+        (plt.Line2D([], [], ls="", **marker(t, c)), label)
+        for c, label in ((False, "turn end, kept going"), (True, "turn end, compacted"))
+    ]
     handles, labels = zip(*lines, *dots, strict=True)
-    ax.legend(handles, labels, frameon=False, fontsize=9, labelcolor=t["ink"], loc="lower right",
-              bbox_to_anchor=(1, 1), ncols=4, borderaxespad=0.2, handlelength=1.3, handletextpad=0.5,
-              columnspacing=1.1)
+    ax.legend(
+        handles,
+        labels,
+        frameon=False,
+        fontsize=9,
+        labelcolor=t["ink"],
+        loc="lower right",
+        bbox_to_anchor=(1, 1),
+        ncols=4,
+        borderaxespad=0.2,
+        handlelength=1.3,
+        handletextpad=0.5,
+        columnspacing=1.1,
+    )
     ax.set_ylim(0, 1_020_000)
     ax.set_xlim(0, len(ys) - 1)
     ax.yaxis.set_major_formatter(charts.tokens)
@@ -98,16 +119,29 @@ def context_chart(S, t, path):
 
     def draw(key, color, fill):
         ys = contexts[key]
-        shares[key], _, _ = ax.hist(ys, bins=bins, weights=[100 / len(ys)] * len(ys), color=color,
-                                    lw=0 if fill else 2, histtype="stepfilled" if fill else "step")
+        shares[key], _, _ = ax.hist(
+            ys,
+            bins=bins,
+            weights=[100 / len(ys)] * len(ys),
+            color=color,
+            lw=0 if fill else 2,
+            histtype="stepfilled" if fill else "step",
+        )
 
     areas(t, draw)
     # Each arm named above its tallest bin past where the two part: sparkjoy's peak, the replay's tail.
     for key, at in (("with", 250_000), ("without", 800_000)):
         i = bins.index(at)
         label = next(label for k, _, label in ARMS if k == key)
-        ax.text(at + 25_000, max(shares[key][i - 1:i + 2]) + 0.5, label, ha="center", va="bottom", fontsize=9,
-                color=t["ink"])
+        ax.text(
+            at + 25_000,
+            max(shares[key][i - 1 : i + 2]) + 0.5,
+            label,
+            ha="center",
+            va="bottom",
+            fontsize=9,
+            color=t["ink"],
+        )
     ax.xaxis.set_major_formatter(charts.tokens)
     ax.set_xticks([0, 200_000, 400_000, 600_000, 800_000, 1_000_000])
     ax.set_xlim(0, 1_000_000)
@@ -129,14 +163,48 @@ def cost_chart(S, t, path):
     ax.spines["bottom"].set_visible(False)
     ax.barh([1, 0], [without, with_], color=[t["without"], t["with"]], height=0.62)
     ax.barh([0], [judge], left=[with_ - judge], color=t["ink"], height=0.62)
-    for y, v, label in ((1, without, f"without {PLUGIN}"), (0, with_, f"with {PLUGIN}")):
-        ax.text(-without * 0.01, y, label, ha="right", va="center", fontsize=10, color=t["ink"])
-        ax.text(v + without * 0.01, y, f"${v:,.0f}", ha="left", va="center", fontsize=10, color=t["ink"])
-    ax.text(with_ + without * 0.09, 0, charts.percent(with_ / without - 1), ha="left", va="center", fontsize=10,
-            color=t["muted"])
-    ax.annotate(f"{PLUGIN}'s questions, ${judge:,.0f}",(with_ - judge / 2, -0.31), xytext=(0, -12), textcoords="offset points",
-                ha="center", va="top", fontsize=9, color=t["muted"],
-                arrowprops={"arrowstyle": "-", "color": t["muted"], "lw": 0.8})
+    for y, v, label in (
+        (1, without, f"without {PLUGIN}"),
+        (0, with_, f"with {PLUGIN}"),
+    ):
+        ax.text(
+            -without * 0.01,
+            y,
+            label,
+            ha="right",
+            va="center",
+            fontsize=10,
+            color=t["ink"],
+        )
+        ax.text(
+            v + without * 0.01,
+            y,
+            f"${v:,.0f}",
+            ha="left",
+            va="center",
+            fontsize=10,
+            color=t["ink"],
+        )
+    ax.text(
+        with_ + without * 0.09,
+        0,
+        charts.percent(with_ / without - 1),
+        ha="left",
+        va="center",
+        fontsize=10,
+        color=t["muted"],
+    )
+    ax.annotate(
+        f"{PLUGIN}'s questions, ${judge:,.0f}",
+        (with_ - judge / 2, -0.31),
+        xytext=(0, -12),
+        textcoords="offset points",
+        ha="center",
+        va="top",
+        fontsize=9,
+        color=t["muted"],
+        arrowprops={"arrowstyle": "-", "color": t["muted"], "lw": 0.8},
+    )
     ax.set_xlim(0, without * 1.12)
     ax.set_yticks([])
     ax.set_xticks([])
@@ -146,8 +214,14 @@ def cost_chart(S, t, path):
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("replay", type=Path, help="the replay's JSON")
-    p.add_argument("--session", required=True, help="a prefix of the session id the session chart shows")
-    p.add_argument("--out", type=Path, required=True, help="the directory the SVGs go to")
+    p.add_argument(
+        "--session",
+        required=True,
+        help="a prefix of the session id the session chart shows",
+    )
+    p.add_argument(
+        "--out", type=Path, required=True, help="the directory the SVGs go to"
+    )
     a = p.parse_args()
     d = json.loads(a.replay.read_text())
     S = d["sessions"]
@@ -161,19 +235,32 @@ def main():
     n = sum(s["as run"]["n"] for s in S)
     calls = sum(s["as run"].get("n_judge", 0) for s in S)
     w, wo = sum(total(s["as run"]) for s in S), sum(total(s["no mod"]) for s in S)
-    over = {arm: sum(c >= LONG for s in S for c in s[arm]["trace"]) / n for arm in ("as run", "no mod")}
+    over = {
+        arm: sum(c >= LONG for s in S for c in s[arm]["trace"]) / n
+        for arm in ("as run", "no mod")
+    }
     mean = {arm: sum(s[arm]["ctx"] for s in S) / n for arm in ("as run", "no mod")}
-    print(f"{len(S)} sessions, {n:,.0f} requests, {d['since'][:16]}Z to {d['until'][:16]}Z; "
-          f"logged ${sum(s['logged'] for s in S):,.0f}")
-    print(f"cost: ${wo:,.0f} without, ${w:,.0f} with ({w / wo - 1:+.1%}); judge ${sum(s['as run'].get('judge', 0) for s in S):,.0f}, "
-          f"{calls:.0f} calls ({calls / n:.2%} of requests)")
-    print(f"mean context {mean['no mod'] / 1000:.0f}k without, {mean['as run'] / 1000:.0f}k with; "
-          f"requests at {LONG // 1000}k+: {over['no mod']:.0%} without, {over['as run']:.0%} with")
+    print(
+        f"{len(S)} sessions, {n:,.0f} requests, {d['since'][:16]}Z to {d['until'][:16]}Z; "
+        f"logged ${sum(s['logged'] for s in S):,.0f}"
+    )
+    print(
+        f"cost: ${wo:,.0f} without, ${w:,.0f} with ({w / wo - 1:+.1%}); judge ${sum(s['as run'].get('judge', 0) for s in S):,.0f}, "
+        f"{calls:.0f} calls ({calls / n:.2%} of requests)"
+    )
+    print(
+        f"mean context {mean['no mod'] / 1000:.0f}k without, {mean['as run'] / 1000:.0f}k with; "
+        f"requests at {LONG // 1000}k+: {over['no mod']:.0%} without, {over['as run']:.0%} with"
+    )
     asked = [c for s in S for c in s["checks"]]
-    print(f"turn ends asked about: {len(asked)}, compacted after {sum(c for _, c in asked)}")
-    print(f"session chart: {Path(s['path']).name}, {len(s['as run']['trace'])} requests, "
-          f"${total(s['no mod']):,.0f} without, ${total(s['as run']):,.0f} with; "
-          f"kept going at {sum(not c for _, c in s['checks'])} of {len(s['checks'])} turn ends asked about")
+    print(
+        f"turn ends asked about: {len(asked)}, compacted after {sum(c for _, c in asked)}"
+    )
+    print(
+        f"session chart: {Path(s['path']).name}, {len(s['as run']['trace'])} requests, "
+        f"${total(s['no mod']):,.0f} without, ${total(s['as run']):,.0f} with; "
+        f"kept going at {sum(not c for _, c in s['checks'])} of {len(s['checks'])} turn ends asked about"
+    )
     for n, reason in enumerate(s["reasons"], 1):
         print(f"  {n}. {reason}")
 
