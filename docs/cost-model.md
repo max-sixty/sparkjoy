@@ -58,16 +58,17 @@ For my sessions on Opus 5.5[^prices]:
   always right saves 13.5%. No session of mine measures how widely work differs,
   how often the question is right on it, or how much detail a compaction in the
   middle of a task loses ([A classifier](#a-classifier)).
-- Compacting at turn ends, with `/autocompact` set higher as a backstop for long
-  turns, saves as much as `/autocompact` alone with fewer compactions in the
-  middle of a turn: 0.1 points less counting cost alone, with 227 mid-turn
-  against 362, and 0.4 points more at the base case for how much context helps
-  the work, β = 0.5, where a request at 250k gets half as much done as one at
-  1M, with 79 against 169. Without the backstop, waiting for a turn end gives up
-  9.1 points counting cost alone. Every wasted request a mid-turn compaction
-  costs beyond one at a turn end tips this further toward turn ends, and no
-  session of mine measures how many it costs ([Mid-turn or at a turn
-  end](#mid-turn-or-at-a-turn-end)).
+- Compacting only at turn ends, as sparkjoy does, saves 9.1 points less than
+  `/autocompact` at its lowest-cost threshold counting cost alone, and 0.9
+  points less at the base case for how much context helps the work, β = 0.5,
+  where a request at 250k gets half as much done as one at 1M. A long turn can
+  carry the context far past where compacting pays before it ends.
+  `/autocompact` set higher as a backstop for those turns closes the gap with
+  fewer compactions in the middle of a turn than `/autocompact` alone: 227
+  against 362 counting cost alone, and 79 against 169 at the base case. Every
+  wasted request a mid-turn compaction costs beyond one at a turn end tips this
+  toward turn ends, and no session of mine measures how many it costs ([Mid-turn
+  or at a turn end](#mid-turn-or-at-a-turn-end)).
 - Just before an idle session's cache lapses, compacting pays from about 160k
   ([Idle sessions](#idle-sessions)).
 - A compaction costs about \$1 at any context size, most of it for the cache
@@ -345,7 +346,9 @@ in the middle of a turn. sparkjoy compacts only at a turn end. A turn runs a
 median of 9 requests but a mean of 38, so one long turn can carry the context
 far past the lowest-cost threshold before the next turn end, and every request
 until then reads the larger context. `/autocompact` set above sparkjoy's floor
-catches those turns, as a backstop.
+catches those turns, as a backstop, by compacting in the middle of them. The
+README recommends no backstop, since a compaction there is the one most likely
+to drop what the turn's next requests need.
 
 In the [replay](#a-replay-of-my-sessions), with each policy at its lowest-cost
 thresholds and all three also compacting idle sessions from 175k, with savings
