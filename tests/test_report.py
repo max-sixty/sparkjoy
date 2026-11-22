@@ -87,7 +87,6 @@ def report(tmp_path, entries, *args):
             "uv",
             "run",
             "--script",
-            "--locked",
             ROOT / "model/report.py",
             "--projects",
             tmp_path / "projects",
