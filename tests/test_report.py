@@ -45,7 +45,7 @@ def report(tmp_path, entries, *args):
     session.parent.mkdir(parents=True)
     session.write_text("".join(json.dumps(e, separators=(",", ":")) + "\n" for e in entries))  # as Claude Code writes it
     run = subprocess.run(
-        ["uv", "run", "--script", ROOT / "model/report.py", "--projects", tmp_path / "projects",
+        ["uv", "run", "--script", "--locked", ROOT / "model/report.py", "--projects", tmp_path / "projects",
          "--since", "2026-11-01T00:00Z", "--until", "2026-11-03T00:00Z", "--no-open", *args],
         capture_output=True, text=True, env={"PATH": subprocess.os.environ["PATH"], "TMPDIR": str(tmp_path)},
         check=True)
