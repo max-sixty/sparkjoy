@@ -38,7 +38,7 @@ export async function checkForUpdate($: EngineInterface) {
     if (latest.startsWith(install.commit)) return
     const { commit, marketplace } = install
     $.ui.log(
-      `A newer version is out. /plugin marketplace update ${marketplace} updates it. To keep it up to date, select ${marketplace} on the tab that command opens and turn on auto-update. What changed: https://github.com/${REPOSITORY}/compare/${commit}...main`,
+      `A newer version is out. /plugin marketplace update ${marketplace} updates it. To keep it up to date, open /plugin, select ${marketplace} on the Marketplaces tab, and choose Turn on auto-update. What changed: https://github.com/${REPOSITORY}/compare/${commit}...main`,
     )
   } catch (error) {
     $.ui.log(`Checking for a newer version failed: ${error}`, { to: 'debug' })

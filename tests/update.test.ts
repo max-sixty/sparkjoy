@@ -1,8 +1,8 @@
 import { expect, test } from 'claude-code/testing'
 import { installOf } from '../hooks/update'
 
-// The plugin under test runs from its folder rather than from an install, so the
-// check stops at its first step in every test: this test pins that step.
+// The plugin under test runs from its folder rather than from an install, so in
+// every test the check stops at its first step, which this test covers.
 test('an install is read from the path Claude Code gives it, on Windows too', () => {
   expect(
     installOf('/home/u/.claude/plugins/cache/sparkjoy/sparkjoy/55178b59fec8'),
