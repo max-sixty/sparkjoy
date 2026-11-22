@@ -31,24 +31,29 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
+import fit
 import numpy as np
 
-import fit
-
 CHECK_OUTPUT = 100  # output tokens of a check, which reads the context from the cache
-RETURN = 3600  # seconds a session sits idle before taking it up again counts as a return
+RETURN = (
+    3600  # seconds a session sits idle before taking it up again counts as a return
+)
 DOC = "https://github.com/max-sixty/sparkjoy/blob/main/docs/cost-model.md"
 KINDS = list(fit.KINDS.values())
 # What each verdict means, from `judge` in hooks/register.ts.
-MEANING = {"compacted": "The model said to compact, and sparkjoy began compacting.",
-           "would compact": "The model said to compact, and sparkjoy, set to classify, left the context as it was.",
-           "kept": "The model said to keep going.",
-           "unreadable": "The model's reply wasn't the JSON the question asks for.",
-           "no verdict": "The model gave no reply.",
-           "dropped": "The conversation moved on before the reply came, so sparkjoy set it aside.",
-           "failed": "An error stopped the check."}
-MISSED = ("Its question read less than nine tenths of its input from the prompt cache, so the rest cost a cache "
-          "write. sparkjoy logs these from 20 November 2026 on.")
+MEANING = {
+    "compacted": "The model said to compact, and sparkjoy began compacting.",
+    "would compact": "The model said to compact, and sparkjoy, set to classify, left the context as it was.",
+    "kept": "The model said to keep going.",
+    "unreadable": "The model's reply wasn't the JSON the question asks for.",
+    "no verdict": "The model gave no reply.",
+    "dropped": "The conversation moved on before the reply came, so sparkjoy set it aside.",
+    "failed": "An error stopped the check.",
+}
+MISSED = (
+    "Its question read less than nine tenths of its input from the prompt cache, so the rest cost a cache "
+    "write. sparkjoy logs these from 20 November 2026 on."
+)
 
 
 def replayed(s, p):
@@ -58,10 +63,14 @@ def replayed(s, p):
     priced = s.model in fit.PRICES
     c = fit.prices(s.model if priced else "claude-opus-5-5", s.ttl)
     # As compactions the user typed, sparkjoy's stay where the log has them.
-    ran, ran_trace = fit.replay(replace(s, kind=np.where(s.sparkjoy, fit.USER, s.kind)), p, c, np.inf, s.ttl)
+    ran, ran_trace = fit.replay(
+        replace(s, kind=np.where(s.sparkjoy, fit.USER, s.kind)), p, c, np.inf, s.ttl
+    )
     without, without_trace = fit.replay(s, p, c, np.inf, s.ttl)
     checks = sum(check(v, c) for v in s.verdicts if v.tokens)
-    dollars = ((ran + checks) * c.read, without * c.read, checks * c.read) if priced else None
+    dollars = (
+        ((ran + checks) * c.read, without * c.read, checks * c.read) if priced else None
+    )
     return dollars, ran_trace, without_trace
 
 
@@ -79,11 +88,20 @@ def returns(S):
     rows = []
     for s in S:
         c = fit.prices(s.model, s.ttl) if s.model in fit.PRICES else None
-        for j in np.flatnonzero(np.roll(s.end, 1) & (s.gap >= RETURN)):  # gap[0] is 0, so j > 0
+        for j in np.flatnonzero(
+            np.roll(s.end, 1) & (s.gap >= RETURN)
+        ):  # gap[0] is 0, so j > 0
             context = s.size[j - 1] + s.out[j - 1]
             if context >= fit.IDLE_FLOOR:
-                by = ("sparkjoy" if s.sparkjoy[j] else "Claude Code" if s.kind[j] == fit.POLICY
-                      else "/compact" if s.kind[j] == fit.USER else None)
+                by = (
+                    "sparkjoy"
+                    if s.sparkjoy[j]
+                    else "Claude Code"
+                    if s.kind[j] == fit.POLICY
+                    else "/compact"
+                    if s.kind[j] == fit.USER
+                    else None
+                )
                 rows.append((s, j, context, by, c and s.write[j] * c.write * c.read))
     return sorted(rows, key=lambda r: -r[0].t[r[1]])
 
@@ -104,11 +122,20 @@ def thresholds(S, p, model, ttl):
     c = fit.prices(model, ttl)
     floors, _ = fit.floors(S, p, c, ttl)
     # Cost per unit of effectiveness, summed over the sessions, for each policy.
-    J = lambda threshold, idle=None: np.divide(*(v.sum() for v in fit.arm(S, p, c, ttl, threshold, idle=idle)))
+    J = lambda threshold, idle=None: np.divide(
+        *(v.sum() for v in fit.arm(S, p, c, ttl, threshold, idle=idle))
+    )
     never = J(np.inf)
-    return {"model": model, "ttl": ttl, "floors": floors, "saved": 1 - J(*floors) / never,
-            "saved_author": 1 - J(fit.FLOOR, fit.IDLE_FLOOR) / never, "steady": fit.steady(p, c, fit.BASE),
-            "idle": fit.idle_break_even(p, c), "compactions": p.compactions}
+    return {
+        "model": model,
+        "ttl": ttl,
+        "floors": floors,
+        "saved": 1 - J(*floors) / never,
+        "saved_author": 1 - J(fit.FLOOR, fit.IDLE_FLOOR) / never,
+        "steady": fit.steady(p, c, fit.BASE),
+        "idle": fit.idle_break_even(p, c),
+        "compactions": p.compactions,
+    }
 
 
 def tokens(n):
@@ -152,16 +179,18 @@ def model_name(model):
 
 # The figures sparkjoy's question states, by the names of their constants in hooks/register.ts,
 # each with how the page and the summary name and show it.
-FIGURES = (("FLOOR", "floor at turn ends", tokens),
-           ("IDLE_FLOOR", "floor in idle sessions", tokens),
-           ("K", "context after a compaction", tokens),
-           ("P", "system prompt and tools within it", tokens),
-           ("SUMMARY", "output of the request that writes the summary", tokens),
-           ("TURN_MEDIAN", "median requests per turn", "{:.0f}".format),
-           ("TURN_MEAN", "mean requests per turn", "{:.0f}".format),
-           ("LAPSE", "requests that find the prompt cache lapsed", "{:.2%}".format),
-           ("WRITE", "cached reads a cache write costs", "{:g}".format),
-           ("OUTPUT", "cached reads an output token costs", "{:g}".format))
+FIGURES = (
+    ("FLOOR", "floor at turn ends", tokens),
+    ("IDLE_FLOOR", "floor in idle sessions", tokens),
+    ("K", "context after a compaction", tokens),
+    ("P", "system prompt and tools within it", tokens),
+    ("SUMMARY", "output of the request that writes the summary", tokens),
+    ("TURN_MEDIAN", "median requests per turn", "{:.0f}".format),
+    ("TURN_MEAN", "mean requests per turn", "{:.0f}".format),
+    ("LAPSE", "requests that find the prompt cache lapsed", "{:.2%}".format),
+    ("WRITE", "cached reads a cache write costs", "{:g}".format),
+    ("OUTPUT", "cached reads an output token costs", "{:g}".format),
+)
 
 
 def figures(p, c, floors=None):
@@ -171,8 +200,17 @@ def figures(p, c, floors=None):
     requests after a compaction: calibrate.py measures it over 60 days, and over a report's
     window it varies across resamples by more than its own size. `floors` is the pair sparkjoy
     asks from, at turn ends and in idle sessions, where the report fitted one."""
-    fitted = {**dict(zip(("FLOOR", "IDLE_FLOOR"), floors or ())), "K": p.K, "P": p.P, "SUMMARY": p.N, "TURN_MEDIAN": p.turn_median, "TURN_MEAN": p.turn,
-              "LAPSE": p.lapse, "WRITE": c.write, "OUTPUT": c.output}
+    fitted = {
+        **dict(zip(("FLOOR", "IDLE_FLOOR"), floors or (), strict=False)),
+        "K": p.K,
+        "P": p.P,
+        "SUMMARY": p.N,
+        "TURN_MEDIAN": p.turn_median,
+        "TURN_MEAN": p.turn,
+        "LAPSE": p.lapse,
+        "WRITE": c.write,
+        "OUTPUT": c.output,
+    }
     return {k: v for k, v in fitted.items() if np.isfinite(v)}
 
 
@@ -181,7 +219,7 @@ def esc(text):
 
 
 def name(s, limit=60):
-    title = s.title if len(s.title) <= limit else s.title[:limit - 1].rstrip() + "…"
+    title = s.title if len(s.title) <= limit else s.title[: limit - 1].rstrip() + "…"
     return f'<span title="{esc(s.title)}">{esc(title)}</span>'
 
 
@@ -200,7 +238,9 @@ def mark(kind):
 def at(v):
     where = "" if v.tokens is None else f"idle {v.idle} min" if v.idle else "turn end"
     if v.missed:
-        where += f", missed the cache (read {tokens(v.missed[0])} of {tokens(v.missed[1])})"
+        where += (
+            f", missed the cache (read {tokens(v.missed[0])} of {tokens(v.missed[1])})"
+        )
     return where
 
 
@@ -208,7 +248,10 @@ def table(head, rows, numeric=(), wrap=()):
     """A table whose `numeric` columns align right and whose `wrap` columns may break lines."""
     cls = lambda i: " class=num" if i in numeric else " class=wrap" if i in wrap else ""
     th = "".join(f"<th{cls(i)}>{h}</th>" for i, h in enumerate(head))
-    body = "".join("<tr>" + "".join(f"<td{cls(i)}>{c}</td>" for i, c in enumerate(row)) + "</tr>" for row in rows)
+    body = "".join(
+        "<tr>" + "".join(f"<td{cls(i)}>{c}</td>" for i, c in enumerate(row)) + "</tr>"
+        for row in rows
+    )
     return f'<div class="scroll"><table><thead><tr>{th}</tr></thead><tbody>{body}</tbody></table></div>'
 
 
@@ -219,16 +262,22 @@ def sparkline(s, ran, without, w=240, h=44):
     x = lambda j: f"{j / max(n - 1, 1) * (w - 6) + 3:.0f}"
     y = lambda v: f"{h - 3 - min(v, fit.WINDOW) / fit.WINDOW * (h - 6):.0f}"
     # One point per pixel the line moves to, which keeps a page of many sessions light.
-    line = lambda trace: " ".join(dict.fromkeys(f"{x(j)},{y(trace[j])}" for j in range(n)))
+    line = lambda trace: " ".join(
+        dict.fromkeys(f"{x(j)},{y(trace[j])}" for j in range(n))
+    )
     dots = "".join(
         f'<circle class="dot {v.kind.replace(" ", "-")}" cx="{x(j)}" cy="{y(ran[j])}" r="3">'
         f"<title>{esc(f'{v.kind.capitalize()}, {when(v.t)}: {v.reason}')}</title></circle>"
-        for v in s.verdicts for j in [max(int(np.searchsorted(s.t, v.t)) - 1, 0)])
-    return (f'<svg class="spark" viewBox="0 0 {w} {h}" width="{w}" height="{h}" role="img" '
-            f'aria-label="Context per request, with and without sparkjoy">'
-            f'<line class="floor" x1="0" x2="{w}" y1="{y(fit.FLOOR)}" y2="{y(fit.FLOOR)}"/>'
-            f'<polyline class="without" points="{line(without)}"/><polyline class="with" points="{line(ran)}"/>'
-            f"{dots}</svg>")
+        for v in s.verdicts
+        for j in [max(int(np.searchsorted(s.t, v.t)) - 1, 0)]
+    )
+    return (
+        f'<svg class="spark" viewBox="0 0 {w} {h}" width="{w}" height="{h}" role="img" '
+        f'aria-label="Context per request, with and without sparkjoy">'
+        f'<line class="floor" x1="0" x2="{w}" y1="{y(fit.FLOOR)}" y2="{y(fit.FLOOR)}"/>'
+        f'<polyline class="without" points="{line(without)}"/><polyline class="with" points="{line(ran)}"/>'
+        f"{dots}</svg>"
+    )
 
 
 CSS = """
@@ -286,100 +335,216 @@ def page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit, saved
     counts = Counter(v.kind for _, v in verdicts)
     if verdicts:
         idle = sum(1 for _, v in verdicts if v.idle)
-        tile = lambda n, label, title="": f'<div class="tile" title="{title}"><b>{n:,}</b><span>{label}</span></div>'
+        tile = lambda n, label, title="": (
+            f'<div class="tile" title="{title}"><b>{n:,}</b><span>{label}</span></div>'
+        )
         tiles = "".join(tile(counts[k], k, MEANING[k]) for k in KINDS if counts[k])
-        none = " · ".join(f'<span title="{MEANING[k]}">0 {k}</span>' for k in KINDS if not counts[k])
+        none = " · ".join(
+            f'<span title="{MEANING[k]}">0 {k}</span>' for k in KINDS if not counts[k]
+        )
         old = sum(v.plugin == "compact-when-done" for _, v in verdicts)
         missed = sum(1 for _, v in verdicts if v.missed)
-        parts.append(f'<div class="tiles">{tile(len(verdicts), "verdicts")}{tiles}</div><p class=note>'
-                     f"{len(verdicts) - idle - counts['failed']:,} at turn ends, {idle:,} in idle sessions · "
-                     f'<span title="{MISSED}">{missed:,} missed the prompt cache</span>'
-                     f"{f' · {none}' if none else ''}</p>")
+        parts.append(
+            f'<div class="tiles">{tile(len(verdicts), "verdicts")}{tiles}</div><p class=note>'
+            f"{len(verdicts) - idle - counts['failed']:,} at turn ends, {idle:,} in idle sessions · "
+            f'<span title="{MISSED}">{missed:,} missed the prompt cache</span>'
+            f"{f' · {none}' if none else ''}</p>"
+        )
         if old:
-            parts.append(f"<p class=note>{old:,} of them came from the plugin under its old name, compact-when-done, "
-                         "which logged only the checks that compacted, so its other verdicts, and what those checks "
-                         "cost, are missing here.</p>")
+            parts.append(
+                f"<p class=note>{old:,} of them came from the plugin under its old name, compact-when-done, "
+                "which logged only the checks that compacted, so its other verdicts, and what those checks "
+                "cost, are missing here.</p>"
+            )
     else:
-        parts.append("<p>No verdicts yet; sessions pick sparkjoy up when they restart.</p>")
+        parts.append(
+            "<p>No verdicts yet; sessions pick sparkjoy up when they restart.</p>"
+        )
 
     summary = []
-    unpriced = Counter(model_name(s.model) for s, r in sessions if s.sparkjoy.any() and not r[0])
+    unpriced = Counter(
+        model_name(s.model) for s, r in sessions if s.sparkjoy.any() and not r[0]
+    )
     if saving:
         ran, without, checks = saving
         n = sum(unpriced.values())
-        left = (f" {n} {'session' if n == 1 else 'sessions'} where it compacted, on {', '.join(unpriced)}, "
-                f"{'is' if n == 1 else 'are'} left out, as this report has no price for that model."
-                if unpriced else "")
+        left = (
+            f" {n} {'session' if n == 1 else 'sessions'} where it compacted, on {', '.join(unpriced)}, "
+            f"{'is' if n == 1 else 'are'} left out, as this report has no price for that model."
+            if unpriced
+            else ""
+        )
         d = without - ran
-        head = (f"<b>Saved {usd(d)}</b>, {d / without:.0%} of what these sessions would have cost" if d >= 0 else
-                f"<b>Cost {usd(-d)} more</b>, {-d / without:.0%} more than these sessions would have cost")
-        summary.append(f"<p>{head} without sparkjoy's compactions. Replayed at list prices, they cost "
-                       f"{usd(without)} without them and {usd(ran)} with them, including {usd(checks)} for its "
-                       f"checks.{left}</p>")
+        head = (
+            f"<b>Saved {usd(d)}</b>, {d / without:.0%} of what these sessions would have cost"
+            if d >= 0
+            else f"<b>Cost {usd(-d)} more</b>, {-d / without:.0%} more than these sessions would have cost"
+        )
+        summary.append(
+            f"<p>{head} without sparkjoy's compactions. Replayed at list prices, they cost "
+            f"{usd(without)} without them and {usd(ran)} with them, including {usd(checks)} for its "
+            f"checks.{left}</p>"
+        )
     elif unpriced:
-        summary.append(f"<p>sparkjoy compacted only in sessions on {', '.join(unpriced)}, which this report has "
-                       "no price for.</p>")
+        summary.append(
+            f"<p>sparkjoy compacted only in sessions on {', '.join(unpriced)}, which this report has "
+            "no price for.</p>"
+        )
     else:
-        summary.append("<p>Nothing saved yet: sparkjoy made no compaction in this window.</p>")
+        summary.append(
+            "<p>Nothing saved yet: sparkjoy made no compaction in this window.</p>"
+        )
     lapsed = [r for r in rows if r[3] is None]
     by = Counter(r[3] for r in rows if r[3])
     first = ", ".join(f"{n} by {who}" for who, n in by.most_common())
     rewrote = sum(r[0].write[r[1]] for r in lapsed)
     spent = sum(r[4] for r in lapsed if r[4])
-    summary.append(f"<p><b>{len(rows)} returns</b> after an hour or more idle to sessions left with "
-                   f"{tokens(fit.IDLE_FLOOR)} or more in context; {len(rows) - len(lapsed)} had been compacted in "
-                   f"between{f' ({first})' if first else ''}."
-                   + (f" The other {len(lapsed)} wrote {tokens(rewrote)} tokens to the cache again, for "
-                      f"{usd(spent)}." if lapsed else "") + "</p>")
+    summary.append(
+        f"<p><b>{len(rows)} returns</b> after an hour or more idle to sessions left with "
+        f"{tokens(fit.IDLE_FLOOR)} or more in context; {len(rows) - len(lapsed)} had been compacted in "
+        f"between{f' ({first})' if first else ''}."
+        + (
+            f" The other {len(lapsed)} wrote {tokens(rewrote)} tokens to the cache again, for "
+            f"{usd(spent)}."
+            if lapsed
+            else ""
+        )
+        + "</p>"
+    )
     if fitted:
         turn, idle = fitted["floors"]
-        summary.append(f"<p><b>Asking from {tokens(turn)} at turn ends and {tokens(idle)} in idle sessions</b> "
-                       f"minimizes the cost of these sessions, {change(fitted['saved'])} than never compacting.</p>")
-    sections = ["Sessions", "Verdicts"] * bool(verdicts) + ["Idle returns", "Thresholds"] + ["Saved figures"] * bool(saved)
-    summary.append("<p class=note>" + " · ".join(f'<a href="#{anchor(h)}">{h}</a>' for h in sections) + "</p>")
+        summary.append(
+            f"<p><b>Asking from {tokens(turn)} at turn ends and {tokens(idle)} in idle sessions</b> "
+            f"minimizes the cost of these sessions, {change(fitted['saved'])} than never compacting.</p>"
+        )
+    sections = (
+        ["Sessions", "Verdicts"] * bool(verdicts)
+        + ["Idle returns", "Thresholds"]
+        + ["Saved figures"] * bool(saved)
+    )
+    summary.append(
+        "<p class=note>"
+        + " · ".join(f'<a href="#{anchor(h)}">{h}</a>' for h in sections)
+        + "</p>"
+    )
     parts.append(f'<div class="summary">{"".join(summary)}</div>')
 
     if verdicts:
         parts.append(h2("Sessions"))
         # Only a user who set sparkjoy to classify has these.
-        would = f"{mark('would compact')}would compact " if counts["would compact"] else ""
-        parts.append('<p class="legend"><span><i style="color: var(--with)"></i>with sparkjoy</span>'
-                     '<span><i style="color: var(--without)"></i>without its compactions; Claude Code\'s and '
-                     "yours still run</span>"
-                     f"<span>{mark('compacted')}compacted {would}{mark('kept')}kept {mark('failed')}other verdict</span>"
-                     f"<span>context per request, 0 to 1M, dashed at {tokens(fit.FLOOR)}</span></p>")
-        acted = sorted((sr for sr in sessions if sr[0].verdicts),
-                       key=lambda sr: -(sr[1][0][1] - sr[1][0][0]) if sr[1][0] else 0)
-        parts.append(table(["Session", "Context", "Verdicts", "With", "Without", "Saved"], [
-            (name(s), sparkline(s, r[1], r[2]),
-             ", ".join(f"{n} {k}" for k in KINDS if (n := sum(v.kind == k for v in s.verdicts))),
-             *((usd(r[0][0]), usd(r[0][1]), f"{usd(r[0][1] - r[0][0])} ({signed((r[0][1] - r[0][0]) / r[0][1])})")
-               if r[0] else ("", "", "")))
-            for s, r in acted], numeric=(3, 4, 5), wrap=(0,)))
+        would = (
+            f"{mark('would compact')}would compact " if counts["would compact"] else ""
+        )
+        parts.append(
+            '<p class="legend"><span><i style="color: var(--with)"></i>with sparkjoy</span>'
+            '<span><i style="color: var(--without)"></i>without its compactions; Claude Code\'s and '
+            "yours still run</span>"
+            f"<span>{mark('compacted')}compacted {would}{mark('kept')}kept {mark('failed')}other verdict</span>"
+            f"<span>context per request, 0 to 1M, dashed at {tokens(fit.FLOOR)}</span></p>"
+        )
+        acted = sorted(
+            (sr for sr in sessions if sr[0].verdicts),
+            key=lambda sr: -(sr[1][0][1] - sr[1][0][0]) if sr[1][0] else 0,
+        )
+        parts.append(
+            table(
+                ["Session", "Context", "Verdicts", "With", "Without", "Saved"],
+                [
+                    (
+                        name(s),
+                        sparkline(s, r[1], r[2]),
+                        ", ".join(
+                            f"{n} {k}"
+                            for k in KINDS
+                            if (n := sum(v.kind == k for v in s.verdicts))
+                        ),
+                        *(
+                            (
+                                usd(r[0][0]),
+                                usd(r[0][1]),
+                                f"{usd(r[0][1] - r[0][0])} ({signed((r[0][1] - r[0][0]) / r[0][1])})",
+                            )
+                            if r[0]
+                            else ("", "", "")
+                        ),
+                    )
+                    for s, r in acted
+                ],
+                numeric=(3, 4, 5),
+                wrap=(0,),
+            )
+        )
 
         parts.append(h2("Verdicts"))
-        parts.append(table(["When", "Session", "Context", "Verdict", "At", "Reason"], [
-            (when(v.t), name(s, 40), "" if v.tokens is None else tokens(v.tokens), mark(v.kind) + v.kind, at(v),
-             esc(v.reason)) for s, v in verdicts], numeric=(2,), wrap=(5,)))
+        parts.append(
+            table(
+                ["When", "Session", "Context", "Verdict", "At", "Reason"],
+                [
+                    (
+                        when(v.t),
+                        name(s, 40),
+                        "" if v.tokens is None else tokens(v.tokens),
+                        mark(v.kind) + v.kind,
+                        at(v),
+                        esc(v.reason),
+                    )
+                    for s, v in verdicts
+                ],
+                numeric=(2,),
+                wrap=(5,),
+            )
+        )
 
     parts.append(h2("Idle returns"))
-    parts.append(f"<p>Each time a session left with {tokens(fit.IDLE_FLOOR)} or more in context took a new message "
-                 "after an hour or more, past the prompt cache's lifetime. Without a compaction in between, the "
-                 "message's first request writes the whole context to the cache again.</p>")
+    parts.append(
+        f"<p>Each time a session left with {tokens(fit.IDLE_FLOOR)} or more in context took a new message "
+        "after an hour or more, past the prompt cache's lifetime. Without a compaction in between, the "
+        "message's first request writes the whole context to the cache again.</p>"
+    )
     if rows:
-        parts.append(table(["When", "Session", "Idle", "Left at", "Compacted first", "Wrote", "Cost"], [
-            (when(s.t[j]), name(s), duration(s.gap[j]), tokens(context), who or "no", tokens(s.write[j]),
-             "" if dollars is None else usd(dollars)) for s, j, context, who, dollars in rows],
-            numeric=(2, 3, 5, 6)))
+        parts.append(
+            table(
+                [
+                    "When",
+                    "Session",
+                    "Idle",
+                    "Left at",
+                    "Compacted first",
+                    "Wrote",
+                    "Cost",
+                ],
+                [
+                    (
+                        when(s.t[j]),
+                        name(s),
+                        duration(s.gap[j]),
+                        tokens(context),
+                        who or "no",
+                        tokens(s.write[j]),
+                        "" if dollars is None else usd(dollars),
+                    )
+                    for s, j, context, who, dollars in rows
+                ],
+                numeric=(2, 3, 5, 6),
+            )
+        )
 
     parts.append(h2("Thresholds"))
     if fitted:
         f = fitted
         turn, idle = f["floors"]
-        parts.append('<div class="narrow">' + table(["Ask from", "The author's floors", "Fitted to these sessions"], [
-            ("At turn ends", tokens(fit.FLOOR), tokens(turn)),
-            ("In idle sessions", tokens(fit.IDLE_FLOOR), tokens(idle)),
-        ], numeric=(1, 2)) + "</div>")
+        parts.append(
+            '<div class="narrow">'
+            + table(
+                ["Ask from", "The author's floors", "Fitted to these sessions"],
+                [
+                    ("At turn ends", tokens(fit.FLOOR), tokens(turn)),
+                    ("In idle sessions", tokens(fit.IDLE_FLOOR), tokens(idle)),
+                ],
+                numeric=(1, 2),
+            )
+            + "</div>"
+        )
         parts.append(
             f"<p>Per unit of work, compacting from the fitted floors would cost {change(f['saved'])} than never "
             f"compacting, and from the author's {change(f['saved_author'])}. These replays compact wherever the floors allow, as if every "
@@ -390,36 +555,65 @@ def page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit, saved
             f"prices with a {'5-minute' if f['ttl'] == 300 else '1-hour'} cache. The floors are fitted by cost alone, since "
             f"sparkjoy only starts asking at them. The savings and the lowest-cost threshold take a request at 250k to get half "
             f"as much done as one at 1M, the cost model's base case, β = {fit.BASE:g}. The "
-            f'<a href="{DOC}">cost model</a> explains these figures.</p>')
+            f'<a href="{DOC}">cost model</a> explains these figures.</p>'
+        )
     else:
         parts.append(f"<p>{unfit}</p>")
 
     if saved:
         parts.append(h2("Saved figures"))
-        parts.append("<p>From the next turn end or idle session, sparkjoy asks from these floors, except where you "
-                     "set a floor of your own, and its question states these figures, fitted to these sessions, in "
-                     "place of its author's.</p>")
-        parts.append('<div class="narrow">' + table(["Figure", "These sessions"], [
-            (label.capitalize(), show(saved[key])) for key, label, show in FIGURES if key in saved], numeric=(1,))
-                     + "</div>")
+        parts.append(
+            "<p>From the next turn end or idle session, sparkjoy asks from these floors, except where you "
+            "set a floor of your own, and its question states these figures, fitted to these sessions, in "
+            "place of its author's.</p>"
+        )
+        parts.append(
+            '<div class="narrow">'
+            + table(
+                ["Figure", "These sessions"],
+                [
+                    (label.capitalize(), show(saved[key]))
+                    for key, label, show in FIGURES
+                    if key in saved
+                ],
+                numeric=(1,),
+            )
+            + "</div>"
+        )
         missing = [label for key, label, _ in FIGURES if key not in saved]
-        parts.append("<p class=note>" + (f"The window measured no {' or '.join(missing)}, so the question states "
-                                         "its author's. " if missing else "")
-                     + "The extra wasted requests after a compaction stay the author's: measuring them takes "
-                     "months of sessions.</p>")
-    return (f'<!doctype html><html lang="en"><head><meta charset="utf-8">'
-            f'<meta name="viewport" content="width=device-width, initial-scale=1">'
-            f"<title>sparkjoy report</title><style>{CSS}</style></head><body><main>{''.join(parts)}</main></body></html>")
+        parts.append(
+            "<p class=note>"
+            + (
+                f"The window measured no {' or '.join(missing)}, so the question states "
+                "its author's. "
+                if missing
+                else ""
+            )
+            + "The extra wasted requests after a compaction stay the author's: measuring them takes "
+            "months of sessions.</p>"
+        )
+    return (
+        f'<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        f'<meta name="viewport" content="width=device-width, initial-scale=1">'
+        f"<title>sparkjoy report</title><style>{CSS}</style></head><body><main>{''.join(parts)}</main></body></html>"
+    )
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     fit.window_args(ap)
-    ap.add_argument("--no-open", action="store_true", help="write the page without opening it")
+    ap.add_argument(
+        "--no-open", action="store_true", help="write the page without opening it"
+    )
     # The file hooks/register.ts reads (FIGURES there), in Claude Code's configuration directory.
-    ap.add_argument("--figures", type=Path, nargs="?", const=fit.PROJECTS.parent / "sparkjoy" / "figures.json",
-                    help="also save the figures sparkjoy's question states, fitted to these sessions, to this "
-                    "JSON file; with no file named, to the one the plugin reads")
+    ap.add_argument(
+        "--figures",
+        type=Path,
+        nargs="?",
+        const=fit.PROJECTS.parent / "sparkjoy" / "figures.json",
+        help="also save the figures sparkjoy's question states, fitted to these sessions, to this "
+        "JSON file; with no file named, to the one the plugin reads",
+    )
     a = ap.parse_args()
     S, since, until = fit.read(a)
     verdicts = sorted(((s, v) for s in S for v in s.verdicts), key=lambda sv: -sv[1].t)
@@ -429,7 +623,9 @@ def main():
     if any(((s.kind == fit.USER) | (s.kind == fit.POLICY)).any() for s in S):
         ttl = fit.usual(s.ttl for s in S)
         model = usual_model(S)
-        with warnings.catch_warnings():  # a short window leaves some parameters without data
+        with (
+            warnings.catch_warnings()
+        ):  # a short window leaves some parameters without data
             warnings.simplefilter("ignore", RuntimeWarning)
             p = fit.measure(S, ttl)
         if np.isfinite([p.K, p.P, p.N, p.g, p.out, p.lapse]).all():
@@ -441,47 +637,79 @@ def main():
                 a.figures.parent.mkdir(parents=True, exist_ok=True)
                 a.figures.write_text(json.dumps(values))
                 saved = values
-            except OSError as e:  # such as a sandbox that keeps writes to the working directory
+            except (
+                OSError
+            ) as e:  # such as a sandbox that keeps writes to the working directory
                 kept = f"saving them failed: {e}"
     # The replay prices each compaction from K, P and N.
     replays = p is not None and np.isfinite([p.K, p.P, p.N]).all()
-    sessions = [(s, replayed(s, p)) for s in S] if replays else [(s, (None, s.size, s.size)) for s in S]
+    sessions = (
+        [(s, replayed(s, p)) for s in S]
+        if replays
+        else [(s, (None, s.size, s.size)) for s in S]
+    )
     priced = [r[0] for _, r in sessions if r[0]]
     # With, without and the checks, summed over the sessions with a price.
-    saving = tuple(map(sum, zip(*priced))) if priced and any(s.sparkjoy.any() for s in S) else None
+    saving = (
+        tuple(map(sum, zip(*priced, strict=True)))
+        if priced and any(s.sparkjoy.any() for s in S)
+        else None
+    )
     rows = returns(S)
 
     # A file of its own, readable by this user alone: the page quotes prompts and reasons.
     fd, path = tempfile.mkstemp(prefix="sparkjoy-report-", suffix=".html")
     with open(fd, "w") as out:
-        out.write(page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit, saved))
+        out.write(
+            page(
+                S, since, until, verdicts, sessions, saving, rows, fitted, unfit, saved
+            )
+        )
     counts = Counter(v.kind for _, v in verdicts)
-    print(f"{len(verdicts)} verdicts in {len({id(s) for s, _ in verdicts})} of {len(S)} sessions: "
-          + ", ".join(f"{counts[k]} {k}" for k in KINDS)
-          + f"; {sum(1 for _, v in verdicts if v.missed)} missed the prompt cache")
+    print(
+        f"{len(verdicts)} verdicts in {len({id(s) for s, _ in verdicts})} of {len(S)} sessions: "
+        + ", ".join(f"{counts[k]} {k}" for k in KINDS)
+        + f"; {sum(1 for _, v in verdicts if v.missed)} missed the prompt cache"
+    )
     if saving:
         ran, without, _ = saving
         d = without - ran
-        print(f"{'saved' if d >= 0 else 'lost'} {usd(abs(d))} ({abs(d) / without:.0%}): {usd(ran)} with its compactions "
-              f"against {usd(without)} without, replayed at list prices")
-    print(f"{len(rows)} returns after an hour idle to sessions left at {tokens(fit.IDLE_FLOOR)} or more, "
-          f"{sum(1 for r in rows if r[3])} compacted in between")
+        print(
+            f"{'saved' if d >= 0 else 'lost'} {usd(abs(d))} ({abs(d) / without:.0%}): {usd(ran)} with its compactions "
+            f"against {usd(without)} without, replayed at list prices"
+        )
+    print(
+        f"{len(rows)} returns after an hour idle to sessions left at {tokens(fit.IDLE_FLOOR)} or more, "
+        f"{sum(1 for r in rows if r[3])} compacted in between"
+    )
     if fitted:
         turn, idle = fitted["floors"]
-        print(f"cheapest floors {tokens(turn)} at turn ends and {tokens(idle)} in idle sessions, "
-              f"{change(fitted['saved'])} per unit of work than never compacting (the author's {tokens(fit.FLOOR)} and "
-              f"{tokens(fit.IDLE_FLOOR)}: {change(fitted['saved_author'])})")
+        print(
+            f"cheapest floors {tokens(turn)} at turn ends and {tokens(idle)} in idle sessions, "
+            f"{change(fitted['saved'])} per unit of work than never compacting (the author's {tokens(fit.FLOOR)} and "
+            f"{tokens(fit.IDLE_FLOOR)}: {change(fitted['saved_author'])})"
+        )
     if saved:
-        print("sparkjoy now asks from these sessions' floors, except where you set your own, and states their "
-              "figures: "
-              + "; ".join(f"{label} {show(saved[key])}" for key, label, show in FIGURES if key in saved))
+        print(
+            "sparkjoy now asks from these sessions' floors, except where you set your own, and states their "
+            "figures: "
+            + "; ".join(
+                f"{label} {show(saved[key])}"
+                for key, label, show in FIGURES
+                if key in saved
+            )
+        )
     elif a.figures:
         print(f"sparkjoy keeps the floors and figures it has: {kept}")
     print(path)
     if not a.no_open:
         try:
-            subprocess.run(["open" if sys.platform == "darwin" else "xdg-open", path], check=False)
-        except FileNotFoundError:  # no desktop to open it on; the path above is the way to it
+            subprocess.run(
+                ["open" if sys.platform == "darwin" else "xdg-open", path], check=False
+            )
+        except (
+            FileNotFoundError
+        ):  # no desktop to open it on; the path above is the way to it
             pass
 
 

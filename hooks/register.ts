@@ -37,7 +37,14 @@
 // announcement in `$.store` until the compaction settles, and the next process
 // finishes it if the conversation hasn't moved on.
 
-import type { CommandRunResult, EngineInterface, PluginOptions, Register, SessionMessage, TurnUsage } from 'claude-code'
+import type {
+  CommandRunResult,
+  EngineInterface,
+  PluginOptions,
+  Register,
+  SessionMessage,
+  TurnUsage,
+} from 'claude-code'
 
 // Set while this process compacts. `$.state` outlives a reload of the mod but
 // not the process, so a reload that finds a compaction announced leaves it to
@@ -156,35 +163,50 @@ function settingsOf(options: PluginOptions): Settings {
     mode: options.mode === 'classify' || options.mode === 'off' ? options.mode : 'on',
     floor: number(options.floor),
     idleFloor: number(options.idle_floor),
-    instructions: typeof options.instructions === 'string' ? options.instructions.trim() : '',
+    instructions:
+      typeof options.instructions === 'string' ? options.instructions.trim() : '',
   }
 }
 
 // Where each floor comes from, in the words `/sparkjoy` uses.
-const SOURCES = { setting: 'your setting', report: "the report's fit", author: 'the default' }
+const SOURCES = {
+  setting: 'your setting',
+  report: "the report's fit",
+  author: 'the default',
+}
 
 type Source = keyof typeof SOURCES
 
 // `/sparkjoy`, registered at each session's start whether the mod is on or off.
 const COMMAND = {
   name: 'sparkjoy',
-  description: "Show sparkjoy's settings, set its mode (on, classify or off), or open its report",
+  description:
+    "Show sparkjoy's settings, set its mode (on, classify or off), or open its report",
   argumentHint: '[on|classify|off|report]',
 }
 
 // What `/sparkjoy` says of each mode: on setting it, as the word for it when a
 // setting is refused, and in its status, given the floors it asks from.
-const MODES: Record<Mode, { set: string; state: string; status: (floors: string) => string }> = {
-  on: { set: 'On from the next turn end.', state: 'on', status: floors => `On. It asks whether to compact ${floors}.` },
+const MODES: Record<
+  Mode,
+  { set: string; state: string; status: (floors: string) => string }
+> = {
+  on: {
+    set: 'On from the next turn end.',
+    state: 'on',
+    status: floors => `On. It asks whether to compact ${floors}.`,
+  },
   classify: {
     set: 'Classifying from the next turn end: it shows each verdict and compacts nothing until /sparkjoy on.',
     state: 'classifying',
-    status: floors => `Classifying. It asks whether to compact ${floors}, and shows each verdict without compacting.`,
+    status: floors =>
+      `Classifying. It asks whether to compact ${floors}, and shows each verdict without compacting.`,
   },
   off: {
     set: 'Off. It asks nothing and compacts nothing until /sparkjoy on.',
     state: 'off',
-    status: floors => `Off, so it asks nothing and compacts nothing. When on, it asks ${floors}.`,
+    status: floors =>
+      `Off, so it asks nothing and compacts nothing. When on, it asks ${floors}.`,
   },
 }
 
@@ -275,11 +297,18 @@ export const register: Register = (on, options) => {
   })
 }
 
-async function afterTurn($: EngineInterface, settings: Settings, watch: Watch, changes: number, usage?: TurnUsage) {
+async function afterTurn(
+  $: EngineInterface,
+  settings: Settings,
+  watch: Watch,
+  changes: number,
+  usage?: TurnUsage,
+) {
   // A line about a conversation that has moved on would land inside the turn
   // now running, so it goes to the debug log.
   const isCurrent = () => watch.changes === changes
-  const say = (text: string) => $.ui.log(text, isCurrent() ? undefined : { to: 'debug' })
+  const say = (text: string) =>
+    $.ui.log(text, isCurrent() ? undefined : { to: 'debug' })
   try {
     const { context } = await $.session.usage()
     const tokens = context.tokens
@@ -297,14 +326,29 @@ async function afterTurn($: EngineInterface, settings: Settings, watch: Watch, c
     // meanwhile.
     const hour = usage?.ephemeral_1h_input_tokens ?? 0
     const fiveMinutes = usage?.ephemeral_5m_input_tokens ?? 0
-    const wait = hour > 0 && fiveMinutes === 0 ? IDLE_MS['1h'] : fiveMinutes > 0 && hour === 0 ? IDLE_MS['5m'] : undefined
+    const wait =
+      hour > 0 && fiveMinutes === 0
+        ? IDLE_MS['1h']
+        : fiveMinutes > 0 && hour === 0
+          ? IDLE_MS['5m']
+          : undefined
     if (tokens >= figures.IDLE_FLOOR && wait !== undefined) {
       const due = (await $.clock.now()) + wait
-      $.clock.after(wait, () => void idle($, settings, isCurrent, say, tokens, due, wait / 60_000))
+      $.clock.after(
+        wait,
+        () => void idle($, settings, isCurrent, say, tokens, due, wait / 60_000),
+      )
     }
     if (tokens < figures.FLOOR) return
     const prompt = question(tokens, undefined, figures, settings.instructions)
-    await judge($, settings, say, async () => isCurrent(), `${thousands(tokens)} tokens`, prompt)
+    await judge(
+      $,
+      settings,
+      say,
+      async () => isCurrent(),
+      `${thousands(tokens)} tokens`,
+      prompt,
+    )
   } catch (error) {
     say(`Failed: ${error}`)
   }
@@ -324,11 +368,24 @@ async function idle(
   due: number,
   minutes: number,
 ) {
-  const isUntouched = async () => isCurrent() && (await $.session.usage()).context.tokens === tokens
+  const isUntouched = async () =>
+    isCurrent() && (await $.session.usage()).context.tokens === tokens
   try {
     if ((await $.clock.now()) > due + LATE_MS || !(await isUntouched())) return
-    const prompt = question(tokens, minutes, (await fitted($, settings)).figures, settings.instructions)
-    await judge($, settings, say, isUntouched, `${thousands(tokens)} tokens, idle ${minutes} minutes`, prompt)
+    const prompt = question(
+      tokens,
+      minutes,
+      (await fitted($, settings)).figures,
+      settings.instructions,
+    )
+    await judge(
+      $,
+      settings,
+      say,
+      isUntouched,
+      `${thousands(tokens)} tokens, idle ${minutes} minutes`,
+      prompt,
+    )
   } catch (error) {
     say(`Failed: ${error}`)
   }
@@ -353,9 +410,13 @@ async function judge(
     const { usage } = answer
     const read = usage.cache_read_input_tokens
     const input = usage.input_tokens + read + usage.cache_creation_input_tokens
-    if (input - read > MISSED * input) say(`Missed the prompt cache at ${at}: read ${thousands(read)} of ${thousands(input)} from it`)
+    if (input - read > MISSED * input)
+      say(
+        `Missed the prompt cache at ${at}: read ${thousands(read)} of ${thousands(input)} from it`,
+      )
   }
-  if (!(await stands())) return say(`Dropped the verdict at ${at}: the conversation moved on`)
+  if (!(await stands()))
+    return say(`Dropped the verdict at ${at}: the conversation moved on`)
   const verdict = answer.isAnswered ? parse(answer.text) : undefined
   if (verdict?.compact && mode === 'classify') {
     say(`Would compact at ${at}: ${verdict.reason}`)
@@ -411,8 +472,11 @@ async function resume($: EngineInterface) {
     if (announced === undefined || (await $.state.get(COMPACTING)).value) return
     const held = new Set(announced.messages)
     const now = await messageKeys($)
-    if (now.length === 0 || !now.every(message => held.has(message))) return await $.store.delete(key)
-    $.ui.log(`Finishing the compaction at ${announced.at}: Claude Code restarted before it landed`)
+    if (now.length === 0 || !now.every(message => held.has(message)))
+      return await $.store.delete(key)
+    $.ui.log(
+      `Finishing the compaction at ${announced.at}: Claude Code restarted before it landed`,
+    )
     await compact($, announced.at)
   } catch (error) {
     $.ui.log(`Failed: ${error}`)
@@ -439,15 +503,20 @@ async function messageKeys($: EngineInterface) {
 // TODO: key by the id a read naming `last` gives, once every release CI tests
 // takes `last`.
 export function messageKey(message: SessionMessage) {
-  const calls = [...message.toolUses, ...(message.toolResults ?? [])].map(call => call.tool_use_id)
-  return calls.length > 0 ? `${message.role} ${calls.join(' ')}` : hash(`${message.role} ${message.text}`)
+  const calls = [...message.toolUses, ...(message.toolResults ?? [])].map(
+    call => call.tool_use_id,
+  )
+  return calls.length > 0
+    ? `${message.role} ${calls.join(' ')}`
+    : hash(`${message.role} ${message.text}`)
 }
 
 // FNV-1a. At 32 bits, a new message takes the key of one of 4096 held about
 // once in a million.
 function hash(text: string) {
   let h = 0x811c9dc5
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193)
+  for (let i = 0; i < text.length; i++)
+    h = Math.imul(h ^ text.charCodeAt(i), 0x01000193)
   return (h >>> 0).toString(36)
 }
 
@@ -472,7 +541,12 @@ function hash(text: string) {
 // result, such as how many compactions keeping the context through the next
 // turn costs, and leave the model mainly to judge whether the next turns need
 // the transcript's detail.
-function question(tokens: number, idleMinutes?: number, figures: Figures = AUTHOR, instructions = '') {
+function question(
+  tokens: number,
+  idleMinutes?: number,
+  figures: Figures = AUTHOR,
+  instructions = '',
+) {
   const { WRITE, OUTPUT, SUMMARY, K, P, TURN_MEDIAN, TURN_MEAN } = figures
   const now = thousands(tokens)
   const isIdle = idleMinutes !== undefined
@@ -484,7 +558,9 @@ function question(tokens: number, idleMinutes?: number, figures: Figures = AUTHO
     : 'Your turn just ended.'
   // Idle, the cache is about to go whatever the answer, so a compaction needs
   // no payback sum, and keeping costs the one cache write the lapse brings.
-  const sum = isIdle ? '' : `\n- At ${now} a compaction pays for itself after about ${payback(tokens, figures)} more requests that need nothing it dropped.`
+  const sum = isIdle
+    ? ''
+    : `\n- At ${now} a compaction pays for itself after about ${payback(tokens, figures)} more requests that need nothing it dropped.`
   const keeping = isIdle
     ? `What keeping costs now:
 - The prompt cache holding the conversation lapses within a few minutes.
@@ -495,7 +571,9 @@ So compact unless the next turn continues work that needs the transcript's detai
 - Every later request reads all ${now} tokens, against about ${thousands(K)} after a compaction.
 - Keeping only puts the compaction off to a later turn end.
 - A turn runs a median of ${Math.round(TURN_MEDIAN)} requests and a mean of ${Math.round(TURN_MEAN)}, so keeping ${now} through one more turn costs as much as about ${turnCost(tokens, TURN_MEDIAN, figures)} compactions for a median turn and ${turnCost(tokens, TURN_MEAN, figures)} for a mean one.`
-  const added = instructions ? `\n\nThe user added these instructions for this decision:\n${instructions}` : ''
+  const added = instructions
+    ? `\n\nThe user added these instructions for this decision:\n${instructions}`
+    : ''
   return `${goal} It comes from the sparkjoy plugin, not from the user, and a program reads your answer. Use no tools.
 
 ${opening}
@@ -569,14 +647,31 @@ async function fitted($: EngineInterface, settings: Settings) {
   } catch {
     saved = undefined
   }
-  const sources = { report: saved, setting: { FLOOR: settings.floor, IDLE_FLOOR: settings.idleFloor } as Record<string, unknown> }
-  const value = (name: keyof Figures, isValid: (value: number) => boolean, source: 'report' | 'setting') => {
+  const sources = {
+    report: saved,
+    setting: { FLOOR: settings.floor, IDLE_FLOOR: settings.idleFloor } as Record<
+      string,
+      unknown
+    >,
+  }
+  const value = (
+    name: keyof Figures,
+    isValid: (value: number) => boolean,
+    source: 'report' | 'setting',
+  ) => {
     const v = sources[source]?.[name]
     return typeof v === 'number' && Number.isFinite(v) && isValid(v) ? v : undefined
   }
   const figures = { ...AUTHOR }
-  const from: Record<'FLOOR' | 'IDLE_FLOOR', Source> = { FLOOR: 'author', IDLE_FLOOR: 'author' }
-  const take = (name: keyof Figures, isValid: (value: number) => boolean, source: 'report' | 'setting' = 'report') => {
+  const from: Record<'FLOOR' | 'IDLE_FLOOR', Source> = {
+    FLOOR: 'author',
+    IDLE_FLOOR: 'author',
+  }
+  const take = (
+    name: keyof Figures,
+    isValid: (value: number) => boolean,
+    source: 'report' | 'setting' = 'report',
+  ) => {
     const v = value(name, isValid, source)
     if (v === undefined) return
     figures[name] = v
@@ -611,7 +706,11 @@ async function fitted($: EngineInterface, settings: Settings) {
 // command's hook runs would wait on that hook, so it goes on a timer. Claude
 // Code shows each answer after the plugin's name, `sparkjoy:`, so no answer
 // names it again.
-async function command($: EngineInterface, args: string, settings: Settings): Promise<CommandRunResult> {
+async function command(
+  $: EngineInterface,
+  args: string,
+  settings: Settings,
+): Promise<CommandRunResult> {
   const word = args.trim().split(/\s+/)[0]
   if (word === '') return { text: await status($, settings) }
   if (word === 'on' || word === 'classify' || word === 'off') {
@@ -622,10 +721,15 @@ async function command($: EngineInterface, args: string, settings: Settings): Pr
   }
   if (word === 'report') {
     const text = `The user typed /sparkjoy ${args.trim()}. Run the sparkjoy:report skill for them.`
-    $.clock.after(0, () => void $.prompt.submit({ text }).catch(error => $.ui.log(`Failed: ${error}`)))
+    $.clock.after(
+      0,
+      () => void $.prompt.submit({ text }).catch(error => $.ui.log(`Failed: ${error}`)),
+    )
     return { text: 'Asking the model to run the report.' }
   }
-  return { text: `/sparkjoy takes on, classify, off or report, not "${word}", or nothing to show its settings.` }
+  return {
+    text: `/sparkjoy takes on, classify, off or report, not "${word}", or nothing to show its settings.`,
+  }
 }
 
 // What `/sparkjoy` says with no arguments: the mod's mode, the floors it asks
@@ -634,16 +738,24 @@ async function command($: EngineInterface, args: string, settings: Settings): Pr
 async function status($: EngineInterface, settings: Settings) {
   const { figures, from } = await fitted($, settings)
   const floor = (name: 'FLOOR' | 'IDLE_FLOOR', set: number | undefined) => {
-    const ignored = set !== undefined && from[name] !== 'setting' ? `, as your ${thousands(set)} is out of range` : ''
+    const ignored =
+      set !== undefined && from[name] !== 'setting'
+        ? `, as your ${thousands(set)} is out of range`
+        : ''
     return `${thousands(figures[name])} (${SOURCES[from[name]]}${ignored})`
   }
   const floors = `at a turn end from ${floor('FLOOR', settings.floor)} and in an idle session from ${floor('IDLE_FLOOR', settings.idleFloor)}`
   const { mode, instructions } = settings
   // The first 60 characters, cut at a space.
-  const excerpt = instructions.length > 60 ? `${instructions.slice(0, 61).replace(/\s+\S*$/, '')}…` : instructions
+  const excerpt =
+    instructions.length > 60
+      ? `${instructions.slice(0, 61).replace(/\s+\S*$/, '')}…`
+      : instructions
   return [
     MODES[mode].status(floors),
-    instructions ? `Its question carries your instructions: "${excerpt}"` : 'Its question carries no instructions of yours.',
+    instructions
+      ? `Its question carries your instructions: "${excerpt}"`
+      : 'Its question carries no instructions of yours.',
     '/sparkjoy on compacts when the model says to, /sparkjoy classify only shows its verdicts, and /sparkjoy off asks nothing. /config sets the floors and instructions.',
   ].join('\n')
 }
@@ -651,7 +763,8 @@ async function status($: EngineInterface, settings: Settings) {
 function parse(text: string): Verdict | undefined {
   try {
     const value = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1))
-    const isVerdict = typeof value.compact === 'boolean' && typeof value.reason === 'string'
+    const isVerdict =
+      typeof value.compact === 'boolean' && typeof value.reason === 'string'
     return isVerdict ? value : undefined
   } catch {
     return undefined

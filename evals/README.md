@@ -72,24 +72,24 @@ A replay differs from the plugin's own fork in these ways:
 Each case's label, its reason and the evidence for it (what the session did
 next) are in `cases.json`.
 
-| case | kind | recorded | expected | the moment |
-|---|---|---|---|---|
-| leaf-scaling-closeout | turn | 742k | compact | performance fixes landed and closed out |
-| leaf-hover-closeout | turn | 736k | compact | reviewed work landed; the rest waits on the user's answers |
-| leaf-followups-merged | turn | 643k | compact | both follow-ups merged, nothing open |
-| leaf-scroll-fix-merged | turn | 608k | compact | a Firefox scroll fix merged and written up |
-| worktrunk-release-tagged | turn | 479k | compact | a release tagged, a question about it answered |
-| leaf-ring-test-rewrite-wait | turn | 681k | keep | waiting on a test rewrite before the final checks |
-| leaf-send-hover-fix | turn | 570k | keep | mid-iteration on a UI fix the user keeps faulting |
-| leaf-menu-design | turn | 551k | keep | a design exploration just rebuilt, awaiting reaction |
-| tend-eval-rerun-wait | turn | 519k | keep | waiting on an eval rerun to turn into a PR |
-| tend-sandbox-bind-ask | turn | 599k | keep | asks for a go-ahead before building more of a sandbox design |
-| leaf-escape-stack-ask | turn | 490k | keep | asks two design decisions before an experiment branch |
-| leaf-save-icon-merge-ask | turn | 479k | compact | asks whether to open and merge a finished branch's PR |
-| leaf-panzoom-drop-ask | turn | 403k | compact | asks whether to drop a library swap (a reset) or fix it |
-| leaf-data-attrs-merged | turn | 296k | keep | three changes landed: a natural break, but small |
-| worktrunk-repairs-merged | turn | 210k | keep | four repair PRs merged: a natural break, but small |
-| leaf-ui-fixes-idle | idle | 290k | compact | idle 55 minutes after everything landed |
+| case                        | kind | recorded | expected | the moment                                                   |
+| --------------------------- | ---- | -------- | -------- | ------------------------------------------------------------ |
+| leaf-scaling-closeout       | turn | 742k     | compact  | performance fixes landed and closed out                      |
+| leaf-hover-closeout         | turn | 736k     | compact  | reviewed work landed; the rest waits on the user's answers   |
+| leaf-followups-merged       | turn | 643k     | compact  | both follow-ups merged, nothing open                         |
+| leaf-scroll-fix-merged      | turn | 608k     | compact  | a Firefox scroll fix merged and written up                   |
+| worktrunk-release-tagged    | turn | 479k     | compact  | a release tagged, a question about it answered               |
+| leaf-ring-test-rewrite-wait | turn | 681k     | keep     | waiting on a test rewrite before the final checks            |
+| leaf-send-hover-fix         | turn | 570k     | keep     | mid-iteration on a UI fix the user keeps faulting            |
+| leaf-menu-design            | turn | 551k     | keep     | a design exploration just rebuilt, awaiting reaction         |
+| tend-eval-rerun-wait        | turn | 519k     | keep     | waiting on an eval rerun to turn into a PR                   |
+| tend-sandbox-bind-ask       | turn | 599k     | keep     | asks for a go-ahead before building more of a sandbox design |
+| leaf-escape-stack-ask       | turn | 490k     | keep     | asks two design decisions before an experiment branch        |
+| leaf-save-icon-merge-ask    | turn | 479k     | compact  | asks whether to open and merge a finished branch's PR        |
+| leaf-panzoom-drop-ask       | turn | 403k     | compact  | asks whether to drop a library swap (a reset) or fix it      |
+| leaf-data-attrs-merged      | turn | 296k     | keep     | three changes landed: a natural break, but small             |
+| worktrunk-repairs-merged    | turn | 210k     | keep     | four repair PRs merged: a natural break, but small           |
+| leaf-ui-fixes-idle          | idle | 290k     | compact  | idle 55 minutes after everything landed                      |
 
 The two small natural breaks are the same kind of moment as the compact cases
 above them. They are labelled keep because a compaction leaves about 142k, so
@@ -127,24 +127,24 @@ kept at the mid-task cases in 6 of 16, 0 of 16, 23 of 32 and 24 of 32 runs
 ([Batches](#batches)). The four cases that stop to ask ran only in the last two
 batches, and its last batch ran as `power-law@929a9bd`, the same question.
 
-| case | recorded | replayed | expected | main | sized-question | detail | measured | model-costs | one-figure | noisy | goal-first | no-fields | fork | fork-no-fields | fork-no-reply | fork-neither | reply-message |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| leaf-scaling-closeout | 742k | 520k | compact | 4/4 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 | 2/2 |
-| leaf-hover-closeout | 736k | 488k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 | 2/2 |
-| leaf-followups-merged | 643k | 405k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 | 2/2 |
-| leaf-scroll-fix-merged | 608k | 326k | compact | 3/3 | 3/3 | 3/3 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 | 2/2 |
-| worktrunk-release-tagged | 479k | 312k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 | 2/2 |
-| leaf-ring-test-rewrite-wait | 681k | 349k | keep | 0/3 | 0/3 | 3/3 | 0/2 | 1/2 | 0/2 | 0/4 | 1/2 | 0/2 | 0/4 | 0/4 | 9/24 | 0/4 | 1/8 |
-| leaf-send-hover-fix | 570k | 278k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 1/2 | 0/4 | 0/2 | 0/2 | 0/4 | 0/4 | 18/24 | 0/4 | 8/8 |
-| leaf-menu-design | 551k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 2/2 | 2/2 | 4/4 | 2/2 | 0/2 | 4/4 | 2/4 | 19/24 | 0/4 | 8/8 |
-| tend-eval-rerun-wait | 519k | 279k | keep | 0/3 | 0/3 | 4/4 | 0/2 | 0/2 | 0/2 | 1/4 | 0/2 | 0/2 | 0/4 | 0/4 | 7/24 | 0/4 | 7/8 |
-| leaf-data-attrs-merged | 296k | 150k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 | 0/2 | | 0/2 | 0/2 | |
-| worktrunk-repairs-merged | 210k | 89k | keep | 0/3 | 0/3 | 0/4 | 0/2 | 0/2 | 0/2 | 0/4 | 0/2 | 0/2 | 0/2 | | 0/2 | 0/2 | |
-| tend-sandbox-bind-ask | 599k | | keep | | | | | | | | | | | | | | | 8/8 | | 6/8 |
-| leaf-escape-stack-ask | 490k | | keep | | | | | | | | | | | | | | | 8/8 | | 7/8 |
-| leaf-save-icon-merge-ask | 479k | | compact | | | | | | | | | | | | | | | 8/8 | | 8/8 |
-| leaf-panzoom-drop-ask | 403k | | compact | | | | | | | | | | | | | | | 0/8 | | 0/8 |
-| leaf-ui-fixes-idle (idle) | 290k | 156k | compact | 3/3 | 3/3 | 4/4 | 2/2 | 2/2 | 2/2 | 4/4 | 2/2 | 2/2 | 2/2 | | 2/2 | 2/2 | 2/2 |
+| case                        | recorded | replayed | expected | main | sized-question | detail | measured | model-costs | one-figure | noisy | goal-first | no-fields | fork | fork-no-fields | fork-no-reply | fork-neither | reply-message |
+| --------------------------- | -------- | -------- | -------- | ---- | -------------- | ------ | -------- | ----------- | ---------- | ----- | ---------- | --------- | ---- | -------------- | ------------- | ------------ | ------------- |
+| leaf-scaling-closeout       | 742k     | 520k     | compact  | 4/4  | 3/3            | 3/3    | 2/2      | 2/2         | 2/2        | 4/4   | 2/2        | 2/2       | 2/2  |                | 2/2           | 2/2          | 2/2           |
+| leaf-hover-closeout         | 736k     | 488k     | compact  | 3/3  | 3/3            | 3/3    | 2/2      | 2/2         | 2/2        | 4/4   | 2/2        | 2/2       | 2/2  |                | 2/2           | 2/2          | 2/2           |
+| leaf-followups-merged       | 643k     | 405k     | compact  | 3/3  | 3/3            | 3/3    | 2/2      | 2/2         | 2/2        | 4/4   | 2/2        | 2/2       | 2/2  |                | 2/2           | 2/2          | 2/2           |
+| leaf-scroll-fix-merged      | 608k     | 326k     | compact  | 3/3  | 3/3            | 3/3    | 2/2      | 2/2         | 2/2        | 4/4   | 2/2        | 2/2       | 2/2  |                | 2/2           | 2/2          | 2/2           |
+| worktrunk-release-tagged    | 479k     | 312k     | compact  | 3/3  | 3/3            | 4/4    | 2/2      | 2/2         | 2/2        | 4/4   | 2/2        | 2/2       | 2/2  |                | 2/2           | 2/2          | 2/2           |
+| leaf-ring-test-rewrite-wait | 681k     | 349k     | keep     | 0/3  | 0/3            | 3/3    | 0/2      | 1/2         | 0/2        | 0/4   | 1/2        | 0/2       | 0/4  | 0/4            | 9/24          | 0/4          | 1/8           |
+| leaf-send-hover-fix         | 570k     | 278k     | keep     | 0/3  | 0/3            | 4/4    | 0/2      | 0/2         | 1/2        | 0/4   | 0/2        | 0/2       | 0/4  | 0/4            | 18/24         | 0/4          | 8/8           |
+| leaf-menu-design            | 551k     | 279k     | keep     | 0/3  | 0/3            | 4/4    | 0/2      | 2/2         | 2/2        | 4/4   | 2/2        | 0/2       | 4/4  | 2/4            | 19/24         | 0/4          | 8/8           |
+| tend-eval-rerun-wait        | 519k     | 279k     | keep     | 0/3  | 0/3            | 4/4    | 0/2      | 0/2         | 0/2        | 1/4   | 0/2        | 0/2       | 0/4  | 0/4            | 7/24          | 0/4          | 7/8           |
+| leaf-data-attrs-merged      | 296k     | 150k     | keep     | 0/3  | 0/3            | 0/4    | 0/2      | 0/2         | 0/2        | 0/4   | 0/2        | 0/2       | 0/2  |                | 0/2           | 0/2          |               |
+| worktrunk-repairs-merged    | 210k     | 89k      | keep     | 0/3  | 0/3            | 0/4    | 0/2      | 0/2         | 0/2        | 0/4   | 0/2        | 0/2       | 0/2  |                | 0/2           | 0/2          |               |
+| tend-sandbox-bind-ask       | 599k     |          | keep     |      |                |        |          |             |            |       |            |           |      |                |               |              |               | 8/8 |     | 6/8 |
+| leaf-escape-stack-ask       | 490k     |          | keep     |      |                |        |          |             |            |       |            |           |      |                |               |              |               | 8/8 |     | 7/8 |
+| leaf-save-icon-merge-ask    | 479k     |          | compact  |      |                |        |          |             |            |       |            |           |      |                |               |              |               | 8/8 |     | 8/8 |
+| leaf-panzoom-drop-ask       | 403k     |          | compact  |      |                |        |          |             |            |       |            |           |      |                |               |              |               | 0/8 |     | 0/8 |
+| leaf-ui-fixes-idle (idle)   | 290k     | 156k     | compact  | 3/3  | 3/3            | 4/4    | 2/2      | 2/2         | 2/2        | 4/4   | 2/2        | 2/2       | 2/2  |                | 2/2           | 2/2          | 2/2           |
 
 The first two questions said compact in all 73 runs. Their reasons agree: the
 context is mostly finished work, and what the next step needs is in the
@@ -169,8 +169,7 @@ that keeping only defers the compaction to a later turn end.
 The labels at those two cases deserve a second look:
 
 - **At 296k, a compaction pays by the question's own sum.** It pays back
-  after about 30 requests, and a turn in my sessions averages about
-  36. That case's keep label rests on the next task building on the change
+  after about 30 requests, and a turn in my sessions averages about 36. That case's keep label rests on the next task building on the change
   just landed, not on the cost.
 - **At 210k it pays back after about 58 requests**, under two average turns,
   so the keep label holds only if the next stretch of work is short.
@@ -350,12 +349,12 @@ compactions into the transcript and sent each keep to a debug log that isn't
 kept. From 7 to 15 November it asked at 198 turn ends and compacted at 122. The
 transcripts account for the other 76 like this:
 
-| what followed the turn end | turn ends |
-|---|---|
-| the next turn began within 45 seconds, before a verdict could stand | 28 |
-| the plugin's files changed and it reloaded within a minute | 21 |
-| a "Compacting" line, but no compaction | 3 |
-| nothing: the model kept, or the check failed | 24 |
+| what followed the turn end                                          | turn ends |
+| ------------------------------------------------------------------- | --------- |
+| the next turn began within 45 seconds, before a verdict could stand | 28        |
+| the plugin's files changed and it reloaded within a minute          | 21        |
+| a "Compacting" line, but no compaction                              | 3         |
+| nothing: the model kept, or the check failed                        | 24        |
 
 So the model said compact at 125 of the at most 149 verdicts that stood. At
 four of the 24 silent turn ends, including leaf-scroll-fix-merged, the harness
