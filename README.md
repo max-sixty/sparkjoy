@@ -378,10 +378,10 @@ section below:
   turns. For as many compactions in the middle of a turn, compacting the rest at
   turn ends saves more.
 - **[A classifier](docs/cost-model.md#a-classifier).** Work differs in what its context is worth:
-  in how much a larger context helps it, and in how much detail a compaction
-  loses, more in the middle of a task than at its end. sparkjoy's question reads
-  the context at each turn end to tell these apart, and what that is worth is
-  what it saves against the lowest-cost single threshold.
+  in how much a larger context helps it, β, and in what the detail a compaction
+  drops costs, D, more in the middle of a task than at its end. sparkjoy's
+  question reads the context at each turn end to tell these apart, and what that
+  is worth is what it saves against the lowest-cost single threshold.
 - **[A replay of my sessions](docs/cost-model.md#a-replay-of-my-sessions).** It keeps every logged
   request and moves only the compactions, so it includes what the other models
   leave out: uneven growth, long turns, cache lapses and sessions that end.
@@ -392,9 +392,12 @@ For my sessions on Opus 5.5[^prices]:
   context is worth. If half the work gets twice as much done with twice the
   context and the rest gets as much done at any size, a question right 9 times
   in 10 saves 9% against the lowest-cost single threshold, and one that is
-  always right saves 13.5%. No session of mine measures how widely work differs,
-  how often the question is right on it, or how much detail a compaction in the
-  middle of a task loses ([A classifier](docs/cost-model.md#a-classifier)).
+  always right saves 13.5%. If half of turn ends fall in the middle of a task,
+  where a compaction costs 24 wasted requests (\$1.48), and the rest finish a
+  piece of work, a question right 9 times in 10 saves 3.5%, and one that is
+  always right saves 4.5%. No session of mine yet measures how widely work
+  differs, how often the question is right, or what a compaction in the middle
+  of a task loses ([A classifier](docs/cost-model.md#a-classifier)).
 - Compacting only at turn ends, as sparkjoy does, saves 9.1 points less than
   `/autocompact` at its lowest-cost threshold counting cost alone, and 0.9
   points less at the base case for how much context helps the work, β = 0.5,
@@ -705,34 +708,46 @@ what one costs.
 
 ## A classifier
 
-In [Cost and context](docs/cost-model.md#cost-and-context), what the context is worth depends only
-on its size, so one threshold suits all work. A classifier that tells kinds of
-work apart lets each kind compact at its own lowest-cost threshold. sparkjoy's
-question is a classifier: at each turn end, it says whether to keep the context
-or compact it. The expected value of a classifier's information is the cost it
-saves against the lowest-cost single threshold, as a share of the whole cost,
-output included. For a classifier that is always right, this is the expected
-value of perfect information.
+In [Cost and context](docs/cost-model.md#cost-and-context), two numbers set what the context is
+worth to the work: β, how much more a request gets done with a larger context,
+and D, what the detail a compaction drops costs the requests after it ([What
+does the model assume a compaction loses?](docs/cost-model.md#questions-about-the-model)). Each is
+one number for all work, so one threshold suits all of it. In real work both
+vary. Some work leans on its history and some doesn't, which is a difference in
+β. A compaction in the middle of a task drops detail the next turns need, and
+one at a turn end that finishes a piece of work drops little, which is a
+difference in D.
 
-The model covers two ways in which work differs:
+A classifier that tells these apart lets each compact where it costs least.
+sparkjoy's question is one: at each turn end above its floor, it reads the
+context and says whether to keep it or compact it. The expected value of a
+classifier's information is the cost it saves against the lowest-cost single
+threshold, as a share of the whole cost, output included. For a classifier that
+is always right, this is the expected value of perfect information.
 
-- **In β.** The classifier sorts the work into two groups, by whether it judges
-  that the context helps the work. Each group compacts at its own lowest-cost
-  threshold. The classifier is right the same share of the time in each group.
-  Its information is the mutual information between its verdict and whether the
-  context helps the work, as a share of a perfect classifier's. A classifier
-  right 9 times in 10 has about half a perfect classifier's information, and one
-  right 99 times in 100 has about 90%.
-- **In lost detail.** Each turn end is either mid-task, where a compaction loses
-  detail, or finished, where it loses none. The classifier is right at some
-  share of turn ends. Above a floor, the session compacts at each turn end the
-  classifier calls finished. Above a higher ceiling, it compacts at every turn
-  end. The floor and ceiling are set where the cost is lowest. sparkjoy's
-  question has no ceiling. It states what keeping the context costs, so the
-  model it asks can compact at a mid-task turn end once keeping costs more than
-  the detail a compaction would lose.
+The model takes as inputs how widely work differs and how often the classifier
+is right. No session of mine measures them yet, so the sections below give what
+a classifier saves across a range of each ([What the model needs
+measured](docs/cost-model.md#what-the-model-needs-measured)).
 
 ### Work that differs in β
+
+β belongs to the work between two compactions: it sets how much the requests in
+between get done. So the classifier sorts the work into two groups, by whether
+it judges that the context helps the work, and each group compacts at its own
+lowest-cost threshold. With $`w_k`$ the share of the work of kind k, $`q_k`$ the
+share of it the classifier says to compact, and $`J_k`$ the cost per unit of
+work of kind k at its own β, from [Cost and context](docs/cost-model.md#cost-and-context), the
+classifier's cost per unit of work is
+
+$`\displaystyle J_\text{classifier} = \min_{X_1} \sum_k q_k\,w_k\,J_k(X_1) + \min_{X_0} \sum_k (1 - q_k)\,w_k\,J_k(X_0)`$
+
+against $`J_\text{single} = \min_X \sum_k w_k\,J_k(X)`$, and it saves
+$`1 - J_\text{classifier} / J_\text{single}`$. Below, the classifier is right
+the same share of the time in each group, and its accuracy is the mutual
+information between its verdict and whether the context helps the work, as a
+share of a perfect classifier's. A classifier right 9 times in 10 has about half
+a perfect classifier's information, and one right 99 times in 100 has about 90%.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-voi-dark.svg">
@@ -777,12 +792,51 @@ work has β around 5 to 10. With 2% of the work at β = 30 it saves 17%. A unit
 of that work's effectiveness costs 77 times one at β = 0 even when the session
 never compacts, and no classifier lowers that part of the cost.
 
-### Where a classifier pays
+### Turn ends that differ in lost detail
 
-| telling work apart pays when                                                                | in the measured sessions                                                                                                                                                   |
-| ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| work's β varies widely, and the classifier is right most of the time                        | Neither is measured. Grading sparkjoy's verdicts by what happened next, such as whether the turns after a compaction re-read files it dropped, would measure its accuracy. |
-| a compaction in the middle of a task loses detail worth more than keeping the context costs | It is difficult to estimate.                                                                                                                                               |
+D belongs to the moment of a compaction, so here the classifier picks the moment
+rather than the group. A share m of turn ends fall in the middle of a task, where
+a compaction costs D wasted requests, such as failed tool calls, repeated
+lookups and corrections, each priced as a request at K, \$0.062. The rest finish
+a piece of work, where a compaction costs none. Without a classifier, a
+compaction falls at a turn end of either kind and costs mD on average. A
+classifier right at a share a of each kind compacts only at turn ends it calls
+finished, so each of its compactions costs
+
+$`\displaystyle \bar D(a) = D\,\frac{m\,(1-a)}{m\,(1-a) + (1-m)\,a}`$
+
+and the session compacts at the threshold where J, with that cost added to each
+compaction, is lowest. Waiting for a turn end the classifier calls finished
+moves each compaction later. A lower floor makes up for the average wait, and J
+changes little near its lowest point, so the spread around it costs little, and
+the model leaves the wait out.
+
+At the base case, with half of turn ends in the middle of a task:
+
+| D, at a turn end in the middle of a task | lowest-cost single threshold | a perfect classifier saves | right 9 times in 10, a classifier saves | a classifier pays once right |
+| ---------------------------------------- | ---------------------------- | -------------------------- | --------------------------------------- | ---------------------------- |
+| 12 wasted requests, \$0.74               | 411k                         | 2.5%                       | 1.9%                                    | 59% of the time              |
+| 24, \$1.48                               | 442k                         | 4.5%                       | 3.5%                                    | 55%                          |
+| 48, \$2.95                               | 494k                         | 7.7%                       | 5.8%                                    | 53%                          |
+| 96, \$5.91                               | 579k                         | 12.4%                      | 9.0%                                    | 52%                          |
+
+At D = 12, a compaction costs 6 wasted requests on average, as many as my
+sessions' compactions did ([Mid-turn or at a turn end](docs/cost-model.md#mid-turn-or-at-a-turn-end)).
+A perfect classifier saves all that the lost detail adds to the cost, since its
+compactions lose none. A classifier pays from little better than chance, since
+each turn end it gets right avoids D outright.
+
+sparkjoy's question goes further than this classifier. It states what keeping
+the context costs, so the model it asks can compact at a turn end in the middle
+of a task once keeping costs more than the detail a compaction would drop.
+
+### What the model needs measured
+
+| what the model takes as input                         | in the measured sessions                                                                                                                                                                                  |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| how widely β varies across work                       | Not measured. Continuing the same work once from a compaction and once from the whole context, and comparing each pair, would measure it.                                                                 |
+| the share of turn ends in the middle of a task, and D | My sessions' compactions cost about 6 wasted requests on average, but nothing separates turn ends in the middle of a task from those that finish a piece of work. The same pairs would measure D at each. |
+| how often the classifier is right                     | Not measured. Grading sparkjoy's verdicts by what happened next, such as whether the turns after a compaction re-read files it dropped, would measure it.                                                 |
 
 ## A replay of my sessions
 
