@@ -287,10 +287,10 @@ asks the question above, on 19 and 20 November 2026[^evals]:
 At the two small natural breaks the [cost model](#cost-model) also says to
 compact. At the mid-task turn ends, the same question and transcripts kept the
 context in 6 of 16 runs on the evening of 19 November, in none of 16 on the
-morning of 20 November and in 74 of 128 over three batches that afternoon, so
-two versions of the question compare only when run in the same batch. Some
-labels are uncertain, since each records what the session did next rather than
-what it needed ([Where this leaves
+morning of 20 November, and in 23 of 32, 24 of 32 and 27 of 64 in three batches
+that afternoon, so two versions of the question compare only when run in the
+same batch. Some labels are uncertain, since each records what the session did
+next rather than what it needed ([Where this leaves
 them](evals/README.md#where-this-leaves-them)).
 
 The hook reads only `compact` and `reason`, yet the question asks for `next`
@@ -330,7 +330,8 @@ size.
 
 - It asks only once the context reaches 250k at a turn end, or 175k in an idle
   session. In a replay of my sessions that compacts wherever the floors allow,
-  this is the pair that costs least counting tokens alone. At the [cost
+  this is the pair that costs least counting tokens alone. If a request with
+  250k of context gets half as much done as one with the full 1M, the [cost
   model](#cost-model)'s base case, asking at a turn end from 400k instead would
   save 0.8 percentage points more. The floors stay at the lower pair because a
   floor only sets where sparkjoy starts asking, and above it the question
