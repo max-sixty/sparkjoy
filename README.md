@@ -71,7 +71,8 @@ At the prompt of a Claude Code session:
 ## Settings
 
 `/sparkjoy` says which mode sparkjoy is in, the floors it asks from, where
-each floor comes from, and whether its question carries instructions of yours.
+each floor comes from, whether the session's context window is too small for it
+to act, and whether its question carries instructions of yours.
 
 - **`/sparkjoy classify`** sets sparkjoy to ask at turn ends and in idle
   sessions and show each verdict, but compact nothing. A verdict to compact
