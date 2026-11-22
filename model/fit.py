@@ -752,10 +752,10 @@ def main():
     at = {x: list(THRESHOLDS).index(x) for x in THRESHOLDS}
     J = cost.sum(0)[:, None] / effectiveness.sum(0)
     Jb = J[:, ib] / J[-1, ib]  # at the base case, against never compacting
-    tlo, thi = np.percentile(BT[:, ib], [5, 95], method="nearest")
+    low, high = np.percentile(BT[:, ib], [5, 95], method="nearest")
     print(f"\nthe replay at β = {BASE:g}")
     print(f"  compacting after any request, lowest-cost threshold {k(Tr[0])}, against the steady state's {k(X0)}")
-    print(f"  at turn ends, lowest-cost threshold {k(T[ib])} ({k(tlo)}-{k(thi)}*), saving {1 - saved[ib]:.1%}; from 250k "
+    print(f"  at turn ends, lowest-cost threshold {k(T[ib])} ({k(low)}-{k(high)}*), saving {1 - saved[ib]:.1%}; from 250k "
           f"{1 - Jb[at[250_000]]:.1%}; from 400k {1 - Jb[at[400_000]]:.1%}")
     print("  * resampling sessions with K, P and N held at their fitted values")
     print(f"  thresholds within a point of the best: {span(THRESHOLDS[Jb[:-1] <= Jb[:-1].min() + 0.01])}")
@@ -763,11 +763,11 @@ def main():
         print(f"  compacting at {k(x)} costs more than the best, in the steady state "
               f"{per_unit(p, c, x, BASE) / per_unit(p, c, X0, BASE) - 1:.1%}, in the replay at turn ends "
               f"{Jb[at[x]] / Jb.min() - 1:.1%}")
-    print("  lowest-cost turn-end threshold, by β: " + ", ".join(f"{b:g} {k(t)}" for b, t in zip(CHART_BETAS, T)))
+    print("  lowest-cost turn-end threshold, by β: " + ", ".join(f"{b:g} {k(t)}" for b, t in zip(CHART_BETAS, T, strict=True)))
     gave = lambda x: (J[at[x]] / J[-1] - saved) * 100  # points of saving a turn-end threshold of x gives up, by β
     for x in (250_000, 400_000):
         print(f"  points {k(x)} gives up against the lowest-cost turn-end threshold, by β: "
-              + ", ".join(f"{beta:g} {v:.1f}" for beta, v in zip(CHART_BETAS, gave(x))))
+              + ", ".join(f"{beta:g} {v:.1f}" for beta, v in zip(CHART_BETAS, gave(x), strict=True)))
     print("\n  context   pays back after   grows back in   (requests, counting cost alone)")
     for x in (200_000, 250_000, 300_000, 400_000, 600_000):
         print(f"  {x / 1e3:5.0f}k   {np.ceil((x + F0) / (h * (x - p.K))):10.0f}   {(x - p.K) / p.g:14.0f}")

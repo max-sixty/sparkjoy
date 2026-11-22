@@ -182,7 +182,7 @@ def coefficients(d):
                                   ("corrected", tband, [p1, p2, d["tstart"]], tg, w),
                                   ("interrupted", tband, [p1, p2, d["tstart"]], tg, w)):
         b = within(d[y], [dummies == k for k in others] + X, gg, ww)
-        for k, v in zip(others, b):
+        for k, v in zip(others, b, strict=False):
             out[f"{y} band {k}"] = v
         out[f"{y} band {REFERENCE}"] = 0.0
     return out

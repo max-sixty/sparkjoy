@@ -412,7 +412,7 @@ def main():
 
     def first_table(ratio):
         T = np.zeros((len(first), len(FIRST_PARTS) + 2))
-        tau = dict(zip(FIRST_KINDS, ratio))
+        tau = dict(zip(FIRST_KINDS, ratio, strict=True))
         for i, (_, _, r, c) in enumerate(first):
             for k, n in r["chars"].items():
                 T[i, part_of(FIRST_PARTS, k)] += n * tau[first_kind(k)]
@@ -429,7 +429,7 @@ def main():
     print(f"{len(first)} compactions in {len(S)} sessions, {since:%Y-%m-%d %H:%M}Z to {until:%Y-%m-%d %H:%M}Z; {cached.sum()} "
           "whose first request read the whole system prompt from the cache fit the token ratios")
     print("characters per token: " + ", ".join(f"{k} {1 / t:.2f}" if t else f"{k} counted as 0 tokens"
-                                               for k, t in zip(FIRST_KINDS, ratio)))
+                                               for k, t in zip(FIRST_KINDS, ratio, strict=True)))
     print(f"  leave-one-out error of the written context: median |error| {np.median(np.abs(loo)):.2%}, "
           f"90% within {np.percentile(np.abs(loo), 90):.2%}")
     print("\n1. First request after a compaction: written context W = size - cache read, tokens per compaction")
@@ -457,7 +457,7 @@ def main():
         return bool(prev and r and r["base"] == prev["id"] and r["shape"] == prev["shape"] and r["keep"] == prev["messages"])
 
     XB, yB = [], []
-    for s, reqs in zip(S, R):
+    for s, reqs in zip(S, R, strict=True):
         for j in range(1, len(reqs)):
             if s.kind[j] == fit.NORMAL and exact(reqs[j - 1], reqs[j]):
                 XB.append([sum(n for k, n in reqs[j]["chars"].items() if k not in ASSISTANT and tail_kind(k) == kind)
@@ -465,15 +465,15 @@ def main():
                 yB.append(s.size[j] - s.size[j - 1])
     XB, yB = np.array(XB, float), np.array(yB, float)
     ratioB = fit_ratios(XB, yB)
-    tauB = dict(zip(TAIL_KINDS, ratioB))
+    tauB = dict(zip(TAIL_KINDS, ratioB, strict=False))
     print(f"\ncharacters per token in the {len(yB):,} later requests' growth over the request before: "
-          + ", ".join(f"{k} {1 / t:.2f}" for k, t in zip(TAIL_KINDS, ratioB))
+          + ", ".join(f"{k} {1 / t:.2f}" for k, t in zip(TAIL_KINDS, ratioB, strict=False))
           + f"; the response before enters at {ratioB[-1]:.3f} tokens per output token, so thinking stays within a turn")
     print(f"  median |error| {np.median(np.abs(yB - XB @ ratioB)):,.0f} tokens per request")
 
     # Each request's growth (fit.py's grew) by source; what its logged tail doesn't account for is unattributed.
     turns = []  # per session, fit.turn_list's turns with each request's growth by source
-    for s, reqs in zip(S, R):
+    for s, reqs in zip(S, R, strict=True):
         G = np.zeros((len(s.size), len(E_PARTS) + 1))
         for j in range(1, len(reqs)):
             if s.kind[j] == fit.NORMAL and exact(reqs[j - 1], reqs[j]):
@@ -506,8 +506,8 @@ def main():
     keys = [k for k, _, _ in FIRST_PARTS] + [k for k, _ in FIRST_REST]
     OUT.write_text(json.dumps({
         "since": f"{since:%Y-%m-%dT%H:%M}Z", "until": f"{until:%Y-%m-%dT%H:%M}Z", "sessions": len(S), "compactions": len(first),
-        "first_request": {k: round(float(v)) for k, v in zip(keys, T.mean(0))},
-        "E": {k: round(float(v)) for k, v in zip([k for k, _, _ in E_PARTS] + [k for k, _ in E_REST], E)},
+        "first_request": {k: round(float(v)) for k, v in zip(keys, T.mean(0), strict=True)},
+        "E": {k: round(float(v)) for k, v in zip([k for k, _, _ in E_PARTS] + [k for k, _ in E_REST], E, strict=True)},
         "E_total": round(float(E.sum())),
     }, indent=2) + "\n")
     print(f"\nwrote {OUT}")

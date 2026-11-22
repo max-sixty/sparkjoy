@@ -219,7 +219,7 @@ def shared_opening(questions: list[str]) -> str:
     """The paragraphs every question opens with, through the quoted reply at most."""
     paragraphs = [q.split("\n\n") for q in questions]
     common = []
-    for parts in zip(*paragraphs):
+    for parts in zip(*paragraphs, strict=False):
         if len(set(parts)) > 1:
             break
         common.append(parts[0])

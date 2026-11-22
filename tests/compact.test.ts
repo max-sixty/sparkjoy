@@ -929,7 +929,7 @@ test('/sparkjoy says sparkjoy is classifying', { options: { mode: 'classify' } }
 
   const { text } = await type($, 'sparkjoy')
 
-  expect(text.split('\n')[0]).toBe(
+  expect(text?.split('\n')[0]).toBe(
     'Classifying. It asks whether to compact at a turn end from 250k (the default) and in an idle session from 175k (the default), and shows each verdict without compacting.',
   )
 })

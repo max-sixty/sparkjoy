@@ -63,7 +63,7 @@ RAMP = (0, 0.3, 0.6, 1, 2)  # the β each step of the "beta" ramp stands for
 
 def tint(color, page, share):
     a, b = (tuple(int(c[i:i + 2], 16) for i in (1, 3, 5)) for c in (color, page))
-    return "#" + "".join(f"{round(x * share + y * (1 - share)):02x}" for x, y in zip(a, b))
+    return "#" + "".join(f"{round(x * share + y * (1 - share)):02x}" for x, y in zip(a, b, strict=True))
 
 
 def shade(t, beta):
@@ -119,7 +119,7 @@ def label_ends(ax, items, gap):
             if short > 0:
                 ys[i - 1] -= short / 2
                 ys[i] += short / 2
-    for (y0, text, color), y in zip(items, ys):
+    for (y0, text, color), y in zip(items, ys, strict=True):
         leader = {"arrowstyle": "-", "color": color, "lw": 0.6, "shrinkA": 1, "shrinkB": 1}
         ax.annotate(text, (1, y0), xycoords=("axes fraction", "data"), xytext=(1.025, y),
                     textcoords=("axes fraction", "data"), va="center", fontsize=9, color=color,
@@ -180,7 +180,7 @@ def cycles(out, p, c):
                                  gridspec_kw={"hspace": 0.55, "wspace": 0.08})
         grey = tint(t["cost"], t["page"], 0.36)
         share_col = tint(t["cost"], t["page"], 0.75)
-        for col, (x, (n, cost)) in enumerate(zip(X, rows)):
+        for col, (x, (n, cost)) in enumerate(zip(X, rows, strict=True)):
             # Everything drawn is linear in the request between the context's drops, so the first and
             # last requests and those either side of each drop draw the same lines as all R + 1.
             drop = np.flatnonzero(np.diff(np.mod(r, n)) < 0)
@@ -277,7 +277,7 @@ def inputs(out, p, c):
         for ax, stack, cap in ((mid, request, 0.3), (low, compaction, 1.3)):
             base = np.zeros_like(x)
             ys = []
-            for label, v, fitted, step in stack:
+            for label, v, _, step in stack:
                 v = v * c.read  # in dollars
                 ax.fill_between(x, base, base + v, fc=ramp[step], ec=t["page"], lw=1.2, label=label)
                 ys.append(base[-1] + v[-1] / 2)
@@ -291,7 +291,7 @@ def inputs(out, p, c):
             ys[-1] = min(ys[-1], cap - gap / 2)
             for i in range(len(ys) - 2, -1, -1):
                 ys[i] = min(ys[i], ys[i + 1] - gap)
-            for (label, _, fitted, _), y, mid_y in zip(stack, ys, mids):
+            for (label, _, fitted, _), y, mid_y in zip(stack, ys, mids, strict=True):
                 if abs(y - mid_y) > 0.02 * cap:
                     ax.plot([fit.AUTO + 6_000, fit.AUTO + 30_000], [mid_y, y], color=t["muted"], lw=0.8,
                             clip_on=False)

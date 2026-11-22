@@ -76,7 +76,7 @@ def session_chart(s, t, path):
              for key, label in (("with", f"with {PLUGIN}"), ("without", f"without {PLUGIN}, replayed"))]
     dots = [(plt.Line2D([], [], ls="", **marker(t, c)), label)
             for c, label in ((False, "turn end, kept going"), (True, "turn end, compacted"))]
-    handles, labels = zip(*lines, *dots)
+    handles, labels = zip(*lines, *dots, strict=True)
     ax.legend(handles, labels, frameon=False, fontsize=9, labelcolor=t["ink"], loc="lower right",
               bbox_to_anchor=(1, 1), ncols=4, borderaxespad=0.2, handlelength=1.3, handletextpad=0.5,
               columnspacing=1.1)

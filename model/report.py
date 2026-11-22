@@ -171,7 +171,7 @@ def figures(p, c, floors=None):
     requests after a compaction: calibrate.py measures it over 60 days, and over a report's
     window it varies across resamples by more than its own size. `floors` is the pair sparkjoy
     asks from, at turn ends and in idle sessions, where the report fitted one."""
-    fitted = {**dict(zip(("FLOOR", "IDLE_FLOOR"), floors or ())), "K": p.K, "P": p.P, "SUMMARY": p.N, "TURN_MEDIAN": p.turn_median, "TURN_MEAN": p.turn,
+    fitted = {**dict(zip(("FLOOR", "IDLE_FLOOR"), floors or (), strict=False)), "K": p.K, "P": p.P, "SUMMARY": p.N, "TURN_MEDIAN": p.turn_median, "TURN_MEAN": p.turn,
               "LAPSE": p.lapse, "WRITE": c.write, "OUTPUT": c.output}
     return {k: v for k, v in fitted.items() if np.isfinite(v)}
 
@@ -448,7 +448,7 @@ def main():
     sessions = [(s, replayed(s, p)) for s in S] if replays else [(s, (None, s.size, s.size)) for s in S]
     priced = [r[0] for _, r in sessions if r[0]]
     # With, without and the checks, summed over the sessions with a price.
-    saving = tuple(map(sum, zip(*priced))) if priced and any(s.sparkjoy.any() for s in S) else None
+    saving = tuple(map(sum, zip(*priced, strict=True))) if priced and any(s.sparkjoy.any() for s in S) else None
     rows = returns(S)
 
     # A file of its own, readable by this user alone: the page quotes prompts and reasons.

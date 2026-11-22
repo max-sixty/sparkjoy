@@ -1,6 +1,7 @@
 """Runs model/report.py on synthetic transcripts: `uvx pytest tests`. It needs uv."""
 
 import json
+import os
 import subprocess
 from itertools import count
 from pathlib import Path
@@ -47,7 +48,7 @@ def report(tmp_path, entries, *args):
     run = subprocess.run(
         ["uv", "run", "--script", ROOT / "model/report.py", "--projects", tmp_path / "projects",
          "--since", "2026-11-01T00:00Z", "--until", "2026-11-03T00:00Z", "--no-open", *args],
-        capture_output=True, text=True, env={"PATH": subprocess.os.environ["PATH"], "TMPDIR": str(tmp_path)},
+        capture_output=True, text=True, env={"PATH": os.environ["PATH"], "TMPDIR": str(tmp_path)},
         check=True)
     *summary, page = run.stdout.splitlines()
     return summary, Path(page).read_text()
