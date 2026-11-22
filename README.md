@@ -1,25 +1,25 @@
 # sparkjoy
 
 A Claude Code plugin that asks the session's own model whether the work ahead
-still needs the context, and compacts if the model says no[^name]. It asks when
-each turn ends, so that it compacts once a piece of work is finished, and again
-just before an idle session's prompt cache expires.
+still needs the context, and compacts if the model says no[^name]. It asks at
+each turn end from 250k, and just before an idle session's prompt cache expires.
 
-When a piece of work is done, the next turns rarely need the detail a summary
-drops. Just before the cache expires, compacting spares the next request a cache
-write of the whole context. Claude Code compacts when the window fills, and
-`/autocompact` compacts once the context reaches the size you set, whether or
-not the turn has ended. A summary written in the middle of a turn is the most
-likely to drop what the turn's next requests need.
+Claude Code compacts when the window fills, and `/autocompact` once the context
+reaches the size you set, whatever the work needs. Work differs in what it needs
+from its context. After a finished fix, the next task does as well from a
+summary. While a design is still taking shape, a summary would drop the options
+already rejected and why. The question gives the model what keeping the context
+and compacting it each cost at the context's size, so a large context stays only
+while the work ahead needs it. In an idle session keeping it costs more, since
+the first request after the cache expires writes all of it to the cache again.
 
-|                | When it compacts                                                          |
-| -------------- | ------------------------------------------------------------------------- |
-| `/compact`     | when you type it                                                          |
-| Claude Code    | at about 965k, even mid-turn                                              |
-| Claude Code    | when idle, just before the one-hour cache expires, from 200k              |
-| `/autocompact` | at the size you set, even mid-turn                                        |
-| sparkjoy       | at a turn end, from 250k, if the model says to                            |
-| sparkjoy       | when idle, just before the cache expires, from 175k, if the model says to |
+|                | When it compacts                                                                                                              |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `/compact`     | when you type it                                                                                                              |
+| Claude Code    | at about 965k, even mid-turn                                                                                                  |
+| Claude Code    | when idle, just before the one-hour cache expires, from 200k                                                                  |
+| `/autocompact` | at the size you set, even mid-turn                                                                                            |
+| sparkjoy       | when the session's model says to; it asks at each turn end from 250k, and when idle, just before the cache expires, from 175k |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/session-dark.svg">
@@ -51,12 +51,11 @@ auto-update.
 
 ## What it does
 
-- **When a turn ends**, it asks the session's own model whether to compact now,
-  and compacts if the model says to ([How it decides](#how-it-decides)).
-- **Before the prompt cache expires** in an idle session, it asks again. That
-  is after 55 minutes on the one-hour cache, and after 4 minutes on the
-  five-minute cache, which API keys use by default. The cache can lapse before
-  then. In my sessions, nearly a quarter of requests after 45 to 60 minutes
+- **It asks the session's own model whether to compact now**, and compacts if
+  the model says to ([How it decides](#how-it-decides)). It asks when a turn
+  ends, and in an idle session just before the prompt cache expires: after 55
+  minutes on the one-hour cache, and after 4 minutes on the five-minute cache,
+  which API keys use by default. The cache can lapse before then. In my sessions, nearly a quarter of requests after 45 to 60 minutes
   idle found that the API had dropped it.
 - **Each verdict shows in the transcript** as a dim line with its reason, and
   a question that missed the prompt cache adds a line saying so. In the session
@@ -182,13 +181,14 @@ above sparkjoy's turn-end floor ([Limits](#limits)).
 
 sparkjoy asks the session's own model whether now is a good time to compact, at
 each turn end from 250k and again just before an idle session's prompt cache
-lapses. To ask, it forks the conversation for one request. The fork reads the
-whole conversation, which is already in the prompt cache, so a question costs
-about as much as one more request. In my sessions, the questions cost $22 in
-all, against $4,013 for the sessions. The model answers in about a hundred
-tokens, a verdict and a one-line reason. The fork goes from Claude Code to the
-session's own model, so the conversation goes only where the session already
-sends it.
+lapses. It never asks in the middle of a turn, where the work ahead nearly
+always needs the context's detail. To ask, it forks the conversation for one
+request. The fork reads the whole conversation, which is already in the prompt
+cache, so a question costs about as much as one more request. In my sessions,
+the questions cost $22 in all, against $4,013 for the sessions. The model
+answers in about a hundred tokens, a verdict and a one-line reason. The fork
+goes from Claude Code to the session's own model, so the conversation goes only
+where the session already sends it.
 
 The question asks whether the next turns will need detail a summary drops, such
 as failed attempts or a design still taking shape, and gives what a compaction
@@ -392,35 +392,40 @@ compacting it cost, fitted to my sessions.
 <details>
 <summary>The cost model</summary>
 
-A compaction policy decides when a session compacts: at what size of context,
-and at which moment in the work. Every request reads the whole context, so a
-session that compacts late pays to read a large context on every request. One
-that compacts early pays for more compactions, and its requests have less of
-the session's history to work with. This document models what a policy costs
-per unit of work done, to find when a session should compact.
+A compaction policy decides when a session compacts. Every request reads the
+whole context, so a session that compacts late pays to read a large context on
+every request. One that compacts early pays for more compactions, and its
+requests have less of the session's history to work with. This document models
+what a policy costs per unit of work done, to find when a session should
+compact.
 
-Two numbers in the model set what the context is worth to the work, and each
-varies:
+What the context is worth depends on the work ahead, and the model gives that
+two numbers:
 
-- **β varies with the work.** A request gets more done with a larger context,
-  by a power β of its size. Work that builds on its history, such as a design
-  that takes shape over many turns, has a larger β than work that needs only a
-  summary of what came before.
-- **D varies with the moment.** A compaction drops detail, and the requests
-  after it waste effort on what it dropped: failed tool calls, repeated lookups
-  and corrections. D counts those wasted requests. It is largest in the middle
-  of a turn, smaller at a turn end in the middle of a task, and close to 0 at a
-  turn end that finishes a piece of work.
+- **β** sets how much a larger context helps. A request gets more done with a
+  larger context, by a power β of its size. Work that builds on its history,
+  such as a design that takes shape over many turns, has a larger β than work
+  that needs only a summary of what came before.
+- **D** counts the requests a compaction's lost detail wastes. A compaction
+  drops detail, and the requests after it waste effort on what it dropped:
+  failed tool calls, repeated lookups and corrections. D is largest while the
+  work ahead continues what the context holds, as in the middle of a turn,
+  smaller at a turn end in the middle of a task, and close to 0 once a piece of
+  work is finished.
 
-The moment matters for cost too. Just before an idle session's prompt cache
-lapses, compacting spares the next request a cache write of the whole context.
+What keeping the context costs varies too. Just before an idle session's prompt
+cache lapses, compacting spares the next request a cache write of the whole
+context.
 
 If β and D were each one number for all work, one threshold would suit all of
 it, and a policy could compact after whichever request reached it, as
-`/autocompact` does once the context reaches the size you set. Because they vary, a policy that tells the cases apart can
-compact each where it costs least. sparkjoy compacts only at a turn end, where
-it asks the session's model whether the next turns need detail a summary would
-drop, or just before an idle session's cache lapses.
+`/autocompact` does once the context reaches the size you set. Because they vary
+with the work ahead, a policy that judges the work ahead can compact each where
+it costs least. sparkjoy's question is that judgment: it asks the session's
+model whether the next turns need detail a summary would drop, and gives it what
+keeping the context and compacting it each cost. It asks at each turn end above
+its floor and just before an idle session's cache lapses, never in the middle of
+a turn.
 
 Each section below takes one case of the model, from the simplest, whose formula
 shows which parameters matter, to a replay that follows real sessions:
@@ -433,12 +438,12 @@ shows which parameters matter, to a replay that follows real sessions:
   lowest.
 - **[Idle sessions](docs/cost-model.md#idle-sessions).** The prompt cache is about to lapse, so
   compacting pays at a smaller context.
-- **[Mid-turn or at a turn end](docs/cost-model.md#mid-turn-or-at-a-turn-end).** D is larger in
-  the middle of a turn than at a turn end. Compacting only at turn ends avoids
-  it, but lets a long turn carry the context past the lowest-cost threshold
-  before the turn ends.
-- **[A classifier](docs/cost-model.md#a-classifier).** β varies with the work and D with the turn
-  end. A question that tells them apart, as sparkjoy's does, lets each compact
+- **[Mid-turn or at a turn end](docs/cost-model.md#mid-turn-or-at-a-turn-end).** What asking
+  only at turn ends costs. D is larger in the middle of a turn, but waiting for
+  the turn to end lets a long turn carry the context past the lowest-cost
+  threshold.
+- **[A classifier](docs/cost-model.md#a-classifier).** β and D vary with the work ahead. A
+  question that tells the cases apart, as sparkjoy's does, lets each compact
   where it costs least, and is worth what it saves against the lowest-cost
   single threshold.
 - **[A replay of my sessions](docs/cost-model.md#a-replay-of-my-sessions).** It keeps every logged
@@ -455,16 +460,16 @@ For my sessions on Opus 5.5[^prices]:
   9 times in 10 saves 1.9% where a compaction there wastes 12 requests, and 9.0%
   where it wastes 96. No session of mine yet measures how widely β or D varies,
   or how often the question is right ([A classifier](docs/cost-model.md#a-classifier)).
-- Compacting only at turn ends, as sparkjoy does, waits out long turns. Turns
-  run a median of 9 requests but a mean of 38, so one long turn can carry the
-  context far past where compacting pays before it ends. In the replay, at each
-  policy's lowest-cost threshold, compacting at every turn end saves 9.1
-  percentage points less than compacting after any request, counting cost
-  alone, and 0.9 less at the base case, β = 0.5, where a request at 250k gets half as
-  much done as one at 1M. Turn ends break even once a compaction in the middle
-  of a turn wastes 35 more requests than one at a turn end, counting cost alone,
-  or 7 more at the base case. No session of mine measures that ([Mid-turn or at
-  a turn end](docs/cost-model.md#mid-turn-or-at-a-turn-end)).
+- sparkjoy asks only at turn ends, so it waits out long turns. Turns run a
+  median of 9 requests but a mean of 38, so one long turn can carry the context
+  far past where compacting pays before it ends. In the replay, at each policy's
+  lowest-cost threshold, compacting at every turn end saves 9.1 percentage
+  points less than compacting after any request, counting cost alone, and 0.9
+  less at the base case, β = 0.5, where a request at 250k gets half as much done
+  as one at 1M. Turn ends break even once a compaction in the middle of a turn
+  wastes 35 more requests than one at a turn end, counting cost alone, or 7 more
+  at the base case. No session of mine measures that ([Mid-turn or at a turn
+  end](docs/cost-model.md#mid-turn-or-at-a-turn-end)).
 - Just before an idle session's cache lapses, compacting pays from about 160k
   ([Idle sessions](docs/cost-model.md#idle-sessions)).
 - A compaction costs about \$1 at any context size, most of it for the cache
@@ -724,7 +729,8 @@ five-minute cache, where a cache write costs 25 cached reads.
 
 Claude Code compacts after whichever request fills the window, and
 `/autocompact` after whichever request reaches its threshold, so most of their
-compactions fall in the middle of a turn. sparkjoy compacts only at a turn end.
+compactions fall in the middle of a turn. sparkjoy asks only at turn ends, since
+in the middle of a turn the work ahead nearly always needs the context's detail.
 Turns run a median of 9 requests but a mean of 38, so one long turn can carry
 the context far past the lowest-cost threshold before it ends, and every request
 until then reads the larger context. `/autocompact` set above sparkjoy's floor
@@ -850,13 +856,14 @@ never compacts, and no classifier lowers that part of the cost.
 
 ### Turn ends that differ in lost detail
 
-D belongs to the moment of a compaction, so here the classifier picks the moment
-rather than the group. A share m of turn ends fall in the middle of a task, where
-a compaction wastes D requests, each priced as a request at K, \$0.062. The rest
-finish a piece of work, where a compaction wastes none. Without a classifier, a
-compaction falls at a turn end of either kind and wastes mD on average. A
-classifier right at a share $`a`$ of the turn ends of each kind compacts only at
-turn ends it calls finished, so each of its compactions wastes
+D depends on whether the work right after a compaction continues what the
+context holds, so here the classifier picks the turn end to compact at, rather
+than sorting the work into groups. A share m of turn ends fall in the middle of
+a task, where a compaction wastes D requests, each priced as a request at K,
+\$0.062. The rest finish a piece of work, where a compaction wastes none.
+Without a classifier, a compaction falls at a turn end of either kind and wastes
+mD on average. A classifier right at a share $`a`$ of the turn ends of each kind
+compacts only at turn ends it calls finished, so each of its compactions wastes
 
 $`\displaystyle \bar D(a) = D\,\frac{m\,(1-a)}{m\,(1-a) + (1-m)\,a}`$
 
