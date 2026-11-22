@@ -307,6 +307,10 @@ two things before it answers. The two fields cost about 20 output tokens a
 question.
 
 </details>
+
+[^evals]:
+    The [evals](evals/README.md) put the question to the model at turn
+    ends from my sessions.
 -->
 
 ## Other plugins
@@ -357,12 +361,6 @@ size.
 - If you set `/autocompact`, keep it above sparkjoy's turn-end floor. At or
   below the floor, Claude Code compacts mid-turn before any turn end reaches it,
   so sparkjoy never asks at a turn end.
-
-<!--
-[^evals]:
-    The [evals](evals/README.md) put the question to the model at turn
-    ends from my sessions.
--->
 
 [^autocompact]:
     At the cost model's base case, where a request with 250k of context gets
