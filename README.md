@@ -268,6 +268,7 @@ own, between "Weigh what keeping costs…" and "Answer with one JSON object…":
 the line "The user added these instructions for this decision:", then your
 text. Unset, the question is as shown.
 
+<!-- The Evals block waits until the mid-task verdicts' swing between batches is explained. Remove this line and the closing one to restore it.
 ### Evals
 
 <details>
@@ -306,6 +307,7 @@ two things before it answers. The two fields cost about 20 output tokens a
 question.
 
 </details>
+-->
 
 ## Other plugins
 
@@ -356,9 +358,11 @@ size.
   below the floor, Claude Code compacts mid-turn before any turn end reaches it,
   so sparkjoy never asks at a turn end.
 
+<!--
 [^evals]:
     The [evals](evals/README.md) put the question to the model at turn
     ends from my sessions.
+-->
 
 [^autocompact]:
     At the cost model's base case, where a request with 250k of context gets
