@@ -5,6 +5,15 @@ finished, rather than when the context window fills. At the end of each turn
 it puts Marie Kondo's question to the session's own model: does this
 transcript spark joy? That is, does the work ahead still need it, or can it go?
 
+|                | When it compacts                                                          |
+| -------------- | ------------------------------------------------------------------------- |
+| `/compact`     | when you type it                                                          |
+| Claude Code    | at about 965k, even mid-turn                                              |
+| Claude Code    | when idle, just before the one-hour cache expires, from 200k              |
+| `/autocompact` | at the size you set, even mid-turn                                        |
+| sparkjoy       | at a turn end, from 250k, if the model says to                            |
+| sparkjoy       | when idle, just before the cache expires, from 175k, if the model says to |
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/session-dark.svg">
   <img alt="Context per request across one session of 3,110 requests over three days. With sparkjoy, dots mark the 55 turn ends where the plugin asked whether to compact: at 30 the session kept going, 16 times in a row from 445k to 700k, and at 25 it compacted, at sizes from 206k to 867k tokens. Without it, the context climbs to about 960k each time before Claude Code compacts, seven times in all." src="assets/session-light.svg">
