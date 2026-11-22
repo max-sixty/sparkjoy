@@ -53,9 +53,22 @@ KEPT_ATTACHMENTS = {
 
 # The fields of an entry a resume reads; the runner adds the session's own.
 FIELDS = {
-    "type", "uuid", "parentUuid", "logicalParentUuid", "timestamp", "isSidechain",
-    "isMeta", "isCompactSummary", "isVisibleInTranscriptOnly", "message",
-    "attachment", "subtype", "content", "compactMetadata", "level", "rendered",
+    "type",
+    "uuid",
+    "parentUuid",
+    "logicalParentUuid",
+    "timestamp",
+    "isSidechain",
+    "isMeta",
+    "isCompactSummary",
+    "isVisibleInTranscriptOnly",
+    "message",
+    "attachment",
+    "subtype",
+    "content",
+    "compactMetadata",
+    "level",
+    "rendered",
 }
 
 SYSTEM_REMINDER = re.compile(r"\s*<system-reminder>.*?</system-reminder>\s*", re.S)
@@ -67,9 +80,19 @@ SCRUB = [
     (re.compile(r"/Users/[a-z][\w.-]*"), "~"),
     (re.compile(r"-Users-[a-z]\w*(?=[-/])"), "-Users-USER"),
     (re.compile(r"pytest-of-[a-z]\w*"), "pytest-of-USER"),
-    (re.compile(r"\b(?!git@github\.com\b)(?!noreply@)[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b"), "user@example.com"),
+    (
+        re.compile(
+            r"\b(?!git@github\.com\b)(?!noreply@)[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b"
+        ),
+        "user@example.com",
+    ),
     (re.compile(r"\bsk-(?:ant-)?[A-Za-z0-9_-]{16,}"), "<api-key>"),
-    (re.compile(r"\b(?:ghp|gho|ghs|ghu|ghr)_[A-Za-z0-9]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}"), "<github-token>"),
+    (
+        re.compile(
+            r"\b(?:ghp|gho|ghs|ghu|ghr)_[A-Za-z0-9]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}"
+        ),
+        "<github-token>",
+    ),
     (re.compile(r"\bBearer\s+[A-Za-z0-9._~+/-]{20,}"), "Bearer <token>"),
     (re.compile(r"\bop://[^\s\"'`)]+"), "<1password-reference>"),
     (re.compile(r"\b[\w-]+\.tail[0-9a-f]{4,}\.ts\.net\b"), "localhost"),
@@ -94,7 +117,11 @@ def scrub(value):
 def text_of(content) -> str:
     if isinstance(content, str):
         return content
-    return "\n".join(b.get("text", "") for b in content or [] if isinstance(b, dict) and b.get("type") == "text")
+    return "\n".join(
+        b.get("text", "")
+        for b in content or []
+        if isinstance(b, dict) and b.get("type") == "text"
+    )
 
 
 def clean_blocks(blocks: list) -> list:
@@ -103,7 +130,9 @@ def clean_blocks(blocks: list) -> list:
     for block in blocks:
         kind = block.get("type")
         if kind == "image":
-            out.append({"type": "text", "text": "[An image is omitted from this fixture.]"})
+            out.append(
+                {"type": "text", "text": "[An image is omitted from this fixture.]"}
+            )
         elif kind == "text":
             text = SYSTEM_REMINDER.sub("\n", block["text"]).strip()
             if text:
@@ -128,7 +157,12 @@ def chain(path: Path, end: int) -> list[dict]:
             if n > end:
                 break
             entry = json.loads(raw)
-            if entry.get("uuid") and entry.get("type") in ("user", "assistant", "attachment", "system"):
+            if entry.get("uuid") and entry.get("type") in (
+                "user",
+                "assistant",
+                "attachment",
+                "system",
+            ):
                 by_uuid[entry["uuid"]] = entry
                 if n == end:
                     leaf = entry
@@ -161,15 +195,23 @@ def sanitize(entries: list[dict]) -> list[dict]:
             keep = entry.get("subtype") == "compact_boundary"
         elif kind == "attachment":
             attachment = entry["attachment"]
-            keep = attachment.get("type") in KEPT_ATTACHMENTS and not harness_file(attachment.get("filename", ""))
+            keep = attachment.get("type") in KEPT_ATTACHMENTS and not harness_file(
+                attachment.get("filename", "")
+            )
         elif kind == "assistant":
-            blocks = [b for b in entry["message"]["content"] if b.get("type") not in ("thinking", "redacted_thinking")]
+            blocks = [
+                b
+                for b in entry["message"]["content"]
+                if b.get("type") not in ("thinking", "redacted_thinking")
+            ]
             entry = entry | {"message": entry["message"] | {"content": blocks}}
             keep = bool(blocks)
         elif kind == "user":
             content = entry["message"]["content"]
             text = text_of(content)
-            if entry.get("isMeta") and text.startswith("Base directory for this skill:"):
+            if entry.get("isMeta") and text.startswith(
+                "Base directory for this skill:"
+            ):
                 header = text.split("\n", 1)[0]
                 content = [{"type": "text", "text": f"{header}\n\n{OMITTED_SKILL}"}]
             elif entry.get("isMeta") and after_command and isinstance(content, list):
@@ -180,7 +222,9 @@ def sanitize(entries: list[dict]) -> list[dict]:
                 content = SYSTEM_REMINDER.sub("\n", content).strip()
             entry = entry | {"message": entry["message"] | {"content": content}}
             keep = bool(content)
-            after_command = "<command-name>" in text[:300] and "<local-command" not in text
+            after_command = (
+                "<command-name>" in text[:300] and "<local-command" not in text
+            )
         if not keep:
             continue
         entry = {k: v for k, v in entry.items() if k in FIELDS}
@@ -200,10 +244,14 @@ def omit_private(entry: dict) -> dict:
     content = (entry.get("message") or {}).get("content")
     if isinstance(content, list):
         for block in content:
-            if block.get("type") == "tool_result" and private_terms("\n".join(strings(block.get("content")))):
+            if block.get("type") == "tool_result" and private_terms(
+                "\n".join(strings(block.get("content")))
+            ):
                 block["content"] = OMITTED_OUTPUT
     if hits := private_terms("\n".join(strings(entry))):
-        raise SystemExit(f"{entry['uuid']} names private work outside a tool's output: {hits}")
+        raise SystemExit(
+            f"{entry['uuid']} names private work outside a tool's output: {hits}"
+        )
     return entry
 
 
@@ -212,7 +260,9 @@ def build(case: dict) -> Path:
     (path,) = PROJECTS.glob(f"*/{session}.jsonl")
     entries = sanitize(chain(path, case["source"]["line"]))
     last = entries[-1]
-    assert last["type"] == "assistant" and last["message"].get("stop_reason") == "end_turn", case["id"]
+    assert (
+        last["type"] == "assistant" and last["message"].get("stop_reason") == "end_turn"
+    ), case["id"]
     target = HERE / "fixtures" / f"{case['id']}.jsonl.gz"
     with gzip.open(target, "wt", compresslevel=9) as f:
         for entry in entries:

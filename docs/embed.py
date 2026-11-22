@@ -18,8 +18,17 @@ def section(doc):
     HTML blocks, and inline maths inside them too, so each display formula becomes a paragraph of
     inline maths in display style."""
     body = doc.split("\n", 1)[1].lstrip()
-    body = re.sub(r"^```math\n(.*?)\n```$", lambda m: f"$`\\displaystyle {m[1]}`$", body, flags=re.M | re.S)
-    body = body.replace('"../', '"').replace("](../", "](").replace("](#", "](docs/cost-model.md#")
+    body = re.sub(
+        r"^```math\n(.*?)\n```$",
+        lambda m: f"$`\\displaystyle {m[1]}`$",
+        body,
+        flags=re.M | re.S,
+    )
+    body = (
+        body.replace('"../', '"')
+        .replace("](../", "](")
+        .replace("](#", "](docs/cost-model.md#")
+    )
     return f"{START}\n<details>\n<summary>The cost model</summary>\n\n{body.rstrip()}\n\n</details>\n{END}"
 
 
@@ -30,7 +39,10 @@ def embedded(readme, doc):
 
 if __name__ == "__main__":
     path = ROOT / "README.md"
-    readme, new = path.read_text(), embedded(path.read_text(), (ROOT / "docs/cost-model.md").read_text())
+    readme, new = (
+        path.read_text(),
+        embedded(path.read_text(), (ROOT / "docs/cost-model.md").read_text()),
+    )
     if "--check" in sys.argv:
         sys.exit(readme != new)
     path.write_text(new)
