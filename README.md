@@ -38,9 +38,7 @@ At the prompt of a Claude Code session:
   and compacts if the model says to ([How it decides](#how-it-decides)).
 - **Before the prompt cache expires** in an idle session, it asks again. That
   is after 55 minutes on the one-hour cache, and after 4 minutes on the
-  five-minute cache, which API keys use by default. The cache can lapse before
-  then. In my sessions, nearly a quarter of requests after 45 to 60 minutes
-  idle found that the API had dropped it.
+  five-minute cache, which API keys use by default.
 - **Each verdict shows in the transcript** as a dim line with its reason, and
   a question that missed the prompt cache adds a line saying so. In the session
   above, it kept the context while a move was half done:

@@ -225,14 +225,13 @@ const WINDOW = 1_000_000
 // idle, 95% ran past 5, so the question seldom comes just before the user
 // returns to a warm cache.
 //
-// The API doesn't always keep a one-hour cache for the hour. Of my requests
-// that sent the request before them unchanged (1-22 Nov 2026), none found the
-// cache gone within 5 minutes, 4% after 5 to 30, 12% after 30 to 45, and
-// 23% after 45 to 60. So an idle question can find the cache gone, as 3 of my
-// 19 did (21-22 Nov 2026), and pay to write the context to it again, as the
-// user's next request would have. Asking earlier would miss less often but ask
-// in more sessions that come back within the hour: of my sessions idle for 30
-// minutes 32% did, against 4% of those idle for 55.
+// The cache belongs to the account's organization, so once Claude Code signs
+// in to another account the question finds it gone and pays to write the
+// context to it again, as the user's next request would have. All 3 of my
+// idle questions that missed it (21-22 Nov 2026) followed such a switch.
+// Otherwise the API keeps it for the hour: of my requests 5 to 60 minutes
+// after one they extended unchanged, on the same account, 11 of 2,392 found
+// it gone (1-22 Nov 2026).
 const IDLE_MS = { '1h': 55 * 60_000, '5m': 4 * 60_000 }
 
 // A wait that ends later than this after it was due slept with the machine,
@@ -400,9 +399,9 @@ async function idle(
       (await fitted($, settings)).figures,
       settings.instructions,
     )
-    // The API may have dropped the cache early (IDLE_MS), or, as the wait runs
-    // from the turn's end, a last request that ran long may have used up the
-    // five-minute cache's margin.
+    // Claude Code may have signed in to another account meanwhile (IDLE_MS),
+    // or, as the wait runs from the turn's end, a last request that ran long
+    // may have used up the five-minute cache's margin.
     await judge(
       $,
       settings,
@@ -410,7 +409,7 @@ async function idle(
       isUntouched,
       `${thousands(tokens)} tokens, idle ${minutes} minutes`,
       prompt,
-      line => say(`${line}. An idle session's cache can lapse before sparkjoy asks.`),
+      line => say(`${line}. Signing in to another account while idle drops the cache.`),
     )
   } catch (error) {
     sayBug(say, `Failed: ${error}`)
@@ -450,10 +449,9 @@ async function judge(
   } else if (verdict?.compact) {
     // `$.session.compact` draws no `/compact` row, so neither the user nor
     // the model reads the compaction as one the user typed. A hook's veto
-    // draws its own line. It rejects while a turn runs, which `stands` rules
-    // out for any turn begun since the one asked about ended.
+    // draws its own line.
     say(`Compacting at ${at}: ${verdict.reason}`)
-    await compact($, at)
+    await compact($, say, at)
   } else if (verdict) {
     say(`Kept at ${at}: ${verdict.reason}`)
   } else if (answer.isAnswered) {
@@ -474,13 +472,19 @@ type Announcement = { at: string; messages: string[] }
 // between never finds an announcement unflagged. A reload during the
 // compaction stops this copy before it clears either, so the flag stays up
 // until the process ends, and the announcement until `resume` clears it.
-async function compact($: EngineInterface, at: string) {
+//
+// The engine rejects a compaction while a turn runs, and a turn can begin
+// after the caller checked that none had: a queued notification starts one
+// some tenths of a second before its `turn.start` reaches this mod. That is no
+// bug, since the next turn end asks again, so `say` gives the engine's reason
+// without calling it one.
+async function compact($: EngineInterface, say: (text: string) => void, at: string) {
   const key = `compacting:${await $.session.id()}`
   await $.state.set(COMPACTING, true)
   try {
     const announcement: Announcement = { at, messages: await messageKeys($) }
     await $.store.set(key, announcement)
-    await $.session.compact()
+    await $.session.compact().catch(error => say(`Didn't compact at ${at}: ${error}`))
   } finally {
     await $.store.delete(key)
     await $.state.set(COMPACTING, false)
@@ -504,7 +508,7 @@ async function resume($: EngineInterface) {
     $.ui.log(
       `Finishing the compaction at ${announced.at}: Claude Code restarted before it landed`,
     )
-    await compact($, announced.at)
+    await compact($, text => $.ui.log(text), announced.at)
   } catch (error) {
     sayBug(text => $.ui.log(text), `Failed: ${error}`)
   }
