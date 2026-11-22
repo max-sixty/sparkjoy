@@ -71,16 +71,6 @@ FILE_HEADER = re.compile(
 )
 
 
-class Only:
-    """A projects directory holding just these transcripts, for fit.load to read."""
-
-    def __init__(self, *paths):
-        self.paths = paths
-
-    def glob(self, _):
-        return list(self.paths)
-
-
 def digest(m):
     return hashlib.sha256(
         json.dumps(
@@ -233,7 +223,7 @@ def read_requests(path, s):
                             b.get("input") or {},
                             e.get("timestamp"),
                         )
-                # fit.load times a request by its message's first logged block.
+                # fit.transcript times a request by its message's first logged block.
                 if (
                     m.get("usage")
                     and m.get("model") != "<synthetic>"
@@ -557,17 +547,12 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     fit.window_args(ap)
     a = ap.parse_args()
-    # fit.read sets the priority and the window; each transcript is then read alone, so its
-    # Session keeps its path.
-    _, since, until = fit.read(argparse.Namespace(**{**vars(a), "projects": Only()}))
-    S, R, shapes = [], [], {}
-    for path in sorted(a.projects.glob("*/*.jsonl")):
-        got = fit.load(Only(path), since, until)
-        if got:
-            reqs, sh = read_requests(path, got[0])
-            S.append(got[0])
-            R.append(reqs)
-            shapes.update(sh)
+    S, since, until = fit.read(a)
+    R, shapes = [], {}
+    for s in S:
+        reqs, sh = read_requests(s.path, s)
+        R.append(reqs)
+        shapes.update(sh)
     p = fit.measure(S, fit.usual(s.ttl for s in S))
     rng = np.random.default_rng(0)
 
