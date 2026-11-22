@@ -1,5 +1,5 @@
 // Says when a newer sparkjoy is out that Claude Code won't install on its own,
-// at most once a day.
+// once a day.
 //
 // Claude Code installs a newer version of a plugin only when it refreshes the
 // plugin's marketplace: when the user asks, or, for a marketplace with auto-update
@@ -9,16 +9,18 @@
 // auto-update off stays at the commit it was installed at
 // (https://code.claude.com/docs/en/plugins/loading.md, "When auto-update runs").
 //
-// So when a session with a person at the prompt starts, and auto-update is off
-// for sparkjoy's marketplace, sparkjoy asks GitHub for the commit the
-// marketplace's source now names. If that isn't the commit the session runs, it
-// says so in the transcript, with the command that updates it and how to turn
-// auto-update on. It asks GitHub at most once a day across sessions, so it says
-// so at most once a day. Two sessions that start within the same few
-// milliseconds can both ask, as `$.store` has no write that only one of them can
-// win.
+// So when a session with a person at the prompt starts, where sparkjoy was
+// installed from its own repository's marketplace and auto-update is off for it,
+// sparkjoy asks GitHub for the commit on the repository's default branch. If that
+// isn't the commit the session runs, it says so in the transcript, with the
+// command that updates it and how to turn auto-update on. It asks GitHub once a
+// day across sessions, so it says so once a day. Two sessions that start within
+// the same few milliseconds can both ask, as `$.store` has no write that only one
+// of them can win.
 
 import type { EngineInterface } from 'claude-code'
+
+const REPOSITORY = 'max-sixty/sparkjoy'
 
 // When sparkjoy last asked GitHub, in `$.store`, as milliseconds since the epoch.
 // A request that fails is not tried again until the next day either.
@@ -30,17 +32,16 @@ export async function checkForUpdate($: EngineInterface) {
   try {
     const install = installOf($.plugin.root)
     if (install === null || (await isQuiet($))) return
-    const source = await sourceToCheck($, install)
-    if (source === null) return
+    if (!(await isUpdatedByHand($, install))) return
     const now = await $.clock.now()
     const asked = await $.store.get(ASKED)
     if (typeof asked === 'number' && now - asked < DAY) return
     await $.store.set(ASKED, now)
-    const latest = await commitOf($, source)
+    const latest = await defaultBranchCommit($)
     if (latest.startsWith(install.commit)) return
     const { commit, marketplace } = install
     $.ui.log(
-      `A newer version is out. /plugin marketplace update ${marketplace} updates it. To keep it up to date, open /plugin, select ${marketplace} on the Marketplaces tab, and choose Turn on auto-update. What changed: https://github.com/${source.repo}/compare/${commit}...${latest.slice(0, 12)}`,
+      `A newer version is out. /plugin marketplace update ${marketplace} updates it. To keep it up to date, open /plugin, select ${marketplace} on the Marketplaces tab, and choose Turn on auto-update. What changed: https://github.com/${REPOSITORY}/compare/${commit}...${latest.slice(0, 12)}`,
     )
   } catch (error) {
     $.ui.log(`Checking for a newer version failed: ${error}`, { to: 'debug' })
@@ -84,55 +85,59 @@ async function isQuiet($: EngineInterface) {
   )
 }
 
-// A marketplace's entry in the settings' `extraKnownMarketplaces` or in
+// A marketplace's entry in a source of settings' `extraKnownMarketplaces`, or in
 // known_marketplaces.json, which records each marketplace Claude Code has
-// fetched: its source, and whether it auto-updates.
-type Entry = { source?: Source; autoUpdate?: unknown } | undefined
-type Source = { source?: unknown; repo?: unknown; url?: unknown; ref?: unknown }
+// fetched.
+type Entry = { source?: unknown; autoUpdate?: unknown } | undefined
 
-// The GitHub repository and ref the install's marketplace tracks, where auto-update
-// is off for it and the user can turn it on. Claude Code takes `autoUpdate` from
-// the marketplace's entry in the settings, then from its entry in
-// known_marketplaces.json, which the item in /plugin writes, and otherwise leaves
-// it off (https://code.claude.com/docs/en/plugins/loading.md, "Which marketplaces
-// and plugins auto-update"). Null where auto-update is on, where the
-// organization's managed settings set it either way, and where the source isn't
-// a GitHub repository.
-async function sourceToCheck($: EngineInterface, { plugins, marketplace }: Install) {
+// Whether the install comes from sparkjoy's own marketplace on its default
+// branch, with auto-update off where the user can turn it on. Claude Code takes
+// `autoUpdate` from the marketplace's entry in the settings, then from its entry
+// in known_marketplaces.json, which the item in /plugin writes, and otherwise
+// leaves it off (https://code.claude.com/docs/en/plugins/loading.md, "Which
+// marketplaces and plugins auto-update"). It is false where Claude Code may
+// install a commit other than the default branch's: a marketplace from another
+// repository, such as a fork or a mirror, or one that names a branch or tag. It
+// is false too where managed settings or `--settings` set `autoUpdate`, which
+// /plugin can't change.
+async function isUpdatedByHand($: EngineInterface, { plugins, marketplace }: Install) {
   const entry = (marketplaces: unknown) =>
     (marketplaces as Record<string, Entry> | undefined)?.[marketplace]
   const autoUpdate = (e: Entry) =>
     typeof e?.autoUpdate === 'boolean' ? e.autoUpdate : undefined
-  const policy = await $.settings.read({ source: 'policy' })
-  if (autoUpdate(entry(policy.extraKnownMarketplaces)) !== undefined) return null
+  for (const source of ['policy', 'flag'] as const) {
+    const settings = await $.settings.read({ source })
+    if (autoUpdate(entry(settings.extraKnownMarketplaces)) !== undefined) return false
+  }
   const declared = entry(await $.settings.read({ key: 'extraKnownMarketplaces' }))
   const known = entry(JSON.parse(await $.fs.read(`${plugins}/known_marketplaces.json`)))
-  if (autoUpdate(declared) ?? autoUpdate(known) ?? false) return null
-  return gitHubOf(known?.source)
+  return (
+    isOwnRepository(known?.source) &&
+    (declared === undefined || isOwnRepository(declared.source)) &&
+    !(autoUpdate(declared) ?? autoUpdate(known) ?? false)
+  )
 }
 
-// A marketplace source as Claude Code records it: `github` names the repository,
-// `git` its URL, and either may name a branch or tag as `ref`, without which it
-// tracks the default branch.
-function gitHubOf(source: Source | undefined) {
-  const repo =
-    source?.source === 'github' && typeof source.repo === 'string'
-      ? source.repo
-      : source?.source === 'git' && typeof source.url === 'string'
-        ? /(?:^|[/@])github\.com[/:]([^/]+\/[^/]+?)(?:\.git)?\/?$/.exec(source.url)?.[1]
-        : undefined
-  if (repo === undefined) return null
-  return { repo, ref: typeof source?.ref === 'string' ? source.ref : 'HEAD' }
+// Whether a marketplace source, as Claude Code records it, is sparkjoy's
+// repository on its default branch: `github` names the repository, `git` its URL,
+// and either names a branch or tag as `ref`.
+function isOwnRepository(source: unknown) {
+  const { source: kind, repo, url, ref } = (source ?? {}) as Record<string, unknown>
+  const isOwn =
+    kind === 'github'
+      ? typeof repo === 'string' && repo.toLowerCase() === REPOSITORY
+      : kind === 'git' && typeof url === 'string' && GIT_URL.test(url)
+  return isOwn && ref === undefined
 }
 
-// The commit `ref` names in the repository now, by GitHub's API, which refuses
+const GIT_URL =
+  /^(?:https:\/\/github\.com\/|git@github\.com:)max-sixty\/sparkjoy(?:\.git)?\/?$/i
+
+// The commit on the repository's default branch, by GitHub's API, which refuses
 // a request with no User-Agent.
-async function commitOf(
-  $: EngineInterface,
-  { repo, ref }: { repo: string; ref: string },
-) {
+async function defaultBranchCommit($: EngineInterface) {
   const response = await $.http.fetch(
-    `https://api.github.com/repos/${repo}/commits/${encodeURIComponent(ref)}`,
+    `https://api.github.com/repos/${REPOSITORY}/commits/HEAD`,
     { headers: { accept: 'application/vnd.github.sha', 'user-agent': 'sparkjoy' } },
   )
   const commit = response.text.trim()
