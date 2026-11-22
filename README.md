@@ -32,14 +32,12 @@ At the prompt of a Claude Code session:
 /plugin install sparkjoy --marketplace max-sixty/sparkjoy
 ```
 
-By default, Claude Code auto-updates only the plugins from its official
-marketplace. To keep sparkjoy up to date, open `/plugin`, go to the Marketplaces
-tab, select sparkjoy, and turn on auto-update. Until you do, sparkjoy asks GitHub
-at most once a day, when a session starts, whether a newer version is out, and if
-one is, says so in the transcript with the command that updates it. It doesn't
-ask where `DISABLE_UPDATES`, `DISABLE_AUTOUPDATER` or
-`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` turns off Claude Code's own plugin
-updates.
+Auto-update is off by default for the sparkjoy marketplace. To keep sparkjoy up
+to date, open `/plugin`, go to the Marketplaces tab, select sparkjoy, and turn on
+auto-update. Until you do, sparkjoy asks GitHub at most once a day, when a session
+starts, whether a newer version is out, and if one is, says so in the transcript
+with the command that updates it. It doesn't ask where `DISABLE_UPDATES`,
+`DISABLE_AUTOUPDATER` or `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set.
 
 ## What it does
 
