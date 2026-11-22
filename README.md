@@ -56,7 +56,9 @@ tab, select sparkjoy, and turn on auto-update.
   and compacts if the model says to ([How it decides](#how-it-decides)).
 - **Before the prompt cache expires** in an idle session, it asks again. That
   is after 55 minutes on the one-hour cache, and after 4 minutes on the
-  five-minute cache, which API keys use by default.
+  five-minute cache, which API keys use by default. The cache can lapse before
+  then. In my sessions, nearly a quarter of requests after 45 to 60 minutes
+  idle found that the API had dropped it.
 - **Each verdict shows in the transcript** as a dim line with its reason, and
   a question that missed the prompt cache adds a line saying so. In the session
   above, it kept the context while a move was half done:
@@ -87,6 +89,12 @@ tab, select sparkjoy, and turn on auto-update.
 </picture>
 
 </details>
+
+- **`/sparkjoy bug`** drafts a bug report from the session's transcript, with
+  what you say went wrong, sparkjoy's settings, and its last lines beside the
+  requests around them, and files it here once you agree. A line that reports a
+  bug, such as a check that failed or a question at a turn's end that missed
+  the prompt cache, is followed by one suggesting it.
 
 ## Settings
 
