@@ -139,7 +139,7 @@ function engine(
   // `trigger`; the engine stamps it `plugin`.
   on('session.compact', async (_, e) => {
     if (compactMs > 0) await clock.sleep(compactMs)
-    if (failures-- > 0) throw new Error('summary unavailable')
+    if (failures-- > 0) throw new Error('a turn is in flight')
     if (e.trigger === undefined || e.trigger === 'plugin')
       compactions.push(e.instructions ?? '')
     // Claude Code measures the context again only at the next request.
@@ -661,7 +661,7 @@ test('an unreadable verdict says so and calls it a bug', async ($, on) => {
   expect(logs).toEqual(['Unreadable verdict at 500k tokens: compact it', BUG])
 })
 
-test('an idle question that missed the prompt cache says the cache can lapse first', async ($, on) => {
+test('an idle question that missed the prompt cache names an account switch', async ($, on) => {
   const { begin, clock, logs, turn } = engine(on, {
     tokens: 200_000,
     forkUsage: { ...MISS, cache_creation_input_tokens: 170_000 },
@@ -673,22 +673,21 @@ test('an idle question that missed the prompt cache says the cache can lapse fir
   await clock.settle()
 
   expect(logs).toEqual([
-    "Missed the prompt cache at 200k tokens, idle 55 minutes: read 30k of 202k from it. An idle session's cache can lapse before sparkjoy asks.",
+    'Missed the prompt cache at 200k tokens, idle 55 minutes: read 30k of 202k from it. Signing in to another account while idle drops the cache.',
     'Compacting at 200k tokens, idle 55 minutes: the PR merged',
   ])
 })
 
-test('a compaction that fails says so, and is tried again once the session sits idle', async ($, on) => {
+test('a compaction the engine refuses says why, and is tried again once the session sits idle', async ($, on) => {
   const { begin, clock, compactions, logs, turn } = engine(on, { compactFailures: 1 })
   await begin($)
 
   await turn($, 't1')
 
   // The test engine skips a hook that throws and rejects with its own error.
-  expect(logs.length).toBe(3)
+  expect(logs.length).toBe(2)
   expect(logs[0]).toBe('Compacting at 500k tokens: the PR merged')
-  expect(logs[1]).toStartWith('Failed: ')
-  expect(logs[2]).toBe(BUG)
+  expect(logs[1]).toStartWith("Didn't compact at 500k tokens: ")
 
   await clock.advance(IDLE)
   await clock.settle()
@@ -715,15 +714,14 @@ test('a compaction whose process ended first is finished when the next process s
   expect(compactions).toEqual([''])
 })
 
-test('a finished compaction that fails says so and calls it a bug', async ($, on) => {
+test('a compaction to finish that the engine refuses says why', async ($, on) => {
   const { begin, clock, logs } = engine(on, { stored: ANNOUNCED, compactFailures: 1 })
 
   await begin($)
   await clock.settle()
 
-  expect(logs.length).toBe(3)
-  expect(logs[1]).toStartWith('Failed: ')
-  expect(logs[2]).toBe(BUG)
+  expect(logs.length).toBe(2)
+  expect(logs[1]).toStartWith("Didn't compact at 489k tokens: ")
 })
 
 test('an announcement a turn has moved past is dropped', async ($, on) => {
