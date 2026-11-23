@@ -415,17 +415,17 @@ td.wrap { white-space: normal; min-width: 160px; }
 CSS += f".scroll:has(+ .more:not([open])) tbody tr:nth-child(n+{ROWS + 1}) {{ display: none; }}\n"
 
 
-def summary(S, acting, verdicts, saving, unpriced, rows, fitted, saved, projects):
+def summary(found, S, verdicts, saving, unpriced, rows, fitted, saved, projects):
     """The paragraphs that open the page and make up the summary the script prints, with what
     reads in bold between **. The first states the result: what sparkjoy's compactions saved; or,
     where it made none, what compacting from the fitted floors would have saved; or why it had
     nothing to do."""
-    if not S:
+    if not found:
         return [
             f"**No sessions.** No interactive Claude Code session in {projects} ran in this window."
         ]
     out = []
-    n, small = len(acting), len(S) - len(acting)
+    n, small = len(S), len(found) - len(S)
     these = "this session's" if n == 1 else f"these {n:,} sessions'"
     if saving:
         ran, without, checks = saving
@@ -477,7 +477,7 @@ def summary(S, acting, verdicts, saving, unpriced, rows, fitted, saved, projects
         f"on its own before {tokens(SMALL)}, as it does in a 200k context window, and sparkjoy acts "
         "only in sessions with a 1M window"
     )
-    if small and not acting:
+    if small and not S:
         out.append(
             f"**sparkjoy can't act in this session.** Claude Code compacted it {why}."
             if small == 1
@@ -485,11 +485,11 @@ def summary(S, acting, verdicts, saving, unpriced, rows, fitted, saved, projects
         )
     elif small:
         out.append(
-            f"Claude Code compacted {small:,} of these {len(S):,} sessions {why}, so this page leaves "
+            f"Claude Code compacted {small:,} of these {len(found):,} sessions {why}, so this page leaves "
             f"{'it' if small == 1 else 'them'} out."
         )
-    if not verdicts and acting:
-        k = sum(map(reached, acting))
+    if not verdicts and S:
+        k = sum(map(reached, S))
         some = (
             f"{'the other' if small else 'this'} session"
             if n == 1
@@ -530,12 +530,12 @@ def summary(S, acting, verdicts, saving, unpriced, rows, fitted, saved, projects
 
 
 def page(
-    S, acting, since, until, verdicts, sessions, opening, rows, fitted, unfit, saved
+    found, S, since, until, verdicts, sessions, opening, rows, fitted, unfit, saved
 ):
     zone = datetime.now().astimezone().strftime("%Z")
     head = (
-        f"{days(since, until)}, times in {zone} · {len(S):,} {'session' if len(S) == 1 else 'sessions'}"
-        f" · {sum(len(s.size) for s in S):,} requests"
+        f"{days(since, until)}, times in {zone} · {len(found):,} {'session' if len(found) == 1 else 'sessions'}"
+        f" · {sum(len(s.size) for s in found):,} requests"
     )
     parts = [f"<h1>{logo()}</h1><p class=sub>{head}</p>"]
     lead, *rest = opening
@@ -567,7 +567,7 @@ def page(
     parts.extend(f"<p>{bold(p)}</p>" for p in rest)
     sections = (
         ["Sessions", "Verdicts"] * bool(verdicts)
-        + ["Thresholds"] * bool(acting)
+        + ["Thresholds"] * bool(S)
         + ["Saved figures"] * bool(saved)
         + ["Idle returns"] * bool(rows)
     )
@@ -647,7 +647,7 @@ def page(
             + more(len(verdicts), "verdicts, newest first")
         )
 
-    if acting:
+    if S:
         parts.append(h2("Thresholds"))
         if fitted:
             f = fitted
@@ -686,7 +686,7 @@ def page(
                 f"The last row compares each with never compacting by cost per unit of work, which also "
                 f"counts what the smaller context costs the work: it takes a request at 250k to get half "
                 f"as much done as one at 1M, the cost model's base case, β = {fit.BASE:g}.</p>"
-                f"<p class=note>Fitted to {len(acting):,} sessions and {f['compactions']:,} compactions, at "
+                f"<p class=note>Fitted to {len(S):,} sessions and {f['compactions']:,} compactions, at "
                 f"{model_name(f['model'])} list prices with a {'5-minute' if f['ttl'] == 300 else '1-hour'} "
                 f"cache. The floors are fitted by cost alone, since sparkjoy only starts asking at them. In "
                 f"an idle session, compacting before the cache lapses breaks even from {tokens(f['idle'])}. "
@@ -787,25 +787,23 @@ def main():
         "JSON file; with no file named, to the one the plugin reads",
     )
     a = ap.parse_args()
-    S, since, until = fit.read(a)
+    found, since, until = fit.read(a)
     # The page leaves out the sessions sparkjoy can't act in, for which the replay doesn't hold.
-    acting = [s for s in S if not cramped(s)]
-    verdicts = sorted(
-        ((s, v) for s in acting for v in s.verdicts), key=lambda sv: -sv[1].t
-    )
+    S = [s for s in found if not cramped(s)]
+    verdicts = sorted(((s, v) for s in S for v in s.verdicts), key=lambda sv: -sv[1].t)
     p = fitted = saved = None
     unfit = "The cost model needs compactions in the window to measure what one leaves."
     kept = "the window holds no compactions to fit them to"  # why the question keeps the figures it has
-    if any(((s.kind == fit.USER) | (s.kind == fit.POLICY)).any() for s in acting):
-        ttl = fit.usual(s.ttl for s in acting)
-        model = usual_model(acting)
+    if any(((s.kind == fit.USER) | (s.kind == fit.POLICY)).any() for s in S):
+        ttl = fit.usual(s.ttl for s in S)
+        model = usual_model(S)
         with (
             warnings.catch_warnings()
         ):  # a short window leaves some parameters without data
             warnings.simplefilter("ignore", RuntimeWarning)
-            p = fit.measure(acting, ttl)
+            p = fit.measure(S, ttl)
         if np.isfinite([p.K, p.P, p.N, p.g, p.out, p.lapse]).all():
-            fitted = thresholds(acting, p, model, ttl)
+            fitted = thresholds(S, p, model, ttl)
         unfit = "The window holds too few requests to fit the cost model."
         if a.figures:
             values = figures(p, fit.prices(model, ttl), fitted and fitted["floors"])
@@ -820,25 +818,23 @@ def main():
     # The replay prices each compaction from K, P and N.
     replays = p is not None and np.isfinite([p.K, p.P, p.N]).all()
     sessions = (
-        [(s, replayed(s, p)) for s in acting]
+        [(s, replayed(s, p)) for s in S]
         if replays
-        else [(s, (None, s.size, s.size)) for s in acting]
+        else [(s, (None, s.size, s.size)) for s in S]
     )
     priced = [r[0] for _, r in sessions if r[0]]
     # With, without and the checks, summed over the sessions with a price.
     saving = (
         tuple(map(sum, zip(*priced, strict=True)))
-        if priced and any(s.sparkjoy.any() for s in acting)
+        if priced and any(s.sparkjoy.any() for s in S)
         else None
     )
     unpriced = Counter(
-        model_name(s.model)
-        for s in acting
-        if s.sparkjoy.any() and s.model not in fit.PRICES
+        model_name(s.model) for s in S if s.sparkjoy.any() and s.model not in fit.PRICES
     )
-    rows = returns(acting)
+    rows = returns(S)
     opening = summary(
-        S, acting, verdicts, saving, unpriced, rows, fitted, saved, a.projects
+        found, S, verdicts, saving, unpriced, rows, fitted, saved, a.projects
     )
 
     # A file of its own, readable by this user alone: the page quotes prompts and reasons.
@@ -846,8 +842,8 @@ def main():
     with open(fd, "w") as out:
         out.write(
             page(
+                found,
                 S,
-                acting,
                 since,
                 until,
                 verdicts,
@@ -866,7 +862,7 @@ def main():
     if verdicts:
         counts = Counter(v.kind for _, v in verdicts)
         print(
-            f"{len(verdicts)} verdicts in {len({id(s) for s, _ in verdicts})} of {len(S)} sessions: "
+            f"{len(verdicts)} verdicts in {len({id(s) for s, _ in verdicts})} of {len(found)} sessions: "
             + ", ".join(f"{counts[k]} {k}" for k in KINDS)
             + f"; {sum(1 for _, v in verdicts if v.missed)} missed the prompt cache"
         )
