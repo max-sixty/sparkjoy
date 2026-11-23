@@ -70,6 +70,10 @@ and [Mid-turn or at a turn end](#mid-turn-or-at-a-turn-end).
 
 ## Costs
 
+The models before the replay price a session as cycles, each a run of requests
+and the compaction that ends it. This section gives what each costs, in symbols
+and then in my sessions' figures.
+
 <details>
 <summary>The model's symbols</summary>
 
@@ -114,9 +118,9 @@ and [Mid-turn or at a turn end](#mid-turn-or-at-a-turn-end).
 
 </details>
 
-In each cycle between compactions, the context starts at K, right after a
-compaction, and grows by g tokens with each request until the session compacts
-at X. A request with context x costs
+The models take each cycle to start at K, right after a compaction, and to grow
+by g tokens with each request until the session compacts at X. A request with
+context x costs
 
 ```math
 c(x) = h\,x + c_0, \qquad h = 1 + \ell\,(w - 1)
