@@ -43,11 +43,11 @@ have saved; or why it had nothing to do. The page then shows:
   checks' cost in the savings prices each miss's unread input as a cache write. Under its old name, compact-when-done, it logged
   only the checks that compacted.
 - **Thresholds**: the pair of floors, at turn ends and in idle sessions, that
-  costs least for these sessions, beside the author's 250k and 175k and never
-  compacting, with what each costs and what each saves per unit of work against
-  never compacting, at the cost model's base case for how much past context is
-  worth to the work.
-- **Saved figures**: the floors and figures it saved. A window without
+  costs least for these sessions, beside sparkjoy's defaults of 250k and 175k
+  and never compacting, with what each costs and what each saves per unit of
+  work against never compacting, at the cost model's base case for how much
+  past context is worth to the work.
+- **Fitted figures**: the floors and figures it saved. A window without
   compactions has nothing to fit them to, and the plugin keeps the ones it
   had.
 - **Idle returns**: each time a session left with 175k or more in context took

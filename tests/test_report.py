@@ -180,12 +180,13 @@ def test_counts_verdicts_and_returns(tmp_path):
         "Cost $1.68 more, 17% more than these sessions would have cost without sparkjoy's compactions.",
         "7 verdicts in 1 of 1 sessions: 3 compacted, 1 would compact, 1 kept, 0 unreadable, "
         "1 no verdict, 0 dropped, 1 failed; 2 missed the prompt cache",
-        "Replayed at list prices, they cost $9.60 without them and $11 with them, including $3.70 "
-        "for its checks.",
+        "Replayed at list prices, these sessions cost $11 with sparkjoy's compactions, $3.70 of it "
+        "for its checks, against $9.60 without them.",
+        "Asking from 350k at turn ends and 125k in idle sessions costs least in this session's "
+        "replay, of the floors it tried.",
         "3 returns after an hour or more idle to sessions left with 175k or more in context; 2 had "
         "been compacted in between (1 by /compact, 1 by sparkjoy). The other 1 wrote 230k tokens to "
         "the cache again, for $1.84.",
-        "Asking from 350k at turn ends and 125k in idle sessions costs least in this session's replay.",
     ]
     assert '<p class="lead"><b>Cost $1.68 more</b>, 17% more' in page
     assert '<span class="mark would-compact"' in page
@@ -216,8 +217,8 @@ def test_a_first_run_leads_with_what_the_fitted_floors_would_have_saved(tmp_path
     assert summary[:2] == [
         "Compacting at every turn end from 350k and in every idle session from 125k would have cut "
         "this session's cost from $7.58 to $7.53 (1%), replayed at Opus 5.5 list prices.",
-        "sparkjoy asked nothing in this window, though this session passed 250k at a turn end, "
-        "where it asks.",
+        "sparkjoy logged no verdict in this session, which reached one of its default floors: 250k "
+        "at a turn end, or 175k before the session sat idle.",
     ]
     assert "<b>from $7.58 to $7.53</b>" in page and "Verdicts" not in page
 
@@ -251,8 +252,8 @@ def test_sessions_on_a_200k_window_say_sparkjoy_cannot_act(tmp_path):
     )
     assert summary == [
         "sparkjoy can't act in these 2 sessions. Claude Code compacted 1 of them on its own before "
-        "200k, as it does in a 200k context window, and none passed 200k. sparkjoy acts only in "
-        "sessions with a 1M window."
+        "200k, as it does in a 200k context window, and none of them passed 200k. sparkjoy acts "
+        "only in sessions with a 1M window. A smaller auto-compact window looks the same."
     ]
     assert "Thresholds" not in page
 
@@ -267,7 +268,10 @@ def test_a_session_below_the_floor_had_nothing_to_ask(tmp_path):
             request("10:01:10Z", 20_000, 1_000),
         ],
     )
-    assert summary == ["No session passed 250k at a turn end, where sparkjoy asks."]
+    assert summary == [
+        "No session reached sparkjoy's default floors: 250k at a turn end, or 175k before the "
+        "session sat idle."
+    ]
 
 
 def test_saves_the_figures_the_question_states(tmp_path):
@@ -291,13 +295,13 @@ def test_saves_the_figures_the_question_states(tmp_path):
         "WRITE": 40,
         "OUTPUT": 100,
     }
-    assert summary[-2] == (
+    assert (
         "Asking from 350k at turn ends and 125k in idle sessions costs least in this session's "
-        "replay. sparkjoy asks from them from the next turn end, except where you set a floor of "
-        "your own."
-    )
+        "replay, of the floors it tried. sparkjoy asks from these floors from the next turn end, "
+        "except where you set your own."
+    ) in summary
     assert summary[-1].startswith(
-        "Saved figures: floor at turn ends 350k; floor in idle sessions 125k; context after a "
+        "Fitted figures: floor at turn ends 350k; floor in idle sessions 125k; context after a "
         "compaction 225k;"
     )
     assert (
@@ -317,8 +321,8 @@ def test_saves_no_figures_without_compactions(tmp_path):
     assert not figures.exists()
     # A session of one request is no session the report reads.
     assert summary[0] == (
-        f"No sessions. No interactive Claude Code session in {tmp_path / 'projects'} ran in this "
-        "window."
+        "No sessions to report. No interactive Claude Code session of more than one request in "
+        f"{tmp_path / 'projects'} ran in this window."
     )
     assert (
         summary[-1]
