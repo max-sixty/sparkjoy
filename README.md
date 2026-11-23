@@ -179,11 +179,10 @@ each turn end from 250k and again just before an idle session's prompt cache
 lapses. It never asks in the middle of a turn, where the work ahead nearly
 always needs the context's detail. To ask, it forks the conversation for one
 request. The fork reads the whole conversation, which is already in the prompt
-cache, so a question costs about as much as one more request. In my sessions,
-the questions cost $22 in all, against $4,013 for the sessions. The model
-answers in about a hundred tokens, a verdict and a one-line reason. The fork
-goes from Claude Code to the session's own model, so the conversation goes only
-where the session already sends it.
+cache. In my sessions, the questions cost $22 in all, against $4,013 for the
+sessions. The model answers in about a hundred tokens, a verdict and a one-line
+reason. The fork goes from Claude Code to the session's own model, so the
+conversation goes only where the session already sends it.
 
 The question asks whether the next turns will need detail a summary drops, such
 as failed attempts or a design still taking shape, and gives what a compaction
