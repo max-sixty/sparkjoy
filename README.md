@@ -6,8 +6,8 @@
 </h1>
 
 A Claude Code plugin that compacts between tasks, rather than when the context
-fills[^name]. It cut the cost of my sessions by 31% ([What it
-saves](#what-it-saves)).
+fills[^name]. It cuts the cost of a session by 26% to 40%, depending on how you
+run Claude Code ([What it saves](#what-it-saves)).
 
 Once the session has built up some context, sparkjoy asks the session's own
 model whether to compact, and tells it what keeping the context and compacting
@@ -127,16 +127,30 @@ this:
 
 ## What it saves
 
-`/sparkjoy report` replays each session's logged requests twice at list prices,
-with sparkjoy's compactions where they happened and without them. My 151
-sessions from 18 to 23 November 2026, when sparkjoy asked from 250k at a turn
-end, its default since 17 November, cost $6,817 with its compactions and $9,904
-without them, 31% less. Its questions cost $49 of that. Run it to see the figure
-for your own sessions.
+Every request reads the whole context, so a context left to fill makes every
+request dearer, while each compaction costs about $1. The [cost
+model](#cost-model) replays real sessions under each policy, keeping every
+request and moving only the compactions. Against Claude Code's own compaction,
+compacting from sparkjoy's floors saves[^fit]:
 
-An earlier replay of my 87 sessions from 7 to 15 November, while sparkjoy asked
-from 400k at a turn end, gave 23% less, $4,013 against $5,214 at Opus 5.5 list
-prices[^replay]:
+| sessions                                                                    | in cost | per unit of work, at the base case |
+| --------------------------------------------------------------------------- | ------- | ---------------------------------- |
+| on the five-minute cache                                                    | 40%     | 21%                                |
+| in the background, on the one-hour cache                                    | 32%     | 12%                                |
+| open on the one-hour cache, where Claude Code compacts idle contexts itself | 26%     | 7%                                 |
+
+"In cost" counts a request as getting as much done with a smaller context. "Per
+unit of work" takes the model's base case, where a request at 250k gets half as
+much done as one at 1M. Each figure has sparkjoy compact at every turn end past
+its floor. Its question keeps the context instead where the next turns need it,
+which saves more where work differs in how much it needs the context, if the
+question is right often enough ([A
+classifier](docs/cost-model.md#a-classifier)).
+
+The model is fitted to my sessions, and `/sparkjoy report` replays your own.
+Replayed as they ran, my 151 sessions from 18 to 23 November cost 31% less with
+sparkjoy's compactions than without them. An earlier replay, of my sessions from
+7 to 15 November, when sparkjoy asked from 400k[^replay]:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/cost-dark.svg">
@@ -344,6 +358,13 @@ Code's updates or nonessential traffic are turned off.
 [^name]:
     The name comes from Marie Kondo, who tidies by keeping only the things that
     spark joy.
+
+[^fit]:
+    The cost model's replay of my 151 sessions from 18 to 23 November 2026, at
+    Opus 5.5 list prices, with sparkjoy compacting at every turn end from 250k
+    and in every idle session from 175k. Claude Code compacts near 965k, and in a
+    session open on the one-hour cache, also an idle context from 200k. The cost
+    model below gives its figures for the earlier replay, of 7 to 15 November.
 
 [^replay]:
     The replay keeps every logged request fixed and moves only the compactions:
