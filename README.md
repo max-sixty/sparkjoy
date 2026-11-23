@@ -48,15 +48,6 @@ session picks it up when it starts. To see its verdicts only, run `/sparkjoy
 classify`, then switch to `/sparkjoy on` to let it compact
 ([Settings](#settings)).
 
-Auto-update is off by default for third-party plugin marketplaces, sparkjoy's
-included. To keep sparkjoy up to date, ask Claude to turn on auto-update for
-sparkjoy, or open `/plugin`, go to the Marketplaces tab, select sparkjoy, and
-turn on auto-update. Until you do, sparkjoy asks GitHub once a day, when a
-session starts, whether a newer version has been out for a day or more, and if
-one has, says in the transcript how many days out of date yours is, with the
-command that updates it. It doesn't ask where `DISABLE_UPDATES`,
-`DISABLE_AUTOUPDATER` or `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set.
-
 ## What it does
 
 - **In an idle session it asks just before the prompt cache expires**: after 55
@@ -143,14 +134,22 @@ too.
 }
 ```
 
+### Updates
+
+Auto-update is off by default for third-party plugin marketplaces, sparkjoy's
+included. To keep sparkjoy up to date, ask Claude to turn on auto-update for
+sparkjoy, or open `/plugin`, go to the Marketplaces tab, select sparkjoy, and
+turn on auto-update. Until you do, sparkjoy asks GitHub once a day, when a
+session starts, whether a newer version has been out for a day or more, and if
+one has, says in the transcript how many days out of date yours is, with the
+command that updates it. It doesn't ask where `DISABLE_UPDATES`,
+`DISABLE_AUTOUPDATER` or `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set.
+
 ## What it saves
 
 The plugin cut the cost of my 87 Claude Code sessions from 7 to 15 November 2026
 by 23%, from $5,214 to $4,013 at Opus 5.5 list prices, in a replay of their
-36,251 requests[^replay]. Most of them ran in the background, like the one
-charted at the top. Had they all been open in a terminal or editor, where Claude
-Code also compacts idle sessions itself, the plugin would have cut their cost by
-16%.
+36,251 requests[^replay].
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/cost-dark.svg">
