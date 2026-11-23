@@ -178,18 +178,20 @@ def test_counts_verdicts_and_returns(tmp_path):
     summary, page = report(tmp_path, session_with_compactions())
     # The page opens on the same paragraphs, with the counts of each kind of verdict after the first.
     assert summary == [
-        "Cost $1.68 more, 17% more than these sessions would have cost without sparkjoy's compactions.",
+        "Cost $5.31 more, 90% more than these sessions would have cost without sparkjoy's compactions.",
         "7 verdicts in 1 of 1 sessions: 3 compacted, 1 would compact, 1 kept, 0 unreadable, "
         "1 no verdict, 0 dropped, 1 failed; 2 missed the prompt cache",
-        "Replayed at the list prices of each session's model, these sessions cost $11 with "
-        "sparkjoy's compactions, $3.70 of it for its checks, against $9.60 without them.",
+        "Replayed at the list prices of each session's model, with Claude Code compacting on its own "
+        "when the window fills and, in a session you had open, an idle context from 200k, these "
+        "sessions cost $11 with "
+        "sparkjoy's compactions, $3.70 of it for its checks, against $5.93 without them.",
         "Asking from 350k at turn ends and 125k in idle sessions costs least in this session's "
         "replay, of the floors it tried.",
         "3 returns after an hour or more idle to sessions left with 175k or more in context; 2 had "
         "been compacted in between (1 by /compact, 1 by sparkjoy). The other 1 wrote 230k tokens to "
         "the cache again, for $1.84.",
     ]
-    assert '<p class="lead"><b>Cost $1.68 more</b>, 17% more' in page
+    assert '<p class="lead"><b>Cost $5.31 more</b>, 90% more' in page
     assert '<span class="mark would-compact"' in page
     assert "Fix the parser" in page
     assert "hooks.json" not in page
