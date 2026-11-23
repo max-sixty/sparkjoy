@@ -21,9 +21,6 @@ from one read of the sessions:
   threshold      the lowest-cost threshold against β, in the steady state and the replay
   voi            the expected value of a classifier's information, on three mixes of work
   voi-point      the compaction threshold of the work a classifier says to compact, on the same mixes
-
-It also prints, drawing nothing, what a classifier saves where work differs in the detail a
-compaction loses rather than in β (voi_lost).
 """
 
 import html
@@ -1104,6 +1101,7 @@ def voi(out, p, c):
             np.concatenate([np.linspace(0.5, 1, 201), 1 - np.logspace(-4, -1.6, 80)]), 6
         )
     )
+    running = 0.004  # what running the classifier costs, as a share of the cost: the replay's 0.43% at the base case, rounded
     # (share of the work at β, β, step of the β ramp), each share giving a mean β of fit.BASE.
     mixes = tuple(
         (fit.BASE / beta, beta, step) for beta, step in ((1, 2), (2, 3), (5, 4))
@@ -1141,7 +1139,7 @@ def voi(out, p, c):
                 f"right {A[i]:.0%}, saves {saved[i]:.1%} ({info[i]:.0%} of the information)"
                 for i in at
             )
-            + f"; pays for running it from {A[np.argmax(saved > fit.RUNNING)]:.1%} right"
+            + f"; pays for running it from {A[np.argmax(saved > running)]:.1%} right"
         )
         print(
             f"model-voi-point, {share:.0%} at β = {beta}: compacts the group to compact at "
@@ -1159,11 +1157,9 @@ def voi(out, p, c):
             ends.append((saved[-1], f"{share:.0%} at β = {beta}", t["ink"]))
         # A band from 0 behind the savings: at this scale a line would sit on the axis and over the lines' starts.
         ax.fill_between(
-            [0, 1], 0, fit.RUNNING, color=t["cost"], lw=0, zorder=1, clip_on=False
+            [0, 1], 0, running, color=t["cost"], lw=0, zorder=1, clip_on=False
         )
-        ends.append(
-            (fit.RUNNING, f"Running the classifier, {fit.RUNNING:.1%}", t["ink"])
-        )
+        ends.append((running, f"Running the classifier, {running:.1%}", t["ink"]))
         label_ends(ax, ends, gap=0.02)
         ax.set_xlim(0, 1)
         ax.set_xticks([0, 0.25, 0.5, 0.75, 1])
@@ -1206,47 +1202,6 @@ def voi(out, p, c):
         save(fig, out / f"model-voi-point-{theme}.svg")
 
 
-# The share of turn ends in the middle of a task, and the wasted requests D that a compaction at one
-# costs beyond one at a turn end that finishes a piece of work, for voi_lost. No session measures
-# either; at half the turn ends and D = 12, a compaction costs 6 wasted requests on average, the figure
-# calibrate.py measures after my sessions' compactions.
-MID = 0.5
-LOST_REQUESTS = (12, 24, 48, 96)
-
-
-def voi_lost(p, c):
-    """The expected value of a classifier's information where work differs in the detail a
-    compaction loses, at the base case for β. A share MID of turn ends fall in the middle of a task,
-    where a compaction costs D wasted requests, each priced as a request at K, and the rest finish a
-    piece of work, where it costs none. Without a classifier a compaction falls at a turn end of
-    either kind, so it costs MID·D on average. A classifier compacts only at turn ends it calls
-    finished, right at a share a of each kind, so each of its compactions costs
-    D·MID(1 - a) / (MID(1 - a) + (1 - MID)a), and the threshold moves to where that costs least.
-    Waiting for such a turn end moves each compaction later by about the same amount, which the
-    threshold makes up for. Prints, for each D, the lowest-cost single threshold, what a perfect
-    classifier and one right 9 times in 10 save, and the accuracy from which it pays for running it."""
-    h, c0, _ = fit.terms(p, c)
-    wasted = h * p.K + c0
-    A = np.round(np.linspace(0.5, 1, 501), 4)
-
-    def lowest(D):
-        X, J = fit.curve(p, c, fit.BASE, lost=D, step=100)
-        return X[J.argmin()], J.min()
-
-    for n in LOST_REQUESTS:
-        D = n * wasted
-        X, single = lowest(MID * D)
-        picked = D * MID * (1 - A) / (MID * (1 - A) + (1 - MID) * A)
-        saved = np.array([1 - lowest(d)[1] / single for d in picked])
-        right = {a: saved[np.abs(A - a).argmin()] for a in (0.9, 1.0)}
-        print(
-            f"voi-lost, {MID:.0%} of turn ends mid-task losing {n} wasted requests (${D * c.read:.2f}): lowest-cost "
-            f"single threshold {tokens(X)}; a perfect classifier "
-            f"saves {right[1.0]:.1%}, one right 9 times in 10 {right[0.9]:.1%}; pays for running it from "
-            f"{A[np.argmax(saved > fit.RUNNING)]:.1%} right"
-        )
-
-
 def draw(out, S, p, c, boot, cost, effectiveness, BT, BX):
     """Draw each chart the docstring lists into `out`, from fit.py's sessions S, their parameters p and
     `boot`, the parameters of each resample of them, the prices c, and the replay's cost and
@@ -1263,4 +1218,3 @@ def draw(out, S, p, c, boot, cost, effectiveness, BT, BX):
     sensitivity(out, p, c, boot)
     thresholds(out, cost, effectiveness, BT, BX, p, c)
     voi(out, p, c)
-    voi_lost(p, c)
