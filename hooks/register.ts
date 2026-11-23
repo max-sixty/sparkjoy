@@ -46,6 +46,7 @@ import type {
   SessionMessage,
   TurnUsage,
 } from 'claude-code'
+import { checkForUpdate } from './update'
 
 // Set while this process compacts. `$.state` outlives a reload of the mod but
 // not the process, so a reload that finds a compaction announced leaves it to
@@ -270,6 +271,7 @@ export const register: Register = (on, options) => {
     watch.isActive = settings.mode !== 'off' && e.isInteractive
     const result = await next(e)
     if (watch.isActive && settings.mode === 'on') $.clock.after(0, () => void resume($))
+    if (e.isInteractive) $.clock.after(0, () => void checkForUpdate($))
     await $.command.register(COMMAND)
     return result
   })
