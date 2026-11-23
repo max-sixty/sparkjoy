@@ -162,18 +162,12 @@ editor on the one-hour cache, where Claude Code also compacts an idle context of
 
 `/autocompact` compacts every session at the size you set. sparkjoy compacts
 where the session's model judges that the work ahead no longer needs the
-context.
-
-That judgment pays where work differs in how much it needs its context. Suppose
-a quarter of the work is like a design still taking shape, where a request with
-250k of context gets 18% as much done as one with the full 1M, and the rest is
-like a finished fix, where it gets 71%. In a session that grows evenly and
-never sits idle, a judgment right 9 times in 10 saves 12% against `/autocompact`
-at whichever size costs least. In a replay of my sessions, it saves 10% in a
-background session, where only sparkjoy compacts an idle context, and 4% in a
-session you have open, where Claude Code compacts one too[^autocompact]. No
-session yet measures how widely work differs, or how often the judgment is
-right.
+context, which pays where work differs in how much it needs its context. On an
+assumed mix of work, the judgment saves 12% against `/autocompact` in a session
+that grows evenly and never sits idle. In a replay of my sessions it saves 10%
+in a background session and 4% in one you have open, where Claude Code also
+compacts idle sessions[^autocompact]. No session yet measures how widely work
+differs, or how often the judgment is right.
 
 I run sparkjoy without `/autocompact`. If you set both, keep `/autocompact`
 above sparkjoy's turn-end floor ([Limits](#limits)).
@@ -367,11 +361,14 @@ size.
     spark joy.
 
 [^autocompact]:
-    The 12% is the steady state of the [cost
-    model](docs/cost-model.md#work-that-differs-in-β), in which a session grows
-    by the same amount with each request, never sits idle, and can compact after
-    any request. The replay keeps each logged request's size and timing, draws
-    each session's turns in stretches of one kind of work, 5 turns long on
+    In the assumed mix, a quarter of the work is like a design still taking
+    shape, where a request with 250k of context gets 18% as much done as one
+    with the full 1M, and the rest is like a finished fix, where it gets 71%,
+    and the judgment is right 9 times in 10. The 12% is the steady state of the
+    [cost model](docs/cost-model.md#work-that-differs-in-β), in which a session
+    grows by the same amount with each request, never sits idle, and can compact
+    after any request. The replay keeps each logged request's size and timing,
+    draws each session's turns in stretches of one kind of work, 5 turns long on
     average, and at each turn end the judgment names the next turn's kind. It
     weighs each kind's cost per unit of its own work by its share. sparkjoy
     compacts idle contexts from 175k, and in a session you have open, so does
