@@ -482,42 +482,16 @@ and N.
 ## Questions about the model
 
 <details>
-<summary>What would put the lowest-cost threshold near 700k?</summary>
+<summary>Has anyone modelled this before?</summary>
 
-A request at 700k costs about \$0.20, against about \$0.06 at 150k, so a
-compaction there pays for its \$1.13 within 9 requests, the length of a
-median turn. The lowest-cost threshold reaches 700k only if the requests after a
-compaction get much less done, and even then compacting at 700k barely beats
-never compacting:
-
-| what puts the lowest-cost threshold at 700k                             | effectiveness right after a compaction, against 1M | effectiveness per dollar against never compacting |
-| ----------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------- |
-| β = 0.76, with no detail lost (lowest-cost threshold 721k)              | 23%                                                | +0.8%                                             |
-| β = 0.5, and each compaction loses \$5.68 of detail, 98 requests' worth | 38%                                                | +2.7%                                             |
-
-</details>
-
-<details>
-<summary>What does the model assume a compaction loses?</summary>
-
-The model makes a request's effectiveness depend only on its context's size. A
-request right after a compaction, whose 142k tokens hold a summary of the work
-so far, counts as getting as much done as a request at 142k before the session's
-first compaction.
-
-At β above 0, a summary can do better than that. If it keeps everything the work
-needs, the requests after the compaction get as much done as with the whole
-transcript. The model counts them as getting less, so compacting pays more than
-the model says. A summary that drops detail the next turns need costs more, in a
-mistake, a correction from the user or a step run again. The model adds that
-cost as D per compaction, and the lowest-cost threshold above is for D = 0.
-
-| D per compaction                          | lowest-cost threshold |
-| ----------------------------------------- | --------------------- |
-| 0, a summary that keeps everything needed | 376k                  |
-| \$0.25                                    | 400k                  |
-| \$1                                       | 461k                  |
-| \$4                                       | 629k                  |
+The closest published studies, from August to October 2026, sweep the
+threshold on benchmarks ([Satish et al.](https://arxiv.org/abs/2609.32961),
+[CliffCompaction](https://arxiv.org/abs/2609.26779)) or measure what a
+compaction drops ([Salle et al.](https://arxiv.org/abs/2610.31778),
+[Liu](https://arxiv.org/abs/2608.16370)). The closest cost rule,
+[Nadir's](https://getnadir.com/blog/mask-dont-summarize-agent-context-cache-cost/),
+leaves out quality. None lets a request's effectiveness depend on its context,
+prices the cache write, or limits compaction to turn ends.
 
 </details>
 
@@ -547,16 +521,42 @@ Yes, with β below 1: a token at 400k adds less than one at 100k, half as much a
 </details>
 
 <details>
-<summary>Has anyone modelled this before?</summary>
+<summary>What does the model assume a compaction loses?</summary>
 
-The closest published studies, from August to October 2026, sweep the
-threshold on benchmarks ([Satish et al.](https://arxiv.org/abs/2609.32961),
-[CliffCompaction](https://arxiv.org/abs/2609.26779)) or measure what a
-compaction drops ([Salle et al.](https://arxiv.org/abs/2610.31778),
-[Liu](https://arxiv.org/abs/2608.16370)). The closest cost rule,
-[Nadir's](https://getnadir.com/blog/mask-dont-summarize-agent-context-cache-cost/),
-leaves out quality. None lets a request's effectiveness depend on its context,
-prices the cache write, or limits compaction to turn ends.
+The model makes a request's effectiveness depend only on its context's size. A
+request right after a compaction, whose 142k tokens hold a summary of the work
+so far, counts as getting as much done as a request at 142k before the session's
+first compaction.
+
+At β above 0, a summary can do better than that. If it keeps everything the work
+needs, the requests after the compaction get as much done as with the whole
+transcript. The model counts them as getting less, so compacting pays more than
+the model says. A summary that drops detail the next turns need costs more, in a
+mistake, a correction from the user or a step run again. The model adds that
+cost as D per compaction, and the lowest-cost threshold above is for D = 0.
+
+| D per compaction                          | lowest-cost threshold |
+| ----------------------------------------- | --------------------- |
+| 0, a summary that keeps everything needed | 376k                  |
+| \$0.25                                    | 400k                  |
+| \$1                                       | 461k                  |
+| \$4                                       | 629k                  |
+
+</details>
+
+<details>
+<summary>What would put the lowest-cost threshold near 700k?</summary>
+
+A request at 700k costs about \$0.20, against about \$0.06 at 150k, so a
+compaction there pays for its \$1.13 within 9 requests, the length of a
+median turn. The lowest-cost threshold reaches 700k only if the requests after a
+compaction get much less done, and even then compacting at 700k barely beats
+never compacting:
+
+| what puts the lowest-cost threshold at 700k                             | effectiveness right after a compaction, against 1M | effectiveness per dollar against never compacting |
+| ----------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------- |
+| β = 0.76, with no detail lost (lowest-cost threshold 721k)              | 23%                                                | +0.8%                                             |
+| β = 0.5, and each compaction loses \$5.68 of detail, 98 requests' worth | 38%                                                | +2.7%                                             |
 
 </details>
 
