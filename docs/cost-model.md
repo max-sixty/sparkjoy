@@ -16,53 +16,23 @@ set size.
 
 ## The model
 
-The model gives the work ahead two numbers, which set what the context is worth
-to it:
+The model builds up in cases, from the simplest, whose formula shows which
+parameters matter, to a replay that follows real sessions. Each case adds
+something the one before it leaves out:
 
-- **β** sets how much a larger context helps. A request gets more done with a
-  larger context, by a power β of its size. Work that builds on its history,
-  such as a design that takes shape over many turns, has a larger β than work
-  that needs only a summary of what came before.
-- **D** counts the requests a compaction's lost detail wastes. A compaction
-  drops detail, and the few requests after it waste effort on what it dropped:
-  failed tool calls, repeated lookups and corrections. D is largest while the
-  work ahead continues what the context holds, as in the middle of a turn,
-  smaller at a turn end in the middle of a task, and close to 0 once a piece of
-  work is finished.
-
-β and D differ in which requests pay for a compaction. β's cost falls on every
-request until the next compaction, and grows the more a compaction shrinks the
-context. D's falls on the few requests right after a compaction, whatever the
-context. So D can differ between two moments in one piece of work, such as the
-middle of a turn and the turn end a few requests later, while β is the same at
-both.
-
-What keeping the context costs varies too. Just before an idle session's prompt
-cache lapses, compacting spares the next request a cache write of the whole
-context.
-
-If β and D were each one number for all work, one threshold would suit all of
-it, and compacting after whichever request reached it would cost least. Because
-they vary with the work ahead, a policy that judges the work ahead can compact
-each where it costs least. sparkjoy's question is that judgment. It tells the
-session's model what keeping the context and compacting it each cost, and it
-never asks in the middle of a turn.
-
-Each section below takes one case of the model, from the simplest, whose formula
-shows which parameters matter, to a replay that follows real sessions:
-
-- **[Cost alone](#cost-alone).** β = 0 and D = 0, and the context grows by the
-  same number of tokens with each request. The lowest-cost threshold, the
-  context at which compacting costs least, has a closed form.
-- **[Cost and context](#cost-and-context).** One β for all work, and D = 0. The
-  lowest-cost threshold is the one where the cost per unit of work done is
-  lowest.
+- **[Cost alone](#cost-alone).** A request gets as much done at any context, so
+  only tokens count, and the context grows by the same number with each request.
+  The lowest-cost threshold, the context at which compacting costs least, has a
+  closed form.
+- **[Cost and context](#cost-and-context).** A larger context gets more done, by
+  a power β of its size, one β for all work. The lowest-cost threshold is the
+  one where the cost per unit of work done is lowest.
 - **[Idle sessions](#idle-sessions).** The prompt cache is about to lapse, so
   compacting pays at a smaller context.
-- **[Mid-turn or at a turn end](#mid-turn-or-at-a-turn-end).** What asking
-  only at turn ends costs. D is larger in the middle of a turn, but waiting for
-  the turn to end lets a long turn carry the context past the lowest-cost
-  threshold.
+- **[Mid-turn or at a turn end](#mid-turn-or-at-a-turn-end).** A compaction also
+  wastes D requests on the detail it drops, more in the middle of a turn than at
+  its end. Asking only at turn ends avoids the larger D, but lets a long turn
+  carry the context past the lowest-cost threshold.
 - **[A classifier](#a-classifier).** β and D vary with the work ahead. A
   question that tells the cases apart, as sparkjoy's does, lets each compact
   where it costs least, and is worth what it saves against the lowest-cost
@@ -175,11 +145,6 @@ Claude Code keeps in a cache shared across sessions:
 F(X) = F_0 + X, \qquad F_0 = o\,N + (w - 1)(K - P)
 ```
 
-A compaction can also drop detail the requests after it need, and they waste D
-requests on what it dropped, each costing as much as a request at K, c(K).
-Unless a section says otherwise, it takes D = 0, a summary that keeps everything
-the work needs.
-
 [Parameter values](#parameter-values) gives my sessions' value for each
 parameter and where it comes from.
 
@@ -284,6 +249,10 @@ full 1M window, so each doubling of the context multiplies it by $`2^\beta`$:
 ```math
 \eta(x) = \left(\frac{x}{1\text{M}}\right)^\beta
 ```
+
+β sets how much the work gets from a larger context. Work that builds on its
+history, such as a design that takes shape over many turns, has a larger β than
+work that needs only a summary of what came before.
 
 At β = 0, where a request gets as much done at any context, J is the average
 cost under [Cost alone](#cost-alone), and the condition above gives its closed
@@ -395,13 +364,26 @@ times, and saves 35.0% counting cost alone and 14.5% at the base case.
 `/autocompact` alone compacts mid-turn as often at 700k, and saves 23.0% and
 11.6%.
 
-None of these savings counts the detail a compaction in the middle of a turn
-drops. Let each such compaction waste ΔD more requests than one at a turn end,
-each priced as a request at K, \$0.062, and move each policy's thresholds to
-where they then cost least. Compacting only at turn ends then breaks even with
-compacting after any request once ΔD reaches 35, counting cost alone, or 7 at
-the base case. Turn ends with a backstop break even once ΔD reaches 1, counting
-cost alone, and at the base case they cost less even at ΔD = 0.
+None of these savings counts the detail a compaction drops. A compaction wastes
+D requests on what it dropped, such as failed tool calls, repeated lookups and
+corrections, among the few requests right after it. Each is priced as a request
+at K, \$0.062. D is largest while the work ahead continues what the context
+holds, as in the middle of a turn, smaller at a turn end in the middle of a
+task, and close to 0 once a piece of work is finished.
+
+β and D differ in which requests pay for a compaction. β's cost falls on every
+request until the next compaction, and grows the more a compaction shrinks the
+context. D's falls on the few requests right after a compaction, whatever the
+context. So D can differ between two moments in one piece of work, such as the
+middle of a turn and the turn end a few requests later, while β is the same at
+both.
+
+Let each compaction in the middle of a turn waste ΔD more requests than one at a
+turn end, and move each policy's thresholds to where they then cost least.
+Compacting only at turn ends then breaks even with compacting after any request
+once ΔD reaches 35, counting cost alone, or 7 at the base case. Turn ends with a
+backstop break even once ΔD reaches 1, counting cost alone, and at the base case
+they cost less even at ΔD = 0.
 
 No session of mine measures ΔD. After a compaction, nearly always at a turn end
 or in an idle session, my sessions had about 6 more wasted requests than usual,
