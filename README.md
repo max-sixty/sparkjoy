@@ -54,15 +54,11 @@ classify`, then switch to `/sparkjoy on` to let it compact
 ## What it does
 
 - **It asks the session's own model whether to compact now**, and compacts if
-  the model says to ([How it decides](#how-it-decides)). It asks when a turn
-  ends, and in an idle session just before the prompt cache expires: after 55
-  minutes on the one-hour cache, and after 4 minutes on the five-minute cache,
-  which API keys use by default.
-- **Each verdict shows in the transcript** as a dim line with its reason. The
-  question reads the conversation from the prompt cache, so it costs little, and
-  when the cache no longer held the conversation, a second line says how much of
-  it the question read from the cache. In the session above, it kept the context
-  while a move was half done:
+  the model says to. It asks when a turn ends, and in an idle session just
+  before the prompt cache expires: after 55 minutes on the one-hour cache, or 4
+  on the five-minute one.
+- **Each verdict shows in the transcript** as a dim line with its reason. In the
+  session above, it kept the context while a move was half done:
 
   ```
   sparkjoy: Kept at 362k tokens: The README move is half done: unpushed files, a helper still running, and a page rebuild that hasn't been run yet
@@ -78,8 +74,7 @@ classify`, then switch to `/sparkjoy on` to let it compact
   with every verdict and what the compactions saved. It fits the [cost
   model](#cost-model) to those sessions, and sparkjoy uses the fit from then on.
   It reads your transcripts on your machine and sends nothing. It needs
-  [uv](https://docs.astral.sh/uv/), which fetches Python and numpy the first
-  time it runs.
+  [uv](https://docs.astral.sh/uv/).
 
 <details>
 <summary>Sample report</summary>
@@ -350,14 +345,10 @@ size.
   requests after a compaction, which takes months of sessions to measure.
 - It leaves Claude Code's own compaction on, so Claude Code still compacts when
   a turn fills the window. In a session you have open on the one-hour cache,
-  Claude Code also compacts an idle context of 200k or more without asking, a
-  minute or more before sparkjoy would ask.
-  [`CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`](https://code.claude.com/docs/en/env-vars)
-  sets that 200k, to no less than 100k. So sparkjoy's idle question comes
-  mainly on the five-minute cache, in background sessions, below that size, or
-  with
+  Claude Code also compacts an idle context of 200k or more itself, before
+  sparkjoy would ask, unless
   [`idleCompaction`](https://code.claude.com/docs/en/settings-reference#idlecompaction)
-  set to `false`.
+  is `false`.
 - If you set `/autocompact`, keep it above sparkjoy's turn-end floor. At or
   below the floor, Claude Code compacts mid-turn before any turn end reaches it,
   so sparkjoy never asks at a turn end.
