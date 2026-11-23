@@ -227,7 +227,12 @@ def cycles(out, p, c):
     rows = [cycle(p, c, x) for x in X]
 
     r = np.arange(R + 1)
-    titles = ("Compact early", "Compact at X*(0)", "Compact late", "Never compact")
+    titles = (
+        "Compact early",
+        "Compact at X*(0)",
+        "Compact late",
+        "Claude Code's default",
+    )
     for theme, t in THEMES.items():
         fig, axes = plt.subplots(
             2,
@@ -769,7 +774,7 @@ def cost_curve(out, p, c):
         top.set_yticks([0, 0.25, 0.5, 0.75, 1, 1.25])
         axis_name(
             top,
-            "Cost and effectiveness per request, averaged over a cycle, relative to never compacting",
+            "Cost and effectiveness per request, averaged over a cycle, relative to Claude Code's default",
             t,
         )
 
@@ -837,7 +842,7 @@ def cost_curve(out, p, c):
         low.set_yticks([0.4, 0.6, 0.8, 1, 1.2])
         low.set_xlabel("Compaction threshold X (tokens)", color=t["muted"], fontsize=10)
         axis_name(
-            low, "Cost per unit of effectiveness, relative to never compacting", t
+            low, "Cost per unit of effectiveness, relative to Claude Code's default", t
         )
         save(fig, out / f"model-cost-{theme}.svg")
 
@@ -1091,13 +1096,15 @@ def thresholds(out, cost, effectiveness, BT, BX, p, c):
 
 
 def voi(out, p, c):
-    """The expected value of a classifier's information on three mixes of work with the same mean β,
-    the base case's: a share of the work at one β > 0, the rest at β = 0, where the context doesn't help. For each
-    mix and each accuracy, the classifier splits the work into a group to keep and a group to compact,
-    each compacting at its own most efficient threshold; the saving is against the most efficient single
-    threshold, and the x axis is the mutual information between the classifier's verdict and the kind of work, as a share
-    of a perfect classifier's. A second chart, model-voi-point, draws the most efficient threshold of the
-    group to compact against the same axis."""
+    """What a classifier saves on three mixes of work with the same mean β, the base case's: a share of
+    the work at one β > 0, the rest at β = 0, where the context doesn't help. For each mix and each
+    accuracy, the classifier splits the work into a group to keep and a group to compact, each
+    compacting at its own most efficient threshold; the saving is against Claude Code's default,
+    compacting at fit.AUTO, after the fit.RUNNING its questions cost, and the x axis is the mutual
+    information between the classifier's verdict and the kind of work, as a share of a perfect
+    classifier's. With no information it compacts all the work at the most efficient single
+    threshold. A second chart, model-voi-point, draws the most efficient threshold of the group to
+    compact against the same axis."""
     # Denser near 1, where a classifier's saving on rare, steep work climbs fastest.
     A = np.unique(
         np.round(
@@ -1119,7 +1126,8 @@ def voi(out, p, c):
     for share, beta, step in mixes:
         Js = np.array([J0, fit.curve(p, c, beta, step=100)[1]])
         w = np.array([1 - share, share])
-        single = (w[:, None] * Js).sum(0).min()
+        single = (w[:, None] * Js).sum(0)
+        default = single[-1]  # fit.curve's last point is fit.AUTO
         keep = (
             np.array([1 - A, A]).T * w
         )  # the classifier keeps the context for a share a of the β work, 1 - a of the rest
@@ -1129,19 +1137,20 @@ def voi(out, p, c):
                 for k in keep
             ]
         )
-        saved = 1 - both / single
+        saved = 1 - (1 + fit.RUNNING) * both / default
         point = np.array([X[((w - k)[:, None] * Js).sum(0).argmin()] for k in keep])
         kept_at = np.array([X[(k[:, None] * Js).sum(0).argmin()] for k in keep])
         info = (H(share * A + (1 - share) * (1 - A)) - H(A)) / H(share)
         lines.append((share, beta, step, saved, info, point))
         at = [int(np.abs(A - a).argmin()) for a in (0.8, 0.9, 0.99, 1.0)]
         print(
-            f"model-voi, {share:.0%} at β = {beta}: most efficient single threshold {tokens(X[(w[:, None] * Js).sum(0).argmin()])}; "
+            f"model-voi, {share:.0%} at β = {beta}, saved against Claude Code's default: most efficient single "
+            f"threshold {tokens(X[single.argmin()])}, saving {1 - single.min() / default:.1%}; "
             + ", ".join(
                 f"right {A[i]:.0%}, saves {saved[i]:.1%} ({info[i]:.0%} of the information)"
                 for i in at
             )
-            + f"; pays for running it from {A[np.argmax(saved > fit.RUNNING)]:.1%} right"
+            + f"; saves more than the single threshold from {A[np.argmax(saved > 1 - single.min() / default)]:.1%} right"
         )
         print(
             f"model-voi-point, {share:.0%} at β = {beta}: compacts the group to compact at "
@@ -1157,17 +1166,11 @@ def voi(out, p, c):
         for share, beta, step, saved, info, _ in lines:
             ax.plot(info, saved, color=t["beta"][step], lw=2, clip_on=False)
             ends.append((saved[-1], f"{share:.0%} at β = {beta}", t["ink"]))
-        # A band from 0 behind the savings: at this scale a line would sit on the axis and over the lines' starts.
-        ax.fill_between(
-            [0, 1], 0, fit.RUNNING, color=t["cost"], lw=0, zorder=1, clip_on=False
-        )
-        ends.append(
-            (fit.RUNNING, f"Running the classifier, {fit.RUNNING:.1%}", t["ink"])
-        )
         label_ends(ax, ends, gap=0.02)
+        ax.axhline(0, color=t["muted"], lw=0.8, zorder=1)
         ax.set_xlim(0, 1)
         ax.set_xticks([0, 0.25, 0.5, 0.75, 1])
-        ax.set_ylim(0, 0.32)
+        ax.set_ylim(-0.02, 0.32)
         ax.set_yticks([0, 0.1, 0.2, 0.3])
         ax.xaxis.set_major_formatter(percent)
         ax.yaxis.set_major_formatter(percent)
@@ -1176,7 +1179,7 @@ def voi(out, p, c):
             color=t["muted"],
             fontsize=10,
         )
-        axis_name(ax, "Expected value of information (% of cost saved)", t)
+        axis_name(ax, "Saved against Claude Code's default (% of cost)", t)
         save(fig, out / f"model-voi-{theme}.svg")
 
         fig, ax = plt.subplots(figsize=(8, 3.6))
@@ -1223,8 +1226,10 @@ def voi_lost(p, c):
     finished, right at a share a of each kind, so each of its compactions costs
     D·MID(1 - a) / (MID(1 - a) + (1 - MID)a), and the threshold moves to where that costs least.
     Waiting for such a turn end moves each compaction later by about the same amount, which the
-    threshold makes up for. Prints, for each D, the most efficient single threshold, what a perfect
-    classifier and one right 9 times in 10 save, and the accuracy from which it pays for running it."""
+    threshold makes up for. Prints, for each D, the most efficient single threshold and what it saves,
+    what a perfect classifier and one right 9 times in 10 save after the fit.RUNNING their questions
+    cost, all against Claude Code's default, whose compaction at fit.AUTO costs MID·D, and the
+    accuracy from which a classifier saves more than the single threshold."""
     h, c0, _ = fit.terms(p, c)
     wasted = h * p.K + c0
     A = np.round(np.linspace(0.5, 1, 501), 4)
@@ -1236,14 +1241,17 @@ def voi_lost(p, c):
     for n in LOST_REQUESTS:
         D = n * wasted
         X, single = lowest(MID * D)
+        default = fit.per_unit(p, c, fit.AUTO, fit.BASE, MID * D)
         picked = D * MID * (1 - A) / (MID * (1 - A) + (1 - MID) * A)
-        saved = np.array([1 - lowest(d)[1] / single for d in picked])
+        saved = np.array(
+            [1 - (1 + fit.RUNNING) * lowest(d)[1] / default for d in picked]
+        )
         right = {a: saved[np.abs(A - a).argmin()] for a in (0.9, 1.0)}
         print(
-            f"voi-lost, {MID:.0%} of turn ends mid-task losing {n} wasted requests (${D * c.read:.2f}): most efficient "
-            f"single threshold {tokens(X)}; a perfect classifier "
-            f"saves {right[1.0]:.1%}, one right 9 times in 10 {right[0.9]:.1%}; pays for running it from "
-            f"{A[np.argmax(saved > fit.RUNNING)]:.1%} right"
+            f"voi-lost, {MID:.0%} of turn ends mid-task losing {n} wasted requests (${D * c.read:.2f}), saved against "
+            f"Claude Code's default: most efficient single threshold {tokens(X)}, saving {1 - single / default:.1%}; "
+            f"a perfect classifier {right[1.0]:.1%}, one right 9 times in 10 {right[0.9]:.1%}; more than the single "
+            f"threshold from {A[np.argmax(saved > 1 - single / default)]:.1%} right"
         )
 
 

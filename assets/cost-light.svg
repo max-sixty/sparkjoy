@@ -50,17 +50,17 @@ z
    </g>
    <g id="patch_4">
     <path d="M 83.379241 86.58 
-L 428.480642 86.58 
-L 428.480642 57.646667 
+L 396.998851 86.58 
+L 396.998851 57.646667 
 L 83.379241 57.646667 
 z
 " clip-path="url(#p7affcfe0d5)" style="fill: #2a78d6"/>
    </g>
    <g id="patch_5">
-    <path d="M 426.557071 86.58 
-L 428.480642 86.58 
-L 428.480642 57.646667 
-L 426.557071 57.646667 
+    <path d="M 394.846808 86.58 
+L 396.998851 86.58 
+L 396.998851 57.646667 
+L 394.846808 57.646667 
 z
 " clip-path="url(#p7affcfe0d5)" style="fill: #0b0b0b"/>
    </g>
@@ -68,24 +68,24 @@ z
     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="78.895313" y="28.124792" transform="rotate(-0 78.895313 28.124792)">without sparkjoy</text>
    </g>
    <g id="text_2">
-    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="536.256027" y="28.474401" transform="rotate(-0 536.256027 28.474401)">$5,214</text>
+    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="536.256027" y="28.474401" transform="rotate(-0 536.256027 28.474401)">$9,827</text>
    </g>
    <g id="text_3">
     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="78.895313" y="74.791458" transform="rotate(-0 78.895313 74.791458)">with sparkjoy</text>
    </g>
    <g id="text_4">
-    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="432.964571" y="75.141068" transform="rotate(-0 432.964571 75.141068)">$4,013</text>
+    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="401.48278" y="75.141068" transform="rotate(-0 401.48278 75.141068)">$6,873</text>
    </g>
    <g id="text_5">
-    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="468.836" y="75.013724" transform="rotate(-0 468.836 75.013724)">−23%</text>
+    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="437.354208" y="75.013724" transform="rotate(-0 437.354208 75.013724)">−30%</text>
    </g>
    <g id="patch_6">
-    <path d="M 427.518856 94.581903 
-Q 427.518856 91.579236 427.518856 88.576569 
+    <path d="M 395.922829 94.581903 
+Q 395.922829 91.579236 395.922829 88.576569 
 " style="fill: none; stroke: #52514e; stroke-width: 0.8; stroke-linecap: round"/>
    </g>
    <g id="text_6">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="427.518856" y="105.559219" transform="rotate(-0 427.518856 105.559219)">sparkjoy's questions, $22</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="395.922829" y="105.559219" transform="rotate(-0 395.922829 105.559219)">sparkjoy's questions, $47</text>
    </g>
   </g>
  </g>
