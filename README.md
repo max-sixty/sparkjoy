@@ -5,19 +5,19 @@
   </picture>
 </h1>
 
-A Claude Code plugin that compacts between tasks, rather than when the context
-fills[^name]. It cuts the cost of long sessions by 26% to 40%, depending on how
-you run Claude Code ([What it saves](#what-it-saves)).
+A Claude Code plugin that compacts based on the model's judgment, rather than
+when the context fills[^name]. It cuts the cost of long sessions by 26% to 40%,
+depending on how you run Claude Code ([What it saves](#what-it-saves)).
 
 Once the session has built up some context, sparkjoy asks the session's own
 model whether to compact, and tells it what keeping the context and compacting
 it each cost. It asks at the end of each turn, and just before an idle
 session's prompt cache expires ([How it decides](#how-it-decides)).
 
-Claude Code and `/autocompact` compact at a set size, whatever the work needs.
-After a finished fix, the next task does as well from a summary, but while a
-design is still taking shape, a summary would drop the options already rejected
-and why.
+In comparison, Claude Code and `/autocompact` compact at a set size, whatever
+the work needs. After a finished fix, the next task does as well from a summary,
+but while a design is still taking shape, a summary would drop the options
+already rejected and why.
 
 |                | When it compacts                                                                                                              |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
