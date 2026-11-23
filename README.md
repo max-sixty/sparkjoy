@@ -43,14 +43,14 @@ session picks it up when it starts. To see its verdicts only, run `/sparkjoy
 classify`, then switch to `/sparkjoy on` to let it compact
 ([Settings](#settings)).
 
-Auto-update is off by default for the sparkjoy marketplace. To keep sparkjoy up
-to date, ask Claude to turn on auto-update for sparkjoy, or open `/plugin`, go to
-the Marketplaces tab, select sparkjoy, and turn on auto-update. Until you do,
-sparkjoy asks GitHub once a day, when a session starts, whether a newer version
-has been out for a day or more, and if one has, says in the transcript how many
-days out of date yours is, with the command that updates it. It doesn't ask
-where `DISABLE_UPDATES`, `DISABLE_AUTOUPDATER` or
-`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set.
+Auto-update is off by default for third-party plugin marketplaces, sparkjoy's
+included. To keep sparkjoy up to date, ask Claude to turn on auto-update for
+sparkjoy, or open `/plugin`, go to the Marketplaces tab, select sparkjoy, and
+turn on auto-update. Until you do, sparkjoy asks GitHub once a day, when a
+session starts, whether a newer version has been out for a day or more, and if
+one has, says in the transcript how many days out of date yours is, with the
+command that updates it. It doesn't ask where `DISABLE_UPDATES`,
+`DISABLE_AUTOUPDATER` or `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set.
 
 ## What it does
 
