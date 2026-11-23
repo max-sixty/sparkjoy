@@ -1,6 +1,6 @@
 {
   "name": "sparkjoy",
-  "description": "Compacts Claude Code's conversation when a piece of work is finished, rather than when the context fills: after each turn, and before an idle session's prompt cache lapses, the session's own model decides.",
+  "description": "Compacts Claude Code sessions based on the model's judgment, rather than when the context fills. At each turn end, and before an idle session's prompt cache lapses, it asks the session's own model whether to compact.",
   "author": { "name": "Maximilian Roos" },
   "homepage": "https://github.com/max-sixty/sparkjoy",
   "icon": "./assets/icon.png",
