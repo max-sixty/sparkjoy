@@ -82,7 +82,7 @@ New sessions pick it up. To see its verdicts before it compacts anything, run
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/report-dark.png">
-  <img alt="A sparkjoy report for 8 to 22 November, under the sparkjoy logo: saved $5,173, 25% of what the sessions would have cost without its compactions; 947 verdicts, 706 compacted and 238 kept; the floors that cost least for these sessions; then a table of sessions, each with its context per request with and without sparkjoy's compactions, its verdicts and its cost." src="assets/report-light.png">
+  <img alt="A sparkjoy report for 8 to 22 November, under the sparkjoy logo: saved $5,243, 26% of what the sessions would have cost without its compactions; 969 verdicts, 727 compacted and 238 kept; the floors that cost least for these sessions; then a table of sessions, each with its context per request with and without sparkjoy's compactions, its verdicts and its cost." src="assets/report-light.png">
 </picture>
 
 </details>
