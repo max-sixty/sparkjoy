@@ -5,10 +5,13 @@
   </picture>
 </h1>
 
-A Claude Code plugin that asks the session's model whether to compact, giving it
-guidance on the tradeoffs so it can make the best decision[^name]. Once the
-session has built up some context, it asks at the end of each turn, and just
-before an idle session's prompt cache expires.
+A Claude Code plugin that compacts between tasks, rather than when the context
+fills[^name].
+
+Once the session has built up some context, sparkjoy asks the session's own
+model whether to compact, and tells it what keeping the context and compacting
+it each cost. It asks at the end of each turn, and just before an idle
+session's prompt cache expires ([How it decides](#how-it-decides)).
 
 In comparison, Claude Code and `/autocompact` compact at a set size, whatever
 the work needs. After a finished fix, the next task does as well from a summary,
