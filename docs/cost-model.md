@@ -3,7 +3,7 @@
 To understand what makes a good compaction policy, we can model how a policy
 affects what a session costs and how much context its requests have. The model
 finds when a session should compact, and what sparkjoy saves by judging the work
-ahead, against compacting every session at one set size as `/autocompact` does.
+ahead.
 
 ## The models
 
@@ -36,21 +36,7 @@ section below, and each adds something the one before it leaves out:
 
 ## Results for my sessions
 
-For my sessions on Opus 5.5[^prices], what sparkjoy's question saves against
-the most efficient single threshold, if it is right 9 times in 10 ([A
-classifier](#a-classifier)):
-
-| the work ahead                                                       | in                                      | saves |
-| -------------------------------------------------------------------- | --------------------------------------- | ----- |
-| ¾ at β = 0.25, ¼ at β = 1.25                                         | the steady state                        | 11.6% |
-| ¾ at β = 0.25, ¼ at β = 1.25                                         | a replay, in a background session       | 9.9%  |
-| ¾ at β = 0.25, ¼ at β = 1.25                                         | a replay, in a session someone has open | 3.7%  |
-| half of turn ends in the middle of a task, wasting 12 requests there | the steady state                        | 1.9%  |
-| half of turn ends in the middle of a task, wasting 96 requests there | the steady state                        | 9.0%  |
-
-In a session someone has open, Claude Code compacts idle contexts itself, which
-leaves the question less to save. No session of mine yet measures the work ahead
-or how often the question is right.
+For my sessions on Opus 5.5[^prices]:
 
 |                                                                                  | at the base case, β = 0.5         |
 | -------------------------------------------------------------------------------- | --------------------------------- |
@@ -417,18 +403,14 @@ in 100 has about 90%.
 
 Each line of the chart is a mix of work with mean β 0.5, the base case, with
 one share at the β shown and the rest at β = 0. The band along 0 is the cost of
-running the classifier, about 0.4%. The table adds the base case where work
-differs, which also has mean β 0.5. Its three quarters at β = 0.25 stand for
-work whose context loses its worth quickly but not entirely, and its quarter at
-β = 1.25 for work that needs much more of its context.
+running the classifier, about 0.4%.
 
-| mix                                                                   | most efficient single threshold | a perfect classifier saves | right 9 times in 10, a classifier saves | a classifier pays once right |
-| --------------------------------------------------------------------- | ------------------------------- | -------------------------- | --------------------------------------- | ---------------------------- |
-| all at β = 0.5                                                        | 376k                            | 0                          | 0                                       |                              |
-| 50% at β = 1                                                          | 648k                            | 13.5%                      | 9%                                      | 58% of the time              |
-| 25% at β = 2                                                          | never compacting                | 23%                        | 10%                                     | 67%                          |
-| 10% at β = 5, work that stalls without its history                    | never compacting                | 27%                        | 2%                                      | 85%                          |
-| 75% at β = 0.25 and 25% at β = 1.25, the base case where work differs | 626k                            | 16.4%                      | 11.6%                                   | 57%                          |
+| mix                                                | most efficient single threshold | a perfect classifier saves | right 9 times in 10, a classifier saves | a classifier pays once right |
+| -------------------------------------------------- | ------------------------------- | -------------------------- | --------------------------------------- | ---------------------------- |
+| all at β = 0.5                                     | 376k                            | 0                          | 0                                       |                              |
+| 50% at β = 1                                       | 648k                            | 13.5%                      | 9%                                      | 58% of the time              |
+| 25% at β = 2                                       | never compacting                | 23%                        | 10%                                     | 67%                          |
+| 10% at β = 5, work that stalls without its history | never compacting                | 27%                        | 2%                                      | 85%                          |
 
 <details>
 <summary>Where a classifier compacts</summary>
@@ -456,33 +438,6 @@ At a given mean β, a perfect classifier saves most when a small share of the
 work has β around 5 to 10. With 2% of the work at β = 30 it saves 17%. A unit
 of that work's effectiveness costs 77 times one at β = 0 even when the session
 never compacts, and no classifier lowers that part of the cost.
-
-The [replay](#a-replay-of-my-sessions) asks the classifier at turn ends, as
-sparkjoy does. Each session's turns come in stretches of one kind of work, 5
-turns long on average. At each turn end the classifier names the next turn's
-kind, right 9 times in 10, and the session compacts if its context has passed
-that kind's threshold. It also compacts idle sessions from 175k, but keeps an
-idle context below 800k when it expects β = 1.25 work next. No compaction loses
-detail the work needs. Claude Code compacts idle contexts only in a session
-someone has open, so `/autocompact` gets those compactions there, from 175k in
-the replay, and not in a background session.
-
-| policy, each at its most efficient thresholds                                          | saves against never compacting |
-| -------------------------------------------------------------------------------------- | ------------------------------ |
-| `/autocompact` in a background session, after any request from 680k                    | 0.4%                           |
-| `/autocompact` in a session someone has open, where only idle compactions pay          | 6.8%                           |
-| turn ends from 830k, and idle sessions                                                 | 7.2%                           |
-| the classifier, at turn ends from 370k or 800k by the kind it names, and idle sessions | 10.3%                          |
-
-| the classifier against `/autocompact`                     | saves |
-| --------------------------------------------------------- | ----- |
-| in a background session                                   | 9.9%  |
-| in a session someone has open                             | 3.7%  |
-| in a session someone has open, right every time           | 5.1%  |
-| in a session someone has open, with stretches of 20 turns | 3.9%  |
-
-In a session someone has open, Claude Code's idle compactions already save 6.8%,
-which leaves the classifier well short of the steady state's 11.6%.
 
 ### Turn ends that differ in lost detail
 
@@ -556,24 +511,21 @@ compact.
 
 ### Floors
 
-| policy, at the base case                                                             | saved |
-| ------------------------------------------------------------------------------------ | ----- |
-| idle sessions from 200k, as Claude Code compacts on its own in a session that's open | 8.5%  |
-| turn ends from 400k                                                                  | 11.2% |
-| turn ends from 400k and idle sessions from 200k                                      | 13.8% |
-| turn ends from 280k, the most efficient threshold alone                              | 12.5% |
-| turn ends from 250k and idle sessions from 175k, sparkjoy's default floors           | 13.1% |
-| turn ends from 400k and idle sessions from 175k, the most efficient pair of floors   | 13.9% |
+| policy, at the base case                                                           | saved |
+| ---------------------------------------------------------------------------------- | ----- |
+| turn ends from 400k                                                                | 11.2% |
+| turn ends from 400k and idle sessions from 200k                                    | 13.8% |
+| turn ends from 280k, the most efficient threshold alone                            | 12.5% |
+| turn ends from 250k and idle sessions from 175k, sparkjoy's default floors         | 13.1% |
+| turn ends from 400k and idle sessions from 175k, the most efficient pair of floors | 13.9% |
 
 Compacting idle sessions gets much of the saving of a lower turn-end threshold:
 with idle sessions from 175k, every turn-end floor from 250k to 400k comes
 within a point of the most efficient pair. sparkjoy fits its floors by cost
-alone. A floor is where sparkjoy starts
-asking, and its question decides at which turn ends above the floor to compact,
-so the floor sits at the most efficient threshold that cost alone gives, the
-lowest any β gives. For my sessions that is the default pair. Claude Code's own
-idle compaction, from 200k in a session someone has open, saves 8.5% alone, so
-in such a session the default floors save 5.0% against Claude Code as it runs.
+alone. A floor is where sparkjoy starts asking, and its question decides at
+which turn ends above the floor to compact, so the floor sits at the most
+efficient threshold that cost alone gives, the lowest any β gives. For my
+sessions that is the default pair.
 
 On the five-minute cache, where the cache lapses after half of turn ends,
 compacting at turn ends from 250k saves 19.4%, and also asking after 4 minutes
