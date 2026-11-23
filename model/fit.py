@@ -216,8 +216,10 @@ def projects_arg(ap):
 
 
 def read(a):
-    """The sessions `window_args` chose, and the window, read at low priority."""
-    os.nice(10)
+    """The sessions `window_args` chose, and the window, read at low priority where the system has
+    one: Windows has no `os.nice`."""
+    if hasattr(os, "nice"):
+        os.nice(10)
     since = (
         datetime.fromisoformat(a.since).astimezone(UTC)
         if a.since
