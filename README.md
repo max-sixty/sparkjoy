@@ -1,4 +1,9 @@
-# sparkjoy
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img alt="sparkjoy" src="assets/logo-light.svg">
+  </picture>
+</h1>
 
 A Claude Code plugin that asks the session's model whether to compact, giving it
 guidance on the tradeoffs so it can make the best decision[^name]. Once there is
