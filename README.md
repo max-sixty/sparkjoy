@@ -157,21 +157,17 @@ reached 400k at a turn end; it now asks from 250k:
 ### Compared with `/autocompact`
 
 `/autocompact` compacts every session at the size you set. sparkjoy compacts
-only where the session's model judges that the work ahead no longer needs the
-context, and only between turns.
+where the session's model judges that the work ahead no longer needs the
+context.
 
-That judgment pays where work differs in how much it needs its context: a design
-still taking shape needs more of it than a finished fix. In the [cost
-model](#a-classifier)'s cases, a judgment right 9 times in 10 saves 2% to 10%
-against compacting all work at whichever single size costs least. Where work
-doesn't differ, waiting for a turn end costs a little, since a long turn can
-carry the context past that size before it ends. In a replay of my sessions,
-`/autocompact` at its best size saves about a point more than compacting at
-every turn end[^autocompact]. No session yet measures how widely work differs,
-or how often the judgment is right.
-
-`/autocompact` also compacts in the middle of a turn, 169 times in that replay,
-where a summary is the most likely to drop what the turn is working on.
+That judgment pays where work differs in how much it needs its context. Suppose
+a quarter of the work is like a design still taking shape, where a request with
+250k of context gets 18% as much done as one with the full 1M, and the rest is
+like a finished fix, where it gets 71%. In a replay of my sessions with that
+mix, a judgment right 9 times in 10 saves about 4% against `/autocompact` at
+whichever size costs least, which for that mix is leaving it off[^autocompact].
+No session yet measures how widely work differs, or how often the judgment is
+right.
 
 I run sparkjoy without `/autocompact`. If you set both, keep `/autocompact`
 above sparkjoy's turn-end floor ([Limits](#limits)).
@@ -365,13 +361,20 @@ size.
     joy?
 
 [^autocompact]:
-    At the cost model's base case, where a request with 250k of context gets
-    half as much done as one with the full 1M, and with each policy at the size
-    that cost least and compacting idle sessions from 175k, `/autocompact` at
-    370k saves 15% and compacting at every turn end from 390k saves 14%.
-    Counting tokens alone, at 270k and from 240k, they save 40% and 31%. Turn
-    ends break even once a compaction in the middle of a turn wastes 7 more
-    requests than one at a turn end, or 35 counting tokens alone.
+    The replay draws each session's turns in stretches of one kind of work, 5
+    turns long on average, and at each turn end the judgment names the next
+    turn's kind. It weighs each kind's cost per unit of its own work by its
+    share, as in the [cost model](#work-that-differs-in-β). Every policy
+    compacts idle sessions from 175k, as sparkjoy and Claude Code both do, and
+    that takes much of what the judgment would otherwise save: with no idle
+    compaction in any policy, it saves 9%. A judgment right every time saves 5%.
+    Where all work is alike, at β = 0.5, `/autocompact` at 370k saves 15%
+    against never compacting, and compacting at every turn end from 390k saves
+    14%; counting tokens alone, at 270k and from 240k, they save 40% and 31%.
+    None of these counts what a compaction in the middle of a turn loses.
+    `/autocompact` compacted mid-turn 169 times in that replay, and turn ends
+    break even once each such compaction wastes 7 more requests than one at a
+    turn end, or 35 counting tokens alone.
 
 [^replay]:
     The replay keeps every logged request fixed and moves only the
