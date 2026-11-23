@@ -543,26 +543,20 @@ logged request and moves only the compactions.
   <img alt="Most efficient threshold against β from 0 to 1, with 90% bands. The steady-state model's, compacting after any request (grey), rises from 262k at β = 0 to 376k at 0.5, crosses 400k at 0.55 and reaches 965k, where Claude Code compacts, from 0.85. The replay's most efficient turn-end threshold (black) stays lower: 200k at β = 0, 240k to 250k from 0.1 to 0.45, 280k at 0.5, 290k at 0.6 and 530k at 0.85, then 850k to 960k. A vertical line marks the base case, β = 0.5, and a horizontal one 250k, sparkjoy's default floor." src="../assets/model-threshold-light.svg">
 </picture>
 
-When the replay may compact after any request, its most efficient threshold at
-the base case is 350k, against 376k under [Cost and context](#cost-and-context),
-so uneven growth, cache lapses and sessions ending move it 26k lower. Its most
-efficient turn-end threshold is lower still, 280k, since turns run a median of 9
-requests but a mean of 38, and one long turn can carry the context far past the
-most efficient threshold before the next turn end. For β from 0.1 to 0.6 the
-turn-end threshold is 240k–290k, and at β = 0 it is 200k. Each assumes a
-compaction loses no detail the work needs.
-
-Compacting at turn ends from 280k saves 12.5% against never compacting, and so
-does compacting from 250k, sparkjoy's default floor. From 400k it saves 11.2%.
-These savings are below the 14.5% that compacting at 376k saves under [Cost and
-context](#cost-and-context), because real sessions without compaction end before
-their context reaches 965k. Each saving assumes a classifier that always says to
-compact. sparkjoy's question instead decides at which turn ends past the floor
-to compact.
+At the base case, the replay's most efficient threshold is 350k when it may
+compact after any request, 26k below the 376k of [Cost and
+context](#cost-and-context), since real sessions grow unevenly, lose their cache
+and end. At turn ends it is lower still, 280k, since a long turn can carry the
+context far past the threshold before it ends. Compacting there saves 12.5%
+against never compacting, below the 14.5% under Cost and context, since real
+sessions often end before their context fills the window. Each figure assumes a
+compaction loses no detail the work needs, and that every turn end past the
+threshold compacts; sparkjoy's question instead decides at which of them to
+compact.
 
 ### Floors
 
-| policy                                                                               | saved |
+| policy, at the base case                                                             | saved |
 | ------------------------------------------------------------------------------------ | ----- |
 | idle sessions from 200k, as Claude Code compacts on its own in a session that's open | 8.5%  |
 | turn ends from 400k                                                                  | 11.2% |
@@ -571,21 +565,19 @@ to compact.
 | turn ends from 250k and idle sessions from 175k, sparkjoy's default floors           | 13.1% |
 | turn ends from 400k and idle sessions from 175k, the most efficient pair of floors   | 13.9% |
 
-Compacting idle sessions gets much of the saving of a lower turn-end threshold,
-since 18% of turn ends are followed by an hour's gap. At the base case, the
-default floors come 0.8 points short of the most efficient pair, and with idle
-sessions from 175k, every turn-end floor from 250k to 400k comes within a point
-of it. sparkjoy fits its floors by cost alone. A floor is where sparkjoy starts
+Compacting idle sessions gets much of the saving of a lower turn-end threshold:
+with idle sessions from 175k, every turn-end floor from 250k to 400k comes
+within a point of the most efficient pair. sparkjoy fits its floors by cost
+alone. A floor is where sparkjoy starts
 asking, and its question decides at which turn ends above the floor to compact,
 so the floor sits at the most efficient threshold that cost alone gives, the
 lowest any β gives. For my sessions that is the default pair. Claude Code's own
 idle compaction, from 200k in a session someone has open, saves 8.5% alone, so
 in such a session the default floors save 5.0% against Claude Code as it runs.
 
-On the five-minute cache, priced at its own rates, the cache lapses after 52%
-of turn ends, and 95% of pauses past 4 minutes run past 5. There, compacting at
-turn ends from 250k saves 19.4%, and also asking after 4 minutes idle from 175k
-saves 20.4%.
+On the five-minute cache, where the cache lapses after half of turn ends,
+compacting at turn ends from 250k saves 19.4%, and also asking after 4 minutes
+idle from 175k saves 20.4%.
 
 ## Parameter values
 
