@@ -395,11 +395,10 @@ Code's updates or nonessential traffic are turned off.
     own idle compaction from 200k. There a judgment right every time saves 5%.
     Where all work is alike, at β = 0.5, `/autocompact` at 370k saves 15%
     against never compacting, and compacting at every turn end from 390k saves
-    14%; counting tokens alone, at 270k and from 240k, they save 40% and 31%.
-    None of these counts what a compaction in the middle of a turn loses.
+    14%. None of these counts what a compaction in the middle of a turn loses.
     `/autocompact` compacted mid-turn 169 times in that replay, and turn ends
     break even once each such compaction wastes 7 more requests than one at a
-    turn end, or 35 counting tokens alone.
+    turn end.
 
 [^replay]:
     The replay keeps every logged request fixed and moves only the compactions:
@@ -471,11 +470,11 @@ In a session someone has open, Claude Code compacts idle contexts itself, which
 leaves the question less to save. No session of mine yet measures the work ahead
 or how often the question is right.
 
-|                                                                                  | counting cost alone | at the base case, β = 0.5 |
-| -------------------------------------------------------------------------------- | ------------------- | ------------------------- |
-| most efficient threshold, compacting after any request                           | 262k                | 376k                      |
-| points less saved asking only at turn ends than after any request, in the replay | 9.1                 | 0.9                       |
-| extra requests a mid-turn compaction must waste for turn ends to pay             | 35                  | 7                         |
+|                                                                                  | at the base case, β = 0.5         |
+| -------------------------------------------------------------------------------- | --------------------------------- |
+| most efficient threshold, compacting after any request                           | 376k, or 262k counting cost alone |
+| points less saved asking only at turn ends than after any request, in the replay | 0.9                               |
+| extra requests a mid-turn compaction must waste for turn ends to pay             | 7                                 |
 
 These come from [Cost alone](docs/cost-model.md#cost-alone), [Cost and context](docs/cost-model.md#cost-and-context)
 and [Mid-turn or at a turn end](docs/cost-model.md#mid-turn-or-at-a-turn-end).
@@ -740,39 +739,16 @@ Claude Code compacts after whichever request fills the window, and
 `/autocompact` after whichever request reaches its threshold, so most of their
 compactions fall in the middle of a turn. sparkjoy asks only at turn ends, on
 the assumption that in the middle of a turn the work ahead nearly always needs
-the context's detail. Turns run a median of 9 requests but a mean of 38, so one
-long turn can carry the context far past the most efficient threshold before it
-ends, and every request until then reads the larger context. `/autocompact` set
-above sparkjoy's floor would compact those long turns as a backstop, but in
-their middle, where a compaction is the most likely to drop what the turn's next
-requests need.
+the context's detail. A long turn can then carry the context far past the most
+efficient threshold before it ends. `/autocompact` set above sparkjoy's floor
+would compact those long turns as a backstop, but in their middle.
 
-The [replay](docs/cost-model.md#a-replay-of-my-sessions) compares three policies, each at its
-most efficient thresholds and each also compacting idle sessions from 175k. The
-table gives what each saves against never compacting, and how many of its
-compactions fall in the middle of a turn. Compacting idle sessions takes some of
-the saving a lower turn-end threshold would make, so at the base case the
-most efficient turn-end threshold here is 390k, against 280k without them:
-
-| β                      | after any request                               | only at turn ends        | at turn ends, with a backstop after any request |
-| ---------------------- | ----------------------------------------------- | ------------------------ | ----------------------------------------------- |
-| 0, counting cost alone | from 270k: 39.8%, with 362 compactions mid-turn | from 240k: 30.7%, with 1 | from 250k, backstop 300k: 39.7%, with 227       |
-| 0.5, the base case     | from 370k: 14.9%, with 169                      | from 390k: 14.0%, with 1 | from 400k, backstop 450k: 15.3%, with 79        |
-
-The one mid-turn compaction under turn ends alone is Claude Code's own, in a
-turn that filled the window. At the same number of mid-turn compactions, turn
-ends with a backstop save more than `/autocompact` alone. Compacting at turn
-ends from 250k, sparkjoy's floor, with a backstop at 500k compacts mid-turn 41
-times, and saves 35.0% counting cost alone and 14.5% at the base case.
-`/autocompact` alone compacts mid-turn as often at 700k, and saves 23.0% and
-11.6%.
-
-None of these savings counts the detail a compaction drops. A compaction wastes
-D requests on what it dropped, such as failed tool calls, repeated lookups and
-corrections, among the few requests right after it. Each is priced as a request
-at K, \$0.062. D is largest while the work ahead continues what the context
-holds, as in the middle of a turn, smaller at a turn end in the middle of a
-task, and close to 0 once a piece of work is finished.
+The model assumes a compaction wastes D requests on the detail it dropped, such
+as failed tool calls, repeated lookups and corrections, each priced as a request
+at K. D is largest while the work ahead continues what the context holds, as in
+the middle of a turn, smaller at a turn end in the middle of a task, and close
+to 0 once a piece of work is finished. Here each compaction in the middle of a
+turn wastes ΔD more requests than one at a turn end.
 
 β and D differ in which requests pay for a compaction. β's cost falls on every
 request until the next compaction, and grows the more a compaction shrinks the
@@ -781,17 +757,17 @@ context. So D can differ between two moments in one piece of work, such as the
 middle of a turn and the turn end a few requests later, while β is the same at
 both.
 
-Let each compaction in the middle of a turn waste ΔD more requests than one at a
-turn end, and move each policy's thresholds to where they then cost least.
-Compacting only at turn ends then breaks even with compacting after any request
-once ΔD reaches 35, counting cost alone, or 7 at the base case. Turn ends with a
-backstop break even once ΔD reaches 1, counting cost alone, and at the base case
-they cost less even at ΔD = 0.
+In the [replay](docs/cost-model.md#a-replay-of-my-sessions) at the base case, β = 0.5, with each
+policy at its most efficient thresholds and also compacting idle sessions from
+175k:
 
-No session of mine measures ΔD. After a compaction, nearly always at a turn end
-or in an idle session, my sessions had about 6 more wasted requests than usual,
-and sparkjoy's question gives the model that figure for what lost detail costs.
-Only 17 of their 1,399 compactions from 22 September to 21 November came in the
+| policy                                          | thresholds          | saves against never compacting, at ΔD = 0 | compactions mid-turn | costs as much as compacting after any request once ΔD reaches |
+| ----------------------------------------------- | ------------------- | ----------------------------------------- | -------------------- | ------------------------------------------------------------- |
+| after any request                               | 370k                | 14.9%                                     | 169                  |                                                               |
+| only at turn ends                               | 390k                | 14.0%                                     | 1                    | 7                                                             |
+| at turn ends, with a backstop after any request | 400k, backstop 450k | 15.3%                                     | 79                   | never: it costs less at any ΔD                                |
+
+No session of mine measures ΔD: only 17 of their 1,399 compactions came in the
 middle of a turn, too few to measure what one costs.
 
 ## A classifier
