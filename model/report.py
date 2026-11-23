@@ -900,7 +900,8 @@ def main():
     if verdicts:
         counts = Counter(v.kind for _, v in verdicts)
         print(
-            f"{len(verdicts)} verdicts in {len({id(s) for s, _ in verdicts})} of {len(found)} sessions: "
+            f"{len(verdicts)} {'verdict' if len(verdicts) == 1 else 'verdicts'} in "
+            f"{len({id(s) for s, _ in verdicts})} of {len(found)} sessions: "
             + ", ".join(f"{counts[k]} {k}" for k in KINDS)
             + f"; {sum(1 for _, v in verdicts if v.missed)} missed the prompt cache"
         )
