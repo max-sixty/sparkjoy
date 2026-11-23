@@ -54,11 +54,9 @@ command that updates it. It doesn't ask where `DISABLE_UPDATES`,
 
 ## What it does
 
-- **It asks the session's own model whether to compact now**, and compacts if
-  the model says to ([How it decides](#how-it-decides)). It asks when a turn
-  ends, and in an idle session just before the prompt cache expires: after 55
+- **In an idle session it asks just before the prompt cache expires**: after 55
   minutes on the one-hour cache, and after 4 minutes on the five-minute cache,
-  which API keys use by default.
+  which API keys use by default ([How it decides](#how-it-decides)).
 - **Each verdict shows in the transcript** as a dim line with its reason, and
   a question that missed the prompt cache adds a line saying so. In the session
   above, it kept the context while a move was half done:
@@ -144,10 +142,10 @@ too.
 
 The plugin cut the cost of my 87 Claude Code sessions from 7 to 15 November 2026
 by 23%, from $5,214 to $4,013 at Opus 5.5 list prices, in a replay of their
-36,251 requests[^replay]. Most of them ran in the background, where Claude Code
-compacts only when the window fills. Had they all been open in a terminal or
-editor on the one-hour cache, where Claude Code also compacts an idle context of
-200k or more, the plugin would have cut their cost by 16%.
+36,251 requests[^replay]. Most of them ran in the background, like the one
+charted at the top. Had they all been open in a terminal or editor, where Claude
+Code also compacts idle sessions itself, the plugin would have cut their cost by
+16%.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/cost-dark.svg">
@@ -170,8 +168,7 @@ in a background session and 4% in one you have open, where Claude Code also
 compacts idle sessions[^autocompact]. No session yet measures how widely work
 differs, or how often the judgment is right.
 
-I run sparkjoy without `/autocompact`. If you set both, keep `/autocompact`
-above sparkjoy's turn-end floor ([Limits](#limits)).
+I run sparkjoy without `/autocompact`. [Limits](#limits) says how to set both.
 
 ## How it decides
 
