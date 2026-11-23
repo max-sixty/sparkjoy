@@ -1,4 +1,9 @@
-# sparkjoy
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img alt="sparkjoy" src="assets/logo-light.svg">
+  </picture>
+</h1>
 
 A Claude Code plugin that compacts the conversation when a piece of work is
 finished, rather than when the context window fills. At the end of each turn
