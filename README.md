@@ -6,9 +6,9 @@
 </h1>
 
 A Claude Code plugin that asks the session's model whether to compact, giving it
-guidance on the tradeoffs so it can make the best decision[^name]. Once there is
-material context, it asks at the end of each turn, and just before an idle
-session's prompt cache expires.
+guidance on the tradeoffs so it can make the best decision[^name]. Once the
+session has built up some context, it asks at the end of each turn, and just
+before an idle session's prompt cache expires.
 
 In comparison, Claude Code and `/autocompact` compact at a set size, whatever
 the work needs. After a finished fix, the next task does as well from a summary,
