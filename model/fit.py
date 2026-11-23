@@ -146,6 +146,7 @@ class Session:
     title: str
     model: str  # the model most of its requests used
     version: str  # the Claude Code release that wrote its last request
+    background: bool  # it ran in the background (`claude --bg`), where Claude Code compacts no idle session itself
     verdicts: list  # what sparkjoy logged
     lines: list  # every line in `LINE`, as (seconds since the epoch, text)
     t: np.ndarray  # when each request started, in seconds since the epoch
@@ -282,7 +283,7 @@ def transcript(path, since=None, until=None):
     )
     title_lines = tuple(f'{{"type":"{t}"' for t in TITLES)
     reqs, comps, prompts, verdicts, lines = {}, [], [], [], []
-    entry, version, asked, missed = None, None, None, None
+    entry, version, asked, missed, background = None, None, None, None, False
     titles, first, models, said, failed, summaries = {}, None, Counter(), [], {}, []
     for raw in path.open(errors="replace"):
         prompt = (
@@ -350,6 +351,7 @@ def transcript(path, since=None, until=None):
             if not u or m.get("model") == "<synthetic>":
                 continue
             entry = entry or e.get("entrypoint")
+            background = background or e.get("sessionKind") == "bg"
             version = e.get("version") or version
             v = (
                 u.get("input_tokens") or 0,
@@ -444,6 +446,7 @@ def transcript(path, since=None, until=None):
         title=" ".join(name.split()),
         model=models.most_common(1)[0][0],
         version=version,
+        background=background,
         verdicts=verdicts,
         lines=lines,
         said=sorted(said),

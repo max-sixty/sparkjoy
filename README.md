@@ -39,8 +39,9 @@ At the prompt of a Claude Code session:
 
 It acts only in sessions with a 1M-token context window, the size its defaults
 are fitted to, and only in interactive ones, not in `-p` runs or SDK hosts. A
-session picks it up when it starts. To see its verdicts before it compacts
-anything, run `/sparkjoy classify` ([Settings](#settings)).
+session picks it up when it starts. To see its verdicts only, run `/sparkjoy
+classify`, then switch to `/sparkjoy on` to let it compact
+([Settings](#settings)).
 
 Auto-update is off by default for the sparkjoy marketplace. To keep sparkjoy up
 to date, ask Claude to turn on auto-update for sparkjoy, or open `/plugin`, go to
