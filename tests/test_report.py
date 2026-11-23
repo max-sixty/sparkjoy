@@ -25,6 +25,7 @@ def request(time, read, write, model="claude-opus-5-5", text="Done.", output=500
         "timestamp": DAY + time,
         "isSidechain": False,
         "entrypoint": "cli",
+        "version": "2.1.330",
         "message": {
             "model": model,
             "id": f"msg_{next(ids)}",
@@ -66,22 +67,31 @@ def line(time, text):
     }
 
 
-def boundary(time, trigger="manual"):
+def boundary(time, trigger="manual", before=None):
+    """A compaction's boundary, with the context it compacted, `before`, where given."""
+    metadata = {"trigger": trigger, "durationMs": 60_000}
     return {
         "type": "system",
         "subtype": "compact_boundary",
         "timestamp": DAY + time,
         "isSidechain": False,
-        "compactMetadata": {"trigger": trigger, "durationMs": 60_000},
+        "compactMetadata": metadata | ({"preTokens": before} if before else {}),
     }
 
 
-def report(tmp_path, entries, *args):
-    session = tmp_path / "projects" / "project" / "session.jsonl"
-    session.parent.mkdir(parents=True)
-    session.write_text(
+def transcript(tmp_path, entries, session="session"):
+    """Writes `entries` as Claude Code writes the transcript of the session with the id `session`,
+    under the projects directory in `tmp_path`, and returns that directory."""
+    path = tmp_path / "projects" / "project" / f"{session}.jsonl"
+    path.parent.mkdir(parents=True)
+    path.write_text(
         "".join(json.dumps(e, separators=(",", ":")) + "\n" for e in entries)
-    )  # as Claude Code writes it
+    )
+    return tmp_path / "projects"
+
+
+def report(tmp_path, entries, *args):
+    projects = transcript(tmp_path, entries)
     run = subprocess.run(
         [
             "uv",
@@ -89,7 +99,7 @@ def report(tmp_path, entries, *args):
             "--script",
             ROOT / "model/report.py",
             "--projects",
-            tmp_path / "projects",
+            projects,
             "--since",
             "2026-11-01T00:00Z",
             "--until",
@@ -129,6 +139,11 @@ def session_with_compactions():
         prompt("12:30:00Z", "back again"),  # after two and a half hours, at 240k
         request("12:30:10Z", 30_000, 230_000),
         line(
+            "13:25:19Z",
+            "sparkjoy: Missed the prompt cache at 260k tokens, idle 55 minutes: read 30k of 262k "
+            "from it. Signing in to another account while idle drops the cache.",
+        ),
+        line(
             "13:25:20Z",
             "sparkjoy: Compacting at 260k tokens, idle 55 minutes: the lexer is done",
         ),
@@ -140,6 +155,10 @@ def session_with_compactions():
         line(
             "15:00:39Z",
             "sparkjoy: Missed the prompt cache at 226k tokens: read 30k of 227k from it",
+        ),
+        line(
+            "15:00:39Z",
+            "sparkjoy: That looks like a bug: /sparkjoy bug drafts a report of it.",
         ),
         line(
             "15:00:40Z", "sparkjoy: Compacting at 226k tokens: all done"
@@ -158,7 +177,7 @@ def test_counts_verdicts_and_returns(tmp_path):
     summary, page = report(tmp_path, session_with_compactions())
     assert summary[0] == (
         "7 verdicts in 1 of 1 sessions: 3 compacted, 1 would compact, 1 kept, 0 unreadable, "
-        "1 no verdict, 0 dropped, 1 failed; 1 missed the prompt cache"
+        "1 no verdict, 0 dropped, 1 failed; 2 missed the prompt cache"
     )
     assert (
         "3 returns after an hour idle to sessions left at 175k or more, 2 compacted in between"
@@ -170,8 +189,9 @@ def test_counts_verdicts_and_returns(tmp_path):
     assert "Fix the parser" in page
     assert "hooks.json" not in page
     assert (
-        "1 missed the prompt cache" in page
+        "2 missed the prompt cache" in page
         and "missed the cache (read 30k of 227k)" in page
+        and "missed the cache (read 30k of 262k)" in page
     )
 
 

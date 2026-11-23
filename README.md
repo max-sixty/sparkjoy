@@ -37,6 +37,15 @@ At the prompt of a Claude Code session:
 /plugin install sparkjoy --marketplace max-sixty/sparkjoy
 ```
 
+Auto-update is off by default for the sparkjoy marketplace. To keep sparkjoy up
+to date, ask Claude to turn on auto-update for sparkjoy, or open `/plugin`, go to
+the Marketplaces tab, select sparkjoy, and turn on auto-update. Until you do,
+sparkjoy asks GitHub once a day, when a session starts, whether a newer version
+has been out for a day or more, and if one has, says in the transcript how many
+days out of date yours is, with the command that updates it. It doesn't ask
+where `DISABLE_UPDATES`, `DISABLE_AUTOUPDATER` or
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set.
+
 ## What it does
 
 - **When a turn ends**, it asks the session's own model whether to compact now,
@@ -72,6 +81,12 @@ At the prompt of a Claude Code session:
 </picture>
 
 </details>
+
+- **`/sparkjoy bug`** drafts a bug report from the session's transcript, with
+  what you say went wrong, sparkjoy's settings, and its last lines beside the
+  requests around them, and files it here once you agree. A line that reports a
+  bug, such as a check that failed or a question at a turn's end that missed
+  the prompt cache, is followed by one suggesting it.
 
 ## Settings
 

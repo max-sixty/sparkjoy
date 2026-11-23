@@ -26,8 +26,9 @@
 // mode, the floors it asks from, and instructions of their own for the
 // question. In the mode `classify` the mod asks as it does when on and shows
 // each verdict, but compacts nothing, so a user can watch what it would do
-// before letting it act. `/sparkjoy` shows the settings, sets the mode, and
-// runs the report.
+// before letting it act. `/sparkjoy` shows the settings, sets the mode, runs
+// the report, and drafts a bug report, which the line after any bug the mod
+// logs suggests.
 //
 // A compaction the mod announces still happens if the process ends before it
 // finishes. Claude Code's background daemon restarts a session's process when
@@ -45,6 +46,7 @@ import type {
   SessionMessage,
   TurnUsage,
 } from 'claude-code'
+import { checkForUpdate } from './update'
 
 // Set while this process compacts. `$.state` outlives a reload of the mod but
 // not the process, so a reload that finds a compaction announced leaves it to
@@ -181,8 +183,8 @@ type Source = keyof typeof SOURCES
 const COMMAND = {
   name: 'sparkjoy',
   description:
-    "Show sparkjoy's settings, set its mode (on, classify or off), or open its report",
-  argumentHint: '[on|classify|off|report]',
+    "Show sparkjoy's settings, set its mode (on, classify or off), open its report, or draft a bug report",
+  argumentHint: '[on|classify|off|report|bug]',
 }
 
 // What `/sparkjoy` says of each mode: on setting it, as the word for it when a
@@ -223,6 +225,14 @@ const WINDOW = 1_000_000
 // lateness LATE_MS allows. Of my turn ends followed by more than 4 minutes
 // idle, 95% ran past 5, so the question seldom comes just before the user
 // returns to a warm cache.
+//
+// The cache belongs to the account's organization, so once Claude Code signs
+// in to another account the question finds it gone and pays to write the
+// context to it again, as the user's next request would have. All 3 of my
+// idle questions that missed it (21-22 Nov 2026) followed such a switch.
+// Otherwise the API keeps it for the hour: of my requests 5 to 60 minutes
+// after one they extended unchanged, on the same account, 11 of 2,392 found
+// it gone (1-22 Nov 2026).
 const IDLE_MS = { '1h': 55 * 60_000, '5m': 4 * 60_000 }
 
 // A wait that ends later than this after it was due slept with the machine,
@@ -236,6 +246,10 @@ const LATE_MS = 60_000
 // question missed it: a hit leaves only the question uncached and a miss most
 // of the context, so any share between separates them.
 const MISSED = 0.1
+
+// What the line after one reporting a bug, in sparkjoy or in the Claude Code
+// it runs on, says.
+const BUG = 'That looks like a bug: /sparkjoy bug drafts a report of it.'
 
 type Verdict = { compact: boolean; reason: string }
 
@@ -257,6 +271,7 @@ export const register: Register = (on, options) => {
     watch.isActive = settings.mode !== 'off' && e.isInteractive
     const result = await next(e)
     if (watch.isActive && settings.mode === 'on') $.clock.after(0, () => void resume($))
+    if (e.isInteractive) $.clock.after(0, () => void checkForUpdate($))
     await $.command.register(COMMAND)
     return result
   })
@@ -341,6 +356,13 @@ async function afterTurn(
     }
     if (tokens < figures.FLOOR) return
     const prompt = question(tokens, undefined, figures, settings.instructions)
+    // A turn that wrote to the cache left it seconds old, so a question that
+    // misses it had a prompt that differed from the turn's, which is a bug. A
+    // turn that wrote nothing left nothing to read.
+    const sayMiss =
+      (usage?.cache_creation_input_tokens ?? 0) > 0
+        ? (line: string) => sayBug(say, line)
+        : say
     await judge(
       $,
       settings,
@@ -348,9 +370,10 @@ async function afterTurn(
       async () => isCurrent(),
       `${thousands(tokens)} tokens`,
       prompt,
+      sayMiss,
     )
   } catch (error) {
-    say(`Failed: ${error}`)
+    sayBug(say, `Failed: ${error}`)
   }
 }
 
@@ -378,6 +401,9 @@ async function idle(
       (await fitted($, settings)).figures,
       settings.instructions,
     )
+    // Claude Code may have signed in to another account meanwhile (IDLE_MS),
+    // or, as the wait runs from the turn's end, a last request that ran long
+    // may have used up the five-minute cache's margin.
     await judge(
       $,
       settings,
@@ -385,16 +411,17 @@ async function idle(
       isUntouched,
       `${thousands(tokens)} tokens, idle ${minutes} minutes`,
       prompt,
+      line => say(`${line}. Signing in to another account while idle drops the cache.`),
     )
   } catch (error) {
-    say(`Failed: ${error}`)
+    sayBug(say, `Failed: ${error}`)
   }
 }
 
 // Asks the session's model whether to compact, and compacts if it says to and
-// the mod is on, saying too when the question missed the prompt cache. The
-// verdict stands only while `stands` holds once the model has answered; `at`
-// names the moment in each line.
+// the mod is on, saying too, with `sayMiss`, when the question missed the
+// prompt cache. The verdict stands only while `stands` holds once the model
+// has answered; `at` names the moment in each line.
 async function judge(
   $: EngineInterface,
   { mode }: Settings,
@@ -402,6 +429,7 @@ async function judge(
   stands: () => Promise<boolean>,
   at: string,
   prompt: string,
+  sayMiss: (text: string) => void,
 ) {
   const answer = await $.model.fork({ prompt })
   // A line of its own, so the verdict's line, which model/fit.py parses, keeps
@@ -411,7 +439,7 @@ async function judge(
     const read = usage.cache_read_input_tokens
     const input = usage.input_tokens + read + usage.cache_creation_input_tokens
     if (input - read > MISSED * input)
-      say(
+      sayMiss(
         `Missed the prompt cache at ${at}: read ${thousands(read)} of ${thousands(input)} from it`,
       )
   }
@@ -423,14 +451,13 @@ async function judge(
   } else if (verdict?.compact) {
     // `$.session.compact` draws no `/compact` row, so neither the user nor
     // the model reads the compaction as one the user typed. A hook's veto
-    // draws its own line. It rejects while a turn runs, which `stands` rules
-    // out for any turn begun since the one asked about ended.
+    // draws its own line.
     say(`Compacting at ${at}: ${verdict.reason}`)
-    await compact($, at)
+    await compact($, say, at)
   } else if (verdict) {
     say(`Kept at ${at}: ${verdict.reason}`)
   } else if (answer.isAnswered) {
-    say(`Unreadable verdict at ${at}: ${answer.text}`)
+    sayBug(say, `Unreadable verdict at ${at}: ${answer.text}`)
   } else {
     say(`No verdict at ${at}: ${answer.reason}`)
   }
@@ -447,13 +474,19 @@ type Announcement = { at: string; messages: string[] }
 // between never finds an announcement unflagged. A reload during the
 // compaction stops this copy before it clears either, so the flag stays up
 // until the process ends, and the announcement until `resume` clears it.
-async function compact($: EngineInterface, at: string) {
+//
+// The engine rejects a compaction while a turn runs, and a turn can begin
+// after the caller checked that none had: a queued notification starts one
+// some tenths of a second before its `turn.start` reaches this mod. That is no
+// bug, since the next turn end asks again, so `say` gives the engine's reason
+// without calling it one.
+async function compact($: EngineInterface, say: (text: string) => void, at: string) {
   const key = `compacting:${await $.session.id()}`
   await $.state.set(COMPACTING, true)
   try {
     const announcement: Announcement = { at, messages: await messageKeys($) }
     await $.store.set(key, announcement)
-    await $.session.compact()
+    await $.session.compact().catch(error => say(`Didn't compact at ${at}: ${error}`))
   } finally {
     await $.store.delete(key)
     await $.state.set(COMPACTING, false)
@@ -477,10 +510,16 @@ async function resume($: EngineInterface) {
     $.ui.log(
       `Finishing the compaction at ${announced.at}: Claude Code restarted before it landed`,
     )
-    await compact($, announced.at)
+    await compact($, text => $.ui.log(text), announced.at)
   } catch (error) {
-    $.ui.log(`Failed: ${error}`)
+    sayBug(text => $.ui.log(text), `Failed: ${error}`)
   }
+}
+
+// Says `text`, a line reporting a bug, and how to report it.
+function sayBug(say: (text: string) => void, text: string) {
+  say(text)
+  say(BUG)
 }
 
 // The keys of the conversation's messages, of the newest 4096, the most
@@ -699,43 +738,55 @@ async function fitted($: EngineInterface, settings: Settings) {
 }
 
 // Answers `/sparkjoy`. Bare, it says how the mod stands. `on`, `classify` and
-// `off` set the mode, and Claude Code then reloads the mod with it. `report` asks the
-// model to run the report skill, which its frontmatter keeps out of the slash
-// menu, so this is the report's one entry there while the model still runs it
-// when the user asks what sparkjoy has done. A prompt submitted while the
-// command's hook runs would wait on that hook, so it goes on a timer. Claude
-// Code shows each answer after the plugin's name, `sparkjoy:`, so no answer
-// names it again.
+// `off` set the mode, and Claude Code then reloads the mod with it. `report`
+// and `bug` ask the model to run the skill of that name, which its frontmatter
+// keeps out of the slash menu, so this is the skill's one entry there while
+// the model still runs it when the user asks for it in their own words. The
+// bug report's skill is told the session's id, which finds its transcript, and
+// the settings `status` states, which no one file holds. A prompt submitted
+// while the command's hook runs would wait on that hook, so it goes on a timer.
+// Claude Code shows each answer after the plugin's name, `sparkjoy:`, so no
+// answer names it again.
 async function command(
   $: EngineInterface,
   args: string,
   settings: Settings,
 ): Promise<CommandRunResult> {
   const word = args.trim().split(/\s+/)[0]
-  if (word === '') return { text: await status($, settings) }
+  if (word === '') return { text: [...(await status($, settings)), HOW].join('\n') }
   if (word === 'on' || word === 'classify' || word === 'off') {
     // `$.config` names a plugin's field `<plugin>.<field>`.
     const { deny } = await $.config.set({ key: 'sparkjoy.mode', value: word })
     if (deny) return { text: `Still ${MODES[settings.mode].state}: ${deny}` }
     return { text: MODES[word].set }
   }
-  if (word === 'report') {
-    const text = `The user typed /sparkjoy ${args.trim()}. Run the sparkjoy:report skill for them.`
+  if (word === 'report' || word === 'bug') {
+    const context =
+      word === 'bug'
+        ? ` The session's id is ${await $.session.id()}. /sparkjoy states its settings as:\n${(await status($, settings, true)).map(line => `> ${line}`).join('\n')}`
+        : ''
+    const text = `The user typed /sparkjoy ${args.trim()}. Run the sparkjoy:${word} skill for them.${context}`
     $.clock.after(
       0,
       () => void $.prompt.submit({ text }).catch(error => $.ui.log(`Failed: ${error}`)),
     )
-    return { text: 'Asking the model to run the report.' }
+    return {
+      text:
+        word === 'bug'
+          ? 'Asking the model to draft a bug report.'
+          : 'Asking the model to run the report.',
+    }
   }
   return {
-    text: `/sparkjoy takes on, classify, off or report, not "${word}", or nothing to show its settings.`,
+    text: `/sparkjoy takes on, classify, off, report or bug, not "${word}", or nothing to show its settings.`,
   }
 }
 
-// What `/sparkjoy` says with no arguments: the mod's mode, the floors it asks
-// from and where each comes from, whether the question carries the user's
-// instructions, and how to change them.
-async function status($: EngineInterface, settings: Settings) {
+// What `/sparkjoy` says of the mod's settings, a line each: its mode and the
+// floors it asks from, with where each comes from, and whether the question
+// carries the user's instructions, quoting their start or, `isWhole`, all of
+// them. Bare, `/sparkjoy` adds HOW.
+async function status($: EngineInterface, settings: Settings, isWhole = false) {
   const { figures, from } = await fitted($, settings)
   const floor = (name: 'FLOOR' | 'IDLE_FLOOR', set: number | undefined) => {
     const ignored =
@@ -748,7 +799,7 @@ async function status($: EngineInterface, settings: Settings) {
   const { mode, instructions } = settings
   // The first 60 characters, cut at a space.
   const excerpt =
-    instructions.length > 60
+    !isWhole && instructions.length > 60
       ? `${instructions.slice(0, 61).replace(/\s+\S*$/, '')}…`
       : instructions
   return [
@@ -756,9 +807,12 @@ async function status($: EngineInterface, settings: Settings) {
     instructions
       ? `Its question carries your instructions: "${excerpt}"`
       : 'Its question carries no instructions of yours.',
-    '/sparkjoy on compacts when the model says to, /sparkjoy classify only shows its verdicts, and /sparkjoy off asks nothing. /config sets the floors and instructions.',
-  ].join('\n')
+  ]
 }
+
+// How to change the settings, the last line of what `/sparkjoy` says bare.
+const HOW =
+  '/sparkjoy on compacts when the model says to, /sparkjoy classify only shows its verdicts, and /sparkjoy off asks nothing. /config sets the floors and instructions.'
 
 function parse(text: string): Verdict | undefined {
   try {
