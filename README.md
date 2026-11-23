@@ -1,23 +1,20 @@
 # sparkjoy
 
-A Claude Code plugin that asks the session's own model whether the work ahead
-still needs the context, and compacts if the model says no[^name]. It asks at
-each turn end from 250k, and just before an idle session's prompt cache expires.
+A Claude Code plugin that asks the session's model whether to compact, giving it
+guidance on the tradeoffs so it can make the best decision[^name]. Once there is
+material context, it asks at the end of each turn, and just before an idle
+session's prompt cache expires.
 
-Claude Code compacts when the window fills, and `/autocompact` once the context
-reaches the size you set, whatever the work needs. Work differs in what it needs
-from its context. After a finished fix, the next task does as well from a
-summary. While a design is still taking shape, a summary would drop the options
-already rejected and why. The question gives the model what keeping the context
-and compacting it each cost at the context's size, so a large context stays only
-while the work ahead needs it. In an idle session keeping it costs more, since
-the first request after the cache expires writes all of it to the cache again.
+Claude Code and `/autocompact` compact at a set size, whatever the work needs.
+After a finished fix, the next task does as well from a summary, but while a
+design is still taking shape, a summary would drop the options already rejected
+and why.
 
 |                | When it compacts                                                                                                              |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `/compact`     | when you type it                                                                                                              |
 | Claude Code    | at about 965k, even mid-turn                                                                                                  |
-| Claude Code    | when idle, just before the one-hour cache expires, from 200k                                                                  |
+| Claude Code    | when idle in a session you have open, just before the one-hour cache expires, from 200k                                       |
 | `/autocompact` | at the size you set, even mid-turn                                                                                            |
 | sparkjoy       | when the session's model says to; it asks at each turn end from 250k, and when idle, just before the cache expires, from 175k |
 
@@ -28,8 +25,9 @@ the first request after the cache expires writes all of it to the cache again.
 
 Every request reads the whole context, so the area under each line counts the
 tokens the session read. At each dot the plugin asked the session's model
-whether to compact, and at the larger dots the session compacted. In the replay,
-this session cost 30% less with the plugin than without it.
+whether to compact, and at the larger dots the session compacted. The session
+ran in the background, where Claude Code compacts only when the window fills,
+and in the replay it cost 30% less with the plugin than without it.
 
 ## Install
 
@@ -41,9 +39,8 @@ At the prompt of a Claude Code session:
 
 It acts only in sessions with a 1M-token context window, the size its defaults
 are fitted to, and only in interactive ones, not in `-p` runs or SDK hosts. A
-session picks it up when it starts. To see its verdicts before it compacts anything, run
-`/sparkjoy classify` ([Settings](#settings)). CI tests it on Claude Code's
-latest and stable releases.
+session picks it up when it starts. To see its verdicts before it compacts
+anything, run `/sparkjoy classify` ([Settings](#settings)).
 
 Auto-update is off by default for the sparkjoy marketplace. To keep sparkjoy up
 to date, ask Claude to turn on auto-update for sparkjoy, or open `/plugin`, go to
@@ -144,10 +141,12 @@ too.
 
 ## What it saves
 
-The plugin cut the cost of my 87 Claude Code sessions from 7 to 15 November
-2026 by 23%, from $5,214 to $4,013 at Opus 5.5 list prices, in a replay of
-their 36,251 requests[^replay]. sparkjoy then asked only once the context
-reached 400k at a turn end; it now asks from 250k:
+The plugin cut the cost of my 87 Claude Code sessions from 7 to 15 November 2026
+by 23%, from $5,214 to $4,013 at Opus 5.5 list prices, in a replay of their
+36,251 requests[^replay]. Most of them ran in the background, where Claude Code
+compacts only when the window fills. Had they all been open in a terminal or
+editor on the one-hour cache, where Claude Code also compacts an idle context of
+200k or more, the plugin would have cut their cost by 16%.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/cost-dark.svg">
@@ -168,10 +167,12 @@ context.
 That judgment pays where work differs in how much it needs its context. Suppose
 a quarter of the work is like a design still taking shape, where a request with
 250k of context gets 18% as much done as one with the full 1M, and the rest is
-like a finished fix, where it gets 71%. In a replay of my sessions with that
-mix, a judgment right 9 times in 10 saves about 4% against `/autocompact` at
-whichever size costs least, which for that mix is leaving it off[^autocompact].
-No session yet measures how widely work differs, or how often the judgment is
+like a finished fix, where it gets 71%. In a session that grows evenly and
+never sits idle, a judgment right 9 times in 10 saves 12% against `/autocompact`
+at whichever size costs least. In a replay of my sessions, it saves 10% in a
+background session, where only sparkjoy compacts an idle context, and 4% in a
+session you have open, where Claude Code compacts one too[^autocompact]. No
+session yet measures how widely work differs, or how often the judgment is
 right.
 
 I run sparkjoy without `/autocompact`. If you set both, keep `/autocompact`
@@ -366,28 +367,36 @@ size.
     spark joy.
 
 [^autocompact]:
-    The replay draws each session's turns in stretches of one kind of work, 5
-    turns long on average, and at each turn end the judgment names the next
-    turn's kind. It weighs each kind's cost per unit of its own work by its
-    share, as in the [cost model](docs/cost-model.md#work-that-differs-in-β). Every policy
-    compacts idle sessions from 175k, as sparkjoy and Claude Code both do, and
-    that takes much of what the judgment would otherwise save: with no idle
-    compaction in any policy, it saves 9%. A judgment right every time saves 5%.
-    Where all work is alike, at β = 0.5, `/autocompact` at 370k saves 15%
-    against never compacting, and compacting at every turn end from 390k saves
-    14%; counting tokens alone, at 270k and from 240k, they save 40% and 31%.
-    None of these counts what a compaction in the middle of a turn loses.
-    `/autocompact` compacted mid-turn 169 times in that replay, and turn ends
-    break even once each such compaction wastes 7 more requests than one at a
-    turn end, or 35 counting tokens alone.
+    The 12% is the steady state of the [cost
+    model](docs/cost-model.md#work-that-differs-in-β), in which a session grows
+    by the same amount with each request, never sits idle, and can compact after
+    any request. The replay keeps each logged request's size and timing, draws
+    each session's turns in stretches of one kind of work, 5 turns long on
+    average, and at each turn end the judgment names the next turn's kind. It
+    weighs each kind's cost per unit of its own work by its share. sparkjoy
+    compacts idle contexts from 175k, and in a session you have open, so does
+    `/autocompact` in the replay, standing in for Claude Code's own idle
+    compaction from 200k. There a judgment right every time saves 5%. Where all
+    work is alike, at β = 0.5, `/autocompact` at 370k saves 15% against never
+    compacting, and compacting at every turn end from 390k saves 14%; counting
+    tokens alone, at 270k and from 240k, they save 40% and 31%. None of these
+    counts what a compaction in the middle of a turn loses. `/autocompact`
+    compacted mid-turn 169 times in that replay, and turn ends break even once
+    each such compaction wastes 7 more requests than one at a turn end, or 35
+    counting tokens alone.
 
 [^replay]:
-    The replay keeps every logged request fixed and moves only the
-    compactions: "with sparkjoy" keeps the plugin's, and "without sparkjoy"
-    removes them and lets Claude Code compact at its own threshold, near 965k.
-    Both price each request at Opus 5.5 list prices with the session's own cache
-    lifetime, and "with sparkjoy" comes within 2% of the cost the transcripts log
-    ($4,013 against $3,943). On a subscription, the same tokens count against
+    sparkjoy then asked from 400k at a turn end, where it now asks from 250k.
+    The replay keeps every logged request fixed and moves only the compactions:
+    "with sparkjoy" keeps the plugin's, and "without sparkjoy" removes them and
+    lets Claude Code compact at its own threshold, near 965k. Both price each
+    request at Opus 5.5 list prices with the session's own cache lifetime, and
+    "with sparkjoy" comes within 2% of the cost the transcripts log ($4,013
+    against $3,943). The cost model's replay of 85 of these sessions also gives
+    23%. Claude Code compacts an idle context itself only in a session someone
+    has open, and 71 of the 85 ran in the background. With Claude Code
+    compacting every idle context from 200k, both with and without sparkjoy,
+    that replay gives 16%. On a subscription, the same tokens count against
     usage limits rather than a bill.
 
 # Cost model
@@ -460,13 +469,16 @@ shows which parameters matter, to a replay that follows real sessions:
 For my sessions on Opus 5.5[^prices]:
 
 - What sparkjoy's question saves depends on how widely β and D vary, and on how
-  often the question is right. If half the work gets twice as much done with
-  twice the context (β = 1) and the rest gets as much done at any size (β = 0),
-  a question right 9 times in 10 saves 9% against the lowest-cost single
-  threshold. If half of turn ends fall in the middle of a task, a question right
-  9 times in 10 saves 1.9% where a compaction there wastes 12 requests, and 9.0%
-  where it wastes 96. No session of mine yet measures how widely β or D varies,
-  or how often the question is right ([A classifier](docs/cost-model.md#a-classifier)).
+  often the question is right. If three quarters of the work is at β = 0.25 and a
+  quarter at β = 1.25, a question right 9 times in 10 saves 11.6% against the
+  lowest-cost single threshold in a session that grows evenly, never sits idle and
+  can compact after any request. In a replay of my sessions, it saves 9.9% in a
+  background session, where only sparkjoy compacts idle sessions, and 3.7% in a
+  session someone has open, where Claude Code compacts them too. In the steady
+  state, if half of turn ends fall in the middle of a task, a question right 9
+  times in 10 saves 1.9% where a compaction there wastes 12 requests, and 9.0%
+  where it wastes 96. No session of mine yet measures how widely β or D varies, or
+  how often the question is right ([A classifier](docs/cost-model.md#a-classifier)).
 - sparkjoy asks only at turn ends, so it waits out long turns. Turns run a
   median of 9 requests but a mean of 38, so one long turn can carry the context
   far past where compacting pays before it ends. In the replay, at each policy's
@@ -870,23 +882,27 @@ asks the classifier where sparkjoy asks it, at turn ends. Each session's turns
 come in stretches of one kind of work, 5 turns long on average, with each
 stretch's kind drawn by its share. At each turn end the classifier names the
 next turn's kind, right 9 times in 10, and the session compacts if its context
-has passed that kind's threshold. Every policy also compacts idle sessions from
-175k, except that the classifier keeps an idle context below 800k when it
-expects β = 1.25 work next. Each kind's cost per unit of its own work is
-weighted by its share, as above, and no compaction loses detail the work needs.
+has passed that kind's threshold. The classifier also compacts idle sessions
+from 175k, except that it keeps an idle context below 800k when it expects β =
+1.25 work next. Each kind's cost per unit of its own work is weighted by its
+share, as above, and no compaction loses detail the work needs. Claude Code
+compacts an idle context itself only in a session someone has open, so the
+replay takes two cases: a session someone has open, where every policy compacts
+idle sessions from 175k, standing in for Claude Code's own idle compaction from
+200k, and a background session, where only the classifier does.
 
-| policy, each at its lowest-cost thresholds                                     | saves against never compacting |
-| ------------------------------------------------------------------------------ | ------------------------------ |
-| idle sessions only, which is what compacting after any request comes to here   | 6.8%                           |
-| idle sessions, and turn ends from 830k                                         | 7.2%                           |
-| the classifier, compacting at turn ends from 370k or 800k by the kind it names | 10.3%                          |
+| policy, each at its lowest-cost thresholds                                                            | saves against never compacting |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------ |
+| after any request from 680k, as `/autocompact` does in a background session                           | 0.4%                           |
+| idle sessions only, which is what compacting after any request comes to in a session someone has open | 6.8%                           |
+| idle sessions, and turn ends from 830k                                                                | 7.2%                           |
+| the classifier, compacting at turn ends from 370k or 800k by the kind it names, and idle sessions     | 10.3%                          |
 
-The classifier saves 3.7% against compacting only idle sessions, well short of
-the steady state's 11.6% in the table above. Most of the gap is the idle
-compaction every policy makes, which alone saves 6.8%. With no policy compacting
-idle sessions, the classifier saves 9.2% against compacting after any request at
-its lowest-cost threshold, 680k. A classifier right every time saves 5.1%, and
-stretches of 20 turns give 3.9%.
+In a session someone has open, the classifier saves 3.7% against compacting only
+idle sessions, well short of the steady state's 11.6% in the table above, since
+compacting idle sessions alone saves 6.8%. In a background session it saves 9.9%
+against `/autocompact` at its lowest-cost threshold, 680k. Right every time, it
+saves 5.1% in a session someone has open, and with stretches of 20 turns, 3.9%.
 
 ### Turn ends that differ in lost detail
 
@@ -964,13 +980,14 @@ to compact.
 
 ### Floors
 
-| policy                                                                          | saved |
-| ------------------------------------------------------------------------------- | ----- |
-| turn ends from 400k                                                             | 11.2% |
-| turn ends from 400k and idle sessions from 200k                                 | 13.8% |
-| turn ends from 280k, the lowest-cost threshold alone                            | 12.5% |
-| turn ends from 250k and idle sessions from 175k, sparkjoy's default floors      | 13.1% |
-| turn ends from 400k and idle sessions from 175k, the lowest-cost pair of floors | 13.9% |
+| policy                                                                               | saved |
+| ------------------------------------------------------------------------------------ | ----- |
+| idle sessions from 200k, as Claude Code compacts on its own in a session that's open | 8.5%  |
+| turn ends from 400k                                                                  | 11.2% |
+| turn ends from 400k and idle sessions from 200k                                      | 13.8% |
+| turn ends from 280k, the lowest-cost threshold alone                                 | 12.5% |
+| turn ends from 250k and idle sessions from 175k, sparkjoy's default floors           | 13.1% |
+| turn ends from 400k and idle sessions from 175k, the lowest-cost pair of floors      | 13.9% |
 
 Compacting idle sessions gets much of the saving of a lower turn-end threshold,
 since 18% of turn ends are followed by an hour's gap. At the base case, the
@@ -979,7 +996,9 @@ sessions from 175k, every turn-end floor from 250k to 400k comes within a point
 of it. sparkjoy fits its floors by cost alone. A floor is where sparkjoy starts
 asking, and its question decides at which turn ends above the floor to compact,
 so the floor sits at the lowest-cost threshold that cost alone gives, the lowest
-any β gives. For my sessions that is the default pair.
+any β gives. For my sessions that is the default pair. Claude Code's own idle
+compaction, from 200k in a session someone has open, saves 8.5% alone, so in
+such a session the default floors save 5.0% against Claude Code as it runs.
 
 On the five-minute cache, priced at its own rates, the cache lapses after 52%
 of turn ends, and 95% of pauses past 4 minutes run past 5. There, compacting at

@@ -912,6 +912,48 @@ def floors(S, p, c, ttl):
     return min(cost, key=cost.get), cost
 
 
+# Where Claude Code compacts an idle session on its own: from 200k, just before a one-hour cache
+# lapses, and only in a session someone is attending, not a background one (hooks/register.ts,
+# IDLE_FLOOR's comment).
+CC_IDLE = 200_000
+
+
+CHECK_OUTPUT = 100  # output tokens of a check, which reads the context from the cache
+
+
+def check(v, c):
+    """A check's cost in cached reads: its question's input, all read from the cache unless the check
+    logged a miss, whose unread part is priced as a cache write, and its output."""
+    read, size = v.missed or (v.tokens, v.tokens)
+    return read + c.write * (size - read) + c.output * CHECK_OUTPUT
+
+
+def as_run(s, p, idle=None):
+    """The session's cost in dollars with sparkjoy's compactions where it made them, its checks
+    included, and without them, at its model's list prices (None for a model with no price
+    here), and the context each request carried in each. Claude Code compacts on its own near the
+    window in both, and with `idle`, also an idle context from that size, as its own idle compaction
+    does on a one-hour cache."""
+    priced = s.model in PRICES
+    c = prices(s.model if priced else "claude-opus-5-5", s.ttl)
+    idle = idle if s.ttl == 3600 else None
+    # As compactions the user typed, sparkjoy's stay where the log has them.
+    ran, ran_trace, _ = replay(
+        replace(s, kind=np.where(s.sparkjoy, USER, s.kind)),
+        p,
+        c,
+        np.inf,
+        s.ttl,
+        idle=idle,
+    )
+    without, without_trace, _ = replay(s, p, c, np.inf, s.ttl, idle=idle)
+    checks = sum(check(v, c) for v in s.verdicts if v.tokens)
+    dollars = (
+        ((ran + checks) * c.read, without * c.read, checks * c.read) if priced else None
+    )
+    return dollars, ran_trace, without_trace
+
+
 # The policies `moments` compares, as (turn-end threshold, any-request threshold), inf for none:
 # after any request as `/autocompact` does, only at turn ends, and at turn ends with `/autocompact`
 # set higher as a backstop for long turns. The backstop pairs take a coarser grid, as there are many.
@@ -1257,6 +1299,10 @@ def main():
         ((400_000, None), "turn ends from 400k"),
         ((400_000, 200_000), "  and idle sessions from 200k"),
         ((200_000, None), "turn ends from 200k"),
+        (
+            (np.inf, CC_IDLE),
+            f"idle sessions only, from {k(CC_IDLE)}, as Claude Code compacts on its own",
+        ),
     ):
         print(f"  {label:58s} {pct(kept[t, i])}")
     print(
@@ -1281,6 +1327,20 @@ def main():
     print("        " + " ".join(f"{x:>6}" for x in ("-", *map(k, IDLE_FLOORS))))
     for t in turns:
         print(f"  {k(t):>5} " + " ".join(f"{kept[t, j]:6.1%}" for j in idles))
+    print(
+        f"  sparkjoy's floors against Claude Code's own idle compaction alone: saved "
+        f"{1 - (1 - kept[FLOOR, IDLE_FLOOR]) / (1 - kept[np.inf, CC_IDLE]):.1%}"
+    )
+    # The README's What it saves: sparkjoy's compactions as they ran, against Claude Code alone.
+    for idle, label in (
+        (None, "near the window only"),
+        (CC_IDLE, "also every idle context from " + k(CC_IDLE)),
+    ):
+        runs = [d for s in S if (d := as_run(s, p, idle)[0])]
+        ran, without = (sum(d[i] for d in runs) for i in (0, 1))
+        print(
+            f"sparkjoy as it ran, against Claude Code compacting {label}: saved {1 - ran / without:.1%}"
+        )
 
     # Mid-turn or at a turn end: each policy at its lowest-cost thresholds, with each mid-turn compaction
     # charged D wasted requests beyond what one at a turn end loses, each priced as a request at K.
@@ -1390,6 +1450,7 @@ def main():
         f"right every time, {judged(RIGHT):.1%} right {RIGHT:.0%} of the time, and pays for its questions from "
         f"{next(a for a in np.arange(0.5, 1.0001, 0.005) if judged(a) > RUNNING):.1%} right"
     )
+    rows = {}
     for label, stretch, right, idle in (
         (f"right {RIGHT:.0%} of the time", STRETCH, RIGHT, IDLE_FLOOR),
         ("right every time", STRETCH, 1.0, IDLE_FLOOR),
@@ -1406,12 +1467,20 @@ def main():
         ends = {x: shared(*mixed(S, p, c, ttl, draws, x, idle=idle)) for x in options}
         xa, xe = min(auto, key=auto.get), min(ends, key=ends.get)
         pair, Jj = judging(S, p, c, ttl, draws, (xe, np.inf), idle=idle)
+        rows[label] = auto[xa], Jj
         print(
             f"  {label}: after any request, at its lowest-cost threshold, {k(xa)}, saves {1 - auto[xa] / none:.1%} "
             f"against never compacting; at turn ends from {k(xe)} {1 - ends[xe] / none:.1%}; the judgment, compacting "
             f"from {k(pair[0])} or {k(pair[1])}, {1 - Jj / none:.1%}, which is {1 - Jj / auto[xa]:.1%} against after any "
             f"request"
         )
+    # Claude Code compacts no idle session itself in a background session (CC_IDLE), so there the
+    # judgment, compacting idle sessions as sparkjoy does, competes with `/autocompact` alone.
+    print(
+        f"  a background session, where only sparkjoy compacts idle sessions: the judgment right {RIGHT:.0%} of the "
+        f"time saves {1 - rows[f'right {RIGHT:.0%} of the time'][1] / rows['no policy compacting idle sessions'][0]:.1%} "
+        f"against after any request"
+    )
     gaps = np.concatenate(
         [np.append(s.gap[1:], 0)[s.end] for s in S]
     )  # from each turn end to the next request

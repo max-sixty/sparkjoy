@@ -61,13 +61,16 @@ shows which parameters matter, to a replay that follows real sessions:
 For my sessions on Opus 5.5[^prices]:
 
 - What sparkjoy's question saves depends on how widely β and D vary, and on how
-  often the question is right. If half the work gets twice as much done with
-  twice the context (β = 1) and the rest gets as much done at any size (β = 0),
-  a question right 9 times in 10 saves 9% against the lowest-cost single
-  threshold. If half of turn ends fall in the middle of a task, a question right
-  9 times in 10 saves 1.9% where a compaction there wastes 12 requests, and 9.0%
-  where it wastes 96. No session of mine yet measures how widely β or D varies,
-  or how often the question is right ([A classifier](#a-classifier)).
+  often the question is right. If three quarters of the work is at β = 0.25 and a
+  quarter at β = 1.25, a question right 9 times in 10 saves 11.6% against the
+  lowest-cost single threshold in a session that grows evenly, never sits idle and
+  can compact after any request. In a replay of my sessions, it saves 9.9% in a
+  background session, where only sparkjoy compacts idle sessions, and 3.7% in a
+  session someone has open, where Claude Code compacts them too. In the steady
+  state, if half of turn ends fall in the middle of a task, a question right 9
+  times in 10 saves 1.9% where a compaction there wastes 12 requests, and 9.0%
+  where it wastes 96. No session of mine yet measures how widely β or D varies, or
+  how often the question is right ([A classifier](#a-classifier)).
 - sparkjoy asks only at turn ends, so it waits out long turns. Turns run a
   median of 9 requests but a mean of 38, so one long turn can carry the context
   far past where compacting pays before it ends. In the replay, at each policy's
@@ -489,23 +492,27 @@ asks the classifier where sparkjoy asks it, at turn ends. Each session's turns
 come in stretches of one kind of work, 5 turns long on average, with each
 stretch's kind drawn by its share. At each turn end the classifier names the
 next turn's kind, right 9 times in 10, and the session compacts if its context
-has passed that kind's threshold. Every policy also compacts idle sessions from
-175k, except that the classifier keeps an idle context below 800k when it
-expects β = 1.25 work next. Each kind's cost per unit of its own work is
-weighted by its share, as above, and no compaction loses detail the work needs.
+has passed that kind's threshold. The classifier also compacts idle sessions
+from 175k, except that it keeps an idle context below 800k when it expects β =
+1.25 work next. Each kind's cost per unit of its own work is weighted by its
+share, as above, and no compaction loses detail the work needs. Claude Code
+compacts an idle context itself only in a session someone has open, so the
+replay takes two cases: a session someone has open, where every policy compacts
+idle sessions from 175k, standing in for Claude Code's own idle compaction from
+200k, and a background session, where only the classifier does.
 
-| policy, each at its lowest-cost thresholds                                     | saves against never compacting |
-| ------------------------------------------------------------------------------ | ------------------------------ |
-| idle sessions only, which is what compacting after any request comes to here   | 6.8%                           |
-| idle sessions, and turn ends from 830k                                         | 7.2%                           |
-| the classifier, compacting at turn ends from 370k or 800k by the kind it names | 10.3%                          |
+| policy, each at its lowest-cost thresholds                                                            | saves against never compacting |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------ |
+| after any request from 680k, as `/autocompact` does in a background session                           | 0.4%                           |
+| idle sessions only, which is what compacting after any request comes to in a session someone has open | 6.8%                           |
+| idle sessions, and turn ends from 830k                                                                | 7.2%                           |
+| the classifier, compacting at turn ends from 370k or 800k by the kind it names, and idle sessions     | 10.3%                          |
 
-The classifier saves 3.7% against compacting only idle sessions, well short of
-the steady state's 11.6% in the table above. Most of the gap is the idle
-compaction every policy makes, which alone saves 6.8%. With no policy compacting
-idle sessions, the classifier saves 9.2% against compacting after any request at
-its lowest-cost threshold, 680k. A classifier right every time saves 5.1%, and
-stretches of 20 turns give 3.9%.
+In a session someone has open, the classifier saves 3.7% against compacting only
+idle sessions, well short of the steady state's 11.6% in the table above, since
+compacting idle sessions alone saves 6.8%. In a background session it saves 9.9%
+against `/autocompact` at its lowest-cost threshold, 680k. Right every time, it
+saves 5.1% in a session someone has open, and with stretches of 20 turns, 3.9%.
 
 ### Turn ends that differ in lost detail
 
@@ -585,13 +592,14 @@ to compact.
 
 ### Floors
 
-| policy                                                                          | saved |
-| ------------------------------------------------------------------------------- | ----- |
-| turn ends from 400k                                                             | 11.2% |
-| turn ends from 400k and idle sessions from 200k                                 | 13.8% |
-| turn ends from 280k, the lowest-cost threshold alone                            | 12.5% |
-| turn ends from 250k and idle sessions from 175k, sparkjoy's default floors      | 13.1% |
-| turn ends from 400k and idle sessions from 175k, the lowest-cost pair of floors | 13.9% |
+| policy                                                                               | saved |
+| ------------------------------------------------------------------------------------ | ----- |
+| idle sessions from 200k, as Claude Code compacts on its own in a session that's open | 8.5%  |
+| turn ends from 400k                                                                  | 11.2% |
+| turn ends from 400k and idle sessions from 200k                                      | 13.8% |
+| turn ends from 280k, the lowest-cost threshold alone                                 | 12.5% |
+| turn ends from 250k and idle sessions from 175k, sparkjoy's default floors           | 13.1% |
+| turn ends from 400k and idle sessions from 175k, the lowest-cost pair of floors      | 13.9% |
 
 Compacting idle sessions gets much of the saving of a lower turn-end threshold,
 since 18% of turn ends are followed by an hour's gap. At the base case, the
@@ -600,7 +608,9 @@ sessions from 175k, every turn-end floor from 250k to 400k comes within a point
 of it. sparkjoy fits its floors by cost alone. A floor is where sparkjoy starts
 asking, and its question decides at which turn ends above the floor to compact,
 so the floor sits at the lowest-cost threshold that cost alone gives, the lowest
-any β gives. For my sessions that is the default pair.
+any β gives. For my sessions that is the default pair. Claude Code's own idle
+compaction, from 200k in a session someone has open, saves 8.5% alone, so in
+such a session the default floors save 5.0% against Claude Code as it runs.
 
 On the five-minute cache, priced at its own rates, the cache lapses after 52%
 of turn ends, and 95% of pauses past 4 minutes run past 5. There, compacting at
