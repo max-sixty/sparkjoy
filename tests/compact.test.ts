@@ -139,7 +139,7 @@ function engine(
   // `trigger`; the engine stamps it `plugin`.
   on('session.compact', async (_, e) => {
     if (compactMs > 0) await clock.sleep(compactMs)
-    if (failures-- > 0) throw new Error('summary unavailable')
+    if (failures-- > 0) throw new Error('a turn is in flight')
     if (e.trigger === undefined || e.trigger === 'plugin')
       compactions.push(e.instructions ?? '')
     // Claude Code measures the context again only at the next request.
@@ -619,7 +619,10 @@ test('a question read from the prompt cache adds no line', async ($, on) => {
   expect(logs).toEqual(['Compacting at 500k tokens: the PR merged'])
 })
 
-test('a question that missed the prompt cache says so on a line of its own', async ($, on) => {
+// The line sparkjoy adds after one reporting a bug.
+const BUG = 'That looks like a bug: /sparkjoy bug drafts a report of it.'
+
+test('a question at a turn’s end that missed the prompt cache says so and calls it a bug', async ($, on) => {
   const { begin, compactions, logs, turn } = engine(on, { forkUsage: MISS })
   await begin($)
 
@@ -628,11 +631,54 @@ test('a question that missed the prompt cache says so on a line of its own', asy
   expect(compactions).toEqual([''])
   expect(logs).toEqual([
     'Missed the prompt cache at 500k tokens: read 30k of 502k from it',
+    BUG,
     'Compacting at 500k tokens: the PR merged',
   ])
 })
 
-test('a compaction that fails says so, and is tried again once the session sits idle', async ($, on) => {
+test('a question after a turn that wrote nothing to the cache says it missed, but not that it’s a bug', async ($, on) => {
+  const { begin, logs, turn } = engine(on, {
+    forkUsage: MISS,
+    usage: { ...HOUR, cache_creation_input_tokens: 0, ephemeral_1h_input_tokens: 0 },
+  })
+  await begin($)
+
+  await turn($, 't1')
+
+  expect(logs).toEqual([
+    'Missed the prompt cache at 500k tokens: read 30k of 502k from it',
+    'Compacting at 500k tokens: the PR merged',
+  ])
+})
+
+test('an unreadable verdict says so and calls it a bug', async ($, on) => {
+  const { begin, compactions, logs, turn } = engine(on, { verdict: 'compact it' })
+  await begin($)
+
+  await turn($, 't1')
+
+  expect(compactions).toEqual([])
+  expect(logs).toEqual(['Unreadable verdict at 500k tokens: compact it', BUG])
+})
+
+test('an idle question that missed the prompt cache names an account switch', async ($, on) => {
+  const { begin, clock, logs, turn } = engine(on, {
+    tokens: 200_000,
+    forkUsage: { ...MISS, cache_creation_input_tokens: 170_000 },
+  })
+  await begin($)
+
+  await turn($, 't1')
+  await clock.advance(IDLE)
+  await clock.settle()
+
+  expect(logs).toEqual([
+    'Missed the prompt cache at 200k tokens, idle 55 minutes: read 30k of 202k from it. Signing in to another account while idle drops the cache.',
+    'Compacting at 200k tokens, idle 55 minutes: the PR merged',
+  ])
+})
+
+test('a compaction the engine refuses says why, and is tried again once the session sits idle', async ($, on) => {
   const { begin, clock, compactions, logs, turn } = engine(on, { compactFailures: 1 })
   await begin($)
 
@@ -641,7 +687,7 @@ test('a compaction that fails says so, and is tried again once the session sits 
   // The test engine skips a hook that throws and rejects with its own error.
   expect(logs.length).toBe(2)
   expect(logs[0]).toBe('Compacting at 500k tokens: the PR merged')
-  expect(logs[1]).toStartWith('Failed: ')
+  expect(logs[1]).toStartWith("Didn't compact at 500k tokens: ")
 
   await clock.advance(IDLE)
   await clock.settle()
@@ -666,6 +712,16 @@ test('a compaction whose process ended first is finished when the next process s
   await begin($)
   await clock.settle()
   expect(compactions).toEqual([''])
+})
+
+test('a compaction to finish that the engine refuses says why', async ($, on) => {
+  const { begin, clock, logs } = engine(on, { stored: ANNOUNCED, compactFailures: 1 })
+
+  await begin($)
+  await clock.settle()
+
+  expect(logs.length).toBe(2)
+  expect(logs[1]).toStartWith("Didn't compact at 489k tokens: ")
 })
 
 test('an announcement a turn has moved past is dropped', async ($, on) => {
@@ -1206,6 +1262,25 @@ test('/sparkjoy report asks the model to run the report skill with what the user
   ])
 })
 
+test(
+  '/sparkjoy bug asks the model to run the bug skill with the session and its settings, instructions whole',
+  { options: { instructions: INSTRUCTIONS } },
+  async ($, on) => {
+    const { begin, clock, prompts, type } = engine(on)
+    await begin($)
+
+    const { text } = await type($, 'sparkjoy', 'bug it compacted mid-debug')
+    await clock.settle()
+
+    expect(text).toBe('Asking the model to draft a bug report.')
+    expect(prompts).toEqual([
+      "The user typed /sparkjoy bug it compacted mid-debug. Run the sparkjoy:bug skill for them. The session's id is s1. /sparkjoy states its settings as:\n" +
+        '> On. It asks whether to compact at a turn end from 250k (the default) and in an idle session from 175k (the default).\n' +
+        `> Its question carries your instructions: "${INSTRUCTIONS}"`,
+    ])
+  },
+)
+
 test('/sparkjoy with another word says what it takes', async ($, on) => {
   const { begin, sets, type } = engine(on)
   await begin($)
@@ -1214,6 +1289,6 @@ test('/sparkjoy with another word says what it takes', async ($, on) => {
 
   expect(sets).toEqual([])
   expect(text).toBe(
-    '/sparkjoy takes on, classify, off or report, not "disable", or nothing to show its settings.',
+    '/sparkjoy takes on, classify, off, report or bug, not "disable", or nothing to show its settings.',
   )
 })
