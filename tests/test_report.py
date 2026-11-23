@@ -180,8 +180,8 @@ def test_counts_verdicts_and_returns(tmp_path):
         "Cost $1.68 more, 17% more than these sessions would have cost without sparkjoy's compactions.",
         "7 verdicts in 1 of 1 sessions: 3 compacted, 1 would compact, 1 kept, 0 unreadable, "
         "1 no verdict, 0 dropped, 1 failed; 2 missed the prompt cache",
-        "Replayed at list prices, these sessions cost $11 with sparkjoy's compactions, $3.70 of it "
-        "for its checks, against $9.60 without them.",
+        "Replayed at the list prices of each session's model, these sessions cost $11 with "
+        "sparkjoy's compactions, $3.70 of it for its checks, against $9.60 without them.",
         "Asking from 350k at turn ends and 125k in idle sessions costs least in this session's "
         "replay, of the floors it tried.",
         "3 returns after an hour or more idle to sessions left with 175k or more in context; 2 had "
@@ -252,8 +252,8 @@ def test_sessions_on_a_200k_window_say_sparkjoy_cannot_act(tmp_path):
     )
     assert summary == [
         "sparkjoy can't act in these 2 sessions. Claude Code compacted 1 of them on its own before "
-        "200k, as it does in a 200k context window, and none of them passed 200k. sparkjoy acts "
-        "only in sessions with a 1M window. A smaller auto-compact window looks the same."
+        "200k, as it does in a 200k context window or where auto-compact is set to start earlier, "
+        "and none of them passed 200k. sparkjoy acts only in sessions with a 1M window, from 175k."
     ]
     assert "Thresholds" not in page
 
@@ -297,7 +297,7 @@ def test_saves_the_figures_the_question_states(tmp_path):
     }
     assert (
         "Asking from 350k at turn ends and 125k in idle sessions costs least in this session's "
-        "replay, of the floors it tried. sparkjoy asks from these floors from the next turn end, "
+        "replay, of the floors it tried, and sparkjoy asks from them from the next turn end, "
         "except where you set your own."
     ) in summary
     assert summary[-1].startswith(

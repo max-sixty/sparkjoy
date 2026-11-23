@@ -454,7 +454,8 @@ def summary(found, S, verdicts, saving, unpriced, rows, fitted, saved, projects)
             + " without sparkjoy's compactions."
         )
         out.append(
-            f"Replayed at list prices, these sessions cost {usd(ran)} with sparkjoy's compactions, "
+            f"Replayed at the list prices of each session's model, these sessions cost {usd(ran)} with "
+            f"sparkjoy's compactions, "
             f"{usd(checks)} of it for its checks, against {usd(without)} without them.{left}"
         )
     elif unpriced:
@@ -487,27 +488,29 @@ def summary(found, S, verdicts, saving, unpriced, rows, fitted, saved, projects)
             f"sparkjoy gave {len(verdicts):,} {'verdict' if len(verdicts) == 1 else 'verdicts'} in "
             "this window and compacted nothing."
         )
-    # Claude Code compacting before SMALL shows a 200k window, or an auto-compact window set
-    # below SMALL, which looks the same in the log.
-    alike = "A smaller auto-compact window looks the same."
+    # Claude Code compacting before SMALL shows a 200k window, or auto-compact set to start
+    # earlier, which looks the same in the log.
+    cause = (
+        f"on its own before {tokens(SMALL)}, as it does in a 200k context window or where "
+        "auto-compact is set to start earlier"
+    )
+    needs = f"sparkjoy acts only in sessions with a 1M window, from {tokens(fit.IDLE_FLOOR)}."
     if small and not S:
         k = sum(map(cramped, found))
         out.append(
             f"**sparkjoy can't act in {'this session' if small == 1 else f'these {small:,} sessions'}.** "
             + (
-                f"Claude Code compacted {'it' if small == 1 else 'them'} on its own before "
-                f"{tokens(SMALL)}, as it does in a 200k context window"
+                f"Claude Code compacted {'it' if small == 1 else 'them'} {cause}."
                 if k == small
-                else f"Claude Code compacted {k:,} of them on its own before {tokens(SMALL)}, as it "
-                f"does in a 200k context window, and none of them passed {tokens(SMALL)}"
+                else f"Claude Code compacted {k:,} of them {cause}, and none of them passed "
+                f"{tokens(SMALL)}."
             )
-            + f". sparkjoy acts only in sessions with a 1M window. {alike}"
+            + f" {needs}"
         )
     elif small:
         out.append(
-            f"Claude Code compacted {small:,} of these {len(found):,} sessions on its own before "
-            f"{tokens(SMALL)}, as it does in a 200k context window, where sparkjoy doesn't act, so "
-            f"this page leaves {'it' if small == 1 else 'them'} out. {alike}"
+            f"Claude Code compacted {small:,} of these {len(found):,} sessions {cause}, so this page "
+            f"leaves {'it' if small == 1 else 'them'} out. {needs}"
         )
     if not verdicts and S:
         k = sum(map(reached, S))
@@ -525,15 +528,23 @@ def summary(found, S, verdicts, saving, unpriced, rows, fitted, saved, projects)
             else f"sparkjoy logged no verdicts in {other} sessions. {k:,} of {other} {n:,} reached "
             f"one of its default floors: {floors}."
         )
-    asks = "sparkjoy asks from these floors from the next turn end, except where you set your own."
     if fitted and (saving or unpriced or compacted):
         turn, idle = fitted["floors"]
         out.append(
             f"**Asking from {tokens(turn)} at turn ends and {tokens(idle)} in idle sessions** costs "
-            f"least in {these} replay, of the floors it tried.{f' {asks}' if saved else ''}"
+            f"least in {these} replay, of the floors it tried"
+            + (
+                ", and sparkjoy asks from them from the next turn end, except where you set your own."
+                if saved
+                else "."
+            )
         )
     elif fitted and saved:
-        out.append(asks)
+        turn, idle = fitted["floors"]
+        out.append(
+            f"From the next turn end, sparkjoy asks from {tokens(turn)} at turn ends and "
+            f"{tokens(idle)} in idle sessions, except where you set your own."
+        )
     if rows:
         lapsed = [r for r in rows if r[3] is None]
         by = Counter(r[3] for r in rows if r[3])
@@ -580,7 +591,7 @@ def page(
         )
         if old:
             parts.append(
-                f"<p class=note>{old:,} of them came from the plugin under its old name, compact-when-done, "
+                f"<p class=note>{old:,} of these verdicts came from the plugin under its old name, compact-when-done, "
                 "which logged only the checks that compacted, so its other verdicts, and what those checks "
                 "cost, are missing here.</p>"
             )
@@ -607,8 +618,8 @@ def page(
         )
         parts.append(
             '<p class="legend"><span><i style="color: var(--with)"></i>with sparkjoy</span>'
-            '<span><i style="color: var(--without)"></i>without its compactions, keeping Claude Code\'s '
-            "when the window fills, and yours</span>"
+            '<span><i style="color: var(--without)"></i>without its compactions; Claude Code\'s and '
+            "yours still run</span>"
             f"<span>{mark('compacted')}compacted {would}{mark('kept')}kept {mark('failed')}other verdict</span>"
             f"<span>context per request, 0 to 1M, dashed at {tokens(fit.FLOOR)}</span></p>"
         )
@@ -685,7 +696,7 @@ def page(
                         ("At turn ends", "—", tokens(fit.FLOOR), tokens(turn)),
                         ("In idle sessions", "—", tokens(fit.IDLE_FLOOR), tokens(idle)),
                         (
-                            f"Cost at {model_name(f['model'])} prices",
+                            "Cost",
                             *(usd(f["cost"][k]) for k in ("never", "author", "fitted")),
                         ),
                         (
@@ -700,8 +711,9 @@ def page(
                 + "</div>"
             )
             parts.append(
-                f"<p>Each column replays these sessions, compacting at every turn end and in every idle "
-                f"session from its floors, as if each question said to. Never compacting keeps only Claude "
+                f"<p>Each column replays these sessions at {model_name(f['model'])} list prices, compacting "
+                f"at every turn end and in every idle session from its floors, as if each question said to. "
+                f"Never compacting keeps only Claude "
                 f"Code's compaction when the window fills, and your /compact. Of the floors tried, the "
                 f"fitted ones cost least. The last row compares each with never compacting by cost per unit "
                 f"of work, which also counts what the smaller context costs the work: it takes a request at "
@@ -745,8 +757,8 @@ def page(
                 if missing
                 else ""
             )
-            + "The extra wasted requests after a compaction stay at their default: measuring them "
-            "takes months of sessions.</p>"
+            + "The requests a compaction wastes re-reading what it dropped stay at their default: "
+            "measuring them takes months of sessions.</p>"
         )
 
     if rows:
