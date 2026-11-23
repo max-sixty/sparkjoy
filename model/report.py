@@ -356,7 +356,9 @@ def page(S, since, until, verdicts, sessions, saving, rows, fitted, unfit, saved
             else f"<b>Cost {usd(-d)} more</b>, {-d / without:.0%} more than these sessions would have cost"
         )
         summary.append(
-            f"<p>{head} without sparkjoy's compactions. Replayed at list prices, they cost "
+            f"<p>{head} without sparkjoy's compactions, with Claude Code compacting on its own: when the "
+            f"window fills, and in a session you had open, an idle context from {tokens(fit.CC_IDLE)}. "
+            f"Replayed at list prices, they cost "
             f"{usd(without)} without them and {usd(ran)} with them, including {usd(checks)} for its "
             f"checks.{left}</p>"
         )
@@ -619,7 +621,7 @@ def main():
     # The replay prices each compaction from K, P and N.
     replays = p is not None and np.isfinite([p.K, p.P, p.N]).all()
     sessions = (
-        [(s, fit.as_run(s, p)) for s in S]
+        [(s, fit.as_run(s, p, None if s.background else fit.CC_IDLE)) for s in S]
         if replays
         else [(s, (None, s.size, s.size)) for s in S]
     )
