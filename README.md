@@ -50,9 +50,11 @@ classify`, then switch to `/sparkjoy on` to let it compact
 
 ## What it does
 
-- **In an idle session it asks just before the prompt cache expires**: after 55
+- **It asks the session's own model whether to compact now**, and compacts if
+  the model says to ([How it decides](#how-it-decides)). It asks when a turn
+  ends, and in an idle session just before the prompt cache expires: after 55
   minutes on the one-hour cache, and after 4 minutes on the five-minute cache,
-  which API keys use by default ([How it decides](#how-it-decides)).
+  which API keys use by default.
 - **Each verdict shows in the transcript** as a dim line with its reason, and
   a question that missed the prompt cache adds a line saying so. In the session
   above, it kept the context while a move was half done:
