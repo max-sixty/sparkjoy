@@ -865,6 +865,10 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0, asks=None)
             )
             if asked:
                 cost += question(ctx, c)
+            # An idle question that keeps the context refreshes the cache, which then lives `ttl`
+            # from the question, IDLE[ttl] after the turn end. A rewrite the log shows within `ttl`
+            # had another cause, which the question doesn't prevent.
+            cold = lapse[j] and not (asked and ttl < s.gap[j] <= IDLE[ttl] + ttl)
             if pending or (idle is not None and ctx >= idle[j - 1] and idled):
                 cost += (
                     ctx + c.output * p.N + lost[j - 1]
@@ -875,14 +879,11 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0, asks=None)
                 ctx, written = left + grew, left - P + grew
             else:
                 ctx += grew
-                # An idle question that kept the context read it from the cache, which then lives
-                # `ttl` from the question, IDLE[ttl] after the turn end.
-                kept = asked and s.gap[j] <= IDLE[ttl] + ttl
-                written = ctx - P if lapse[j] and not kept else grew
+                written = ctx - P if cold else grew
             if ctx >= AUTO:
                 # Claude Code compacts before sending, so after a lapse its summary reads uncached input.
                 cost += (
-                    (P + c.input * (ctx - P) if lapse[j] else ctx)
+                    (P + c.input * (ctx - P) if cold else ctx)
                     + c.output * p.N
                     + lost[j - 1]
                 )
