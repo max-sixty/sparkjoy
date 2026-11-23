@@ -6,8 +6,8 @@
 </h1>
 
 A Claude Code plugin that compacts between tasks, rather than when the context
-fills[^name]. It cuts the cost of a session by 26% to 40%, depending on how you
-run Claude Code ([What it saves](#what-it-saves)).
+fills[^name]. It cuts the cost of long sessions by 26% to 40%, depending on how
+you run Claude Code ([What it saves](#what-it-saves)).
 
 Once the session has built up some context, sparkjoy asks the session's own
 model whether to compact, and tells it what keeping the context and compacting
@@ -127,30 +127,30 @@ this:
 
 ## What it saves
 
-Every request reads the whole context, so a context left to fill makes every
-request dearer, while each compaction costs about $1. The [cost
-model](#cost-model) replays real sessions under each policy, keeping every
-request and moving only the compactions. Against Claude Code's own compaction,
-compacting from sparkjoy's floors saves[^fit]:
+Every request reads the whole context, so a larger context makes each request
+cost more, and each compaction costs about $1. The [cost model](#cost-model)
+replays real sessions under each policy, keeping every request and moving only
+the compactions. Against Claude Code's own compaction, compacting from
+sparkjoy's floors saves[^fit]:
 
-| sessions                                                                    | in cost | per unit of work, at the base case |
-| --------------------------------------------------------------------------- | ------- | ---------------------------------- |
-| on the five-minute cache                                                    | 40%     | 21%                                |
-| in the background, on the one-hour cache                                    | 32%     | 12%                                |
-| open on the one-hour cache, where Claude Code compacts idle contexts itself | 26%     | 7%                                 |
+| sessions                                                                                          | for the same requests | for the same work, at the cost model's base case |
+| ------------------------------------------------------------------------------------------------- | --------------------- | ------------------------------------------------ |
+| on the five-minute cache                                                                          | 40%                   | 21%                                              |
+| on the one-hour cache, running in the background                                                  | 32%                   | 12%                                              |
+| on the one-hour cache, open in a terminal or editor, where Claude Code compacts idle contexts too | 26%                   | 7%                                               |
 
-"In cost" counts a request as getting as much done with a smaller context. "Per
-unit of work" takes the model's base case, where a request at 250k gets half as
-much done as one at 1M. Each figure has sparkjoy compact at every turn end past
-its floor. Its question keeps the context instead where the next turns need it,
-which saves more where work differs in how much it needs the context, if the
-question is right often enough ([A
-classifier](docs/cost-model.md#a-classifier)).
+"The same requests" counts a request as getting as much done with a smaller
+context. "The same work" takes the cost model's base case, where a request at
+250k gets half as much done as one at 1M. Each figure has sparkjoy compact at
+every turn end past its floor. sparkjoy asks first and keeps the context where
+the next turns need it, which saves more for the same work if it judges right
+often enough ([A classifier](docs/cost-model.md#a-classifier)).
 
 The model is fitted to my sessions, and `/sparkjoy report` replays your own.
 Replayed as they ran, my 151 sessions from 18 to 23 November cost 31% less with
-sparkjoy's compactions than without them. An earlier replay, of my sessions from
-7 to 15 November, when sparkjoy asked from 400k[^replay]:
+sparkjoy's compactions than with Claude Code's alone, and 25% less had each been
+open, within about a point of the model. An earlier replay, of 7 to 15 November,
+when sparkjoy asked from 400k, drew these charts[^replay]:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/cost-dark.svg">
