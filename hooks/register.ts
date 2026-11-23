@@ -54,7 +54,8 @@ import { checkForUpdate } from './update'
 const COMPACTING = { plugin: 'sparkjoy', key: 'compacting' } as const
 
 // The floors sparkjoy asks from and the figures the question states, as my
-// sessions measured them (docs/cost-model.md, 7-15 Nov 2026).
+// sessions of 7-15 Nov 2026 measured them (docs/cost-model.md); FLOOR's
+// comment gives what my sessions of 18-22 Nov 2026 say of the floors.
 // `/sparkjoy report` fits the same figures to the user's own sessions and
 // saves them (`FIGURES`), and sparkjoy uses those instead (`fitted`), falling
 // back to these figure by figure. A floor the user set in their settings wins
@@ -66,7 +67,7 @@ const COMPACTING = { plugin: 'sparkjoy', key: 'compacting' } as const
 const AUTHOR = {
   // The judge is asked at a turn end only from FLOOR context tokens, and in
   // an idle session from IDLE_FLOOR. In docs/cost-model.md's replay of my
-  // sessions ("Floors"), the pair that costs least counting cost alone is
+  // sessions of 18-22 Nov 2026 ("Floors"), the pair that costs least counting cost alone is
   // 250k and 150k; this one saves as much at the model's base case for β,
   // 0.4 points short of the most efficient pair. The pair is fitted by cost
   // alone, since the question decides above it. The report finds the pair

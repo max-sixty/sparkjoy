@@ -9,9 +9,9 @@
         --session 00e0c1c4 --out assets
 
 The replay is the cost model's `as_run` (model/fit.py): it prices each session twice from its
-logged requests, "with" sparkjoy's compactions where they happened and its questions, and
-"without" them, so that Claude Code compacts on its own near the window, as in a background
-session. The charts:
+logged requests, at fit.MODEL's list prices, "with" sparkjoy's compactions where they happened and
+its questions, and "without" them, so that Claude Code compacts on its own near the window, and in a
+session someone had open, also an idle context from fit.CC_IDLE. The charts:
 
   session.svg   one session's context per request, with and without sparkjoy
   context.svg   the share of the window's requests at each context size, with and without
@@ -35,8 +35,8 @@ ARMS = (
 
 
 def marker(t, compacted):
-    """A turn end sparkjoy asked about, in the colour of the line it sits on: a large dot where the
-    model compacted, a small one where it kept going."""
+    """A question sparkjoy asked, at a turn end or in an idle session, in the colour of the line it sits
+    on: a large dot where the model compacted, a small one where it kept going."""
     if compacted:
         return {"marker": "o", "ms": 8, "mew": 1.5, "mec": t["page"], "mfc": t["with"]}
     return {"marker": "o", "ms": 5, "mew": 1, "mec": t["page"], "mfc": t["with"]}
@@ -51,8 +51,8 @@ def areas(t, draw):
 
 
 def session_chart(traces, checks, t, path):
-    """One session's context per request in each arm, keyed as ARMS is, with a dot at each turn end
-    sparkjoy asked about, as (request, whether it compacted)."""
+    """One session's context per request in each arm, keyed as ARMS is, with a dot at each question
+    sparkjoy asked, as (request, whether it compacted)."""
     fig, ax = plt.subplots(figsize=(9, 3.4))
     charts.style(ax, t)
 
@@ -79,7 +79,7 @@ def session_chart(traces, checks, t, path):
     ]
     dots = [
         (plt.Line2D([], [], ls="", **marker(t, c)), label)
-        for c, label in ((False, "turn end, kept going"), (True, "turn end, compacted"))
+        for c, label in ((False, "asked, kept going"), (True, "asked, compacted"))
     ]
     handles, labels = zip(*lines, *dots, strict=True)
     ax.legend(
@@ -221,7 +221,7 @@ def main():
     a = ap.parse_args()
     S, since, until = fit.read(a)
     p = fit.measure(S, fit.usual(s.ttl for s in S))
-    runs = [(s, *r) for s in S if (r := fit.as_run(s, p))[0]]
+    runs = [(s, *r) for s in S if (r := fit.as_run(s, p, model=fit.MODEL))[0]]
     without, with_, judge = (sum(d[i] for _, d, _, _ in runs) for i in (1, 0, 2))
     contexts = {
         "with": np.concatenate([w for _, _, w, _ in runs]),
@@ -229,13 +229,12 @@ def main():
     }
     one = next(s for s in S if s.path.name.startswith(a.session))
     (one_with, one_without, _), traces = (
-        (d := fit.as_run(one, p))[0],
+        (d := fit.as_run(one, p, model=fit.MODEL))[0],
         {"with": d[1], "without": d[2]},
     )
+    asked = [v for v in one.verdicts if v.kind in ("compacted", "kept")]
     checks = [
-        (int(np.searchsorted(one.t, v.t)) - 1, v.kind == "compacted")
-        for v in one.verdicts
-        if v.kind in ("compacted", "kept")
+        (int(np.searchsorted(one.t, v.t)) - 1, v.kind == "compacted") for v in asked
     ]
     a.out.mkdir(parents=True, exist_ok=True)
     for theme, t in charts.THEMES.items():
@@ -246,7 +245,7 @@ def main():
     n = len(contexts["with"])
     logged = 0.0
     for s, *_ in runs:
-        c = fit.prices(s.model, s.ttl)
+        c = fit.prices(fit.MODEL, s.ttl)
         logged += (
             float(
                 s.read.sum()
@@ -258,7 +257,7 @@ def main():
         )
     print(
         f"{len(runs)} sessions, {n:,} requests, {since:%Y-%m-%d %H:%M}Z to {until:%Y-%m-%d %H:%M}Z; "
-        f"the requests' logged cost ${logged:,.0f}"
+        f"the requests' logged tokens at {fit.MODEL} prices ${logged:,.0f}"
     )
     print(
         f"cost: ${without:,.0f} without, ${with_:,.0f} with ({with_ / without - 1:+.1%}); its questions ${judge:,.0f}"
@@ -268,21 +267,23 @@ def main():
         f"requests at {LONG // 1000}k+: {(contexts['without'] >= LONG).mean():.0%} without, "
         f"{(contexts['with'] >= LONG).mean():.0%} with"
     )
-    asked = [v for s, *_ in runs for v in s.verdicts if v.kind in ("compacted", "kept")]
+    every = [v for s, *_ in runs for v in s.verdicts if v.kind in ("compacted", "kept")]
     print(
-        f"verdicts: {len(asked)}, compacted after {sum(v.kind == 'compacted' for v in asked)}"
+        f"verdicts: {len(every)}, compacted after {sum(v.kind == 'compacted' for v in every)}"
     )
     days = (one.t[-1] - one.t[0]) / 86_400
     print(
         f"session chart: {one.path.name}, {len(one.t):,} requests over {days:.1f} days, "
         f"${one_without:,.0f} without, ${one_with:,.0f} with ({one_with / one_without - 1:+.1%}); "
-        f"kept going at {sum(not c for _, c in checks)} of {len(checks)} turn ends asked about; compacted at "
+        f"asked {len(asked)} times, {sum(v.idle is None for v in asked)} at turn ends and "
+        f"{sum(v.idle is not None for v in asked)} when idle; kept going {sum(not c for _, c in checks)} times; compacted at "
         f"{', '.join(f'{traces["with"][i] / 1000:.0f}k' for i, c in checks if c)}; without, Claude Code compacts "
         f"{int((np.diff(traces['without']) < -300_000).sum())} times"
     )
-    for v in one.verdicts:
-        if v.kind in ("compacted", "kept"):
-            print(f"  {v.kind} at {v.tokens // 1000}k: {v.reason}")
+    for v in asked:
+        print(
+            f"  {v.kind} at {v.tokens // 1000}k{'' if v.idle is None else ', idle'}: {v.reason}"
+        )
 
 
 if __name__ == "__main__":

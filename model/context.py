@@ -6,7 +6,7 @@
 """Measures what fills the context a compaction leaves, K - P in docs/cost-model.md, by source.
 
     uv run --script model/context.py                        # the last 14 days of ~/.claude/projects
-    uv run --script model/context.py --since 2026-11-07T12:00Z --until 2026-11-16T00:00Z
+    uv run --script model/context.py --since 2026-11-18T00:00Z --until 2026-11-23T00:00Z
 
 It reads the sessions and requests fit.py reads, with fit.py's reader, one transcript at a time.
 Transcripts log each request as Claude Code sent it: an `api-request` record names its messages by
