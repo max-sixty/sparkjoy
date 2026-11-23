@@ -82,11 +82,14 @@ VERDICT = re.compile(
     re.S,
 )
 # The line it writes before a verdict whose question read less than nine tenths of its input from
-# the prompt cache (MISSED in hooks/register.ts).
+# the prompt cache (MISSED in hooks/register.ts), which in an idle session goes on to say why.
 MISSED = re.compile(
     r"sparkjoy: Missed the prompt cache at \d+k tokens(?:, idle \d+ minutes)?: "
-    r"read (?P<read>\d+)k of (?P<input>\d+)k from it"
+    r"read (?P<read>\d+)k of (?P<input>\d+)k from it(?:\. .*)?"
 )
+# Every line sparkjoy writes in the transcript, under either name, and those Claude Code writes
+# about it there.
+LINE = ("sparkjoy: ", "compact-when-done: ")
 KINDS = {
     "Compacting": "compacted",
     "Would compact": "would compact",
@@ -130,9 +133,12 @@ class Verdict:
 
 @dataclass
 class Session:
+    path: Path  # its transcript
     title: str
     model: str  # the model most of its requests used
+    version: str  # the Claude Code release that wrote its last request
     verdicts: list  # what sparkjoy logged
+    lines: list  # every line in `LINE`, as (seconds since the epoch, text)
     t: np.ndarray  # when each request started, in seconds since the epoch
     sparkjoy: np.ndarray  # the request is the first after a compaction sparkjoy made
     kind: np.ndarray  # one of the request kinds above
@@ -186,6 +192,11 @@ def window_args(ap):
         help="ISO time; a bound with no offset is local (default: 14 days ago)",
     )
     ap.add_argument("--until", help="ISO time (default: now)")
+    projects_arg(ap)
+
+
+def projects_arg(ap):
+    """The argument that says where the transcripts are."""
     ap.add_argument(
         "--projects",
         type=Path,
@@ -244,194 +255,193 @@ def typed(e):
 
 def load(root, since, until):
     """The main thread of each interactive session in [since, until)."""
-    lo, hi = (t.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S") for t in (since, until))
-    title_lines = tuple(f'{{"type":"{t}"' for t in TITLES)
-    sessions = []
     # A subagent's transcript sits a level deeper. Sorted, so the resampling draws the same sessions
     # whatever order the filesystem lists them in.
-    for path in sorted(root.glob("*/*.jsonl")):
-        if path.stat().st_mtime < since.timestamp():
+    return [
+        s
+        for path in sorted(root.glob("*/*.jsonl"))
+        if path.stat().st_mtime >= since.timestamp()
+        and (s := transcript(path, since, until))
+    ]
+
+
+def transcript(path, since=None, until=None):
+    """The main thread of the session whose transcript is at `path`, in [since, until) or all of
+    it, or None for a `claude -p` run or a session of one request."""
+    # Compared with each entry's ISO timestamp, which lies between "0" and "~" when it has one.
+    lo, hi = (
+        t.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S") if t else default
+        for t, default in ((since, "0"), (until, "~"))
+    )
+    title_lines = tuple(f'{{"type":"{t}"' for t in TITLES)
+    reqs, comps, prompts, verdicts, lines = {}, [], [], [], []
+    entry, version, asked, missed = None, None, None, None
+    titles, first, models, said, failed, summaries = {}, None, Counter(), [], {}, []
+    for raw in path.open(errors="replace"):
+        prompt = (
+            '"type":"user"' in raw and '"tool_result"' not in raw
+        )  # a message that starts a turn
+        title = raw.startswith(title_lines)
+        error = '"is_error":true' in raw
+        queued = '"queued_command"' in raw  # a message typed while the turn ran
+        summary = '"isCompactSummary":true' in raw  # its text may quote a tool result
+        if not (
+            prompt
+            or title
+            or error
+            or queued
+            or summary
+            or '"assistant"' in raw
+            or "compact_boundary" in raw
+            or '"informational"' in raw
+        ):
             continue
-        reqs, comps, prompts, verdicts, entry, asked, missed = (
-            {},
-            [],
-            [],
-            [],
-            None,
-            None,
-            None,
-        )
-        titles, first, models, said, failed, summaries = {}, None, Counter(), [], {}, []
-        for raw in path.open(errors="replace"):
-            prompt = (
-                '"type":"user"' in raw and '"tool_result"' not in raw
-            )  # a message that starts a turn
-            title = raw.startswith(title_lines)
-            error = '"is_error":true' in raw
-            queued = '"queued_command"' in raw  # a message typed while the turn ran
-            summary = (
-                '"isCompactSummary":true' in raw
-            )  # its text may quote a tool result
-            if not (
-                prompt
-                or title
-                or error
-                or queued
-                or summary
-                or '"assistant"' in raw
-                or "compact_boundary" in raw
-                or '"informational"' in raw
+        try:
+            e = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        # A session's name and first prompt carry no time, or come before the window.
+        if title:
+            titles[e["type"]] = e.get(TITLES[e["type"]])
+            continue
+        if prompt and first is None and e.get("type") == "user":
+            first = typed(e)
+        if not lo <= e.get("timestamp", "") < hi or e.get("isSidechain"):
+            continue
+        t = datetime.fromisoformat(e["timestamp"].replace("Z", "+00:00")).timestamp()
+        if e.get("isCompactSummary"):
+            summaries.append(len(text_of((e.get("message") or {}).get("content"))) / 4)
+        if prompt and e.get("type") == "user":
+            prompts.append(t)
+            if text := typed(e):
+                said.append((t, text, False))
+        elif e.get("type") == "attachment":
+            # Plain text typed mid-turn is folded into the turn at its next tool result. Its
+            # timestamp is when it was typed; another agent's message carries isMeta.
+            a = e.get("attachment") or {}
+            if (
+                a.get("type") == "queued_command"
+                and a.get("commandMode") == "prompt"
+                and not a.get("isMeta")
             ):
-                continue
-            try:
-                e = json.loads(raw)
-            except json.JSONDecodeError:
-                continue
-            # A session's name and first prompt carry no time, or come before the window.
-            if title:
-                titles[e["type"]] = e.get(TITLES[e["type"]])
-                continue
-            if prompt and first is None and e.get("type") == "user":
-                first = typed(e)
-            if not lo <= e.get("timestamp", "") < hi or e.get("isSidechain"):
-                continue
-            t = datetime.fromisoformat(
-                e["timestamp"].replace("Z", "+00:00")
-            ).timestamp()
-            if e.get("isCompactSummary"):
-                summaries.append(
-                    len(text_of((e.get("message") or {}).get("content"))) / 4
-                )
-            if prompt and e.get("type") == "user":
-                prompts.append(t)
-                if text := typed(e):
-                    said.append((t, text, False))
-            elif e.get("type") == "attachment":
-                # Plain text typed mid-turn is folded into the turn at its next tool result. Its
-                # timestamp is when it was typed; another agent's message carries isMeta.
-                a = e.get("attachment") or {}
+                if text := text_of(a.get("prompt")):
+                    said.append((t, text, True))
+        elif error and e.get("type") == "user":
+            for b in (e.get("message") or {}).get("content") or []:
                 if (
-                    a.get("type") == "queued_command"
-                    and a.get("commandMode") == "prompt"
-                    and not a.get("isMeta")
+                    isinstance(b, dict)
+                    and b.get("type") == "tool_result"
+                    and b.get("is_error")
                 ):
-                    if text := text_of(a.get("prompt")):
-                        said.append((t, text, True))
-            elif error and e.get("type") == "user":
-                for b in (e.get("message") or {}).get("content") or []:
-                    if (
-                        isinstance(b, dict)
-                        and b.get("type") == "tool_result"
-                        and b.get("is_error")
-                    ):
-                        c = b.get("content")
-                        failed[b.get("tool_use_id")] = (
-                            c if isinstance(c, str) else text_of(c)
-                        )[:200]
-            elif e.get("type") == "assistant":
-                m = e.get("message") or {}
-                u = m.get("usage")
-                if not u or m.get("model") == "<synthetic>":
-                    continue
-                entry = entry or e.get("entrypoint")
-                v = (
-                    u.get("input_tokens") or 0,
-                    u.get("cache_read_input_tokens") or 0,
-                    u.get("cache_creation_input_tokens") or 0,
-                    (u.get("cache_creation") or {}).get("ephemeral_5m_input_tokens")
-                    or 0,
-                    u.get("output_tokens") or 0,
-                )
-                # Claude Code logs each content block as an entry of its own,
-                # each repeating the usage, which streaming grows.
-                if m["id"] not in reqs:
-                    models[m.get("model")] += 1
-                q = reqs.setdefault(
-                    m["id"], [t, (0,) * 5, False, set(), t, {}, {}, m.get("model")]
-                )
-                q[4] = t  # when its last block was logged
-                q[1] = tuple(map(max, q[1], v))
-                q[2] = q[2] or m.get("stop_reason") == "end_turn"
-                for n, b in enumerate(m.get("content") or []):
-                    # Its visible characters, each block counted once however often it is logged.
-                    if b.get("type") == "text":
-                        q[6][e.get("uuid"), n] = len(b.get("text") or "")
-                    elif b.get("type") == "tool_use":
-                        i = b.get("input") or {}
-                        q[5][b.get("id")] = (
-                            b.get("name"),
-                            hash(json.dumps(i, sort_keys=True)),
-                            i.get("file_path"),
-                        )
-                        q[6][b.get("id")] = len(json.dumps(i))
-                        if b.get("name") == "Read" and "file_path" in i:
-                            q[3].add(i["file_path"])
-            elif e.get("subtype") == "informational":
-                text = str(e.get("content", ""))
-                if line := MISSED.fullmatch(text):
-                    missed = int(line["read"]) * 1000, int(line["input"]) * 1000
-                elif line := VERDICT.fullmatch(text):
-                    kind = KINDS[line["kind"]]
-                    verdicts.append(
-                        Verdict(
-                            t,
-                            line["plugin"],
-                            kind,
-                            line["tokens"] and int(line["tokens"]) * 1000,
-                            line["idle"] and int(line["idle"]),
-                            line["reason"],
-                            missed,
-                        )
+                    c = b.get("content")
+                    failed[b.get("tool_use_id")] = (
+                        c if isinstance(c, str) else text_of(c)
+                    )[:200]
+        elif e.get("type") == "assistant":
+            m = e.get("message") or {}
+            u = m.get("usage")
+            if not u or m.get("model") == "<synthetic>":
+                continue
+            entry = entry or e.get("entrypoint")
+            version = e.get("version") or version
+            v = (
+                u.get("input_tokens") or 0,
+                u.get("cache_read_input_tokens") or 0,
+                u.get("cache_creation_input_tokens") or 0,
+                (u.get("cache_creation") or {}).get("ephemeral_5m_input_tokens") or 0,
+                u.get("output_tokens") or 0,
+            )
+            # Claude Code logs each content block as an entry of its own,
+            # each repeating the usage, which streaming grows.
+            if m["id"] not in reqs:
+                models[m.get("model")] += 1
+            q = reqs.setdefault(
+                m["id"], [t, (0,) * 5, False, set(), t, {}, {}, m.get("model")]
+            )
+            q[4] = t  # when its last block was logged
+            q[1] = tuple(map(max, q[1], v))
+            q[2] = q[2] or m.get("stop_reason") == "end_turn"
+            for n, b in enumerate(m.get("content") or []):
+                # Its visible characters, each block counted once however often it is logged.
+                if b.get("type") == "text":
+                    q[6][e.get("uuid"), n] = len(b.get("text") or "")
+                elif b.get("type") == "tool_use":
+                    i = b.get("input") or {}
+                    q[5][b.get("id")] = (
+                        b.get("name"),
+                        hash(json.dumps(i, sort_keys=True)),
+                        i.get("file_path"),
                     )
-                    missed = None
-                    asked = t if kind == "compacted" else asked
-                elif (
-                    text.startswith("Compacted while idle")
-                    and comps
-                    and t - comps[-1][0] < 10
-                ):
-                    # Claude Code's idle compaction logs as an auto compaction, then says so.
-                    comps[-1][4] = "idle"
-            elif e.get("subtype") == "compact_boundary":
-                md = e.get("compactMetadata") or {}
-                took = (md.get("durationMs") or 0) / 1000
-                # sparkjoy starts compacting as soon as it writes its line. Of the 351 compactions
-                # that followed one in my sessions (16 Oct to 15 Nov 2026), 349 began
-                # within 2 s of it; the other two were the user's, 20 minutes or more later, after
-                # a compaction of sparkjoy's that never ran.
-                mod = asked is not None and t - took - asked < 60
-                auto = md.get("trigger") == "auto"
-                comps.append(
-                    [
+                    q[6][b.get("id")] = len(json.dumps(i))
+                    if b.get("name") == "Read" and "file_path" in i:
+                        q[3].add(i["file_path"])
+        elif e.get("subtype") == "informational":
+            text = str(e.get("content", ""))
+            if text.startswith(LINE):
+                lines.append((t, text))
+            if line := MISSED.fullmatch(text):
+                missed = int(line["read"]) * 1000, int(line["input"]) * 1000
+            elif line := VERDICT.fullmatch(text):
+                kind = KINDS[line["kind"]]
+                verdicts.append(
+                    Verdict(
                         t,
-                        mod or auto,
-                        took,
-                        mod,
-                        "sparkjoy" if mod else "auto" if auto else "user",
-                        md.get("preTokens"),
-                    ]
+                        line["plugin"],
+                        kind,
+                        line["tokens"] and int(line["tokens"]) * 1000,
+                        line["idle"] and int(line["idle"]),
+                        line["reason"],
+                        missed,
+                    )
                 )
-                asked = None
-        if entry == "cli" and len(reqs) > 1:
-            name = (
-                next((titles[k] for k in TITLES if titles.get(k)), None)
-                or first
-                or "untitled"
+                missed = None
+                asked = t if kind == "compacted" else asked
+            elif (
+                text.startswith("Compacted while idle")
+                and comps
+                and t - comps[-1][0] < 10
+            ):
+                # Claude Code's idle compaction logs as an auto compaction, then says so.
+                comps[-1][4] = "idle"
+        elif e.get("subtype") == "compact_boundary":
+            md = e.get("compactMetadata") or {}
+            took = (md.get("durationMs") or 0) / 1000
+            # sparkjoy starts compacting as soon as it writes its line. Of the 351 compactions
+            # that followed one in my sessions (16 Oct to 15 Nov 2026), 349 began
+            # within 2 s of it; the other two were the user's, 20 minutes or more later, after
+            # a compaction of sparkjoy's that never ran.
+            mod = asked is not None and t - took - asked < 60
+            auto = md.get("trigger") == "auto"
+            comps.append(
+                [
+                    t,
+                    mod or auto,
+                    took,
+                    mod,
+                    "sparkjoy" if mod else "auto" if auto else "user",
+                    md.get("preTokens"),
+                ]
             )
-            sessions.append(
-                session(
-                    sorted(reqs.values(), key=lambda q: q[0]),
-                    comps,
-                    sorted(prompts),
-                    failed,
-                    title=" ".join(name.split()),
-                    model=models.most_common(1)[0][0],
-                    verdicts=verdicts,
-                    said=sorted(said),
-                    summaries=summaries,
-                )
-            )
-    return sessions
+            asked = None
+    if entry != "cli" or len(reqs) < 2:
+        return None
+    name = (
+        next((titles[k] for k in TITLES if titles.get(k)), None) or first or "untitled"
+    )
+    return session(
+        sorted(reqs.values(), key=lambda q: q[0]),
+        comps,
+        sorted(prompts),
+        failed,
+        path=path,
+        title=" ".join(name.split()),
+        model=models.most_common(1)[0][0],
+        version=version,
+        verdicts=verdicts,
+        lines=lines,
+        said=sorted(said),
+        summaries=summaries,
+    )
 
 
 def session(reqs, comps, prompts, failed, **meta):
