@@ -42,9 +42,7 @@ At the prompt of a Claude Code session:
 /plugin install sparkjoy --marketplace max-sixty/sparkjoy
 ```
 
-It acts only in sessions with a 1M-token context window, the size its defaults
-are fitted to, and only in interactive ones, not in `-p` runs or SDK hosts. A
-session picks it up when it starts. To see its verdicts only, run `/sparkjoy
+A session picks it up when it starts. To see its verdicts only, run `/sparkjoy
 classify`, then switch to `/sparkjoy on` to let it compact
 ([Settings](#settings)).
 
@@ -332,6 +330,8 @@ size.
 
 ## Limits
 
+- It acts only in sessions with a 1M-token context window, the size its defaults
+  are fitted to, and only in interactive ones, not in `-p` runs or SDK hosts.
 - It asks only once the context reaches 250k at a turn end, or 175k in an idle
   session. In a replay of my sessions that compacts wherever the floors allow,
   this is the pair that costs least counting tokens alone. If a request with
