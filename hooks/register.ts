@@ -676,11 +676,12 @@ function saving(tokens: number, { WRITE, K, LAPSE }: Figures) {
 // Read for each question, so a report run mid-session counts from the next one;
 // a configuration directory or file that can't be found or read leaves every
 // figure but the user's floors at `AUTHOR`'s. The directory is
-// $CLAUDE_CONFIG_DIR, or ~/.claude, as Claude Code and model/fit.py find it.
+// $CLAUDE_CONFIG_DIR, or ~/.claude, as Claude Code and model/fit.py find it:
+// Windows names the home %USERPROFILE% and sets no HOME.
 async function fitted($: EngineInterface, settings: Settings) {
   let saved: Record<string, unknown> | undefined
   try {
-    const home = await $.env.get('HOME')
+    const home = (await $.env.get('HOME')) || (await $.env.get('USERPROFILE'))
     const config = (await $.env.get('CLAUDE_CONFIG_DIR')) || (home && `${home}/.claude`)
     if (config) saved = JSON.parse(await $.fs.read(`${config}/${FIGURES}`))
   } catch {
@@ -783,11 +784,20 @@ async function command(
 }
 
 // What `/sparkjoy` says of the mod's settings, a line each: its mode and the
-// floors it asks from, with where each comes from, and whether the question
-// carries the user's instructions, quoting their start or, `isWhole`, all of
-// them. Bare, `/sparkjoy` adds HOW.
+// floors it asks from, with where each comes from, whether this session's window
+// leaves it nothing to ask, and whether the question carries the user's
+// instructions, quoting their start or, `isWhole`, all of them. Bare,
+// `/sparkjoy` adds HOW. A user whose sessions run on a smaller window would
+// otherwise see the mod on and never see it act.
 async function status($: EngineInterface, settings: Settings, isWhole = false) {
   const { figures, from } = await fitted($, settings)
+  const { window } = (await $.session.usage()).context
+  const windowLine =
+    window < WINDOW
+      ? [
+          `This session's context window is ${thousands(window)}, and sparkjoy acts only in sessions with a 1M window, so it asks nothing here.`,
+        ]
+      : []
   const floor = (name: 'FLOOR' | 'IDLE_FLOOR', set: number | undefined) => {
     const ignored =
       set !== undefined && from[name] !== 'setting'
@@ -804,6 +814,7 @@ async function status($: EngineInterface, settings: Settings, isWhole = false) {
       : instructions
   return [
     MODES[mode].status(floors),
+    ...windowLine,
     instructions
       ? `Its question carries your instructions: "${excerpt}"`
       : 'Its question carries no instructions of yours.',
