@@ -24,11 +24,18 @@ to it:
   such as a design that takes shape over many turns, has a larger β than work
   that needs only a summary of what came before.
 - **D** counts the requests a compaction's lost detail wastes. A compaction
-  drops detail, and the requests after it waste effort on what it dropped:
+  drops detail, and the few requests after it waste effort on what it dropped:
   failed tool calls, repeated lookups and corrections. D is largest while the
   work ahead continues what the context holds, as in the middle of a turn,
   smaller at a turn end in the middle of a task, and close to 0 once a piece of
   work is finished.
+
+β and D differ in which requests pay for a compaction. β's cost falls on every
+request until the next compaction, and grows the more a compaction shrinks the
+context. D's falls on the few requests right after a compaction, whatever the
+context. So D can differ between two moments in one piece of work, such as the
+middle of a turn and the turn end a few requests later, while β is the same at
+both.
 
 What keeping the context costs varies too. Just before an idle session's prompt
 cache lapses, compacting spares the next request a cache write of the whole
