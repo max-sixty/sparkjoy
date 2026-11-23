@@ -6,7 +6,8 @@
 </h1>
 
 A Claude Code plugin that compacts between tasks, rather than when the context
-fills[^name].
+fills[^name]. It cut the cost of my sessions by 31% ([What it
+saves](#what-it-saves)).
 
 Once the session has built up some context, sparkjoy asks the session's own
 model whether to compact, and tells it what keeping the context and compacting
@@ -155,9 +156,16 @@ command that updates it. It doesn't ask where `DISABLE_UPDATES`,
 
 ## What it saves
 
-The plugin cut the cost of my 87 Claude Code sessions from 7 to 15 November 2026
-by 23%, from $5,214 to $4,013 at Opus 5.5 list prices, in a replay of their
-36,251 requests[^replay].
+`/sparkjoy report` replays each session's logged requests twice at list prices,
+with sparkjoy's compactions where they happened and without them. My 151
+sessions from 18 to 23 November 2026, when sparkjoy asked from 250k at a turn
+end, its default since 17 November, cost $6,817 with its compactions and $9,904
+without them, 31% less. Its questions cost $49 of that. Run it to see the figure
+for your own sessions.
+
+An earlier replay of my 87 sessions from 7 to 15 November, while sparkjoy asked
+from 400k at a turn end, gave 23% less, $4,013 against $5,214 at Opus 5.5 list
+prices[^replay]:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/cost-dark.svg">
@@ -176,7 +184,7 @@ each turn end from 250k and again just before an idle session's prompt cache
 lapses. It never asks in the middle of a turn, where the work ahead nearly
 always needs the context's detail. To ask, it forks the conversation for one
 request. The fork reads the whole conversation, which is already in the prompt
-cache. In my sessions, the questions cost $22 in all, against $4,013 for the
+cache. In my sessions, the questions cost $49 in all, against $6,817 for the
 sessions. The model answers in about a hundred tokens, a verdict and a one-line
 reason. The fork goes from Claude Code to the session's own model, so the
 conversation goes only where the session already sends it.
@@ -359,7 +367,6 @@ size.
     spark joy.
 
 [^replay]:
-    sparkjoy then asked from 400k at a turn end, where it now asks from 250k.
     The replay keeps every logged request fixed and moves only the compactions:
     "with sparkjoy" keeps the plugin's, and "without sparkjoy" removes them and
     lets Claude Code compact at its own threshold, near 965k. Both price each
