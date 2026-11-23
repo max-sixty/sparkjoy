@@ -63,10 +63,10 @@ def replayed(s, p):
     priced = s.model in fit.PRICES
     c = fit.prices(s.model if priced else "claude-opus-5-5", s.ttl)
     # As compactions the user typed, sparkjoy's stay where the log has them.
-    ran, ran_trace = fit.replay(
+    ran, ran_trace, _ = fit.replay(
         replace(s, kind=np.where(s.sparkjoy, fit.USER, s.kind)), p, c, np.inf, s.ttl
     )
-    without, without_trace = fit.replay(s, p, c, np.inf, s.ttl)
+    without, without_trace, _ = fit.replay(s, p, c, np.inf, s.ttl)
     checks = sum(check(v, c) for v in s.verdicts if v.tokens)
     dollars = (
         ((ran + checks) * c.read, without * c.read, checks * c.read) if priced else None

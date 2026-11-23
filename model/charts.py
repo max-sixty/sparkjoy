@@ -1090,10 +1090,6 @@ def thresholds(out, cost, effectiveness, BT, BX, p, c):
         save(fig, out / f"model-threshold-{theme}.svg")
 
 
-# What running the classifier costs, as a share of the cost: the replay's 0.43% at the base case, rounded.
-RUNNING = 0.004
-
-
 def voi(out, p, c):
     """The expected value of a classifier's information on three mixes of work with the same mean β,
     the base case's: a share of the work at one β > 0, the rest at β = 0, where the context doesn't help. For each
@@ -1145,7 +1141,7 @@ def voi(out, p, c):
                 f"right {A[i]:.0%}, saves {saved[i]:.1%} ({info[i]:.0%} of the information)"
                 for i in at
             )
-            + f"; pays for running it from {A[np.argmax(saved > RUNNING)]:.1%} right"
+            + f"; pays for running it from {A[np.argmax(saved > fit.RUNNING)]:.1%} right"
         )
         print(
             f"model-voi-point, {share:.0%} at β = {beta}: compacts the group to compact at "
@@ -1163,9 +1159,11 @@ def voi(out, p, c):
             ends.append((saved[-1], f"{share:.0%} at β = {beta}", t["ink"]))
         # A band from 0 behind the savings: at this scale a line would sit on the axis and over the lines' starts.
         ax.fill_between(
-            [0, 1], 0, RUNNING, color=t["cost"], lw=0, zorder=1, clip_on=False
+            [0, 1], 0, fit.RUNNING, color=t["cost"], lw=0, zorder=1, clip_on=False
         )
-        ends.append((RUNNING, f"Running the classifier, {RUNNING:.1%}", t["ink"]))
+        ends.append(
+            (fit.RUNNING, f"Running the classifier, {fit.RUNNING:.1%}", t["ink"])
+        )
         label_ends(ax, ends, gap=0.02)
         ax.set_xlim(0, 1)
         ax.set_xticks([0, 0.25, 0.5, 0.75, 1])
@@ -1245,7 +1243,7 @@ def voi_lost(p, c):
             f"voi-lost, {MID:.0%} of turn ends mid-task losing {n} wasted requests (${D * c.read:.2f}): lowest-cost "
             f"single threshold {tokens(X)}; a perfect classifier "
             f"saves {right[1.0]:.1%}, one right 9 times in 10 {right[0.9]:.1%}; pays for running it from "
-            f"{A[np.argmax(saved > RUNNING)]:.1%} right"
+            f"{A[np.argmax(saved > fit.RUNNING)]:.1%} right"
         )
 
 
