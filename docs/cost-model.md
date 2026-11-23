@@ -1,14 +1,23 @@
 # Cost model
 
-A compaction policy decides when a session compacts. Every request reads the
-whole context, so a session that compacts late pays to read a large context on
-every request. One that compacts early pays for more compactions, and its
-requests have less of the session's history to work with. This document models
-what a policy costs per unit of work done, to find when a session should
-compact.
+To understand what makes a good compaction policy, we can model how a policy
+affects what a session costs and how much context its requests have. Every
+request reads the whole context, so a session that compacts late pays to read a
+large context on every request. One that compacts early pays for more
+compactions, and its requests have less of the session's history to work with.
 
-What the context is worth depends on the work ahead, and the model gives that
-two numbers:
+Where that balance falls depends on the work ahead. `/autocompact` compacts
+every session once the context reaches the size you set. sparkjoy asks the
+session's model, at each turn end above its floor and just before an idle
+session's cache lapses, whether the next turns need detail a summary would drop.
+The model prices each policy per unit of work done, to find when a session
+should compact, and what judging the work ahead saves against compacting at a
+set size.
+
+## The model
+
+The model gives the work ahead two numbers, which set what the context is worth
+to it:
 
 - **β** sets how much a larger context helps. A request gets more done with a
   larger context, by a power β of its size. Work that builds on its history,
@@ -26,14 +35,11 @@ cache lapses, compacting spares the next request a cache write of the whole
 context.
 
 If β and D were each one number for all work, one threshold would suit all of
-it, and a policy could compact after whichever request reached it, as
-`/autocompact` does once the context reaches the size you set. Because they vary
-with the work ahead, a policy that judges the work ahead can compact each where
-it costs least. sparkjoy's question is that judgment: it asks the session's
-model whether the next turns need detail a summary would drop, and gives it what
-keeping the context and compacting it each cost. It asks at each turn end above
-its floor and just before an idle session's cache lapses, never in the middle of
-a turn.
+it, and compacting after whichever request reached it would cost least. Because
+they vary with the work ahead, a policy that judges the work ahead can compact
+each where it costs least. sparkjoy's question is that judgment. It tells the
+session's model what keeping the context and compacting it each cost, and it
+never asks in the middle of a turn.
 
 Each section below takes one case of the model, from the simplest, whose formula
 shows which parameters matter, to a replay that follows real sessions:
@@ -57,6 +63,8 @@ shows which parameters matter, to a replay that follows real sessions:
 - **[A replay of my sessions](#a-replay-of-my-sessions).** It keeps every logged
   request and moves only the compactions, so it includes what the other cases
   leave out: uneven growth, long turns, cache lapses and sessions that end.
+
+## Results for my sessions
 
 For my sessions on Opus 5.5[^prices]:
 
