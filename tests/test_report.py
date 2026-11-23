@@ -83,7 +83,7 @@ def transcript(tmp_path, entries, session="session"):
     """Writes `entries` as Claude Code writes the transcript of the session with the id `session`,
     under the projects directory in `tmp_path`, and returns that directory."""
     path = tmp_path / "projects" / "project" / f"{session}.jsonl"
-    path.parent.mkdir(parents=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         "".join(json.dumps(e, separators=(",", ":")) + "\n" for e in entries)
     )
@@ -223,6 +223,21 @@ def test_a_first_run_leads_with_what_the_fitted_floors_would_have_saved(tmp_path
 
 
 def test_sessions_on_a_200k_window_say_sparkjoy_cannot_act(tmp_path):
+    """An account on a 200k window: one session Claude Code compacted at 165k, and another the
+    user compacted before it got that far, which shows no window of its own."""
+    transcript(
+        tmp_path,
+        [
+            prompt("09:00:00Z", "plan it"),
+            request("09:00:10Z", 70_000, 10_000),
+            prompt("09:05:00Z", "<command-name>/compact</command-name>"),
+            boundary("09:06:00Z"),
+            compact_summary("09:06:00Z"),
+            prompt("09:10:00Z", "carry on"),
+            request("09:10:10Z", 20_000, 10_000),
+        ],
+        session="other",
+    )
     summary, page = report(
         tmp_path,
         [
@@ -235,8 +250,9 @@ def test_sessions_on_a_200k_window_say_sparkjoy_cannot_act(tmp_path):
         ],
     )
     assert summary == [
-        "sparkjoy can't act in this session. Claude Code compacted it on its own before 200k, as "
-        "it does in a 200k context window, and sparkjoy acts only in sessions with a 1M window."
+        "sparkjoy can't act in these 2 sessions. Claude Code compacted 1 of them on its own before "
+        "200k, as it does in a 200k context window, and none passed 200k. sparkjoy acts only in "
+        "sessions with a 1M window."
     ]
     assert "Thresholds" not in page
 

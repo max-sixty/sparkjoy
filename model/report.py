@@ -478,10 +478,15 @@ def summary(found, S, verdicts, saving, unpriced, rows, fitted, saved, projects)
         "only in sessions with a 1M window"
     )
     if small and not S:
+        k = sum(map(cramped, found))
         out.append(
             f"**sparkjoy can't act in this session.** Claude Code compacted it {why}."
             if small == 1
             else f"**sparkjoy can't act in these {small:,} sessions.** Claude Code compacted them {why}."
+            if k == small
+            else f"**sparkjoy can't act in these {small:,} sessions.** Claude Code compacted {k:,} of "
+            f"them on its own before {tokens(SMALL)}, as it does in a 200k context window, and none "
+            f"passed {tokens(SMALL)}. sparkjoy acts only in sessions with a 1M window."
         )
     elif small:
         out.append(
@@ -788,8 +793,12 @@ def main():
     )
     a = ap.parse_args()
     found, since, until = fit.read(a)
-    # The page leaves out the sessions sparkjoy can't act in, for which the replay doesn't hold.
+    # The page leaves out the sessions sparkjoy can't act in, for which the replay doesn't hold:
+    # those Claude Code compacted as in a 200k window, and all of them where the others show no
+    # sign of a larger one, as a verdict or a context past SMALL would.
     S = [s for s in found if not cramped(s)]
+    if len(S) < len(found) and not any(s.verdicts or s.size.max() >= SMALL for s in S):
+        S = []
     verdicts = sorted(((s, v) for s in S for v in s.verdicts), key=lambda sv: -sv[1].t)
     p = fitted = saved = None
     unfit = "The cost model needs compactions in the window to measure what one leaves."
