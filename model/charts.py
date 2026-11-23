@@ -15,7 +15,7 @@ from one read of the sessions:
                  at half and twice it, and at β = 0
   cost           the steady state's cost per unit of effectiveness against the compaction threshold, at the
                  same four β, with each one's lowest point, under a request's mean cost and mean
-                 effectiveness, the averages it is the ratio of, on one panel, all relative to never compacting
+                 effectiveness, the averages it is the ratio of, on one panel, all relative to Claude Code's default
   sensitivity    how far the most efficient threshold moves with each measured parameter and with β, at the
                  base case
   threshold      the most efficient threshold against β, in the steady state and the replay
@@ -721,12 +721,12 @@ def effectiveness_curve(out):
 
 
 def cost_curve(out, p, c):
-    """The steady state's cost per unit of effectiveness against the compaction threshold, relative to never
-    compacting, at the β the effectiveness chart draws, the base case thicker, under the two averages it is
-    the ratio of, on one panel and relative to never compacting too: a request's mean cost over a cycle, its
+    """The steady state's cost per unit of effectiveness against the compaction threshold, relative to Claude Code's
+    default, at the β the effectiveness chart draws, the base case thicker, under the two averages it is
+    the ratio of, on one panel and relative to Claude Code's default too: a request's mean cost over a cycle, its
     share of the compaction included, which no β changes, and its mean effectiveness, at each β. Dividing
-    both by never compacting compares an average with an average, and puts the cost line below a β's line
-    wherever compacting there costs less per unit than never compacting. A dot marks the lowest point of
+    both by Claude Code's default compares an average with an average, and puts the cost line below a β's line
+    wherever compacting there costs less per unit than Claude Code's default. A dot marks the lowest point of
     each β's cost per unit (fit.steady), and each line is named by its β alone, since the axes give the
     points' values."""
     betas = (0, fit.BASE / 2, fit.BASE, fit.BASE * 2)
@@ -742,7 +742,7 @@ def cost_curve(out, p, c):
             style(ax, t)
 
         # A request's mean effectiveness at each β, the cycle's effectiveness over its requests, and its mean
-        # cost, the same at every β, each relative to never compacting.
+        # cost, the same at every β, each relative to Claude Code's default.
         X, A = fit.curve(p, c, 0)
         for b in betas:
             base = b == fit.BASE
@@ -778,7 +778,7 @@ def cost_curve(out, p, c):
             t,
         )
 
-        # Their ratio, relative to never compacting.
+        # Their ratio, relative to Claude Code's default.
         for b in betas:
             color = shade(t, b)
             base = b == fit.BASE
@@ -1099,8 +1099,9 @@ def voi(out, p, c):
     """What a classifier saves on three mixes of work with the same mean β, the base case's: a share of
     the work at one β > 0, the rest at β = 0, where the context doesn't help. For each mix and each
     accuracy, the classifier splits the work into a group to keep and a group to compact, each
-    compacting at its own most efficient threshold; the saving is against Claude Code's default,
-    compacting at fit.AUTO, after the fit.RUNNING its questions cost, and the x axis is the mutual
+    compacting at its own most efficient threshold, no lower than fit.FLOOR, where sparkjoy starts asking;
+    the saving is against Claude Code's default, compacting at fit.AUTO, after the questions sparkjoy asks
+    from fit.FLOOR, as fit.cycle counts them, and the x axis is the mutual
     information between the classifier's verdict and the kind of work, as a share of a perfect
     classifier's. With no information it compacts all the work at the most efficient single
     threshold. A second chart, model-voi-point, draws the most efficient threshold of the group to
@@ -1122,9 +1123,11 @@ def voi(out, p, c):
 
     # On fit.steady's 100-token grid, so the most efficient threshold of the work at β = 0 is the doc's 262k.
     X, J0 = fit.curve(p, c, 0, step=100)
+    Xq, J0q = fit.curve(p, c, 0, step=100, asks=fit.FLOOR)  # with sparkjoy's questions
     lines = []
     for share, beta, step in mixes:
         Js = np.array([J0, fit.curve(p, c, beta, step=100)[1]])
+        Jq = np.array([J0q, fit.curve(p, c, beta, step=100, asks=fit.FLOOR)[1]])
         w = np.array([1 - share, share])
         single = (w[:, None] * Js).sum(0)
         default = single[-1]  # fit.curve's last point is fit.AUTO
@@ -1133,13 +1136,13 @@ def voi(out, p, c):
         )  # the classifier keeps the context for a share a of the β work, 1 - a of the rest
         both = np.array(
             [
-                (k[:, None] * Js).sum(0).min() + ((w - k)[:, None] * Js).sum(0).min()
+                (k[:, None] * Jq).sum(0).min() + ((w - k)[:, None] * Jq).sum(0).min()
                 for k in keep
             ]
         )
-        saved = 1 - (1 + fit.RUNNING) * both / default
-        point = np.array([X[((w - k)[:, None] * Js).sum(0).argmin()] for k in keep])
-        kept_at = np.array([X[(k[:, None] * Js).sum(0).argmin()] for k in keep])
+        saved = 1 - both / default
+        point = np.array([Xq[((w - k)[:, None] * Jq).sum(0).argmin()] for k in keep])
+        kept_at = np.array([Xq[(k[:, None] * Jq).sum(0).argmin()] for k in keep])
         info = (H(share * A + (1 - share) * (1 - A)) - H(A)) / H(share)
         lines.append((share, beta, step, saved, info, point))
         at = [int(np.abs(A - a).argmin()) for a in (0.8, 0.9, 0.99, 1.0)]
@@ -1170,7 +1173,7 @@ def voi(out, p, c):
         ax.axhline(0, color=t["muted"], lw=0.8, zorder=1)
         ax.set_xlim(0, 1)
         ax.set_xticks([0, 0.25, 0.5, 0.75, 1])
-        ax.set_ylim(-0.02, 0.32)
+        ax.set_ylim(-0.03, 0.32)
         ax.set_yticks([0, 0.1, 0.2, 0.3])
         ax.xaxis.set_major_formatter(percent)
         ax.yaxis.set_major_formatter(percent)
@@ -1197,8 +1200,8 @@ def voi(out, p, c):
         ax.set_xlim(0, 1)
         ax.set_xticks([0, 0.25, 0.5, 0.75, 1])
         ax.xaxis.set_major_formatter(percent)
-        ax.set_ylim(X[J0.argmin()] - 40_000, fit.AUTO + 20_000)
-        ax.set_yticks([X[J0.argmin()], 500_000, 750_000, fit.AUTO])
+        ax.set_ylim(fit.FLOOR - 40_000, fit.AUTO + 20_000)
+        ax.set_yticks([fit.FLOOR, 500_000, 750_000, fit.AUTO])
         ax.yaxis.set_major_formatter(tokens)
         ax.set_xlabel(
             "Accuracy (% of a perfect classifier's information)",
@@ -1226,26 +1229,28 @@ def voi_lost(p, c):
     finished, right at a share a of each kind, so each of its compactions costs
     D·MID(1 - a) / (MID(1 - a) + (1 - MID)a), and the threshold moves to where that costs least.
     Waiting for such a turn end moves each compaction later by about the same amount, which the
-    threshold makes up for. Prints, for each D, the most efficient single threshold and what it saves,
-    what a perfect classifier and one right 9 times in 10 save after the fit.RUNNING their questions
-    cost, all against Claude Code's default, whose compaction at fit.AUTO costs MID·D, and the
-    accuracy from which a classifier saves more than the single threshold."""
+    threshold makes up for. Claude Code's own compaction at fit.AUTO falls in the middle of a turn, and
+    so of a task, and costs D. Prints, for each D, the most efficient single threshold and what it saves,
+    what a perfect classifier and one right 9 times in 10 save after the questions they ask from
+    fit.FLOOR, all against Claude Code's default, and the accuracy from which a classifier saves more
+    than the single threshold."""
     h, c0, _ = fit.terms(p, c)
     wasted = h * p.K + c0
     A = np.round(np.linspace(0.5, 1, 501), 4)
 
-    def lowest(D):
-        X, J = fit.curve(p, c, fit.BASE, lost=D, step=100)
+    def lowest(d, D, asks=None):
+        """The most efficient threshold where a compaction at a turn end costs d, and J there; one at
+        fit.AUTO, the curve's last point, is Claude Code's and costs D."""
+        X, J = fit.curve(p, c, fit.BASE, lost=d, step=100, asks=asks)
+        J[-1] = fit.per_unit(p, c, fit.AUTO, fit.BASE, D, asks)
         return X[J.argmin()], J.min()
 
     for n in LOST_REQUESTS:
         D = n * wasted
-        X, single = lowest(MID * D)
-        default = fit.per_unit(p, c, fit.AUTO, fit.BASE, MID * D)
+        X, single = lowest(MID * D, D)
+        default = fit.per_unit(p, c, fit.AUTO, fit.BASE, D)
         picked = D * MID * (1 - A) / (MID * (1 - A) + (1 - MID) * A)
-        saved = np.array(
-            [1 - (1 + fit.RUNNING) * lowest(d)[1] / default for d in picked]
-        )
+        saved = np.array([1 - lowest(d, D, fit.FLOOR)[1] / default for d in picked])
         right = {a: saved[np.abs(A - a).argmin()] for a in (0.9, 1.0)}
         print(
             f"voi-lost, {MID:.0%} of turn ends mid-task losing {n} wasted requests (${D * c.read:.2f}), saved against "

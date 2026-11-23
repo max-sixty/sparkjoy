@@ -830,7 +830,7 @@ def main():
     # The replay prices each compaction from K, P and N.
     replays = p is not None and np.isfinite([p.K, p.P, p.N]).all()
     sessions = (
-        [(s, fit.as_run(s, p, None if s.background else fit.CC_IDLE)) for s in S]
+        [(s, fit.as_run(s, p)) for s in S]
         if replays
         else [(s, (None, s.size, s.size)) for s in S]
     )
