@@ -40,35 +40,22 @@ November on Opus 5.5[^sessions]:
 
 <!-- What sparkjoy saves -->
 
-|                                                                             | five-minute cache | one-hour cache, in the background | one-hour cache, open in a terminal or editor |
-| --------------------------------------------------------------------------- | ----------------- | --------------------------------- | -------------------------------------------- |
-| sparkjoy as it ran, for the same requests                                   |                   | 31%                               | 24%                                          |
-| compacting at every turn end past its floors, for the same requests         | 39%               | 31%                               | 24%                                          |
-| compacting at every turn end past its floors, for the same work             | 20%               | 11%                               | 6%                                           |
-| compacting at every turn end past its floors, where work differs            | 9%                | 0%                                | −5%                                          |
-| compacting where its judgment says, right 9 times in 10, where work differs | 16%               | 10%                               | 5%                                           |
+| policy                                                         | what a smaller context costs the work                                     | in the background | open in a terminal or editor |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------- | ---------------------------- |
+| sparkjoy as it ran                                             | nothing: a request gets as much done at any context                       | 31%               | 24%                          |
+| compacting at turn ends from 250k and idle sessions from 175k  | the base case: a request at 250k gets half as much done as one at 1M      | 11%               | 6%                           |
+| compacting at turn ends from 250k and idle sessions from 175k  | varies: a quarter of the work needs much more context, the rest much less | 0%                | −5%                          |
+| compacting where sparkjoy's judgment says, right 9 times in 10 | varies: a quarter of the work needs much more context, the rest much less | 10%               | 5%                           |
+
+Claude Code's default compacts near 965k, and in an open session also an idle
+context from 200k. The last three rows replay my sessions ([A replay of my
+sessions](#a-replay-of-my-sessions)), the judgment at the thresholds that cost
+least in hindsight, 280k and 900k ([A classifier](#a-classifier)). How much a
+smaller context costs the work ([Cost and context](#cost-and-context)), and how
+often the judgment is right, are assumed, not yet measured. Every row counts
+what sparkjoy's questions cost.
 
 <!-- End of what sparkjoy saves. -->
-
-Claude Code's default compacts near 965k, and in a session open on the one-hour
-cache, also an idle context from 200k. "As it ran" keeps the compactions
-sparkjoy made. None of my sessions used the five-minute cache, so that cell is
-empty, and the rest of that column replays them as if they had. The other rows
-replay the same sessions ([A replay of my sessions](#a-replay-of-my-sessions)).
-The next three compact at every turn end past sparkjoy's floors, 250k at a turn
-end and 175k in an idle session, as if its model always said yes. The last
-compacts where its judgment says: at each turn end it names the kind of work
-coming next, right 9 times in 10, and compacts past that kind's threshold, from
-the pair that costs least, 280k and 900k on the one-hour cache, as if it knew
-them ([A classifier](#a-classifier)). "The same requests" counts a request as
-getting as much done at any context ([Cost alone](#cost-alone)), and "the same
-work" takes the base case, β = 0.5 ([Cost and context](#cost-and-context)).
-"Where work differs" takes three quarters of turns at β = 0.25 and a quarter at
-β = 1.25 ([Work that differs in β](#work-that-differs-in-β)). No session of mine
-yet measures how widely work differs, or how often the judgment is right. Each
-row counts what sparkjoy's questions cost: the first, the questions it asked,
-and the others, a question at every turn end and idle session past its floors,
-each as a request that reads the context.
 
 |                                                                                      | at the base case, β = 0.5         |
 | ------------------------------------------------------------------------------------ | --------------------------------- |
