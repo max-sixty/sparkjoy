@@ -1,6 +1,7 @@
 """Copies docs/cost-model.md into the README's Cost model section, collapsed, so the model reads both
-on its own page and in the README. Edit the doc, then run `python3 docs/embed.py`; `--check` exits 1
-when the README's copy is out of date."""
+on its own page and in the README, and the doc's table of what sparkjoy saves into the README's What
+it saves. Edit the doc, then run `python3 docs/embed.py`; `--check` exits 1 when the README's copies
+are out of date."""
 
 import re
 import sys
@@ -32,9 +33,22 @@ def section(doc):
     return f"{START}\n<details>\n<summary>The cost model</summary>\n\n{body.rstrip()}\n\n</details>\n{END}"
 
 
+# The doc marks its table of what sparkjoy saves with these lines, and the README's copy of it sits
+# between the generated ones.
+SAVES, SAVES_END = (
+    "<!-- What sparkjoy saves -->",
+    "<!-- End of what sparkjoy saves. -->",
+)
+SAVES_START = "<!-- Generated from docs/cost-model.md's Results by docs/embed.py; edit that file. -->"
+
+
 def embedded(readme, doc):
     start, end = readme.index(START), readme.index(END) + len(END)
-    return readme[:start] + section(doc) + readme[end:]
+    readme = readme[:start] + section(doc) + readme[end:]
+    table = doc[doc.index(SAVES) + len(SAVES) : doc.index(SAVES_END)].strip()
+    start = readme.index(SAVES_START)
+    end = readme.index(SAVES_END, start) + len(SAVES_END)
+    return f"{readme[:start]}{SAVES_START}\n\n{table}\n\n{SAVES_END}{readme[end:]}"
 
 
 if __name__ == "__main__":

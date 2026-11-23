@@ -95,96 +95,96 @@ L 538.82 67.058162
    </g>
    <g id="FillBetweenPolyCollection_1">
     <defs>
-     <path id="m6a737c7def" d="M 37.140415 -220.284814 
+     <path id="maaebbda746" d="M 37.140415 -219.99207 
 L 37.140415 -213.626904 
-L 52.460897 -213.626904 
-L 110.762019 -213.626904 
+L 54.029427 -213.626904 
+L 108.817345 -213.626904 
 L 400.910155 -213.626904 
 L 538.82 -213.626904 
-L 538.82 -220.284814 
-L 538.82 -220.284814 
-L 400.910155 -220.284814 
-L 110.762019 -220.284814 
-L 52.460897 -220.284814 
-L 37.140415 -220.284814 
+L 538.82 -219.99207 
+L 538.82 -219.99207 
+L 400.910155 -219.99207 
+L 108.817345 -219.99207 
+L 54.029427 -219.99207 
+L 37.140415 -219.99207 
 z
 " style="stroke: #0d1117; stroke-width: 1.2"/>
     </defs>
     <g clip-path="url(#p10c6d02764)">
-     <use xlink:href="#m6a737c7def" x="0" y="369.898859" style="fill: #113b32; stroke: #0d1117; stroke-width: 1.2"/>
+     <use xlink:href="#maaebbda746" x="0" y="369.898859" style="fill: #113b32; stroke: #0d1117; stroke-width: 1.2"/>
     </g>
    </g>
    <g id="FillBetweenPolyCollection_2">
     <defs>
-     <path id="me2001d04d7" d="M 37.140415 -226.187675 
-L 37.140415 -220.284814 
-L 52.460897 -220.284814 
-L 110.762019 -220.284814 
-L 400.910155 -220.284814 
-L 538.82 -220.284814 
-L 538.82 -226.187675 
-L 538.82 -226.187675 
-L 400.910155 -226.187675 
-L 110.762019 -226.187675 
-L 52.460897 -226.187675 
-L 37.140415 -226.187675 
+     <path id="m371189c75c" d="M 37.140415 -225.626771 
+L 37.140415 -219.99207 
+L 54.029427 -219.99207 
+L 108.817345 -219.99207 
+L 400.910155 -219.99207 
+L 538.82 -219.99207 
+L 538.82 -225.626771 
+L 538.82 -225.626771 
+L 400.910155 -225.626771 
+L 108.817345 -225.626771 
+L 54.029427 -225.626771 
+L 37.140415 -225.626771 
 z
 " style="stroke: #0d1117; stroke-width: 1.2"/>
     </defs>
     <g clip-path="url(#p10c6d02764)">
-     <use xlink:href="#me2001d04d7" x="0" y="369.898859" style="fill: #135844; stroke: #0d1117; stroke-width: 1.2"/>
+     <use xlink:href="#m371189c75c" x="0" y="369.898859" style="fill: #135844; stroke: #0d1117; stroke-width: 1.2"/>
     </g>
    </g>
    <g id="FillBetweenPolyCollection_3">
     <defs>
-     <path id="m3ac7fa4808" d="M 37.140415 -226.187675 
-L 37.140415 -226.187675 
-L 52.460897 -226.187675 
-L 110.762019 -226.187675 
-L 400.910155 -226.187675 
-L 538.82 -226.187675 
-L 538.82 -244.356855 
-L 538.82 -244.356855 
-L 400.910155 -239.204882 
-L 110.762019 -228.365661 
-L 52.460897 -226.187675 
-L 37.140415 -226.187675 
+     <path id="m205fe80c78" d="M 37.140415 -225.626771 
+L 37.140415 -225.626771 
+L 54.029427 -225.626771 
+L 108.817345 -225.626771 
+L 400.910155 -225.626771 
+L 538.82 -225.626771 
+L 538.82 -241.201422 
+L 538.82 -241.201422 
+L 400.910155 -236.770854 
+L 108.817345 -227.386918 
+L 54.029427 -225.626771 
+L 37.140415 -225.626771 
 z
 " style="stroke: #0d1117; stroke-width: 1.2"/>
     </defs>
     <g clip-path="url(#p10c6d02764)">
-     <use xlink:href="#m3ac7fa4808" x="0" y="369.898859" style="fill: #157455; stroke: #0d1117; stroke-width: 1.2"/>
+     <use xlink:href="#m205fe80c78" x="0" y="369.898859" style="fill: #157455; stroke: #0d1117; stroke-width: 1.2"/>
     </g>
    </g>
    <g id="FillBetweenPolyCollection_4">
     <defs>
-     <path id="maee202c680" d="M 37.140415 -226.276889 
-L 37.140415 -226.187675 
-L 52.460897 -226.187675 
-L 110.762019 -228.365661 
-L 400.910155 -239.204882 
-L 538.82 -244.356855 
-L 538.82 -330.448165 
-L 538.82 -330.448165 
-L 400.910155 -301.654537 
-L 110.762019 -241.075704 
-L 52.460897 -228.903254 
-L 37.140415 -226.276889 
+     <path id="m70ed8e6e71" d="M 37.140415 -225.715985 
+L 37.140415 -225.626771 
+L 54.029427 -225.626771 
+L 108.817345 -227.386918 
+L 400.910155 -236.770854 
+L 538.82 -241.201422 
+L 538.82 -327.292733 
+L 538.82 -327.292733 
+L 400.910155 -299.220509 
+L 108.817345 -239.763589 
+L 54.029427 -228.61124 
+L 37.140415 -225.715985 
 z
 " style="stroke: #0d1117; stroke-width: 1.2"/>
     </defs>
     <g clip-path="url(#p10c6d02764)">
-     <use xlink:href="#maee202c680" x="0" y="369.898859" style="fill: #189067; stroke: #0d1117; stroke-width: 1.2"/>
+     <use xlink:href="#m70ed8e6e71" x="0" y="369.898859" style="fill: #189067; stroke: #0d1117; stroke-width: 1.2"/>
     </g>
    </g>
    <g id="line2d_12">
-    <path d="M 541.942487 146.662614 
-L 554.432435 139.560931 
+    <path d="M 541.942487 147.089438 
+L 554.432435 139.707303 
 " style="fill: none; stroke: #c3c2b7; stroke-width: 0.8; stroke-linecap: square"/>
    </g>
    <g id="line2d_13">
-    <path d="M 541.942487 134.626594 
-L 554.432435 126.178862 
+    <path d="M 541.942487 136.484762 
+L 554.432435 126.325234 
 " style="fill: none; stroke: #c3c2b7; stroke-width: 0.8; stroke-linecap: square"/>
    </g>
    <g id="patch_3">
@@ -193,16 +193,16 @@ L 538.82 156.271955
 " style="fill: none; stroke: #c3c2b7; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
    <g id="text_5">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="155.380031" transform="rotate(-0 557.554922 155.380031)">output and uncached input</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="155.526403" transform="rotate(-0 557.554922 155.526403)">output and uncached input</text>
    </g>
    <g id="text_6">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="142.171282" transform="rotate(-0 557.554922 142.171282)">cache write of the new tokens</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="142.317654" transform="rotate(-0 557.554922 142.317654)">cache write of the new tokens</text>
    </g>
    <g id="text_7">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="128.615893" transform="rotate(-0 557.554922 128.615893)">cache write of the context after a lapse</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="128.762265" transform="rotate(-0 557.554922 128.762265)">cache write of the context after a lapse</text>
    </g>
    <g id="text_8">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="557.554922" y="85.106701" transform="rotate(-0 557.554922 85.106701)">cache read of the context</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="557.554922" y="88.262133" transform="rotate(-0 557.554922 88.262133)">cache read of the context</text>
    </g>
    <g id="text_9">
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #e39457" x="538.82" y="15.107188" transform="rotate(-0 538.82 15.107188)">parts named in orange are fitted to the sessions</text>
@@ -304,107 +304,107 @@ L 538.82 209.388475
    </g>
    <g id="FillBetweenPolyCollection_5">
     <defs>
-     <path id="me337522d23" d="M 37.140415 -48.528676 
+     <path id="m3b2f261b6b" d="M 37.140415 -47.476489 
 L 37.140415 -36.983594 
-L 52.460897 -36.983594 
-L 110.762019 -36.983594 
+L 54.029427 -36.983594 
+L 108.817345 -36.983594 
 L 400.910155 -36.983594 
 L 538.82 -36.983594 
-L 538.82 -48.528676 
-L 538.82 -48.528676 
-L 400.910155 -48.528676 
-L 110.762019 -48.528676 
-L 52.460897 -48.528676 
-L 37.140415 -48.528676 
+L 538.82 -47.476489 
+L 538.82 -47.476489 
+L 400.910155 -47.476489 
+L 108.817345 -47.476489 
+L 54.029427 -47.476489 
+L 37.140415 -47.476489 
 z
 " style="stroke: #0d1117; stroke-width: 1.2"/>
     </defs>
     <g clip-path="url(#p2a4c4a9af1)">
-     <use xlink:href="#me337522d23" x="0" y="369.898859" style="fill: #113b32; stroke: #0d1117; stroke-width: 1.2"/>
+     <use xlink:href="#m3b2f261b6b" x="0" y="369.898859" style="fill: #113b32; stroke: #0d1117; stroke-width: 1.2"/>
     </g>
    </g>
    <g id="FillBetweenPolyCollection_6">
     <defs>
-     <path id="m8c80e9bd23" d="M 37.140415 -65.96932 
-L 37.140415 -48.528676 
-L 52.460897 -48.528676 
-L 110.762019 -48.528676 
-L 400.910155 -48.528676 
-L 538.82 -48.528676 
-L 538.82 -65.96932 
-L 538.82 -65.96932 
-L 400.910155 -65.96932 
-L 110.762019 -65.96932 
-L 52.460897 -65.96932 
-L 37.140415 -65.96932 
+     <path id="m6829ad27a3" d="M 37.140415 -65.255209 
+L 37.140415 -47.476489 
+L 54.029427 -47.476489 
+L 108.817345 -47.476489 
+L 400.910155 -47.476489 
+L 538.82 -47.476489 
+L 538.82 -65.255209 
+L 538.82 -65.255209 
+L 400.910155 -65.255209 
+L 108.817345 -65.255209 
+L 54.029427 -65.255209 
+L 37.140415 -65.255209 
 z
 " style="stroke: #0d1117; stroke-width: 1.2"/>
     </defs>
     <g clip-path="url(#p2a4c4a9af1)">
-     <use xlink:href="#m8c80e9bd23" x="0" y="369.898859" style="fill: #135844; stroke: #0d1117; stroke-width: 1.2"/>
+     <use xlink:href="#m6829ad27a3" x="0" y="369.898859" style="fill: #135844; stroke: #0d1117; stroke-width: 1.2"/>
     </g>
    </g>
    <g id="FillBetweenPolyCollection_7">
     <defs>
-     <path id="mec4e7b2f86" d="M 37.140415 -85.884594 
-L 37.140415 -65.96932 
-L 52.460897 -65.96932 
-L 110.762019 -65.96932 
-L 400.910155 -65.96932 
-L 538.82 -65.96932 
-L 538.82 -85.884594 
-L 538.82 -85.884594 
-L 400.910155 -85.884594 
-L 110.762019 -85.884594 
-L 52.460897 -85.884594 
-L 37.140415 -85.884594 
+     <path id="m6a6f507146" d="M 37.140415 -78.039781 
+L 37.140415 -65.255209 
+L 54.029427 -65.255209 
+L 108.817345 -65.255209 
+L 400.910155 -65.255209 
+L 538.82 -65.255209 
+L 538.82 -78.039781 
+L 538.82 -78.039781 
+L 400.910155 -78.039781 
+L 108.817345 -78.039781 
+L 54.029427 -78.039781 
+L 37.140415 -78.039781 
 z
 " style="stroke: #0d1117; stroke-width: 1.2"/>
     </defs>
     <g clip-path="url(#p2a4c4a9af1)">
-     <use xlink:href="#mec4e7b2f86" x="0" y="369.898859" style="fill: #135844; stroke: #0d1117; stroke-width: 1.2"/>
+     <use xlink:href="#m6a6f507146" x="0" y="369.898859" style="fill: #135844; stroke: #0d1117; stroke-width: 1.2"/>
     </g>
    </g>
    <g id="FillBetweenPolyCollection_8">
     <defs>
-     <path id="m51eb6ae574" d="M 37.140415 -138.478856 
-L 37.140415 -85.884594 
-L 52.460897 -85.884594 
-L 110.762019 -85.884594 
-L 400.910155 -85.884594 
-L 538.82 -85.884594 
-L 538.82 -138.478856 
-L 538.82 -138.478856 
-L 400.910155 -138.478856 
-L 110.762019 -138.478856 
-L 52.460897 -138.478856 
-L 37.140415 -138.478856 
+     <path id="m7151874985" d="M 37.140415 -132.006303 
+L 37.140415 -78.039781 
+L 54.029427 -78.039781 
+L 108.817345 -78.039781 
+L 400.910155 -78.039781 
+L 538.82 -78.039781 
+L 538.82 -132.006303 
+L 538.82 -132.006303 
+L 400.910155 -132.006303 
+L 108.817345 -132.006303 
+L 54.029427 -132.006303 
+L 37.140415 -132.006303 
 z
 " style="stroke: #0d1117; stroke-width: 1.2"/>
     </defs>
     <g clip-path="url(#p2a4c4a9af1)">
-     <use xlink:href="#m51eb6ae574" x="0" y="369.898859" style="fill: #135844; stroke: #0d1117; stroke-width: 1.2"/>
+     <use xlink:href="#m7151874985" x="0" y="369.898859" style="fill: #135844; stroke: #0d1117; stroke-width: 1.2"/>
     </g>
    </g>
    <g id="FillBetweenPolyCollection_9">
     <defs>
-     <path id="mb9be8d573b" d="M 37.140415 -138.499444 
-L 37.140415 -138.478856 
-L 52.460897 -138.478856 
-L 110.762019 -138.478856 
-L 400.910155 -138.478856 
-L 538.82 -138.478856 
-L 538.82 -158.346081 
-L 538.82 -158.346081 
-L 400.910155 -152.890315 
-L 110.762019 -141.411943 
-L 52.460897 -139.105528 
-L 37.140415 -138.499444 
+     <path id="m4bde94c2a7" d="M 37.140415 -132.026891 
+L 37.140415 -132.006303 
+L 54.029427 -132.006303 
+L 108.817345 -132.006303 
+L 400.910155 -132.006303 
+L 538.82 -132.006303 
+L 538.82 -151.873529 
+L 538.82 -151.873529 
+L 400.910155 -146.417762 
+L 108.817345 -134.862458 
+L 54.029427 -132.695027 
+L 37.140415 -132.026891 
 z
 " style="stroke: #0d1117; stroke-width: 1.2"/>
     </defs>
     <g clip-path="url(#p2a4c4a9af1)">
-     <use xlink:href="#mb9be8d573b" x="0" y="369.898859" style="fill: #189067; stroke: #0d1117; stroke-width: 1.2"/>
+     <use xlink:href="#m4bde94c2a7" x="0" y="369.898859" style="fill: #189067; stroke: #0d1117; stroke-width: 1.2"/>
     </g>
    </g>
    <g id="patch_5">
@@ -413,19 +413,19 @@ L 538.82 332.915265
 " style="fill: none; stroke: #c3c2b7; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
    <g id="text_21">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="329.579755" transform="rotate(-0 557.554922 329.579755)">output of the compaction request</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="330.105849" transform="rotate(-0 557.554922 330.105849)">output of the compaction request</text>
    </g>
    <g id="text_22">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="315.060173" transform="rotate(-0 557.554922 315.060173)">cache write of the summary and the rest</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="315.943322" transform="rotate(-0 557.554922 315.943322)">cache write of the summary and the rest</text>
    </g>
    <g id="text_23">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="296.351277" transform="rotate(-0 557.554922 296.351277)">cache write of files, re-attached or read again</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="300.630739" transform="rotate(-0 557.554922 300.630739)">cache write of files, re-attached or read again</text>
    </g>
    <g id="text_24">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="260.127446" transform="rotate(-0 557.554922 260.127446)">cache write of skills, instructions and memory</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="557.554922" y="267.286129" transform="rotate(-0 557.554922 267.286129)">cache write of skills, instructions and memory</text>
    </g>
    <g id="text_25">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="557.554922" y="224.096742" transform="rotate(-0 557.554922 224.096742)">cache read of the context</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="557.554922" y="230.569294" transform="rotate(-0 557.554922 230.569294)">cache read of the context</text>
    </g>
   </g>
  </g>

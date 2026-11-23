@@ -31,36 +31,36 @@ z
   <g id="axes_1">
    <g id="patch_2">
     <path d="M 7.2 50.397 
-L 77.534397 50.397 
-L 77.534397 24.987 
+L 84.816389 50.397 
+L 84.816389 24.987 
 L 7.2 24.987 
 z
 " clip-path="url(#p0fffbaefca)" style="fill: #113b32; stroke: #0d1117; stroke-width: 1.5; stroke-linejoin: miter"/>
    </g>
    <g id="patch_3">
-    <path d="M 77.534397 50.397 
-L 203.801024 50.397 
-L 203.801024 24.987 
-L 77.534397 24.987 
+    <path d="M 84.816389 50.397 
+L 218.178283 50.397 
+L 218.178283 24.987 
+L 84.816389 24.987 
 z
 " clip-path="url(#p0fffbaefca)" style="fill: #135844; stroke: #0d1117; stroke-width: 1.5; stroke-linejoin: miter"/>
    </g>
    <g id="patch_4">
-    <path d="M 203.801024 50.397 
-L 509.362999 50.397 
-L 509.362999 24.987 
-L 203.801024 24.987 
+    <path d="M 218.178283 50.397 
+L 509.358365 50.397 
+L 509.358365 24.987 
+L 218.178283 24.987 
 z
 " clip-path="url(#p0fffbaefca)" style="fill: #189067; stroke: #0d1117; stroke-width: 1.5; stroke-linejoin: miter"/>
    </g>
    <g id="text_1">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="9.2088" y="17.40555" transform="rotate(-0 9.2088 17.40555)">Output, thinking included, 14%</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="9.2088" y="17.40555" transform="rotate(-0 9.2088 17.40555)">Output, thinking included, 15%</text>
    </g>
    <g id="text_2">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="79.543197" y="62.7372" transform="rotate(-0 79.543197 62.7372)">Cache writes, 25%</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="86.825189" y="62.7372" transform="rotate(-0 86.825189 62.7372)">Cache writes, 27%</text>
    </g>
    <g id="text_3">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="205.809824" y="17.867503" transform="rotate(-0 205.809824 17.867503)">Cache reads, 61%</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="220.187083" y="17.867503" transform="rotate(-0 220.187083 17.867503)">Cache reads, 58%</text>
    </g>
   </g>
  </g>
