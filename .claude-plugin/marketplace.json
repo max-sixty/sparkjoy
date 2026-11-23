@@ -5,7 +5,7 @@
     {
       "name": "sparkjoy",
       "source": "./",
-      "description": "Compacts Claude Code sessions between tasks, rather than when the context fills."
+      "description": "Compacts Claude Code sessions based on the model's judgment, rather than when the context fills."
     }
   ]
 }
