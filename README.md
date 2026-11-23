@@ -282,26 +282,6 @@ question.
     ends from my sessions.
 -->
 
-## Other plugins
-
-Two other plugins also compact before the window fills, and never in the middle
-of a turn:
-
-- [Compactly](https://github.com/swapnildahiphale/compactly) asks Sonnet, at
-  each prompt you send from 150k, whether the work has reached a natural break,
-  and if so compacts before sending the prompt. After a turn that commits,
-  pushes or opens a pull request, it also compacts if no prompt comes within 55
-  minutes.
-- [claude-smart-compact](https://github.com/mdseyam-as/claude-smart-compact)
-  compacts at every turn end from 180k unless you send a message first. Haiku
-  says whether the task is done, and its answer sets how long the plugin waits,
-  60 seconds or up to 8 minutes. From 350k it compacts as soon as the turn ends.
-
-Both decide from under 8,000 characters of the transcript, and neither tells its
-model what keeping or compacting costs. sparkjoy asks the session's own model,
-which reads the whole transcript, and tells it what each costs at the context's
-size.
-
 ## Limits
 
 - It acts only in sessions with a 1M-token context window, the size its defaults
@@ -330,6 +310,29 @@ size.
   so sparkjoy never asks at a turn end.
 
 ## FAQ
+
+<details>
+<summary>How does sparkjoy differ from other compaction plugins?</summary>
+
+Two other plugins also compact before the window fills, and never in the middle
+of a turn:
+
+- [Compactly](https://github.com/swapnildahiphale/compactly) asks Sonnet, at
+  each prompt you send from 150k, whether the work has reached a natural break,
+  and if so compacts before sending the prompt. After a turn that commits,
+  pushes or opens a pull request, it also compacts if no prompt comes within 55
+  minutes.
+- [claude-smart-compact](https://github.com/mdseyam-as/claude-smart-compact)
+  compacts at every turn end from 180k unless you send a message first. Haiku
+  says whether the task is done, and its answer sets how long the plugin waits,
+  60 seconds or up to 8 minutes. From 350k it compacts as soon as the turn ends.
+
+Both decide from under 8,000 characters of the transcript, and neither tells its
+model what keeping or compacting costs. sparkjoy asks the session's own model,
+which reads the whole transcript, and tells it what each costs at the context's
+size.
+
+</details>
 
 <details>
 <summary>How do I keep sparkjoy up to date?</summary>
