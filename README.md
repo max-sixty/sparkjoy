@@ -357,8 +357,8 @@ size.
   so sparkjoy never asks at a turn end.
 
 [^name]:
-    The name is Marie Kondo's test for what to keep when tidying: does it spark
-    joy?
+    The name comes from Marie Kondo, who tidies by keeping only the things that
+    spark joy.
 
 [^autocompact]:
     The replay draws each session's turns in stretches of one kind of work, 5
