@@ -498,32 +498,32 @@ work has β around 5 to 10. With 2% of the work at β = 30 it saves 17%. A unit
 of that work's effectiveness costs 77 times one at β = 0 even when the session
 never compacts, and no classifier lowers that part of the cost.
 
-The [replay](#a-replay-of-my-sessions) of the base case where work differs
-asks the classifier where sparkjoy asks it, at turn ends. Each session's turns
-come in stretches of one kind of work, 5 turns long on average, with each
-stretch's kind drawn by its share. At each turn end the classifier names the
-next turn's kind, right 9 times in 10, and the session compacts if its context
-has passed that kind's threshold. The classifier also compacts idle sessions
-from 175k, except that it keeps an idle context below 800k when it expects β =
-1.25 work next. Each kind's cost per unit of its own work is weighted by its
-share, as above, and no compaction loses detail the work needs. Claude Code
-compacts an idle context itself only in a session someone has open, so the
-replay takes two cases: a session someone has open, where every policy compacts
-idle sessions from 175k, standing in for Claude Code's own idle compaction from
-200k, and a background session, where only the classifier does.
+The [replay](#a-replay-of-my-sessions) asks the classifier at turn ends, as
+sparkjoy does. Each session's turns come in stretches of one kind of work, 5
+turns long on average. At each turn end the classifier names the next turn's
+kind, right 9 times in 10, and the session compacts if its context has passed
+that kind's threshold. It also compacts idle sessions from 175k, but keeps an
+idle context below 800k when it expects β = 1.25 work next. No compaction loses
+detail the work needs. Claude Code compacts idle contexts only in a session
+someone has open, so `/autocompact` gets those compactions there, from 175k in
+the replay, and not in a background session.
 
-| policy, each at its lowest-cost thresholds                                                            | saves against never compacting |
-| ----------------------------------------------------------------------------------------------------- | ------------------------------ |
-| after any request from 680k, as `/autocompact` does in a background session                           | 0.4%                           |
-| idle sessions only, which is what compacting after any request comes to in a session someone has open | 6.8%                           |
-| idle sessions, and turn ends from 830k                                                                | 7.2%                           |
-| the classifier, compacting at turn ends from 370k or 800k by the kind it names, and idle sessions     | 10.3%                          |
+| policy, each at its lowest-cost thresholds                                             | saves against never compacting |
+| -------------------------------------------------------------------------------------- | ------------------------------ |
+| `/autocompact` in a background session, after any request from 680k                    | 0.4%                           |
+| `/autocompact` in a session someone has open, which comes to idle compactions          | 6.8%                           |
+| turn ends from 830k, and idle sessions                                                 | 7.2%                           |
+| the classifier, at turn ends from 370k or 800k by the kind it names, and idle sessions | 10.3%                          |
 
-In a session someone has open, the classifier saves 3.7% against compacting only
-idle sessions, well short of the steady state's 11.6% in the table above, since
-compacting idle sessions alone saves 6.8%. In a background session it saves 9.9%
-against `/autocompact` at its lowest-cost threshold, 680k. Right every time, it
-saves 5.1% in a session someone has open, and with stretches of 20 turns, 3.9%.
+| the classifier against `/autocompact`                     | saves |
+| --------------------------------------------------------- | ----- |
+| in a background session                                   | 9.9%  |
+| in a session someone has open                             | 3.7%  |
+| in a session someone has open, right every time           | 5.1%  |
+| in a session someone has open, with stretches of 20 turns | 3.9%  |
+
+In a session someone has open, Claude Code's idle compactions already save 6.8%,
+which leaves the classifier well short of the steady state's 11.6%.
 
 ### Turn ends that differ in lost detail
 
