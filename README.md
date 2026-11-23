@@ -5,9 +5,9 @@
   </picture>
 </h1>
 
-A Claude Code plugin that compacts based on the model's judgment, rather than
-when the context fills[^name]. It cuts the cost of long sessions by 26% to 40%,
-depending on how you run Claude Code ([What it saves](#what-it-saves)).
+A Claude Code plugin that lets the model decide when to compact[^name]. It cuts
+the cost of long sessions by 26% to 40%, depending on how you run Claude Code
+([What it saves](#what-it-saves)).
 
 Once the session has built up some context, sparkjoy asks the session's own
 model whether to compact, and tells it what keeping the context and compacting
