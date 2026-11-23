@@ -125,7 +125,7 @@ L 535.22 81.747985
      </g>
     </g>
     <g id="text_12">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="7.2" y="14.7" transform="rotate(-0 7.2 14.7)">Lowest-cost threshold (tokens)</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="7.2" y="14.7" transform="rotate(-0 7.2 14.7)">Most efficient threshold (tokens)</text>
     </g>
    </g>
    <g id="FillBetweenPolyCollection_1">

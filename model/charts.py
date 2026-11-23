@@ -16,9 +16,9 @@ from one read of the sessions:
   cost           the steady state's cost per unit of effectiveness against the compaction threshold, at the
                  same four β, with each one's lowest point, under a request's mean cost and mean
                  effectiveness, the averages it is the ratio of, on one panel, all relative to never compacting
-  sensitivity    how far the lowest-cost threshold moves with each measured parameter and with β, at the
+  sensitivity    how far the most efficient threshold moves with each measured parameter and with β, at the
                  base case
-  threshold      the lowest-cost threshold against β, in the steady state and the replay
+  threshold      the most efficient threshold against β, in the steady state and the replay
   voi            the expected value of a classifier's information, on three mixes of work
   voi-point      the compaction threshold of the work a classifier says to compact, on the same mixes
 
@@ -594,11 +594,11 @@ def bill(out, S, p, c):
 
 
 def average(out, p, c):
-    """Why the lowest-cost threshold sits where it does when context size doesn't matter: against the
+    """Why the most efficient threshold sits where it does when context size doesn't matter: against the
     compaction threshold X, a request's cost averaged over the cycle, its share of the compaction included,
     and the marginal cost, what one more request before compacting costs. The average is least where
     they cross, which a dot marks. It draws the model in symbols, so its axes carry K and X*(0), the
-    lowest-cost threshold counting cost alone, and no figures."""
+    most efficient threshold counting cost alone, and no figures."""
     h, c0, _ = fit.terms(p, c)
     X, A = fit.curve(
         p, c, 0
@@ -843,9 +843,9 @@ def cost_curve(out, p, c):
 
 
 def sensitivity(out, p, c, boot):
-    """How far the lowest-cost threshold moves at the base case for β when each parameter measured in the
+    """How far the most efficient threshold moves at the base case for β when each parameter measured in the
     sessions is half or twice its value, and across its 90% interval over `boot`, the sessions resampled,
-    and when β is half or twice the base case (fit.sensitivity), with a line at the lowest-cost threshold
+    and when β is half or twice the base case (fit.sensitivity), with a line at the most efficient threshold
     with every parameter as measured. β, which isn't measured, has no interval. Each bar is labelled for a reader to
     point at."""
     b = fit.BASE
@@ -1000,7 +1000,7 @@ def sensitivity(out, p, c, boot):
             handlelength=1.2,
         )
         ax.set_xlabel(
-            f"Lowest-cost threshold at β = {b:g} (tokens)",
+            f"Most efficient threshold at β = {b:g} (tokens)",
             color=t["muted"],
             fontsize=10,
         )
@@ -1008,7 +1008,7 @@ def sensitivity(out, p, c, boot):
 
 
 def thresholds(out, cost, effectiveness, BT, BX, p, c):
-    """The lowest-cost threshold against β: the steady-state model and the turn-end replay, with 90%
+    """The most efficient threshold against β: the steady-state model and the turn-end replay, with 90%
     bands. The replay's legend entry takes the fit colour, since it is measured in the sessions."""
     bs = np.array(fit.CHART_BETAS)
     X = [fit.steady(p, c, b) for b in bs]
@@ -1078,7 +1078,7 @@ def thresholds(out, cost, effectiveness, BT, BX, p, c):
         ax.yaxis.set_major_formatter(tokens)
         ax.set_yticks([0, 250_000, 500_000, 750_000])
         ax.set_xlabel("β, the exponent of the power law", color=t["muted"], fontsize=10)
-        axis_name(ax, "Lowest-cost threshold (tokens)", t)
+        axis_name(ax, "Most efficient threshold (tokens)", t)
         legend = ax.legend(
             frameon=False,
             fontsize=9,
@@ -1094,9 +1094,9 @@ def voi(out, p, c):
     """The expected value of a classifier's information on three mixes of work with the same mean β,
     the base case's: a share of the work at one β > 0, the rest at β = 0, where the context doesn't help. For each
     mix and each accuracy, the classifier splits the work into a group to keep and a group to compact,
-    each compacting at its own lowest-cost threshold; the saving is against the lowest-cost single
+    each compacting at its own most efficient threshold; the saving is against the most efficient single
     threshold, and the x axis is the mutual information between the classifier's verdict and the kind of work, as a share
-    of a perfect classifier's. A second chart, model-voi-point, draws the lowest-cost threshold of the
+    of a perfect classifier's. A second chart, model-voi-point, draws the most efficient threshold of the
     group to compact against the same axis."""
     # Denser near 1, where a classifier's saving on rare, steep work climbs fastest.
     A = np.unique(
@@ -1113,7 +1113,7 @@ def voi(out, p, c):
         q = np.clip(q, 1e-12, 1 - 1e-12)
         return -(q * np.log2(q) + (1 - q) * np.log2(1 - q))
 
-    # On fit.steady's 100-token grid, so the lowest-cost threshold of the work at β = 0 is the doc's 262k.
+    # On fit.steady's 100-token grid, so the most efficient threshold of the work at β = 0 is the doc's 262k.
     X, J0 = fit.curve(p, c, 0, step=100)
     lines = []
     for share, beta, step in mixes:
@@ -1136,7 +1136,7 @@ def voi(out, p, c):
         lines.append((share, beta, step, saved, info, point))
         at = [int(np.abs(A - a).argmin()) for a in (0.8, 0.9, 0.99, 1.0)]
         print(
-            f"model-voi, {share:.0%} at β = {beta}: lowest-cost single threshold {tokens(X[(w[:, None] * Js).sum(0).argmin()])}; "
+            f"model-voi, {share:.0%} at β = {beta}: most efficient single threshold {tokens(X[(w[:, None] * Js).sum(0).argmin()])}; "
             + ", ".join(
                 f"right {A[i]:.0%}, saves {saved[i]:.1%} ({info[i]:.0%} of the information)"
                 for i in at
@@ -1223,7 +1223,7 @@ def voi_lost(p, c):
     finished, right at a share a of each kind, so each of its compactions costs
     D·MID(1 - a) / (MID(1 - a) + (1 - MID)a), and the threshold moves to where that costs least.
     Waiting for such a turn end moves each compaction later by about the same amount, which the
-    threshold makes up for. Prints, for each D, the lowest-cost single threshold, what a perfect
+    threshold makes up for. Prints, for each D, the most efficient single threshold, what a perfect
     classifier and one right 9 times in 10 save, and the accuracy from which it pays for running it."""
     h, c0, _ = fit.terms(p, c)
     wasted = h * p.K + c0
@@ -1240,7 +1240,7 @@ def voi_lost(p, c):
         saved = np.array([1 - lowest(d)[1] / single for d in picked])
         right = {a: saved[np.abs(A - a).argmin()] for a in (0.9, 1.0)}
         print(
-            f"voi-lost, {MID:.0%} of turn ends mid-task losing {n} wasted requests (${D * c.read:.2f}): lowest-cost "
+            f"voi-lost, {MID:.0%} of turn ends mid-task losing {n} wasted requests (${D * c.read:.2f}): most efficient "
             f"single threshold {tokens(X)}; a perfect classifier "
             f"saves {right[1.0]:.1%}, one right 9 times in 10 {right[0.9]:.1%}; pays for running it from "
             f"{A[np.argmax(saved > fit.RUNNING)]:.1%} right"
@@ -1250,7 +1250,7 @@ def voi_lost(p, c):
 def draw(out, S, p, c, boot, cost, effectiveness, BT, BX):
     """Draw each chart the docstring lists into `out`, from fit.py's sessions S, their parameters p and
     `boot`, the parameters of each resample of them, the prices c, and the replay's cost and
-    effectiveness with BT and BX, the lowest-cost turn-end threshold and steady-state threshold of each resample."""
+    effectiveness with BT and BX, the most efficient turn-end threshold and steady-state threshold of each resample."""
     out.mkdir(parents=True, exist_ok=True)
     print()
     cycles(out, p, c)

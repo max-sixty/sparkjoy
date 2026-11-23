@@ -84,7 +84,7 @@ L 413.604624 27.179297
      </g>
     </g>
     <g id="text_5">
-     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #c3c2b7" x="258.3" y="309.902516" transform="rotate(-0 258.3 309.902516)">Lowest-cost threshold at β = 0.5 (tokens)</text>
+     <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #c3c2b7" x="258.3" y="309.902516" transform="rotate(-0 258.3 309.902516)">Most efficient threshold at β = 0.5 (tokens)</text>
     </g>
    </g>
    <g id="matplotlib.axis_2"/>
