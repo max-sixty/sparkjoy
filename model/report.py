@@ -31,14 +31,12 @@ import tempfile
 import warnings
 import webbrowser
 from collections import Counter
-from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
 import fit
 import numpy as np
 
-CHECK_OUTPUT = 100  # output tokens of a check, which reads the context from the cache
 RETURN = (
     3600  # seconds a session sits idle before taking it up again counts as a return
 )
@@ -63,31 +61,6 @@ MISSED = (
     "Its question read less than nine tenths of its input from the prompt cache, so the rest cost a cache "
     "write. sparkjoy logs these from 20 November 2026 on."
 )
-
-
-def replayed(s, p):
-    """The session's cost in dollars with sparkjoy's compactions where it made them, its checks
-    included, and without them, at its model's list prices (None for a model with no price
-    here), and the context each request carried in each."""
-    priced = s.model in fit.PRICES
-    c = fit.prices(s.model if priced else "claude-opus-5-5", s.ttl)
-    # As compactions the user typed, sparkjoy's stay where the log has them.
-    ran, ran_trace = fit.replay(
-        replace(s, kind=np.where(s.sparkjoy, fit.USER, s.kind)), p, c, np.inf, s.ttl
-    )
-    without, without_trace = fit.replay(s, p, c, np.inf, s.ttl)
-    checks = sum(check(v, c) for v in s.verdicts if v.tokens)
-    dollars = (
-        ((ran + checks) * c.read, without * c.read, checks * c.read) if priced else None
-    )
-    return dollars, ran_trace, without_trace
-
-
-def check(v, c):
-    """A check's cost in cached reads: its question's input, all read from the cache unless the check
-    logged a miss, whose unread part is priced as a cache write, and its output."""
-    read, size = v.missed or (v.tokens, v.tokens)
-    return read + c.write * (size - read) + c.output * CHECK_OUTPUT
 
 
 def returns(S):
@@ -855,7 +828,7 @@ def main():
     # The replay prices each compaction from K, P and N.
     replays = p is not None and np.isfinite([p.K, p.P, p.N]).all()
     sessions = (
-        [(s, replayed(s, p)) for s in S]
+        [(s, fit.as_run(s, p)) for s in S]
         if replays
         else [(s, (None, s.size, s.size)) for s in S]
     )
