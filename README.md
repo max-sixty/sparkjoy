@@ -14,10 +14,10 @@ model whether to compact, and tells it what keeping the context and compacting
 it each cost. It asks at the end of each turn, and just before an idle
 session's prompt cache expires ([How it decides](#how-it-decides)).
 
-In comparison, Claude Code and `/autocompact` compact at a set size, whatever
-the work needs. After a finished fix, the next task does as well from a summary,
-but while a design is still taking shape, a summary would drop the options
-already rejected and why.
+Claude Code and `/autocompact` compact at a set size, whatever the work needs.
+After a finished fix, the next task does as well from a summary, but while a
+design is still taking shape, a summary would drop the options already rejected
+and why.
 
 |                | When it compacts                                                                                                              |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -35,9 +35,8 @@ already rejected and why.
 Every request reads the whole context, so the area under each line counts the
 tokens the session read. At each dot the plugin asked the session's model
 whether to compact, and at the larger dots the session compacted. The session
-ran in the background, and Claude Code compacts a session nobody has open only
-when the window fills. Priced at list prices from its logged requests, the
-session as it ran cost 30% less than a replay of it without the plugin.
+ran in the background, where Claude Code compacts only when the window fills.
+At list prices it cost 30% less than a replay of it without the plugin.
 
 ## Install
 
@@ -47,8 +46,8 @@ At the prompt of a Claude Code session:
 /plugin install sparkjoy --marketplace max-sixty/sparkjoy
 ```
 
-A session picks it up when it starts. To see its verdicts only, run `/sparkjoy
-classify`, then switch to `/sparkjoy on` to let it compact
+New sessions pick it up. To see its verdicts before it compacts anything, run
+`/sparkjoy classify`, then `/sparkjoy on` to let it compact
 ([Settings](#settings)).
 
 ## What it does
@@ -87,10 +86,9 @@ classify`, then switch to `/sparkjoy on` to let it compact
 </details>
 
 - **`/sparkjoy bug`** drafts a bug report from the session's transcript, with
-  what you say went wrong, sparkjoy's settings, and its last lines beside the
-  requests around them, and files it here once you agree. A line that reports a
-  bug, such as a check that failed or a question at a turn's end that missed
-  the prompt cache, is followed by one suggesting it.
+  sparkjoy's settings and what you say went wrong, and files it here once you
+  agree. When one of sparkjoy's lines reports a bug, such as a question that
+  failed, the next line suggests it.
 
 ## Settings
 
@@ -185,8 +183,8 @@ reason. The fork goes from Claude Code to the session's own model, so the
 conversation goes only where the session already sends it.
 
 The question asks whether the next turns will need detail a summary drops, such
-as failed attempts or a design still taking shape, and gives what a compaction
-and keeping the context each cost at the context's size.
+as failed attempts or a design still taking shape, and states what compacting
+and keeping the context each cost at its current size.
 
 ### The prompt
 
