@@ -5,10 +5,10 @@ guidance on the tradeoffs so it can make the best decision[^name]. Once there is
 material context, it asks at the end of each turn, and just before an idle
 session's prompt cache expires.
 
-Claude Code and `/autocompact` compact at a set size, whatever the work needs.
-After a finished fix, the next task does as well from a summary, but while a
-design is still taking shape, a summary would drop the options already rejected
-and why.
+In comparison, Claude Code and `/autocompact` compact at a set size, whatever
+the work needs. After a finished fix, the next task does as well from a summary,
+but while a design is still taking shape, a summary would drop the options
+already rejected and why.
 
 |                | When it compacts                                                                                                              |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
