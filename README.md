@@ -427,11 +427,12 @@ The model prices each policy per unit of work done, to find when a session
 should compact, and what judging the work ahead saves against compacting at a
 set size.
 
-## The model
+## The models
 
-The model builds up in cases, from the simplest, whose formula shows which
-parameters matter, to a replay that follows real sessions. Each case adds
-something the one before it leaves out:
+As with any model, there's a trade-off between simplicity and completeness. A
+simple model gives a formula that shows which parameters matter, and a fuller
+one follows real sessions more closely. There are a few models, each in a
+section below, and each adds something the one before it leaves out:
 
 - **[Cost alone](docs/cost-model.md#cost-alone).** A request gets as much done at any context, so
   only tokens count, and the context grows by the same number with each request.
@@ -447,11 +448,11 @@ something the one before it leaves out:
   its end. Asking only at turn ends avoids the larger D, but lets a long turn
   carry the context past the lowest-cost threshold.
 - **[A classifier](docs/cost-model.md#a-classifier).** β and D vary with the work ahead. A
-  question that tells the cases apart, as sparkjoy's does, lets each compact
-  where it costs least, and is worth what it saves against the lowest-cost
-  single threshold.
+  question that tells these kinds of work apart, as sparkjoy's does, lets each
+  compact where it costs least, and is worth what it saves against the
+  lowest-cost single threshold.
 - **[A replay of my sessions](docs/cost-model.md#a-replay-of-my-sessions).** It keeps every logged
-  request and moves only the compactions, so it includes what the other cases
+  request and moves only the compactions, so it includes what the other models
   leave out: uneven growth, long turns, cache lapses and sessions that end.
 
 ## Results for my sessions
