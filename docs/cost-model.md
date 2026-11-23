@@ -73,41 +73,37 @@ shows which parameters matter, to a replay that follows real sessions:
 
 ## Results for my sessions
 
-For my sessions on Opus 5.5[^prices]:
+For my sessions on Opus 5.5[^prices], what sparkjoy's question saves against
+the lowest-cost single threshold, if it is right 9 times in 10 ([A
+classifier](#a-classifier)):
 
-- What sparkjoy's question saves depends on how widely β and D vary, and on how
-  often the question is right. If three quarters of the work is at β = 0.25 and a
-  quarter at β = 1.25, a question right 9 times in 10 saves 11.6% against the
-  lowest-cost single threshold in a session that grows evenly, never sits idle and
-  can compact after any request. In a replay of my sessions, it saves 9.9% in a
-  background session, where only sparkjoy compacts idle sessions, and 3.7% in a
-  session someone has open, where Claude Code compacts them too. In the steady
-  state, if half of turn ends fall in the middle of a task, a question right 9
-  times in 10 saves 1.9% where a compaction there wastes 12 requests, and 9.0%
-  where it wastes 96. No session of mine yet measures how widely β or D varies, or
-  how often the question is right ([A classifier](#a-classifier)).
-- sparkjoy asks only at turn ends, so it waits out long turns. Turns run a
-  median of 9 requests but a mean of 38, so one long turn can carry the context
-  far past where compacting pays before it ends. In the replay, at each policy's
-  lowest-cost threshold, compacting at every turn end saves 9.1 percentage
-  points less than compacting after any request, counting cost alone, and 0.9
-  less at the base case, β = 0.5, where a request at 250k gets half as much done
-  as one at 1M. Turn ends break even once a compaction in the middle of a turn
-  wastes 35 more requests than one at a turn end, counting cost alone, or 7 more
-  at the base case. No session of mine measures that ([Mid-turn or at a turn
-  end](#mid-turn-or-at-a-turn-end)).
+| the work ahead                                                       | in                                      | saves |
+| -------------------------------------------------------------------- | --------------------------------------- | ----- |
+| ¾ at β = 0.25, ¼ at β = 1.25                                         | the steady state                        | 11.6% |
+| ¾ at β = 0.25, ¼ at β = 1.25                                         | a replay, in a background session       | 9.9%  |
+| ¾ at β = 0.25, ¼ at β = 1.25                                         | a replay, in a session someone has open | 3.7%  |
+| half of turn ends in the middle of a task, wasting 12 requests there | the steady state                        | 1.9%  |
+| half of turn ends in the middle of a task, wasting 96 requests there | the steady state                        | 9.0%  |
+
+In a session someone has open, Claude Code compacts idle contexts itself, which
+leaves the question less to save. No session of mine yet measures the work ahead
+or how often the question is right.
+
+|                                                                                  | counting cost alone | at the base case, β = 0.5 |
+| -------------------------------------------------------------------------------- | ------------------- | ------------------------- |
+| lowest-cost threshold, compacting after any request                              | 262k                | 376k                      |
+| points less saved asking only at turn ends than after any request, in the replay | 9.1                 | 0.9                       |
+| extra requests a mid-turn compaction must waste for turn ends to pay             | 35                  | 7                         |
+
+These come from [Cost alone](#cost-alone), [Cost and context](#cost-and-context)
+and [Mid-turn or at a turn end](#mid-turn-or-at-a-turn-end).
+
+- A compaction costs about \$1 at any context size ([What a request and a
+  compaction cost](#what-a-request-and-a-compaction-cost)).
 - Just before an idle session's cache lapses, compacting pays from about 160k
   ([Idle sessions](#idle-sessions)).
-- A compaction costs about \$1 at any context size, most of it for the cache
-  write of the context it leaves ([What a request and a compaction
-  cost](#what-a-request-and-a-compaction-cost)).
-- Compacting after any request, the lowest-cost threshold is 262k counting cost
-  alone ([Cost alone](#cost-alone)), and 376k at the base case ([Cost and
-  context](#cost-and-context)).
-- sparkjoy asks its question only once the context reaches a floor, 250k at a
-  turn end or 175k in an idle session. The default floors are the pair that
-  costs least, counting cost alone, in a replay that compacts wherever they
-  allow ([Floors](#floors)).
+- The default floors, 250k at a turn end and 175k in an idle session, cost least
+  in a replay, counting cost alone ([Floors](#floors)).
 
 ## Costs
 
