@@ -125,17 +125,6 @@ this:
 }
 ```
 
-### Updates
-
-Auto-update is off by default for third-party plugin marketplaces, sparkjoy's
-included. To keep sparkjoy up to date, ask Claude to turn on auto-update for
-sparkjoy, or open `/plugin`, go to the Marketplaces tab, select sparkjoy, and
-turn on auto-update. Until you do, sparkjoy asks GitHub once a day, when a
-session starts, whether a newer version has been out for a day or more, and if
-one has, says in the transcript how many days out of date yours is, with the
-command that updates it. It doesn't ask where `DISABLE_UPDATES`,
-`DISABLE_AUTOUPDATER` or `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set.
-
 ## What it saves
 
 `/sparkjoy report` replays each session's logged requests twice at list prices,
@@ -339,6 +328,20 @@ size.
 - If you set `/autocompact`, keep it above sparkjoy's turn-end floor. At or
   below the floor, Claude Code compacts mid-turn before any turn end reaches it,
   so sparkjoy never asks at a turn end.
+
+## FAQ
+
+<details>
+<summary>How do I keep sparkjoy up to date?</summary>
+
+Claude Code leaves auto-update off for plugins installed from GitHub. Ask
+Claude to turn it on for sparkjoy, or open `/plugin`, select sparkjoy in the
+Marketplaces tab, and turn it on there. Until then, sparkjoy checks GitHub once
+a day, and when a newer version has been out for a day or more, says so in the
+transcript with the command that updates it. It doesn't check where Claude
+Code's updates or nonessential traffic are turned off.
+
+</details>
 
 [^name]:
     The name comes from Marie Kondo, who tidies by keeping only the things that
