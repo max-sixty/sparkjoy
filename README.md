@@ -364,7 +364,7 @@ size.
     The replay draws each session's turns in stretches of one kind of work, 5
     turns long on average, and at each turn end the judgment names the next
     turn's kind. It weighs each kind's cost per unit of its own work by its
-    share, as in the [cost model](#work-that-differs-in-β). Every policy
+    share, as in the [cost model](docs/cost-model.md#work-that-differs-in-β). Every policy
     compacts idle sessions from 175k, as sparkjoy and Claude Code both do, and
     that takes much of what the judgment would otherwise save: with no idle
     compaction in any policy, it saves 9%. A judgment right every time saves 5%.
@@ -818,16 +818,20 @@ in 100 has about 90%.
   <img alt="What a classifier saves against the lowest-cost single threshold, by its accuracy as a share of a perfect classifier's information, for 50% of the work at β = 1, 25% at β = 2 and 10% at β = 5, the rest at β = 0. A perfect classifier saves 13.5%, 23% and 27%. The β = 1 line climbs fastest at first, the β = 2 line is nearly straight, and the β = 5 line stays near 0 until about 30% of the information and reaches half its saving only at about 90%. A thin band along 0 marks what running the classifier costs, 0.4%." src="assets/model-voi-light.svg">
 </picture>
 
-Each line is a mix of work with mean β 0.5, the base case, with one share at
-the β shown and the rest at β = 0. The band along 0 is the cost of running the classifier,
-about 0.4%.
+Each line of the chart is a mix of work with mean β 0.5, the base case, with
+one share at the β shown and the rest at β = 0. The band along 0 is the cost of
+running the classifier, about 0.4%. The table adds the base case where work
+differs, which also has mean β 0.5. Its three quarters at β = 0.25 stand for
+work whose context loses its worth quickly but not entirely, and its quarter at
+β = 1.25 for work that needs much more of its context.
 
-| mix                                                | lowest-cost single threshold | a perfect classifier saves | right 9 times in 10, a classifier saves | a classifier pays once right |
-| -------------------------------------------------- | ---------------------------- | -------------------------- | --------------------------------------- | ---------------------------- |
-| all at β = 0.5                                     | 376k                         | 0                          | 0                                       |                              |
-| 50% at β = 1                                       | 648k                         | 13.5%                      | 9%                                      | 58% of the time              |
-| 25% at β = 2                                       | never compacting             | 23%                        | 10%                                     | 67%                          |
-| 10% at β = 5, work that stalls without its history | never compacting             | 27%                        | 2%                                      | 85%                          |
+| mix                                                                   | lowest-cost single threshold | a perfect classifier saves | right 9 times in 10, a classifier saves | a classifier pays once right |
+| --------------------------------------------------------------------- | ---------------------------- | -------------------------- | --------------------------------------- | ---------------------------- |
+| all at β = 0.5                                                        | 376k                         | 0                          | 0                                       |                              |
+| 50% at β = 1                                                          | 648k                         | 13.5%                      | 9%                                      | 58% of the time              |
+| 25% at β = 2                                                          | never compacting             | 23%                        | 10%                                     | 67%                          |
+| 10% at β = 5, work that stalls without its history                    | never compacting             | 27%                        | 2%                                      | 85%                          |
+| 75% at β = 0.25 and 25% at β = 1.25, the base case where work differs | 626k                         | 16.4%                      | 11.6%                                   | 57%                          |
 
 <details>
 <summary>Where a classifier compacts</summary>
@@ -855,6 +859,29 @@ At a given mean β, a perfect classifier saves most when a small share of the
 work has β around 5 to 10. With 2% of the work at β = 30 it saves 17%. A unit
 of that work's effectiveness costs 77 times one at β = 0 even when the session
 never compacts, and no classifier lowers that part of the cost.
+
+The [replay](docs/cost-model.md#a-replay-of-my-sessions) of the base case where work differs
+asks the classifier where sparkjoy asks it, at turn ends. Each session's turns
+come in stretches of one kind of work, 5 turns long on average, with each
+stretch's kind drawn by its share. At each turn end the classifier names the
+next turn's kind, right 9 times in 10, and the session compacts if its context
+has passed that kind's threshold. Every policy also compacts idle sessions from
+175k, except that the classifier keeps an idle context below 800k when it
+expects β = 1.25 work next. Each kind's cost per unit of its own work is
+weighted by its share, as above, and no compaction loses detail the work needs.
+
+| policy, each at its lowest-cost thresholds                                     | saves against never compacting |
+| ------------------------------------------------------------------------------ | ------------------------------ |
+| idle sessions only, which is what compacting after any request comes to here   | 6.8%                           |
+| idle sessions, and turn ends from 830k                                         | 7.2%                           |
+| the classifier, compacting at turn ends from 370k or 800k by the kind it names | 10.3%                          |
+
+The classifier saves 3.7% against compacting only idle sessions, well short of
+the steady state's 11.6% in the table above. Most of the gap is the idle
+compaction every policy makes, which alone saves 6.8%. With no policy compacting
+idle sessions, the classifier saves 9.2% against compacting after any request at
+its lowest-cost threshold, 680k. A classifier right every time saves 5.1%, and
+stretches of 20 turns give 3.9%.
 
 ### Turn ends that differ in lost detail
 
