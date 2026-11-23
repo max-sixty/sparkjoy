@@ -161,19 +161,6 @@ by 23%, from $5,214 to $4,013 at Opus 5.5 list prices, in a replay of their
   <img alt="Share of requests at each context size. With the plugin, most requests carry 100k to 450k tokens; without it, a long tail runs to 1M." src="assets/context-light.svg">
 </picture>
 
-### Compared with `/autocompact`
-
-`/autocompact` compacts every session at the size you set. sparkjoy compacts
-where the session's model judges that the work ahead no longer needs the
-context, which pays where work differs in how much it needs its context. On an
-assumed mix of work, the judgment saves 12% against `/autocompact` in a session
-that grows evenly and never sits idle. In a replay of my sessions it saves 10%
-in a background session and 4% in one you have open, where Claude Code also
-compacts idle sessions[^autocompact]. No session yet measures how widely work
-differs, or how often the judgment is right.
-
-I run sparkjoy without `/autocompact`. [Limits](#limits) says how to set both.
-
 ## How it decides
 
 sparkjoy asks the session's own model whether now is a good time to compact, at
@@ -308,6 +295,19 @@ question.
     ends from my sessions.
 -->
 
+## Compared with `/autocompact`
+
+`/autocompact` compacts every session at the size you set. sparkjoy compacts
+where the session's model judges that the work ahead no longer needs the
+context, which pays where work differs in how much it needs its context. On an
+assumed mix of work, the judgment saves 12% against `/autocompact` in a session
+that grows evenly and never sits idle. In a replay of my sessions it saves 10%
+in a background session and 4% in one open in a terminal or editor, where Claude
+Code also compacts idle sessions[^autocompact]. No session yet measures how
+widely work differs, or how often the judgment is right.
+
+I run sparkjoy without `/autocompact`. [Limits](#limits) says how to set both.
+
 ## Other plugins
 
 Two other plugins also compact before the window fills, and never in the middle
@@ -372,16 +372,16 @@ size.
     draws each session's turns in stretches of one kind of work, 5 turns long on
     average, and at each turn end the judgment names the next turn's kind. It
     weighs each kind's cost per unit of its own work by its share. sparkjoy
-    compacts idle contexts from 175k, and in a session you have open, so does
-    `/autocompact` in the replay, standing in for Claude Code's own idle
-    compaction from 200k. There a judgment right every time saves 5%. Where all
-    work is alike, at β = 0.5, `/autocompact` at 370k saves 15% against never
-    compacting, and compacting at every turn end from 390k saves 14%; counting
-    tokens alone, at 270k and from 240k, they save 40% and 31%. None of these
-    counts what a compaction in the middle of a turn loses. `/autocompact`
-    compacted mid-turn 169 times in that replay, and turn ends break even once
-    each such compaction wastes 7 more requests than one at a turn end, or 35
-    counting tokens alone.
+    compacts idle contexts from 175k, and in a session open in a terminal or
+    editor, so does `/autocompact` in the replay, standing in for Claude Code's
+    own idle compaction from 200k. There a judgment right every time saves 5%.
+    Where all work is alike, at β = 0.5, `/autocompact` at 370k saves 15%
+    against never compacting, and compacting at every turn end from 390k saves
+    14%; counting tokens alone, at 270k and from 240k, they save 40% and 31%.
+    None of these counts what a compaction in the middle of a turn loses.
+    `/autocompact` compacted mid-turn 169 times in that replay, and turn ends
+    break even once each such compaction wastes 7 more requests than one at a
+    turn end, or 35 counting tokens alone.
 
 [^replay]:
     sparkjoy then asked from 400k at a turn end, where it now asks from 250k.
