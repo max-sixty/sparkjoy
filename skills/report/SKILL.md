@@ -30,7 +30,10 @@ point the user to https://docs.astral.sh/uv/ to install it. The script reads
 every transcript modified in the window at low priority, which takes about half
 a minute for two weeks of heavy use, and longer for a longer window.
 
-Reply with the summary it printed and the page's path. The page shows:
+Reply with the summary it printed and the page's path. Both open on the
+result: what sparkjoy's compactions saved; or, where it made none, such as on
+a first run, what compacting from the floors fitted to the same sessions would
+have saved; or why it had nothing to do. The page then shows:
 
 - **Sessions**: for each session where sparkjoy gave a verdict, its context per
   request with and without sparkjoy's compactions, and the cost of each.
@@ -39,19 +42,21 @@ Reply with the summary it printed and the page's path. The page shows:
   whether its question missed the prompt cache, and the model's reason. The
   checks' cost in the savings prices each miss's unread input as a cache write. Under its old name, compact-when-done, it logged
   only the checks that compacted.
-- **Idle returns**: each time a session left with 175k or more in context took
-  a new message after an hour or more, and whether a compaction came in
-  between.
 - **Thresholds**: the pair of floors, at turn ends and in idle sessions, that
-  costs least for these sessions, beside the author's 250k and 175k, and what
-  each saves per unit of work against never compacting, at the cost model's
-  base case for how much past context is worth to the work.
+  costs least for these sessions, beside the author's 250k and 175k and never
+  compacting, with what each costs and what each saves per unit of work against
+  never compacting, at the cost model's base case for how much past context is
+  worth to the work.
 - **Saved figures**: the floors and figures it saved. A window without
   compactions has nothing to fit them to, and the plugin keeps the ones it
   had.
+- **Idle returns**: each time a session left with 175k or more in context took
+  a new message after an hour or more, and whether a compaction came in
+  between.
 
 The savings come from replaying each session's logged requests with sparkjoy's
 compactions where it made them and without them, at list prices for the
 session's model, so they are estimates; on a subscription the same tokens count
-against usage limits rather than a bill. With no verdicts yet, the page says so:
-a session picks sparkjoy up when it restarts.
+against usage limits rather than a bill. The page leaves out sessions that
+Claude Code compacted before 200k, as it does in a 200k context window, since
+sparkjoy acts only in sessions with a 1M window, and says so.

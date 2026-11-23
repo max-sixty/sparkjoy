@@ -77,7 +77,7 @@ where `DISABLE_UPDATES`, `DISABLE_AUTOUPDATER` or
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/report-dark.png">
-  <img alt="A sparkjoy report for 4 to 18 November: 505 verdicts, 374 compacted and 131 kept; saved $3,208, 22% of what the sessions would have cost; then a table of sessions, each with its context per request with and without sparkjoy's compactions, its verdicts and its cost." src="assets/report-light.png">
+  <img alt="A sparkjoy report for 8 to 22 November, under the sparkjoy logo: saved $5,168, 25% of what the sessions would have cost without its compactions; 945 verdicts, 704 compacted and 238 kept; the floors that cost least for these sessions; then a table of sessions, each with its context per request with and without sparkjoy's compactions, its verdicts and its cost." src="assets/report-light.png">
 </picture>
 
 </details>

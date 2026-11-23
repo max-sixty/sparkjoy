@@ -175,16 +175,19 @@ def session_with_compactions():
 
 def test_counts_verdicts_and_returns(tmp_path):
     summary, page = report(tmp_path, session_with_compactions())
-    assert summary[0] == (
+    # The page opens on the same paragraphs, with the counts of each kind of verdict after the first.
+    assert summary == [
+        "Cost $1.68 more, 17% more than these sessions would have cost without sparkjoy's compactions.",
         "7 verdicts in 1 of 1 sessions: 3 compacted, 1 would compact, 1 kept, 0 unreadable, "
-        "1 no verdict, 0 dropped, 1 failed; 2 missed the prompt cache"
-    )
-    assert (
-        "3 returns after an hour idle to sessions left at 175k or more, 2 compacted in between"
-        in summary
-    )
-    assert "Replayed at list prices" in page
-    assert "1 by sparkjoy" in page and "1 by /compact" in page
+        "1 no verdict, 0 dropped, 1 failed; 2 missed the prompt cache",
+        "Replayed at list prices, they cost $9.60 without them and $11 with them, including $3.70 "
+        "for its checks.",
+        "3 returns after an hour or more idle to sessions left with 175k or more in context; 2 had "
+        "been compacted in between (1 by /compact, 1 by sparkjoy). The other 1 wrote 230k tokens to "
+        "the cache again, for $1.84.",
+        "Asking from 350k at turn ends and 125k in idle sessions costs least in this session's replay.",
+    ]
+    assert '<p class="lead"><b>Cost $1.68 more</b>, 17% more' in page
     assert '<span class="mark would-compact"' in page
     assert "Fix the parser" in page
     assert "hooks.json" not in page
@@ -193,10 +196,53 @@ def test_counts_verdicts_and_returns(tmp_path):
         and "missed the cache (read 30k of 227k)" in page
         and "missed the cache (read 30k of 262k)" in page
     )
+    # The lockup, its dots in the accent, and the icon as the favicon.
+    assert '<svg class="logo"' in page and page.count('class="accent"') == 3
+    assert '<link rel="icon"' in page
 
 
-def test_no_verdicts_yet(tmp_path):
+def test_a_first_run_leads_with_what_the_fitted_floors_would_have_saved(tmp_path):
+    """Before sparkjoy has run: the same session, with the user's compactions and none of
+    sparkjoy's lines."""
+    lines = ("sparkjoy: ", "compact-when-done: ")
     summary, page = report(
+        tmp_path,
+        [
+            e
+            for e in session_with_compactions()
+            if not str(e.get("content", "")).startswith(lines)
+        ],
+    )
+    assert summary[:2] == [
+        "Compacting at every turn end from 350k and in every idle session from 125k would have cut "
+        "this session's cost from $7.58 to $7.53 (1%), replayed at Opus 5.5 list prices.",
+        "sparkjoy asked nothing in this window, though this session passed 250k at a turn end, "
+        "where it asks.",
+    ]
+    assert "<b>from $7.58 to $7.53</b>" in page and "Verdicts" not in page
+
+
+def test_sessions_on_a_200k_window_say_sparkjoy_cannot_act(tmp_path):
+    summary, page = report(
+        tmp_path,
+        [
+            prompt("10:00:00Z", "start"),
+            request("10:00:10Z", 150_000, 15_000),
+            boundary("10:01:00Z", trigger="auto", before=165_000),
+            compact_summary("10:01:00Z"),
+            prompt("10:05:00Z", "go on"),
+            request("10:05:10Z", 20_000, 30_000),
+        ],
+    )
+    assert summary == [
+        "sparkjoy can't act in this session. Claude Code compacted it on its own before 200k, as "
+        "it does in a 200k context window, and sparkjoy acts only in sessions with a 1M window."
+    ]
+    assert "Thresholds" not in page
+
+
+def test_a_session_below_the_floor_had_nothing_to_ask(tmp_path):
+    summary, _ = report(
         tmp_path,
         [
             prompt("10:00:00Z", "hello"),
@@ -205,11 +251,7 @@ def test_no_verdicts_yet(tmp_path):
             request("10:01:10Z", 20_000, 1_000),
         ],
     )
-    assert summary[0] == (
-        "0 verdicts in 0 of 1 sessions: 0 compacted, 0 would compact, 0 kept, 0 unreadable, "
-        "0 no verdict, 0 dropped, 0 failed; 0 missed the prompt cache"
-    )
-    assert "No verdicts yet; sessions pick sparkjoy up when they restart." in page
+    assert summary == ["No session passed 250k at a turn end, where sparkjoy asks."]
 
 
 def test_saves_the_figures_the_question_states(tmp_path):
@@ -233,10 +275,14 @@ def test_saves_the_figures_the_question_states(tmp_path):
         "WRITE": 40,
         "OUTPUT": 100,
     }
+    assert summary[-2] == (
+        "Asking from 350k at turn ends and 125k in idle sessions costs least in this session's "
+        "replay. sparkjoy asks from them from the next turn end, except where you set a floor of "
+        "your own."
+    )
     assert summary[-1].startswith(
-        "sparkjoy now asks from these sessions' floors, except where you set your own, and "
-        "states their figures: floor at turn ends 350k; floor in idle sessions 125k; context "
-        "after a compaction 225k;"
+        "Saved figures: floor at turn ends 350k; floor in idle sessions 125k; context after a "
+        "compaction 225k;"
     )
     assert (
         "sparkjoy asks from these floors, except where you set a floor of your own, and its question"
@@ -253,6 +299,11 @@ def test_saves_no_figures_without_compactions(tmp_path):
         figures,
     )
     assert not figures.exists()
+    # A session of one request is no session the report reads.
+    assert summary[0] == (
+        f"No sessions. No interactive Claude Code session in {tmp_path / 'projects'} ran in this "
+        "window."
+    )
     assert (
         summary[-1]
         == "sparkjoy keeps the floors and figures it has: the window holds no compactions to fit them to"
