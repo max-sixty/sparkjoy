@@ -511,7 +511,7 @@ the replay, and not in a background session.
 | policy, each at its lowest-cost thresholds                                             | saves against never compacting |
 | -------------------------------------------------------------------------------------- | ------------------------------ |
 | `/autocompact` in a background session, after any request from 680k                    | 0.4%                           |
-| `/autocompact` in a session someone has open, which comes to idle compactions          | 6.8%                           |
+| `/autocompact` in a session someone has open, where only idle compactions pay          | 6.8%                           |
 | turn ends from 830k, and idle sessions                                                 | 7.2%                           |
 | the classifier, at turn ends from 370k or 800k by the kind it names, and idle sessions | 10.3%                          |
 
