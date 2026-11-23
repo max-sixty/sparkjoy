@@ -59,6 +59,15 @@ SPAN = 20  # requests over which re-reads after a compaction are counted
 # threshold chart draws the lowest-cost threshold at each of CHART_BETAS.
 BASE = 0.5
 CHART_BETAS = tuple(i / 20 for i in range(21))
+# The base case where work differs, as (share of the turns, β): most work's context loses its worth
+# quickly, and a quarter of it needs much more of its context. Its mean β is BASE. No session
+# measures it either.
+MIX = ((0.75, 0.25), (0.25, 1.25))
+RIGHT = 0.9  # how often sparkjoy's judgment names the kind of work that comes next
+STRETCH = 5  # turns in a row of one kind of work, on average
+MIX_DRAWS = 10  # draws of which turns are of which kind, pooled
+# What running the classifier costs, as a share of the cost: the replay's 0.43% at the base case, rounded.
+RUNNING = 0.004
 # Values of D, the detail a compaction drops, in dollars, for the table under "What does the model assume a
 # compaction loses?" in docs/cost-model.md. The doc fits no value of D.
 LOST = (0.25, 1, 4)
@@ -137,6 +146,7 @@ class Session:
     title: str
     model: str  # the model most of its requests used
     version: str  # the Claude Code release that wrote its last request
+    background: bool  # it ran in the background (`claude --bg`), where Claude Code compacts no idle session itself
     verdicts: list  # what sparkjoy logged
     lines: list  # every line in `LINE`, as (seconds since the epoch, text)
     t: np.ndarray  # when each request started, in seconds since the epoch
@@ -275,7 +285,7 @@ def transcript(path, since=None, until=None):
     )
     title_lines = tuple(f'{{"type":"{t}"' for t in TITLES)
     reqs, comps, prompts, verdicts, lines = {}, [], [], [], []
-    entry, version, asked, missed = None, None, None, None
+    entry, version, asked, missed, background = None, None, None, None, False
     titles, first, models, said, failed, summaries = {}, None, Counter(), [], {}, []
     for raw in path.open(errors="replace"):
         prompt = (
@@ -343,6 +353,7 @@ def transcript(path, since=None, until=None):
             if not u or m.get("model") == "<synthetic>":
                 continue
             entry = entry or e.get("entrypoint")
+            background = background or e.get("sessionKind") == "bg"
             version = e.get("version") or version
             v = (
                 u.get("input_tokens") or 0,
@@ -437,6 +448,7 @@ def transcript(path, since=None, until=None):
         title=" ".join(name.split()),
         model=models.most_common(1)[0][0],
         version=version,
+        background=background,
         verdicts=verdicts,
         lines=lines,
         said=sorted(said),
@@ -783,15 +795,18 @@ def idle_break_even(p, c):
 
 
 def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0):
-    """One session's cost under a policy, with the context each request then carried.
+    """One session's cost under a policy, with the context each request then carried and what
+    each request cost, a compaction before it included.
     The policy compacts at the end of any turn (or with `every`, after any request) whose
     context reaches `threshold`, and with `idle`, at any turn end from that size after which
     the session sits idle for IDLE[ttl] seconds, as sparkjoy's timer does. Each
-    compaction the policy or Claude Code makes also costs `lost`, D in cached reads. Either of
-    `threshold` and `lost` can instead hold one value per request: the threshold at a turn end
-    after that request, and what a compaction after it costs."""
+    compaction the policy or Claude Code makes also costs `lost`, D in cached reads. Each of
+    `threshold`, `idle` and `lost` can instead hold one value per request: the threshold at a turn
+    end after that request, the threshold if the session then sits idle, and what a compaction
+    after it costs."""
     K, P = p.K, p.P
     threshold, lost = (np.broadcast_to(v, len(s.size)) for v in (threshold, lost))
+    idle = None if idle is None else np.broadcast_to(idle, len(s.size))
     lapse = lapsed(s, ttl)
     # Each compaction an arm makes leaves K, the E tokens read again included, all at once, so
     # the requests after a dropped one give up E of their growth, the earliest first, where the
@@ -802,9 +817,10 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0):
         for i in range(j + 1, min(j + SPAN, len(growth))):
             take = min(growth[i], left)
             growth[i], left = growth[i] - take, left - take
-    trace = np.empty(len(s.size))
+    trace, paid = np.empty(len(s.size)), np.empty(len(s.size))
     cost, ctx, pending, ended = 0.0, 0.0, False, False
     for j in range(len(s.size)):
+        before = cost
         kind, grew, inp, out = s.kind[j], growth[j], s.inp[j], s.out[j]
         if kind in (FIRST, USER):
             if kind == USER:
@@ -812,7 +828,9 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0):
             ctx = s.size[j]
             cost += s.read[j] + c.write * s.write[j] + c.input * inp + c.output * out
         else:
-            if pending or (idle is not None and ctx >= idle and s.idle[j] > IDLE[ttl]):
+            if pending or (
+                idle is not None and ctx >= idle[j - 1] and s.idle[j] > IDLE[ttl]
+            ):
                 cost += (
                     ctx + c.output * p.N + lost[j - 1]
                 )  # read from the cache, which the turn end left warm
@@ -837,14 +855,15 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0):
                 + c.input * inp
                 + c.output * out
             )
-        trace[j] = ctx
+        trace[j], paid[j] = ctx, cost - before
         ended = bool(s.end[j])
         pending = (every or ended) and ctx + out >= threshold[j]
     # A compaction after the session's last turn still runs its summary, and so does an idle
     # one: the policy can't know the session is over, and takes it to have sat idle.
-    if pending or (idle is not None and ended and ctx >= idle):
+    if pending or (idle is not None and ended and ctx >= idle[-1]):
         cost += ctx + c.output * p.N
-    return cost, trace
+        paid[-1] += ctx + c.output * p.N
+    return cost, trace, paid
 
 
 def arm(S, p, c, ttl, threshold, betas=(BASE,), **kw):
@@ -852,7 +871,7 @@ def arm(S, p, c, ttl, threshold, betas=(BASE,), **kw):
     of its requests' η, for each β in `betas`."""
     cost, effectiveness = np.empty(len(S)), np.empty((len(S), len(betas)))
     for i, s in enumerate(S):
-        cost[i], trace = replay(s, p, c, threshold, ttl, **kw)
+        cost[i], trace, _ = replay(s, p, c, threshold, ttl, **kw)
         effectiveness[i] = [eta(trace, b).sum() for b in betas]
     return cost, effectiveness
 
@@ -896,6 +915,167 @@ def floors(S, p, c, ttl):
     `/sparkjoy report` fits it to the user's."""
     cost = {key: v[0] for key, v in pairs(S, p, c, ttl, betas=()).items()}
     return min(cost, key=cost.get), cost
+
+
+# Where Claude Code compacts an idle session on its own: from 200k, just before a one-hour cache
+# lapses, and only in a session someone is attending, not a background one (hooks/register.ts,
+# IDLE_FLOOR's comment).
+CC_IDLE = 200_000
+
+
+CHECK_OUTPUT = 100  # output tokens of a check, which reads the context from the cache
+
+
+def check(v, c):
+    """A check's cost in cached reads: its question's input, all read from the cache unless the check
+    logged a miss, whose unread part is priced as a cache write, and its output."""
+    read, size = v.missed or (v.tokens, v.tokens)
+    return read + c.write * (size - read) + c.output * CHECK_OUTPUT
+
+
+def as_run(s, p, idle=None):
+    """The session's cost in dollars with sparkjoy's compactions where it made them, its checks
+    included, and without them, at its model's list prices (None for a model with no price
+    here), and the context each request carried in each. Claude Code compacts on its own near the
+    window in both, and with `idle`, also an idle context from that size, as its own idle compaction
+    does on a one-hour cache."""
+    priced = s.model in PRICES
+    c = prices(s.model if priced else "claude-opus-5-5", s.ttl)
+    idle = idle if s.ttl == 3600 else None
+    # As compactions the user typed, sparkjoy's stay where the log has them.
+    ran, ran_trace, _ = replay(
+        replace(s, kind=np.where(s.sparkjoy, USER, s.kind)),
+        p,
+        c,
+        np.inf,
+        s.ttl,
+        idle=idle,
+    )
+    without, without_trace, _ = replay(s, p, c, np.inf, s.ttl, idle=idle)
+    checks = sum(check(v, c) for v in s.verdicts if v.tokens)
+    dollars = (
+        ((ran + checks) * c.read, without * c.read, checks * c.read) if priced else None
+    )
+    return dollars, ran_trace, without_trace
+
+
+# The policies `moments` compares, as (turn-end threshold, any-request threshold), inf for none:
+# after any request as `/autocompact` does, only at turn ends, and at turn ends with `/autocompact`
+# set higher as a backstop for long turns. The backstop pairs take a coarser grid, as there are many.
+MOMENTS = (
+    [(t, t) for t in THRESHOLDS]
+    + [(t, np.inf) for t in THRESHOLDS]
+    + [(t, y) for t in THRESHOLDS[::5] for y in THRESHOLDS[::5] if y > t]
+)
+
+
+def moments(S, p, c, ttl, betas, policies=MOMENTS):
+    """For each policy, keyed (turn-end threshold, any-request threshold): the cost summed over the
+    sessions, the compactions made in the middle of a turn, Claude Code's own included, and the
+    effectiveness at each β in `betas`, all also compacting idle sessions from IDLE_FLOOR. Cost grows by
+    D with each mid-turn compaction, so a caller charges D, what a mid-turn compaction loses beyond one
+    at a turn end, as cost + D * mid."""
+    out = {}
+    for turn, anywhere in policies:
+        cost = mid = 0.0
+        effectiveness = np.zeros(len(betas))
+        for s in S:
+            threshold = np.where(s.end, min(turn, anywhere), anywhere)
+            plain, trace, _ = replay(
+                s, p, c, threshold, ttl, every=True, idle=IDLE_FLOOR
+            )
+            charged, _, _ = replay(
+                s,
+                p,
+                c,
+                threshold,
+                ttl,
+                every=True,
+                idle=IDLE_FLOOR,
+                lost=(~s.end).astype(float),
+            )
+            cost, mid = cost + plain, mid + charged - plain
+            effectiveness += [eta(trace, b).sum() for b in betas]
+        out[turn, anywhere] = cost, mid, effectiveness
+    return out
+
+
+def kinds(S, rng, mix=MIX, stretch=STRETCH, right=RIGHT):
+    """One draw of which kind of work, an index into `mix`, each session's turns do, and what
+    sparkjoy's judgment says of them: per session, the kind of each request's turn, and at each
+    request the kind the judgment names for the turn after it, which only a turn end uses. The turns
+    come in stretches of one kind, each as long as a geometric draw with mean `stretch` and of a kind
+    drawn by the mix's shares. The judgment names the next turn's kind rightly `right` of the time,
+    and otherwise the other kind."""
+    shares = [share for share, _ in mix]
+    out = []
+    for s in S:
+        turn = np.concatenate([[0], np.cumsum(s.end)[:-1]])  # each request's turn
+        starts = rng.random(turn[-1] + 2) < 1 / stretch  # up to the turn after the last
+        starts[0] = True
+        kind = rng.choice(len(mix), len(starts), p=shares)[np.cumsum(starts) - 1]
+        ahead = kind[turn + 1]
+        out.append(
+            (kind[turn], np.where(rng.random(len(turn)) < right, ahead, 1 - ahead))
+        )
+    return out
+
+
+def mixed(
+    S, p, c, ttl, draws, threshold, mix=MIX, judged=False, every=False, idle=IDLE_FLOOR
+):
+    """Each kind of work's cost and effectiveness, summed over the sessions and `draws` of `kinds`,
+    a request's cost going to its own kind. With `judged`, a turn end compacts from threshold[k] where
+    the judgment names kind k for the next turn, and pays RUNNING for its questions; an idle session
+    then compacts from `idle` where it names the kind with the lowest threshold, and otherwise from
+    that kind's threshold, as sparkjoy's idle question keeps a context the work ahead needs.
+    Otherwise every turn end compacts from `threshold`, or with `every`, every request, as
+    `/autocompact` does, and every idle session from `idle`."""
+    betas = np.array([beta for _, beta in mix])
+    cost, effectiveness = np.zeros(len(mix)), np.zeros(len(mix))
+    for i, s in enumerate(S):
+        if not judged:
+            _, trace, paid = replay(s, p, c, threshold, ttl, every, idle)
+        for draw in draws:
+            kind, said = draw[i]
+            if judged:
+                at = np.asarray(threshold, float)
+                idles = (
+                    None if idle is None else np.where(at == at.min(), idle, at)[said]
+                )
+                _, trace, paid = replay(s, p, c, at[said], ttl, idle=idles)
+                paid = paid * (1 + RUNNING)
+            cost += np.bincount(kind, paid, len(mix))
+            effectiveness += np.bincount(kind, eta(trace, betas[kind]), len(mix))
+    return cost, effectiveness
+
+
+def shared(cost, effectiveness, mix=MIX):
+    """Cost per unit of work, with each kind's share of the work fixed at its share in `mix`: the
+    shares' sum of each kind's cost per unit of its effectiveness, as under "Work that differs in β"."""
+    return sum(share * cost[k] / effectiveness[k] for k, (share, _) in enumerate(mix))
+
+
+def judging(S, p, c, ttl, draws, start, mix=MIX, idle=IDLE_FLOOR):
+    """The pair of turn-end thresholds, one per kind of work the judgment names, with the least cost
+    per unit of work in `mixed`, found one threshold at a time from `start` on THRESHOLDS and never
+    compacting short of AUTO; and that cost."""
+    options, seen = [*THRESHOLDS, np.inf], {}
+
+    def J(pair):
+        if pair not in seen:
+            seen[pair] = shared(
+                *mixed(S, p, c, ttl, draws, pair, mix, judged=True, idle=idle), mix
+            )
+        return seen[pair]
+
+    pair = tuple(start)
+    while True:
+        moved = pair
+        for k in range(len(pair)):
+            pair = min(((*pair[:k], x, *pair[k + 1 :]) for x in options), key=J)
+        if pair == moved:
+            return pair, J(pair)
 
 
 def main():
@@ -1124,6 +1304,10 @@ def main():
         ((400_000, None), "turn ends from 400k"),
         ((400_000, 200_000), "  and idle sessions from 200k"),
         ((200_000, None), "turn ends from 200k"),
+        (
+            (np.inf, CC_IDLE),
+            f"idle sessions only, from {k(CC_IDLE)}, as Claude Code compacts on its own",
+        ),
     ):
         print(f"  {label:58s} {pct(kept[t, i])}")
     print(
@@ -1148,7 +1332,160 @@ def main():
     print("        " + " ".join(f"{x:>6}" for x in ("-", *map(k, IDLE_FLOORS))))
     for t in turns:
         print(f"  {k(t):>5} " + " ".join(f"{kept[t, j]:6.1%}" for j in idles))
+    print(
+        f"  sparkjoy's floors against Claude Code's own idle compaction alone: saved "
+        f"{1 - (1 - kept[FLOOR, IDLE_FLOOR]) / (1 - kept[np.inf, CC_IDLE]):.1%}"
+    )
+    # The README's What it saves: sparkjoy's compactions as they ran, against Claude Code alone.
+    for idle, label in (
+        (None, "near the window only"),
+        (CC_IDLE, "also every idle context from " + k(CC_IDLE)),
+    ):
+        runs = [d for s in S if (d := as_run(s, p, idle)[0])]
+        ran, without = (sum(d[i] for d in runs) for i in (0, 1))
+        print(
+            f"sparkjoy as it ran, against Claude Code compacting {label}: saved {1 - ran / without:.1%}"
+        )
 
+    # Mid-turn or at a turn end: each policy at its lowest-cost thresholds, with each mid-turn compaction
+    # charged D wasted requests beyond what one at a turn end loses, each priced as a request at K.
+    betas = (0.0, BASE)
+    mo = moments(S, p, c, ttl, betas)
+    wasted = h * p.K + c0
+    unit = lambda key, i, D: (
+        (mo[key][0] + D * wasted * mo[key][1]) / mo[key][2][i]
+    )  # cost per unit of work
+    nothing = [
+        cost[:, -1].sum() / effectiveness[:, -1, list(CHART_BETAS).index(b)].sum()
+        for b in betas
+    ]
+    kinds = {
+        "after any request": lambda t, y: t == y,
+        "only at turn ends": lambda t, y: y == np.inf,
+        "at turn ends with a backstop": lambda t, y: t < y < np.inf,
+    }
+    lowest = lambda kind, i, D: min(
+        (key for key in mo if kinds[kind](*key)), key=lambda key: unit(key, i, D)
+    )
+    print(
+        f"\nafter any request, only at turn ends, or at turn ends with a backstop after any request, all compacting "
+        f"idle sessions from {k(IDLE_FLOOR)}, each at its lowest-cost thresholds; a wasted request ${wasted * c.read:.3f}"
+    )
+    for i, b in enumerate(betas):
+        for kind in kinds:
+            turn, anywhere = key = lowest(kind, i, 0)
+            print(
+                f"  β = {b:g}, {kind}: turn ends from {k(turn)}, any request from "
+                f"{'-' if anywhere == np.inf else k(anywhere)}, saving {1 - unit(key, i, 0) / nothing[i]:.1%}, "
+                f"{mo[key][1]:.0f} mid-turn compactions"
+            )
+        for kind in ("only at turn ends", "at turn ends with a backstop"):
+            even = next(
+                (
+                    D
+                    for D in range(101)
+                    if unit(lowest(kind, i, D), i, D)
+                    <= unit(lowest("after any request", i, D), i, D)
+                ),
+                None,
+            )
+            print(
+                f"    {kind} costs as little as after any request once a mid-turn compaction loses "
+                + (
+                    "over 100 wasted requests"
+                    if even is None
+                    else f"{even} wasted requests (${even * wasted * c.read:.2f})"
+                )
+            )
+        print(
+            f"    from sparkjoy's FLOOR, {k(FLOOR)}, by backstop: "
+            + ", ".join(
+                f"{k(y)} {1 - unit((FLOOR, y), i, 0) / nothing[i]:.1%} with {mo[FLOOR, y][1]:.0f} mid-turn"
+                for t, y in mo
+                if t == FLOOR and FLOOR < y < np.inf
+            )
+        )
+        print(
+            "    after any request, by threshold: "
+            + ", ".join(
+                f"{k(t)} {1 - unit((t, y), i, 0) / nothing[i]:.1%} with {mo[t, y][1]:.0f} mid-turn"
+                for t, y in mo
+                if t == y and t % 50_000 == 0 and t >= 200_000
+            )
+        )
+        for D in (2, 6):
+            turn, anywhere = key = lowest("at turn ends with a backstop", i, D)
+            other = lowest("after any request", i, D)
+            print(
+                f"    losing {D}: with a backstop, turn ends from {k(turn)} and any request from {k(anywhere)}, saving "
+                f"{1 - unit(key, i, D) / nothing[i]:.1%} with {mo[key][1]:.0f} mid-turn compactions; after any request "
+                f"from {k(other[0])}, {1 - unit(other, i, D) / nothing[i]:.1%}"
+            )
+
+    # Work that differs: the base case's mix of work, the judgment naming each turn end's next kind,
+    # against the single thresholds a policy without it costs least at, all compacting idle sessions
+    # from IDLE_FLOOR but the last.
+    options = [*THRESHOLDS, np.inf]
+    print(
+        f"\nwhere work differs: {', '.join(f'{share:.0%} of turns at β = {b:g}' for share, b in MIX)}, in stretches "
+        f"of {STRETCH} turns on average, {MIX_DRAWS} draws; each kind's cost per unit of its own work, weighted by its "
+        f"share; the judgment pays {RUNNING:.1%} for its questions"
+    )
+    # The steady state on the same mix, each kind running whole cycles, as under "Work that differs in β".
+    X = curve(p, c, 0)[0]
+    Js = np.array([curve(p, c, b)[1] for _, b in MIX])
+    w = np.array([share for share, _ in MIX])
+    single = (w[:, None] * Js).sum(0)
+
+    def judged(
+        a,
+    ):  # the judgment, right a of the time in each kind, against the single threshold
+        keep = np.array([1 - a, a]) * w
+        return (
+            1
+            - (
+                (keep[:, None] * Js).sum(0).min()
+                + ((w - keep)[:, None] * Js).sum(0).min()
+            )
+            / single.min()
+        )
+
+    print(
+        f"  the steady state: lowest-cost single threshold {k(X[single.argmin()])}; the judgment saves {judged(1):.1%} "
+        f"right every time, {judged(RIGHT):.1%} right {RIGHT:.0%} of the time, and pays for its questions from "
+        f"{next(a for a in np.arange(0.5, 1.0001, 0.005) if judged(a) > RUNNING):.1%} right"
+    )
+    rows = {}
+    for label, stretch, right, idle in (
+        (f"right {RIGHT:.0%} of the time", STRETCH, RIGHT, IDLE_FLOOR),
+        ("right every time", STRETCH, 1.0, IDLE_FLOOR),
+        ("stretches of 20 turns", 20, RIGHT, IDLE_FLOOR),
+        ("no policy compacting idle sessions", STRETCH, RIGHT, None),
+    ):
+        rng = np.random.default_rng(0)
+        draws = [kinds(S, rng, MIX, stretch, right) for _ in range(MIX_DRAWS)]
+        none = shared(*mixed(S, p, c, ttl, draws, np.inf, idle=None))
+        auto = {
+            x: shared(*mixed(S, p, c, ttl, draws, x, every=True, idle=idle))
+            for x in options
+        }
+        ends = {x: shared(*mixed(S, p, c, ttl, draws, x, idle=idle)) for x in options}
+        xa, xe = min(auto, key=auto.get), min(ends, key=ends.get)
+        pair, Jj = judging(S, p, c, ttl, draws, (xe, np.inf), idle=idle)
+        rows[label] = auto[xa], Jj
+        print(
+            f"  {label}: after any request, at its lowest-cost threshold, {k(xa)}, saves {1 - auto[xa] / none:.1%} "
+            f"against never compacting; at turn ends from {k(xe)} {1 - ends[xe] / none:.1%}; the judgment, compacting "
+            f"from {k(pair[0])} or {k(pair[1])}, {1 - Jj / none:.1%}, which is {1 - Jj / auto[xa]:.1%} against after any "
+            f"request"
+        )
+    # Claude Code compacts no idle session itself in a background session (CC_IDLE), so there the
+    # judgment, compacting idle sessions as sparkjoy does, competes with `/autocompact` alone.
+    print(
+        f"  a background session, where only sparkjoy compacts idle sessions: the judgment right {RIGHT:.0%} of the "
+        f"time saves {1 - rows[f'right {RIGHT:.0%} of the time'][1] / rows['no policy compacting idle sessions'][0]:.1%} "
+        f"against after any request"
+    )
     gaps = np.concatenate(
         [np.append(s.gap[1:], 0)[s.end] for s in S]
     )  # from each turn end to the next request
