@@ -692,8 +692,8 @@ def cycle(p, c, X, beta, lost=0.0, asks=None):
     over its (X - K) / g requests: its cost, the requests' c(x) plus g (F(X) + D) for the compaction, and
     its effectiveness, the requests' η(x) with exponent β. `lost` is D, what the detail a compaction
     drops costs the requests after it, in cached reads. With `asks`, sparkjoy's turn-end floor, the cost
-    also counts its questions: one at each turn end from the floor, a turn growing the context by g times
-    the mean requests per turn, and the one that compacts at X short of AUTO."""
+    also counts its questions: one at each turn end from the floor, a turn growing the context by its
+    measured mean growth per turn, and the one that compacts at X short of AUTO."""
     h, c0, F0 = terms(p, c)
     K, X = p.K, np.asarray(X, float)
     cost = p.g * (X + F0 + lost) + h * (X**2 - K**2) / 2 + c0 * (X - K)
@@ -702,7 +702,7 @@ def cycle(p, c, X, beta, lost=0.0, asks=None):
         a = np.minimum(asks, X)
         cost = (
             cost
-            + ((X**2 - a**2) / 2 + q0 * (X - a)) / p.turn
+            + p.g * ((X**2 - a**2) / 2 + q0 * (X - a)) / p.turn_growth
             + np.where(X < AUTO, p.g * (X + q0), 0)
         )
     # The integral of (x / WINDOW)^β from K to X, which is X - K at β = 0.
@@ -830,7 +830,7 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0, asks=None)
     after it costs. With `asks`, sparkjoy's floors at a turn end and in an idle session (None for no idle
     floor), each request's cost also counts the `question` sparkjoy asks after it: at a turn end from
     the first floor, and once the session has sat idle, from the second, unless the turn end
-    compacted."""
+    compacted. An idle question that keeps the context keeps its cache alive for `ttl` more."""
     K, P = p.K, p.P
     threshold, lost = (np.broadcast_to(v, len(s.size)) for v in (threshold, lost))
     idle = None if idle is None else np.broadcast_to(idle, len(s.size))
@@ -856,13 +856,14 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0, asks=None)
             cost += s.read[j] + c.write * s.write[j] + c.input * inp + c.output * out
         else:
             idled = s.idle[j] > IDLE[ttl]
-            if (
+            asked = (
                 asks is not None
                 and asks[1] is not None
                 and idled
                 and not pending
                 and ctx >= asks[1]
-            ):
+            )
+            if asked:
                 cost += question(ctx, c)
             if pending or (idle is not None and ctx >= idle[j - 1] and idled):
                 cost += (
@@ -874,7 +875,10 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0, asks=None)
                 ctx, written = left + grew, left - P + grew
             else:
                 ctx += grew
-                written = ctx - P if lapse[j] else grew
+                # An idle question that kept the context read it from the cache, which then lives
+                # `ttl` from the question, IDLE[ttl] after the turn end.
+                kept = asked and s.gap[j] <= IDLE[ttl] + ttl
+                written = ctx - P if lapse[j] and not kept else grew
             if ctx >= AUTO:
                 # Claude Code compacts before sending, so after a lapse its summary reads uncached input.
                 cost += (
@@ -1120,7 +1124,8 @@ def shared(cost, effectiveness, mix=MIX):
 def judging(S, p, c, ttl, draws, start, mix=MIX, idle=IDLE_FLOOR):
     """The pair of turn-end thresholds, one per kind of work the judgment names, with the least cost
     per unit of work in `mixed`, found one threshold at a time from `start`, first every 50k and then
-    on THRESHOLDS within 40k of each, and leaving it to Claude Code's default near AUTO; and that cost."""
+    on THRESHOLDS within 40k of each, from FLOOR, below which sparkjoy doesn't ask, and leaving it to
+    Claude Code's default near AUTO; and that cost."""
     seen = {}
 
     def J(pair):
@@ -1141,8 +1146,9 @@ def judging(S, p, c, ttl, draws, start, mix=MIX, idle=IDLE_FLOOR):
             if pair == moved:
                 return pair
 
-    pair = search(tuple(start), [*THRESHOLDS[THRESHOLDS % 50_000 == 0], np.inf])
-    near = [x for x in THRESHOLDS if min(abs(x - y) for y in pair) <= 40_000]
+    options = THRESHOLDS[THRESHOLDS >= FLOOR]
+    pair = search(tuple(start), [*options[options % 50_000 == 0], np.inf])
+    near = [x for x in options if min(abs(x - y) for y in pair) <= 40_000]
     pair = search(pair, [*near, np.inf])
     return pair, J(pair)
 
