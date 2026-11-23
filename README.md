@@ -5,19 +5,23 @@
   </picture>
 </h1>
 
-A Claude Code plugin that compacts the conversation when a piece of work is
-finished, rather than when the context window fills. At the end of each turn
-it puts Marie Kondo's question to the session's own model: does this
-transcript spark joy? That is, does the work ahead still need it, or can it go?
+A Claude Code plugin that asks the session's model whether to compact, giving it
+guidance on the tradeoffs so it can make the best decision[^name]. Once there is
+material context, it asks at the end of each turn, and just before an idle
+session's prompt cache expires.
 
-|                | When it compacts                                                          |
-| -------------- | ------------------------------------------------------------------------- |
-| `/compact`     | when you type it                                                          |
-| Claude Code    | at about 965k, even mid-turn                                              |
-| Claude Code    | when idle, just before the one-hour cache expires, from 200k              |
-| `/autocompact` | at the size you set, even mid-turn                                        |
-| sparkjoy       | at a turn end, from 250k, if the model says to                            |
-| sparkjoy       | when idle, just before the cache expires, from 175k, if the model says to |
+In comparison, Claude Code and `/autocompact` compact at a set size, whatever
+the work needs. After a finished fix, the next task does as well from a summary,
+but while a design is still taking shape, a summary would drop the options
+already rejected and why.
+
+|                | When it compacts                                                                                                              |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `/compact`     | when you type it                                                                                                              |
+| Claude Code    | at about 965k, even mid-turn                                                                                                  |
+| Claude Code    | when idle in a session you have open, just before the one-hour cache expires, from 200k                                       |
+| `/autocompact` | at the size you set, even mid-turn                                                                                            |
+| sparkjoy       | when the session's model says to; it asks at each turn end from 250k, and when idle, just before the cache expires, from 175k |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/session-dark.svg">
@@ -26,8 +30,9 @@ transcript spark joy? That is, does the work ahead still need it, or can it go?
 
 Every request reads the whole context, so the area under each line counts the
 tokens the session read. At each dot the plugin asked the session's model
-whether to compact, and at the larger dots the session compacted. In the replay,
-this session cost 30% less with the plugin than without it.
+whether to compact, and at the larger dots the session compacted. The session
+ran in the background, where Claude Code compacts only when the window fills,
+and in the replay it cost 30% less with the plugin than without it.
 
 ## Install
 
@@ -37,22 +42,17 @@ At the prompt of a Claude Code session:
 /plugin install sparkjoy --marketplace max-sixty/sparkjoy
 ```
 
-Auto-update is off by default for the sparkjoy marketplace. To keep sparkjoy up
-to date, ask Claude to turn on auto-update for sparkjoy, or open `/plugin`, go to
-the Marketplaces tab, select sparkjoy, and turn on auto-update. Until you do,
-sparkjoy asks GitHub once a day, when a session starts, whether a newer version
-has been out for a day or more, and if one has, says in the transcript how many
-days out of date yours is, with the command that updates it. It doesn't ask
-where `DISABLE_UPDATES`, `DISABLE_AUTOUPDATER` or
-`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set.
+A session picks it up when it starts. To see its verdicts only, run `/sparkjoy
+classify`, then switch to `/sparkjoy on` to let it compact
+([Settings](#settings)).
 
 ## What it does
 
-- **When a turn ends**, it asks the session's own model whether to compact now,
-  and compacts if the model says to ([How it decides](#how-it-decides)).
-- **Before the prompt cache expires** in an idle session, it asks again. That
-  is after 55 minutes on the one-hour cache, and after 4 minutes on the
-  five-minute cache, which API keys use by default.
+- **It asks the session's own model whether to compact now**, and compacts if
+  the model says to ([How it decides](#how-it-decides)). It asks when a turn
+  ends, and in an idle session just before the prompt cache expires: after 55
+  minutes on the one-hour cache, and after 4 minutes on the five-minute cache,
+  which API keys use by default.
 - **Each verdict shows in the transcript** as a dim line with its reason, and
   a question that missed the prompt cache adds a line saying so. In the session
   above, it kept the context while a move was half done:
@@ -70,7 +70,9 @@ where `DISABLE_UPDATES`, `DISABLE_AUTOUPDATER` or
 - **`/sparkjoy report`** opens a page on your sessions of the last 14 days,
   with every verdict and what the compactions saved. It fits the [cost
   model](#cost-model) to those sessions, and sparkjoy uses the fit from then on.
-  It needs [uv](https://docs.astral.sh/uv/).
+  It reads your transcripts on your machine and sends nothing. It needs
+  [uv](https://docs.astral.sh/uv/), which fetches Python and numpy the first
+  time it runs.
 
 <details>
 <summary>Sample report</summary>
@@ -133,11 +135,22 @@ too.
 }
 ```
 
+### Updates
+
+Auto-update is off by default for third-party plugin marketplaces, sparkjoy's
+included. To keep sparkjoy up to date, ask Claude to turn on auto-update for
+sparkjoy, or open `/plugin`, go to the Marketplaces tab, select sparkjoy, and
+turn on auto-update. Until you do, sparkjoy asks GitHub once a day, when a
+session starts, whether a newer version has been out for a day or more, and if
+one has, says in the transcript how many days out of date yours is, with the
+command that updates it. It doesn't ask where `DISABLE_UPDATES`,
+`DISABLE_AUTOUPDATER` or `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set.
+
 ## What it saves
 
-The plugin cut the cost of my 87 Claude Code sessions from 7 to 15 November
-2026 by 23%, from $5,214 to $4,013 at Opus 5.5 list prices, in a replay of
-their 36,251 requests[^replay]:
+The plugin cut the cost of my 87 Claude Code sessions from 7 to 15 November 2026
+by 23%, from $5,214 to $4,013 at Opus 5.5 list prices, in a replay of their
+36,251 requests[^replay].
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/cost-dark.svg">
@@ -151,21 +164,19 @@ their 36,251 requests[^replay]:
 
 ## How it decides
 
-sparkjoy's question fires at each turn end from 250k, since a piece of work most
-likely finishes with a turn, and again if the session then sits idle until just
-before its prompt cache lapses. It forks the conversation for one request, which
-asks the session's own model whether to compact now. The fork reads the whole
-transcript from the prompt cache and outputs about a hundred tokens, a verdict
-and a one-line reason.
+sparkjoy asks the session's own model whether now is a good time to compact, at
+each turn end from 250k and again just before an idle session's prompt cache
+lapses. It never asks in the middle of a turn, where the work ahead nearly
+always needs the context's detail. To ask, it forks the conversation for one
+request. The fork reads the whole conversation, which is already in the prompt
+cache. In my sessions, the questions cost $22 in all, against $4,013 for the
+sessions. The model answers in about a hundred tokens, a verdict and a one-line
+reason. The fork goes from Claude Code to the session's own model, so the
+conversation goes only where the session already sends it.
 
 The question asks whether the next turns will need detail a summary drops, such
 as failed attempts or a design still taking shape, and gives what a compaction
 and keeping the context each cost at the context's size.
-
-In the [evals](#evals), the question compacts at every turn end that finishes
-a piece of work. At turn ends in the middle of a task, where it should keep the
-context, it kept it in anywhere from none of 16 runs to 24 of 32, depending on
-the batch of runs.
 
 ### The prompt
 
@@ -240,6 +251,7 @@ own, between "Weigh what keeping costs…" and "Answer with one JSON object…":
 the line "The user added these instructions for this decision:", then your
 text. Unset, the question is as shown.
 
+<!-- The Evals block waits until the mid-task verdicts' swing between batches is explained. Remove this line and the closing one to restore it.
 ### Evals
 
 <details>
@@ -260,10 +272,10 @@ asks the question above, on 19 and 20 November 2026[^evals]:
 At the two small natural breaks the [cost model](#cost-model) also says to
 compact. At the mid-task turn ends, the same question and transcripts kept the
 context in 6 of 16 runs on the evening of 19 November, in none of 16 on the
-morning of 20 November and in 74 of 128 over three batches that afternoon, so
-two versions of the question compare only when run in the same batch. Some
-labels are uncertain, since each records what the session did next rather than
-what it needed ([Where this leaves
+morning of 20 November, and in 23 of 32, 24 of 32 and 27 of 64 in three batches
+that afternoon, so two versions of the question compare only when run in the
+same batch. Some labels are uncertain, since each records what the session did
+next rather than what it needed ([Where this leaves
 them](evals/README.md#where-this-leaves-them)).
 
 The hook reads only `compact` and `reason`, yet the question asks for `next`
@@ -279,40 +291,75 @@ question.
 
 </details>
 
+[^evals]:
+    The [evals](evals/README.md) put the question to the model at turn
+    ends from my sessions.
+-->
+
+## Other plugins
+
+Two other plugins also compact before the window fills, and never in the middle
+of a turn:
+
+- [Compactly](https://github.com/swapnildahiphale/compactly) asks Sonnet, at
+  each prompt you send from 150k, whether the work has reached a natural break,
+  and if so compacts before sending the prompt. After a turn that commits,
+  pushes or opens a pull request, it also compacts if no prompt comes within 55
+  minutes.
+- [claude-smart-compact](https://github.com/mdseyam-as/claude-smart-compact)
+  compacts at every turn end from 180k unless you send a message first. Haiku
+  says whether the task is done, and its answer sets how long the plugin waits,
+  60 seconds or up to 8 minutes. From 350k it compacts as soon as the turn ends.
+
+Both decide from under 8,000 characters of the transcript, and neither tells its
+model what keeping or compacting costs. sparkjoy asks the session's own model,
+which reads the whole transcript, and tells it what each costs at the context's
+size.
+
 ## Limits
 
+- It acts only in sessions with a 1M-token context window, the size its defaults
+  are fitted to, and only in interactive ones, not in `-p` runs or SDK hosts.
 - It asks only once the context reaches 250k at a turn end, or 175k in an idle
-  session. If every question leads to a compaction, these floors are the pair
-  that costs least in a replay of my sessions, counting cost alone. Counting
-  cost per unit of work at the [cost model](#cost-model)'s base case for how
-  much past context is worth to the work, they come 0.8 points short of the
-  lowest-cost pair. My sessions hold about 142k after a compaction, much of it
-  my own instructions and skills, and sessions that hold less would do better
-  with lower floors. `/sparkjoy report` fits the floors to your own sessions,
-  and you can set them yourself ([Settings](#settings)).
+  session. In a replay of my sessions that compacts wherever the floors allow,
+  this is the pair that costs least counting tokens alone. If a request with
+  250k of context gets half as much done as one with the full 1M, the [cost
+  model](#cost-model)'s base case, asking at a turn end from 400k instead would
+  save 0.8 percentage points more. The floors stay at the lower pair because a
+  floor only sets where sparkjoy starts asking, and above it the question
+  decides. My sessions hold about 142k after a compaction, much of it my own
+  instructions and skills, and sessions that hold less would do better with
+  lower floors. `/sparkjoy report` fits the floors to your own sessions, and you
+  can set them yourself ([Settings](#settings)).
 - The report fits every figure the question states except the count of wasted
   requests after a compaction, which takes months of sessions to measure.
 - It leaves Claude Code's own compaction on, so Claude Code still compacts when
   a turn fills the window. In a session you have open on the one-hour cache,
   Claude Code also compacts an idle context of 200k or more without asking, a
-  minute or more before sparkjoy would ask. So sparkjoy's idle question comes
-  mainly on the five-minute cache, in background sessions, below 200k, or with
+  minute or more before sparkjoy would ask.
+  [`CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`](https://code.claude.com/docs/en/env-vars)
+  sets that 200k, to no less than 100k. So sparkjoy's idle question comes
+  mainly on the five-minute cache, in background sessions, below that size, or
+  with
   [`idleCompaction`](https://code.claude.com/docs/en/settings-reference#idlecompaction)
   set to `false`.
-- It acts only in sessions with a 1M-token context window, the size its floors
-  and figures come from.
+- If you set `/autocompact`, keep it above sparkjoy's turn-end floor. At or
+  below the floor, Claude Code compacts mid-turn before any turn end reaches it,
+  so sparkjoy never asks at a turn end.
 
-[^evals]:
-    The [evals](evals/README.md) put the question to the model at turn
-    ends from my sessions.
+[^name]:
+    The name comes from Marie Kondo, who tidies by keeping only the things that
+    spark joy.
 
 [^replay]:
-    The replay keeps every logged request fixed and moves only the
-    compactions: "with sparkjoy" keeps the plugin's, and "without sparkjoy"
-    removes them and lets Claude Code compact at its own threshold, near 965k.
-    Both price each request at Opus 5.5 list prices with the session's own cache
-    lifetime, and "with sparkjoy" comes within 2% of the cost the transcripts log
-    ($4,013 against $3,943).
+    sparkjoy then asked from 400k at a turn end, where it now asks from 250k.
+    The replay keeps every logged request fixed and moves only the compactions:
+    "with sparkjoy" keeps the plugin's, and "without sparkjoy" removes them and
+    lets Claude Code compact at its own threshold, near 965k. Both price each
+    request at Opus 5.5 list prices with the session's own cache lifetime, and
+    "with sparkjoy" comes within 2% of the cost the transcripts log ($4,013
+    against $3,943). On a subscription, the same tokens count against usage
+    limits rather than a bill.
 
 # Cost model
 
