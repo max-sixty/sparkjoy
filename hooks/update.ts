@@ -11,12 +11,12 @@
 //
 // So when a session with a person at the prompt starts, where sparkjoy was
 // installed from its own repository's marketplace and auto-update is off for it,
-// sparkjoy asks GitHub how far the commit the session runs is behind the
-// repository's default branch. If it is behind, sparkjoy says by how many days
-// and commits in the transcript, with the command that updates it, and suggests
-// asking Claude to turn auto-update on, which Claude does by setting `autoUpdate`
-// on the marketplace's entry. It asks GitHub once a day across sessions, so it
-// says so once a day. Two sessions that start within the same few milliseconds
+// sparkjoy asks GitHub for the first commit on the repository's default branch
+// that the commit the session runs lacks. If that commit is a day old or more,
+// sparkjoy says in the transcript how many days out of date it is, with the
+// command that updates it, and suggests asking Claude to turn auto-update on,
+// which Claude does by setting `autoUpdate` on the marketplace's entry. It asks
+// GitHub once a day across sessions, so it says so once a day. Two sessions that start within the same few milliseconds
 // can both ask, as `$.store` has no write that only one of them can win.
 
 import type { EngineInterface } from 'claude-code'
@@ -38,13 +38,12 @@ export async function checkForUpdate($: EngineInterface) {
     const asked = await $.store.get(ASKED)
     if (typeof asked === 'number' && now - asked < DAY) return
     await $.store.set(ASKED, now)
-    const behind = await newerCommits($, install.commit)
-    if (behind === null) return
-    const days = Math.floor((now - behind.since) / DAY)
-    const age = days === 0 ? 'less than a day' : days === 1 ? '1 day' : `${days} days`
-    const commits = behind.count === 1 ? '1 commit' : `${behind.count} commits`
+    const since = await firstNewerCommit($, install.commit)
+    if (since === null) return
+    const days = Math.floor((now - since) / DAY)
+    if (days === 0) return
     $.ui.log(
-      `This version is ${age} out of date, ${commits} behind. /plugin marketplace update ${install.marketplace} updates it. To keep it up to date, ask Claude to turn on auto-update for sparkjoy.`,
+      `This version is ${days === 1 ? '1 day' : `${days} days`} out of date. /plugin marketplace update ${install.marketplace} updates it. To keep it up to date, ask Claude to turn on auto-update for sparkjoy.`,
     )
   } catch (error) {
     $.ui.log(`Checking for a newer version failed: ${error}`, { to: 'debug' })
@@ -136,11 +135,11 @@ function isOwnRepository(source: unknown) {
 const GIT_URL =
   /^(?:https:\/\/github\.com\/|git@github\.com:)max-sixty\/sparkjoy(?:\.git)?\/?$/i
 
-// The commits on the repository's default branch that `commit` lacks: how many,
-// and when the first of them was made, in milliseconds since the epoch. Null
-// when it lacks none. GitHub's API refuses a request with no User-Agent, and it
-// lists a comparison's commits oldest first, so a page of one holds the first.
-async function newerCommits($: EngineInterface, commit: string) {
+// When the first commit on the repository's default branch that `commit` lacks
+// was made, in milliseconds since the epoch. Null when it lacks none. GitHub's
+// API refuses a request with no User-Agent, and it lists a comparison's commits
+// oldest first, so a page of one holds the first.
+async function firstNewerCommit($: EngineInterface, commit: string) {
   const response = await $.http.fetch(
     `https://api.github.com/repos/${REPOSITORY}/compare/${commit}...HEAD?per_page=1`,
     { headers: { accept: 'application/vnd.github+json', 'user-agent': 'sparkjoy' } },
@@ -149,11 +148,9 @@ async function newerCommits($: EngineInterface, commit: string) {
     throw new Error(
       `GitHub answered ${response.status}: ${response.text.slice(0, 200)}`,
     )
-  const { ahead_by: count, commits } = JSON.parse(response.text) as {
-    ahead_by: number
+  const { commits } = JSON.parse(response.text) as {
     commits: { commit: { committer: { date: string } } }[]
   }
   const first = commits[0]
-  if (first === undefined) return null
-  return { count, since: Date.parse(first.commit.committer.date) }
+  return first === undefined ? null : Date.parse(first.commit.committer.date)
 }
