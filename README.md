@@ -25,14 +25,15 @@ already rejected and why.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/session-dark.svg">
-  <img alt="Context per request across one session of 3,110 requests over three days. With sparkjoy, dots mark the 55 turn ends where the plugin asked whether to compact: at 30 the session kept going, 16 times in a row from 445k to 700k, and at 25 it compacted, at sizes from 206k to 867k tokens. Without it, the context climbs to about 960k each time before Claude Code compacts, seven times in all." src="assets/session-light.svg">
+  <img alt="Context per request across one session of 3,110 requests over three days. With sparkjoy, dots mark the 55 turn ends where the plugin asked whether to compact. At 30 of them the session kept going, 16 times in a row as it grew from 445k to 700k, and at the other 25 it compacted, at sizes from 206k to 867k tokens. In a replay without it, the context climbs to about 960k each time before Claude Code compacts, seven times in all." src="assets/session-light.svg">
 </picture>
 
 Every request reads the whole context, so the area under each line counts the
 tokens the session read. At each dot the plugin asked the session's model
 whether to compact, and at the larger dots the session compacted. The session
-ran in the background, where Claude Code compacts only when the window fills,
-and in the replay it cost 30% less with the plugin than without it.
+ran in the background, and Claude Code compacts a session nobody has open only
+when the window fills. Priced at list prices from its logged requests, the
+session as it ran cost 30% less than a replay of it without the plugin.
 
 ## Install
 
@@ -53,9 +54,11 @@ classify`, then switch to `/sparkjoy on` to let it compact
   ends, and in an idle session just before the prompt cache expires: after 55
   minutes on the one-hour cache, and after 4 minutes on the five-minute cache,
   which API keys use by default.
-- **Each verdict shows in the transcript** as a dim line with its reason, and
-  a question that missed the prompt cache adds a line saying so. In the session
-  above, it kept the context while a move was half done:
+- **Each verdict shows in the transcript** as a dim line with its reason. The
+  question reads the conversation from the prompt cache, so it costs little, and
+  when the cache no longer held the conversation, a second line says how much of
+  it the question read from the cache. In the session above, it kept the context
+  while a move was half done:
 
   ```
   sparkjoy: Kept at 362k tokens: The README move is half done: unpushed files, a helper still running, and a page rebuild that hasn't been run yet
@@ -115,10 +118,11 @@ to act, and whether its question carries instructions of yours.
   paragraph of its own near the end of the question ([The
   prompt](#the-prompt)).
 
-`/config` lists each of these under sparkjoy. An agent can set them in
-`~/.claude/settings.json`, under the id of the plugin as installed above.
-Claude Code reloads sparkjoy whenever they change, in sessions already open
-too.
+`/config` lists `mode`, `floor`, `idle_floor` and `instructions` under sparkjoy.
+They can also be set in `~/.claude/settings.json`, under `sparkjoy@sparkjoy`,
+the id of the plugin as installed above, and Claude can set them there when you
+ask it to. Claude Code reloads sparkjoy whenever they change, in sessions
+already open too.
 
 ```json
 {
