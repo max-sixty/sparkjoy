@@ -286,17 +286,12 @@ question.
 
 - It acts only in sessions with a 1M-token context window, the size its defaults
   are fitted to, and only in interactive ones, not in `-p` runs or SDK hosts.
-- It asks only once the context reaches 250k at a turn end, or 175k in an idle
-  session. In a replay of my sessions that compacts wherever the floors allow,
-  this is the pair that costs least counting tokens alone. If a request with
-  250k of context gets half as much done as one with the full 1M, the [cost
-  model](#cost-model)'s base case, asking at a turn end from 400k instead would
-  save 0.8 percentage points more. The floors stay at the lower pair because a
-  floor only sets where sparkjoy starts asking, and above it the question
-  decides. My sessions hold about 142k after a compaction, much of it my own
-  instructions and skills, and sessions that hold less would do better with
-  lower floors. `/sparkjoy report` fits the floors to your own sessions, and you
-  can set them yourself ([Settings](#settings)).
+- Its default floors, 250k at a turn end and 175k in an idle session, are
+  fitted to my sessions ([Floors](docs/cost-model.md#floors)). My sessions hold
+  about 142k after a compaction, much of it my own instructions and skills, and
+  sessions that hold less would do better with lower floors. `/sparkjoy report`
+  fits the floors to your own sessions, and you can set them yourself
+  ([Settings](#settings)).
 - The report fits every figure the question states except the count of wasted
   requests after a compaction, which takes months of sessions to measure.
 - It leaves Claude Code's own compaction on, so Claude Code still compacts when
