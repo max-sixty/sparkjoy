@@ -18,7 +18,7 @@ With `--figures` it also saves the floors sparkjoy asks from and the figures its
 question states, such as the context a compaction leaves and the requests in a
 turn, fitted to the same sessions, to `sparkjoy/figures.json` in the same
 directory as `projects`. From the next turn end, the plugin uses them in place
-of the author's, except for a floor the user set in sparkjoy's settings.
+of its defaults, except for a floor the user set in sparkjoy's settings.
 
 It covers the last 14 days. When the user names another window, pass it as
 `--since` and `--until`, each an ISO date or time, read as local time unless it
