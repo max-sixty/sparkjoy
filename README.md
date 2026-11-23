@@ -46,8 +46,8 @@ session picks it up when it starts. To see its verdicts before it compacts anyth
 latest and stable releases.
 
 Auto-update is off by default for the sparkjoy marketplace. To keep sparkjoy up
-to date, open `/plugin`, go to the Marketplaces tab, select sparkjoy, and turn on
-auto-update.
+to date, ask Claude to turn on auto-update for sparkjoy, or open `/plugin`, go to
+the Marketplaces tab, select sparkjoy, and turn on auto-update.
 
 ## What it does
 
