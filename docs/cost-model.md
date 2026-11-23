@@ -480,7 +480,7 @@ threshold. Each row fits its own pair of thresholds, the pair that costs least:
 280k and 860k right 9 times in 10, and 260k and 900k in the other two rows. It
 also compacts
 idle sessions from 175k, but keeps an idle context below 860k when it expects β
-= 1.25 work next, unless Claude Code's own idle compaction takes it first in a
+= 1.25 work next, unless Claude Code's own idle compaction takes it first in an
 open session. No compaction loses detail the work needs.
 
 | against Claude Code's default                                  | in a background session | in an open session |
@@ -490,7 +490,7 @@ open session. No compaction loses detail the work needs.
 | compacting where its judgment says, right every time           | 11.5%                   | 7.2%               |
 | compacting where its judgment says, with stretches of 20 turns | 10.0%                   | 5.5%               |
 
-On this mix, compacting at every turn end past the floors saves little, and in a
+On this mix, compacting at every turn end past the floors saves little, and in an
 open session, where Claude Code compacts idle contexts itself, it
 costs more than Claude Code's default. The classifier's saving falls short of
 the steady state's 14.1%, since real sessions often end before their context
