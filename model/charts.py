@@ -8,6 +8,8 @@ from one read of the sessions:
                  after a compaction split by what fills the context (context.py's context-parts.json)
   payback        how many later requests a compaction takes to pay for itself, against the context it
                  compacts, for the README's What it saves
+  lapse          what a compaction costs against the context it compacts, while the prompt cache holds the
+                 context and after the cache lapses
   average        a request's mean cost over a cycle against the compaction threshold, with the marginal cost,
                  as a schematic
   effectiveness  a request's effectiveness against its context, at the base case for β (fit.BASE),
@@ -526,6 +528,71 @@ def payback(out, p, c):
         )
         axis_name(ax, "Later requests until the compaction pays for itself", t)
         save(fig, out / f"model-payback-{theme}.svg")
+
+
+def lapse(out, p, c):
+    """What a compaction costs against the context x it compacts, while the prompt cache still holds the
+    context and after the cache lapses, as in a session left idle past the cache's lifetime. Cached, it
+    costs x + F0 cached reads. After a lapse, the compaction request first writes all of the context but
+    the shared prefix to the cache, P + w (x - P) in place of the read of x. Dots mark the two sizes the
+    doc names."""
+    _, _, F0 = fit.terms(p, c)
+    X = np.array([p.K, fit.AUTO], float)  # both costs are straight lines in x
+
+    def held(x):
+        return (x + F0) * c.read
+
+    def lapsed(x):
+        return (p.P + c.write * (x - p.P) + F0) * c.read
+
+    marks = (200_000, 500_000)
+    for x in marks:
+        print(
+            f"model-lapse: a compaction at {x / 1e3:.0f}k costs ${held(x):.2f} while the cache holds the "
+            f"context, and ${lapsed(x):.2f} after it lapses"
+        )
+    for theme, t in THEMES.items():
+        fig, ax = plt.subplots(figsize=(9, 3))
+        style(ax, t)
+        for f in (lapsed, held):
+            ax.plot(X, f(X), color=t["ink"], lw=2, zorder=2)
+            for x in marks:
+                ax.plot(
+                    [x],
+                    [f(x)],
+                    "o",
+                    ms=7,
+                    mfc=t["ink"],
+                    mec=t["page"],
+                    mew=1.5,
+                    zorder=3,
+                )
+                ax.text(
+                    x,
+                    f(x) + 0.35,
+                    f"${f(x):.2f}",
+                    ha="right" if f is lapsed else "center",
+                    va="bottom",
+                    fontsize=9,
+                    color=t["ink"],
+                )
+        label_ends(
+            ax,
+            [
+                (lapsed(fit.AUTO), "after the cache lapses", t["ink"]),
+                (held(fit.AUTO), "while the cache holds the context", t["ink"]),
+            ],
+            gap=0.8,
+        )
+        ax.set_xlim(0, fit.AUTO)
+        ax.set_ylim(0, 9)
+        ax.xaxis.set_major_formatter(tokens)
+        ax.set_xticks([0, 250_000, 500_000, 750_000])
+        ax.set_yticks([0, 2, 4, 6, 8])
+        ax.yaxis.set_major_formatter(dollars)
+        ax.set_xlabel("Context compacted (tokens)", color=t["muted"], fontsize=10)
+        axis_name(ax, "Cost of the compaction ($)", t)
+        save(fig, out / f"model-lapse-{theme}.svg")
 
 
 def average(out, p, c):
@@ -1164,6 +1231,7 @@ def draw(out, p, c, boot, cost, effectiveness, BT, BX):
     cycles(out, p, c)
     inputs(out, p, c)
     payback(out, p, c)
+    lapse(out, p, c)
     average(out, p, c)
     effectiveness_curve(out)
     cost_curve(out, p, c)
