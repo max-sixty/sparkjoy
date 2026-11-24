@@ -14,11 +14,8 @@ model whether to compact, and tells it what keeping the context and compacting
 it each cost. It asks at the end of each turn, and just before an idle
 session's prompt cache expires ([How it decides](#how-it-decides)).
 
-In comparison, Claude Code and `/autocompact` compact at a set size, whatever
-the work needs. After a finished fix, the next task goes as well from a summary
-as from the whole transcript, but while a design is still taking shape, a
-summary would drop the options already rejected and the reasons for rejecting
-them.
+In comparison, Claude Code and `/autocompact` compact at a set size, whether or
+not the existing context is valuable:
 
 |                | When it compacts                                                                    |
 | -------------- | ----------------------------------------------------------------------------------- |
