@@ -10,9 +10,8 @@ the cost of long sessions by 24% to 31%, depending on how you run Claude Code
 ([What it saves](#what-it-saves)).
 
 At the end of each turn, sparkjoy asks the model whether to compact. It uses the
-cached context and a small prompt which lists the cost of compacting and the
-cost of keeping the context at its current size
-([How it decides](#how-it-decides)).
+cached context and a small prompt which explains the tradeoff of compacting vs
+keeping the existing context ([How it decides](#how-it-decides)).
 
 Because it asks after a turn ends, or just before the cache expires, asking is
 [very cheap](#faq), and the compacted session is ready for you when you return.
