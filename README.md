@@ -328,8 +328,8 @@ question.
 Because the context is cached, it's really cheap to send another request with
 the existing context and a short prompt added on. On Opus 5.5, reading a full
 context window of 1M tokens from the cache costs \$0.20, or \$0.05 at
-sparkjoy's 250k floor. In my sessions of
-18 to 22 November, the questions came to less than 1% of what the sessions cost.
+sparkjoy's 250k floor. In my sessions of 18 to 22 November, the questions came
+to less than 1% of what the sessions cost.
 
 When a question reads less than nine tenths of its input from the cache,
 sparkjoy prints a line saying so, and when the turn before it had just written
