@@ -52,7 +52,9 @@ plt.rcParams.update(
 # against the page: "beta" for β, an assumption, and "costs" for magnitudes of a cost. "beta" is the
 # dataviz reference palette's blue, "costs" OKLCH steps of its aqua, each validated as an ordinal
 # ramp against its page (validate_palette.js --ordinal). "parts" are the steps, faint to strong, that
-# `parts` takes from the page toward "cost" to colour a cost's parts. "with" and "without" are the README's two arms,
+# `parts` takes from the page toward "cost" to colour a cost's parts. "lapse" colours the part a lapse of the
+# cache adds, the cache write of the context, apart from the parts that are there anyway; it is a step of "beta"'s
+# hue, validated against its neighbouring parts (validate_palette.js). "with" and "without" are the README's two arms,
 # sparkjoy's compactions as they ran and the replay without them, validated as a categorical pair
 # against each page.
 THEMES = {
@@ -65,7 +67,8 @@ THEMES = {
         "cost": "#1baf7a",
         "beta": ("#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"),
         "costs": ("#22b37d", "#088a5e", "#035f40"),
-        "parts": (0.2, 0.36, 0.52, 0.7),
+        "parts": (0.2, 0.36, 0.7),
+        "lapse": "#5799e9",
         "band": 0.14,
         "with": "#2a78d6",
         "without": "#eb6834",
@@ -79,7 +82,8 @@ THEMES = {
         "cost": "#199e70",
         "beta": ("#256abf", "#3987e5", "#6da7ec", "#9ec5f4", "#cde2fb"),
         "costs": ("#049165", "#43ba8a", "#75e8b6"),
-        "parts": (0.3, 0.5, 0.7, 0.9),
+        "parts": (0.3, 0.5, 0.9),
+        "lapse": "#2c64a7",
         "band": 0.18,
         "with": "#3987e5",
         "without": "#d95926",
@@ -342,10 +346,11 @@ def written(p):
 
 
 def compaction_parts(x, p, c):
-    """F(x) = x + F0 by part, in reads, as (name, values, fitted, step of the ramp): the parts that don't
-    grow with the context first, so they stack at the bottom. A part is fitted when it comes from what the
-    sessions measured (output, growth, lapses, K, P, N); the cache read of the context is the context
-    itself. Steps: output 0, cache writes 1 (2 for a lapse's), the cache read of the context 3."""
+    """F(x) = x + F0 by part, in reads, as (name, values, fitted, colour): the parts that don't grow with
+    the context first, so they stack at the bottom. A part is fitted when it comes from what the sessions
+    measured (output, growth, lapses, K, P, N); the cache read of the context is the context itself. The
+    colour is a step of the parts ramp, output 0, cache writes 1, the cache read of the context 2, or the
+    name of a theme colour, "lapse" for the cache write a lapse adds."""
     w1 = c.write - 1
     return [
         ("output of the compaction request", np.full_like(x, c.output * p.N), True, 0),
@@ -353,13 +358,13 @@ def compaction_parts(x, p, c):
             (f"cache write of {what}", np.full_like(x, w1 * tokens), True, 1)
             for what, tokens in written(p)
         ],
-        ("cache read of the context", x, False, 3),
+        ("cache read of the context", x, False, 2),
     ]
 
 
 def bands(ax, x, stack, cap, step, t, c):
-    """Draw `stack`'s parts as bands stacked from the axis, in dollars, one hue lighter for the parts lower
-    in the stack, each band parted from the next by the page. Each part is named at the right end of its
+    """Draw `stack`'s parts as bands stacked from the axis, in dollars, in the colour each part names
+    (compaction_parts), each band parted from the next by the page. Each part is named at the right end of its
     band, in the fit colour where the sessions measured it, thin bands' names pushed apart to stay legible:
     up from the bottom, then down from the cap where that pushed one past it. A name moved off its band's
     middle has a leader to it."""
@@ -369,7 +374,13 @@ def bands(ax, x, stack, cap, step, t, c):
     for label, v, _, k in stack:
         v = v * c.read
         ax.fill_between(
-            x, base, base + v, fc=ramp[k], ec=t["page"], lw=1.2, label=label
+            x,
+            base,
+            base + v,
+            fc=t[k] if isinstance(k, str) else ramp[k],
+            ec=t["page"],
+            lw=1.2,
+            label=label,
         )
         ys.append(base[-1] + v[-1] / 2)
         base = base + v
@@ -428,9 +439,9 @@ def inputs(out, p, c):
             "cache write of the context after a lapse",
             p.lapse * w1 * np.maximum(x - p.P, 0),
             True,
-            2,
+            "lapse",
         ),
-        ("cache read of the context", x, False, 3),
+        ("cache read of the context", x, False, 2),
     ]
     compaction = compaction_parts(x, p, c)
     assert np.allclose(sum(v for _, v, _, _ in request)[x > p.P], (h * x + c0)[x > p.P])
@@ -549,7 +560,7 @@ def lapse(out, p, c):
     lapse_write = (c.write - 1) * np.maximum(x - p.P, 0)
     stack = [
         *held[:-1],
-        ("cache write of the context after a lapse", lapse_write, True, 2),
+        ("cache write of the context after a lapse", lapse_write, True, "lapse"),
         held[-1],
     ]
     _, _, F0 = fit.terms(p, c)

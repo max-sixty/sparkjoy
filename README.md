@@ -6,8 +6,8 @@
 </h1>
 
 A Claude Code plugin that lets the model decide when to compact[^name]. It cuts
-the cost of long sessions by 24% to 31%, depending on how you run Claude Code
-([What it saves](#what-it-saves)).
+the total cost of long sessions by 20% to 35%, depending on how you run Claude
+Code ([What it saves](#what-it-saves)).
 
 At the end of each turn, sparkjoy asks the model whether to compact. It uses the
 cached context and a small prompt which explains the tradeoff of compacting vs
@@ -541,18 +541,13 @@ parameter and where it comes from.
   <img alt="Two panels against the context x, from 0 to 965k, in dollars; parts named in orange are fitted to the sessions. Top, c(x), a request's cost by part, the fixed parts at the bottom: output and uncached input, and the cache write of the new tokens, about $0.027 together; above them the cache write of the context after a lapse and the cache read of the context, both growing; $0.059 in all at 139k and $0.192 at 700k. Bottom, F(x), a compaction's cost by part, about $1 at any context: the compaction request's output, $0.10; the cache write of the context after it, $0.82, in three bands by source, the summary and the rest of the context $0.17, files re-attached or read again $0.12, and skills, instructions and memory $0.52; and the cache read of the context, the only part that grows; $1.06 at 700k." src="assets/model-inputs-light.svg">
 </picture>
 
-A compaction's cost hardly changes with the context it compacts, from \$0.95 at
-139k to \$1.12 at 965k[^parts], since most of it, \$0.82, is the cache write of
-the context it leaves. My skills, instruction files and memory make up \$0.52 of
-that write. The system prompt and tools, P, stay in a cache Claude Code shares
-across sessions, so a compaction doesn't write them again.
+A compaction costs about \$1 whatever the context it compacts[^parts], since
+most of it is the cache write of the context it leaves.
 
-That holds while the prompt cache still holds the context. Once the cache
-lapses, as it does in a session left idle for an hour, the compaction request
-first writes all of the context but P to the cache. A compaction at 200k then
-costs \$2.26 rather than \$0.96, and one at 500k costs \$4.66 rather than
-\$1.02. So sparkjoy asks an idle session whether to compact just before its
-cache lapses ([Idle sessions](docs/cost-model.md#idle-sessions)):
+Once the prompt cache lapses, as in a session left idle for an hour, the
+compaction first writes the context to the cache again, so a compaction at 500k
+costs \$4.66 rather than \$1.02. sparkjoy asks an idle session whether to
+compact before its cache lapses ([Idle sessions](docs/cost-model.md#idle-sessions)):
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-lapse-dark.svg">

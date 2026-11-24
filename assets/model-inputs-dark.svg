@@ -137,7 +137,7 @@ z
    </g>
    <g id="FillBetweenPolyCollection_3">
     <defs>
-     <path id="m205fe80c78" d="M 37.140415 -225.626771 
+     <path id="m050104c516" d="M 37.140415 -225.626771 
 L 37.140415 -225.626771 
 L 54.029427 -225.626771 
 L 108.817345 -225.626771 
@@ -153,7 +153,7 @@ z
 " style="stroke: #0d1117; stroke-width: 1.2"/>
     </defs>
     <g clip-path="url(#p10c6d02764)">
-     <use xlink:href="#m205fe80c78" x="0" y="369.898859" style="fill: #157455; stroke: #0d1117; stroke-width: 1.2"/>
+     <use xlink:href="#m050104c516" x="0" y="369.898859" style="fill: #2c64a7; stroke: #0d1117; stroke-width: 1.2"/>
     </g>
    </g>
    <g id="FillBetweenPolyCollection_4">
