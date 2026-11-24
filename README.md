@@ -99,6 +99,27 @@ New sessions pick it up. To see its verdicts before it compacts anything, run
   agree. When one of sparkjoy's lines reports a bug, such as a question that
   failed, the next line suggests running `/sparkjoy bug`.
 
+## Salient points about compactions
+
+The [cost model](#cost-model) has a lot of detail about compactions. These are
+the points I find most interesting:
+
+- Compacting while the cache is warm is cheap. Even at 965k, where Claude Code
+  compacts on its own, a compaction costs \$1.12.
+- Missing the cache is expensive. After the cache lapses, the same compaction
+  costs \$8.38.
+- The compaction's summary is small, about 5k tokens, so the compaction
+  request's output costs only \$0.10.
+- Most of a compaction's cost, \$0.82, is the cache write of the first request
+  after it, which writes the context the compaction leaves.
+- Because writing the cache is the expensive part, dropping old tool results in
+  place of compacting isn't much cheaper. The next request writes everything
+  after the first result dropped, and once about 130k tokens follow it, that
+  costs as much as a compaction.
+- Getting compacting right is really important for costs, particularly for long
+  sessions, and using the full context is arguably very worthwhile to get that
+  right: in my sessions the \$47 cost of asking compares to a \$2,906 saving.
+
 ## What it saves
 
 Every request reads the whole context, so a larger context makes each request
@@ -394,24 +415,6 @@ To understand what makes a good compaction policy, we can model how a policy
 affects what a session costs and how much context its requests have. The model
 finds when a session should compact, and what sparkjoy saves against Claude
 Code's default.
-
-## Salient points about compactions
-
-There's a lot of detail here about compactions. These are the points I find most
-interesting:
-
-- Compacting while the cache is warm is cheap. Even at 965k, where Claude Code
-  compacts on its own, a compaction costs \$1.12.
-- Missing the cache is expensive. After the cache lapses, the same compaction
-  costs \$8.38.
-- The compaction's summary is small, about 5k tokens, so the compaction
-  request's output costs only \$0.10.
-- Most of a compaction's cost, \$0.82, is the cache write of the first request
-  after it, which writes the context the compaction leaves.
-- Because writing the cache is the expensive part, dropping old tool results in
-  place of compacting isn't much cheaper. The next request writes everything
-  after the first result dropped, and once about 130k tokens follow it, that
-  costs as much as a compaction.
 
 ## The models
 
