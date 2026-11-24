@@ -37,35 +37,34 @@ section below, and each adds something the one before it leaves out:
 
 ## Results for my sessions
 
-What sparkjoy saves against Claude Code's default, in my sessions of 18 to 22
-November on Opus 5.5[^sessions]:
+What my sessions of 18 to 22 November cost on Opus 5.5[^sessions], with sparkjoy
+and in a replay without it:
 
 <!-- What sparkjoy saves -->
 
-| policy                                                         | how much a request gets done with a smaller context                       | without Claude Code's idle compaction[^idle] | with it |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------- | ------- |
-| sparkjoy as it ran                                             | as much as with a larger one                                              | 31%                                          | 24%     |
-| compacting at turn ends from 250k and idle sessions from 175k  | the base case: half as much at 250k as at 1M                              | 11%                                          | 6%      |
-| compacting at turn ends from 250k and idle sessions from 175k  | varies: a quarter of the work needs much more context, the rest much less | 0%                                           | −5%     |
-| compacting where sparkjoy's judgment says, right 9 times in 10 | varies: a quarter of the work needs much more context, the rest much less | 10%                                          | 5%      |
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/savings-dark.svg">
+  <img alt="What 163 sessions cost with sparkjoy and in a replay without it, as a pair of bars for each case. Without Claude Code's idle compaction, $9,539 without sparkjoy and $6,621 with it, 31% less. With Claude Code's idle compaction, $8,672 without sparkjoy and $6,577 with it, 24% less." src="../assets/savings-light.svg">
+</picture>
 
-Claude Code's default compacts near 965k, and where its idle compaction runs,
-also an idle context from 200k. The last three rows replay my sessions ([A
-replay of my sessions](#a-replay-of-my-sessions)). The last compacts where the
-judgment says, from 280k for work that needs less context and from 900k for work
-that needs more, the thresholds that cost least in hindsight ([A
-classifier](#a-classifier)). How much less a request gets done with a smaller
-context ([Cost and context](#cost-and-context)), and how often the judgment is
-right, are assumed, not yet measured. Every row counts what sparkjoy's questions
-cost.
+The replay prices the same requests without sparkjoy's compactions or its
+questions, so Claude Code compacts on its own near 965k, and where its idle
+compaction runs[^idle], also an idle context from 200k. If a request gets less
+done with a smaller context ([Cost and context](#cost-and-context)), sparkjoy
+saves less per unit of work than it saves in cost.
 
-Resampling my sessions gives the first row a 90% interval of 29–32% without
-Claude Code's idle compaction and 22–26% with it. A single session's saving
-varies more. Of the quarter of sessions that cost the most under Claude Code's
-default, eight in ten saved 22% to 43% without its idle compaction, and 17% to
-39% with it.
+Resampling my sessions gives the saving a 90% interval of 29–32% without Claude
+Code's idle compaction and 22–26% with it. A single session's saving varies
+more. Of the quarter of sessions that cost the most under Claude Code's default,
+eight in ten saved 22% to 43% without its idle compaction, and 17% to 39% with
+it.
 
 <!-- End of what sparkjoy saves. -->
+
+<!-- TODO: Work through the cost model to give sparkjoy's saving per unit of work beside its saving in cost.
+If a request at 250k gets half as much done as one at 1M (β = 0.5), sparkjoy as it ran saves 11.3% per unit
+of work without Claude Code's idle compaction and 6.5% with it, against 30.6% and 24.2% in cost; fit.py doesn't
+print these yet. -->
 
 ## Costs
 
