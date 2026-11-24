@@ -20,13 +20,14 @@ as from the whole transcript, but while a design is still taking shape, a
 summary would drop the options already rejected and the reasons for rejecting
 them.
 
-|                | When it compacts                                                                                                              |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `/compact`     | when you type it                                                                                                              |
-| Claude Code    | at about 965k, even mid-turn                                                                                                  |
-| Claude Code    | when idle in a session open in a terminal or editor, just before the one-hour cache expires, from 200k                        |
-| `/autocompact` | at the size you set, even mid-turn                                                                                            |
-| sparkjoy       | when the session's model says to; it asks at each turn end from 250k, and when idle, just before the cache expires, from 175k |
+|                | When it compacts                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------------------ |
+| `/compact`     | when you type it                                                                                       |
+| Claude Code    | at about 965k, even mid-turn                                                                           |
+| Claude Code    | when idle in a session open in a terminal or editor, just before the one-hour cache expires, from 200k |
+| `/autocompact` | at the size you set, even mid-turn                                                                     |
+| sparkjoy       | at a turn end from 250k, if the session's model says to                                                |
+| sparkjoy       | when idle, just before the cache expires, from 175k, if the session's model says to                    |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/session-dark.svg">
@@ -34,9 +35,10 @@ them.
 </picture>
 
 Every request reads the whole context, so the area under each line counts the
-tokens the session read. At each dot the plugin asked the session's model
-whether to compact, and at the larger dots the session compacted. The session
-ran in the background, where Claude Code compacts only when the window fills.
+tokens the session read. Each dot marks a time the plugin asked the session's
+model whether to compact. The larger dots mark the times the session compacted.
+The session ran in the background, where Claude Code compacts only when the
+window fills.
 
 ## Install
 
