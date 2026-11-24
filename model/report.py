@@ -247,13 +247,13 @@ def logo():
     svg = (ASSETS / "logo-light.svg").read_text()
     return (
         svg.replace('fill="#1f2328"', 'fill="currentColor"')
-        .replace('fill="#d61f69"', 'class="accent"')
+        .replace('fill="#bf397a"', 'class="accent"')
         .replace("<svg ", '<svg class="logo" role="img" aria-label="sparkjoy" ', 1)
     )
 
 
 def icon():
-    """The plugin's icon, the mark on a magenta tile, as the page's favicon."""
+    """The plugin's icon, the mark on a pink tile, as the page's favicon."""
     svg = base64.b64encode((ASSETS / "icon.svg").read_bytes()).decode()
     return (
         f'<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,{svg}">'
@@ -335,9 +335,9 @@ def sparkline(s, ran, without, w=240, h=44):
 
 CSS = """
 :root { color-scheme: light dark; --page: #ffffff; --ink: #0b0b0b; --muted: #52514e; --rule: #e4e3df;
-  --tile: #f6f5f2; --with: #2a78d6; --without: #9a998f; --accent: #d61f69; }
+  --tile: #f6f5f2; --with: #bf397a; --without: #d97757; --accent: #bf397a; }
 @media (prefers-color-scheme: dark) { :root { --page: #0d1117; --ink: #f0efec; --muted: #a9a89f;
-  --rule: #30302d; --tile: #161b22; --with: #3987e5; --without: #6f6e68; --accent: #f0508f; } }
+  --rule: #30302d; --tile: #161b22; --with: #bf397a; --without: #d57353; --accent: #bf397a; } }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--page); color: var(--ink);
   font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
