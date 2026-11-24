@@ -8,6 +8,8 @@ from one read of the sessions:
                  after a compaction split by what fills the context (context.py's context-parts.json)
   payback        how many later requests a compaction takes to pay for itself, against the context it
                  compacts, for the README's What it saves
+  lapse          a compaction's cost by part after the prompt cache lapses, against the context, in the form
+                 of inputs' compaction panel
   average        a request's mean cost over a cycle against the compaction threshold, with the marginal cost,
                  as a schematic
   effectiveness  a request's effectiveness against its context, at the base case for β (fit.BASE),
@@ -50,9 +52,11 @@ plt.rcParams.update(
 # against the page: "beta" for β, an assumption, and "costs" for magnitudes of a cost. "beta" is the
 # dataviz reference palette's blue, "costs" OKLCH steps of its aqua, each validated as an ordinal
 # ramp against its page (validate_palette.js --ordinal). "parts" are the steps, faint to strong, that
-# `parts` takes from the page toward "cost" to colour a cost's parts. "with" and "without" are the README's two arms,
-# sparkjoy's compactions as they ran and the replay without them, validated as a categorical pair
-# against each page.
+# `parts` takes from the page toward "cost" to colour a cost's parts. "lapse" colours the part a lapse of the
+# cache adds, the cache write of the context, apart from the parts that are there anyway; it is a step of "beta"'s
+# hue, validated against its neighbouring parts (validate_palette.js). "with" is sparkjoy, in the logo's pink,
+# and "without" is Claude Code's default, in Anthropic's orange (#d97757, a step darker on the dark page
+# to stay in its lightness band), validated as a categorical pair against each page.
 THEMES = {
     "light": {
         "ink": "#0b0b0b",
@@ -63,10 +67,11 @@ THEMES = {
         "cost": "#1baf7a",
         "beta": ("#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"),
         "costs": ("#22b37d", "#088a5e", "#035f40"),
-        "parts": (0.2, 0.36, 0.52, 0.7),
+        "parts": (0.2, 0.36, 0.7),
+        "lapse": "#5799e9",
         "band": 0.14,
-        "with": "#2a78d6",
-        "without": "#eb6834",
+        "with": "#bf397a",
+        "without": "#d97757",
     },
     "dark": {
         "ink": "#f0efec",
@@ -77,10 +82,11 @@ THEMES = {
         "cost": "#199e70",
         "beta": ("#256abf", "#3987e5", "#6da7ec", "#9ec5f4", "#cde2fb"),
         "costs": ("#049165", "#43ba8a", "#75e8b6"),
-        "parts": (0.3, 0.5, 0.7, 0.9),
+        "parts": (0.3, 0.5, 0.9),
+        "lapse": "#2c64a7",
         "band": 0.18,
-        "with": "#3987e5",
-        "without": "#d95926",
+        "with": "#bf397a",
+        "without": "#d57353",
     },
 }
 RAMP = (0, 0.3, 0.6, 1, 2)  # the β each step of the "beta" ramp stands for
@@ -339,6 +345,74 @@ def written(p):
     return [(what, (p.K - p.P) * v / total) for what, v in sizes.items()]
 
 
+def compaction_parts(x, p, c):
+    """F(x) = x + F0 by part, in reads, as (name, values, fitted, colour): the parts that don't grow with
+    the context first, so they stack at the bottom. A part is fitted when it comes from what the sessions
+    measured (output, growth, lapses, K, P, N); the cache read of the context is the context itself. The
+    colour is a step of the parts ramp, output 0, cache writes 1, the cache read of the context 2, or the
+    name of a theme colour, "lapse" for the cache write a lapse adds."""
+    w1 = c.write - 1
+    return [
+        ("output of the compaction request", np.full_like(x, c.output * p.N), True, 0),
+        *[
+            (f"cache write of {what}", np.full_like(x, w1 * tokens), True, 1)
+            for what, tokens in written(p)
+        ],
+        ("cache read of the context", x, False, 2),
+    ]
+
+
+def bands(ax, x, stack, cap, step, t, c):
+    """Draw `stack`'s parts as bands stacked from the axis, in dollars, in the colour each part names
+    (compaction_parts), each band parted from the next by the page. Each part is named at the right end of its
+    band, in the fit colour where the sessions measured it, thin bands' names pushed apart to stay legible:
+    up from the bottom, then down from the cap where that pushed one past it. A name moved off its band's
+    middle has a leader to it."""
+    ramp = parts(t)
+    base = np.zeros_like(x)
+    ys = []
+    for label, v, _, k in stack:
+        v = v * c.read
+        ax.fill_between(
+            x,
+            base,
+            base + v,
+            fc=t[k] if isinstance(k, str) else ramp[k],
+            ec=t["page"],
+            lw=1.2,
+            label=label,
+        )
+        ys.append(base[-1] + v[-1] / 2)
+        base = base + v
+    mids, gap = list(ys), 0.1 * cap
+    for i in range(1, len(ys)):
+        ys[i] = max(ys[i], ys[i - 1] + gap)
+    ys[-1] = min(ys[-1], cap - gap / 2)
+    for i in range(len(ys) - 2, -1, -1):
+        ys[i] = min(ys[i], ys[i + 1] - gap)
+    for (label, _, fitted, _), y, mid_y in zip(stack, ys, mids, strict=True):
+        if abs(y - mid_y) > 0.02 * cap:
+            ax.plot(
+                [fit.AUTO + 6_000, fit.AUTO + 30_000],
+                [mid_y, y],
+                color=t["muted"],
+                lw=0.8,
+                clip_on=False,
+            )
+        ax.text(
+            fit.AUTO + 36_000,
+            y,
+            label,
+            va="center",
+            fontsize=9,
+            color=t["fit"] if fitted else t["ink"],
+        )
+    ax.set_xlim(0, fit.AUTO)
+    ax.set_ylim(0, cap)
+    ax.set_yticks(np.arange(0, cap, step))
+    ax.yaxis.set_major_formatter(dollars)
+
+
 def inputs(out, p, c):
     """What the costs are made of: a request's cost at its context by part, and a compaction's cost by
     part, on one axis. Parts that come from the sessions' fitted parameters are named in the fit colour."""
@@ -347,12 +421,7 @@ def inputs(out, p, c):
     # Every part is linear in x but for the lapse's kink at P, so the ends and P draw the same bands as
     # any finer grid; K and 700k are where the figures below are read.
     x = np.unique([1_000, p.P, p.K, 700_000, fit.AUTO])
-    # c(x) = h x + c0 and F(x) = x + F0 by part, in reads: the parts that don't grow with the
-    # context first, so they stack at the bottom.
-    # Each part says whether it comes from what the sessions measured (output, growth, lapses, K, P,
-    # N) or not: the cache read of the context is the context itself.
-    # Each part also names its step of the ramp: output 0, cache writes 1 (2 for the lapse's), the cache
-    # read of the context the strongest.
+    # c(x) = h x + c0 by part, in the form of compaction_parts.
     request = [
         (
             "output and uncached input",
@@ -370,18 +439,11 @@ def inputs(out, p, c):
             "cache write of the context after a lapse",
             p.lapse * w1 * np.maximum(x - p.P, 0),
             True,
-            2,
+            "lapse",
         ),
-        ("cache read of the context", x, False, 3),
+        ("cache read of the context", x, False, 2),
     ]
-    compaction = [
-        ("output of the compaction request", np.full_like(x, c.output * p.N), True, 0),
-        *[
-            (f"cache write of {what}", np.full_like(x, w1 * tokens), True, 1)
-            for what, tokens in written(p)
-        ],
-        ("cache read of the context", x, False, 3),
-    ]
+    compaction = compaction_parts(x, p, c)
     assert np.allclose(sum(v for _, v, _, _ in request)[x > p.P], (h * x + c0)[x > p.P])
     assert np.allclose(sum(v for _, v, _, _ in compaction), x + F0)
     for name, stack in (("request", request), ("compaction", compaction)):
@@ -400,49 +462,8 @@ def inputs(out, p, c):
         )
         for ax in (mid, low):
             style(ax, t)
-            ax.set_xlim(0, fit.AUTO)
-        # One hue, lighter for the parts lower in the stack, each band parted from the next by the page;
-        # the labels say which parts the sessions measured.
-        ramp = parts(t)
-        for ax, stack, cap in ((mid, request, 0.3), (low, compaction, 1.3)):
-            base = np.zeros_like(x)
-            ys = []
-            for label, v, _, step in stack:
-                v = v * c.read  # in dollars
-                ax.fill_between(
-                    x, base, base + v, fc=ramp[step], ec=t["page"], lw=1.2, label=label
-                )
-                ys.append(base[-1] + v[-1] / 2)
-                base = base + v
-            # Each part named at the right end of its band, thin bands' names pushed apart to stay
-            # legible: up from the bottom, then down from the cap where that pushed one past it. A
-            # name moved off its band's middle has a leader to it.
-            mids, gap = list(ys), 0.1 * cap
-            for i in range(1, len(ys)):
-                ys[i] = max(ys[i], ys[i - 1] + gap)
-            ys[-1] = min(ys[-1], cap - gap / 2)
-            for i in range(len(ys) - 2, -1, -1):
-                ys[i] = min(ys[i], ys[i + 1] - gap)
-            for (label, _, fitted, _), y, mid_y in zip(stack, ys, mids, strict=True):
-                if abs(y - mid_y) > 0.02 * cap:
-                    ax.plot(
-                        [fit.AUTO + 6_000, fit.AUTO + 30_000],
-                        [mid_y, y],
-                        color=t["muted"],
-                        lw=0.8,
-                        clip_on=False,
-                    )
-                ax.text(
-                    fit.AUTO + 36_000,
-                    y,
-                    label,
-                    va="center",
-                    fontsize=9,
-                    color=fit_c if fitted else t["ink"],
-                )
-            ax.set_ylim(0, cap)
-            ax.set_yticks(np.arange(0, cap, 0.1 if cap < 0.5 else 0.4))
-            ax.yaxis.set_major_formatter(dollars)
+        bands(mid, x, request, 0.3, 0.1, t, c)
+        bands(low, x, compaction, 1.3, 0.4, t, c)
         low.xaxis.set_major_formatter(tokens)
         low.set_xticks([0, 200_000, 400_000, 600_000, 800_000])
         low.set_xlabel(
@@ -526,6 +547,57 @@ def payback(out, p, c):
         )
         axis_name(ax, "Later requests until the compaction pays for itself", t)
         save(fig, out / f"model-payback-{theme}.svg")
+
+
+def lapse(out, p, c):
+    """What a compaction costs after the prompt cache lapses, as in a session left idle past the cache's
+    lifetime, by part, in the form of inputs' compaction panel. The compaction request first writes all of
+    the context but the shared prefix P to the cache, so on top of F(x)'s parts it pays the part a request
+    pays after a lapse, the cache write of the context, (w - 1)(x - P) reads. It also prints how many tokens
+    may follow the first part of a context that is dropped in place of compacting it, such as old tool
+    results, before the next request's cache write of them costs as much as the compaction."""
+    marks = (200_000, 500_000, fit.AUTO)
+    x = np.unique([1_000, p.P, p.K, *marks, fit.AUTO])
+    held = compaction_parts(x, p, c)
+    lapse_write = (c.write - 1) * np.maximum(x - p.P, 0)
+    stack = [
+        *held[:-1],
+        ("cache write of the context after a lapse", lapse_write, True, "lapse"),
+        held[-1],
+    ]
+    _, _, F0 = fit.terms(p, c)
+    after = x > p.P
+    total = sum(v for _, v, _, _ in stack)
+    assert np.allclose(total[after], (p.P + c.write * (x - p.P) + F0)[after])
+    for v in marks:
+        j = np.abs(x - v).argmin()
+        print(
+            f"model-lapse: a compaction at {v / 1e3:.0f}k costs ${(total[j] - lapse_write[j]) * c.read:.2f} "
+            f"while the cache holds the context, and ${total[j] * c.read:.2f} after it lapses; dropping part of "
+            f"the context in its place costs as much once {(v + F0) / (c.write - 1) / 1e3:.0f}k tokens follow the "
+            f"first part dropped"
+        )
+    for theme, t in THEMES.items():
+        fig, ax = plt.subplots(figsize=(9, 2.8))
+        style(ax, t)
+        bands(ax, x, stack, 9, 2, t, c)
+        ax.xaxis.set_major_formatter(tokens)
+        ax.set_xticks([0, 200_000, 400_000, 600_000, 800_000])
+        ax.set_xlabel(
+            "Context x (tokens) before the compaction", color=t["muted"], fontsize=10
+        )
+        axis_name(ax, "Cost per compaction after a lapse by part ($)", t)
+        ax.text(
+            1,
+            1.04,
+            "parts named in orange are fitted to the sessions",
+            transform=ax.transAxes,
+            ha="right",
+            va="bottom",
+            fontsize=9,
+            color=t["fit"],
+        )
+        save(fig, out / f"model-lapse-{theme}.svg")
 
 
 def average(out, p, c):
@@ -1164,6 +1236,7 @@ def draw(out, p, c, boot, cost, effectiveness, BT, BX):
     cycles(out, p, c)
     inputs(out, p, c)
     payback(out, p, c)
+    lapse(out, p, c)
     average(out, p, c)
     effectiveness_curve(out)
     cost_curve(out, p, c)

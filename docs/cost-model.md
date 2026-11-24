@@ -44,7 +44,7 @@ and in a replay without it:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/savings-dark.svg">
-  <img alt="What 163 sessions cost with sparkjoy and in a replay without it, as a pair of bars for each case. Without Claude Code's idle compaction, $9,539 without sparkjoy and $6,621 with it, 31% less. With Claude Code's idle compaction, $8,672 without sparkjoy and $6,577 with it, 24% less." src="../assets/savings-light.svg">
+  <img alt="What 163 sessions cost, as three bars: $9,539 under Claude Code's default in a replay without its idle compaction, $8,672 in a replay with it, and $6,612 with sparkjoy as the sessions ran, 31% and 24% less." src="../assets/savings-light.svg">
 </picture>
 
 The replay prices the same requests without sparkjoy's compactions or its
@@ -155,11 +155,18 @@ parameter and where it comes from.
   <img alt="Two panels against the context x, from 0 to 965k, in dollars; parts named in orange are fitted to the sessions. Top, c(x), a request's cost by part, the fixed parts at the bottom: output and uncached input, and the cache write of the new tokens, about $0.027 together; above them the cache write of the context after a lapse and the cache read of the context, both growing; $0.059 in all at 139k and $0.192 at 700k. Bottom, F(x), a compaction's cost by part, about $1 at any context: the compaction request's output, $0.10; the cache write of the context after it, $0.82, in three bands by source, the summary and the rest of the context $0.17, files re-attached or read again $0.12, and skills, instructions and memory $0.52; and the cache read of the context, the only part that grows; $1.06 at 700k." src="../assets/model-inputs-light.svg">
 </picture>
 
-A compaction's cost hardly changes with the context it compacts, from \$0.95 at
-139k to \$1.12 at 965k[^parts], since most of it, \$0.82, is the cache write of
-the context it leaves. My skills, instruction files and memory make up \$0.52 of
-that write. The system prompt and tools, P, stay in a cache Claude Code shares
-across sessions, so a compaction doesn't write them again.
+A compaction costs about \$1 whatever the context it compacts[^parts], since
+most of it is the cache write of the context it leaves.
+
+Once the prompt cache lapses, the compaction first writes the context to the
+cache again, so a compaction at 500k costs \$4.66 rather than \$1.02. sparkjoy
+asks an idle session whether to compact before its cache lapses
+([Idle sessions](#idle-sessions)):
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/model-lapse-dark.svg">
+  <img alt="A compaction's cost by part after the prompt cache lapses, against the context x, from 0 to 965k, in dollars; parts named in orange are fitted to the sessions. At the bottom, as in the chart of F(x) above, the compaction request's output and the cache write of the context after it, in three bands, about $0.92 together at any context. Above them, the cache write of the context after a lapse grows with the context, and the cache read of the context lies on top. In all, $2.26 at 200k against $0.96 while the cache holds the context, $4.66 at 500k against $1.02, and about $8.40 at 965k." src="../assets/model-lapse-light.svg">
+</picture>
 
 The larger the context, the sooner a compaction pays for itself. After a
 compaction at 700k, each later request reads 561k fewer tokens, and the

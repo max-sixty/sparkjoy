@@ -15,8 +15,8 @@ session someone had open, also an idle context from fit.CC_IDLE. The charts:
 
   session.svg   one session's context per request, with and without sparkjoy
   context.svg   the share of the window's requests at each context size, with and without
-  savings.svg   what the window's sessions cost with and without, as if none had Claude Code's idle
-                compaction and as if all had it
+  savings.svg   what the window's sessions cost under Claude Code's default, as if none had its idle
+                compaction and as if all had it, and with sparkjoy as they ran
 """
 
 import argparse
@@ -151,10 +151,10 @@ def context_chart(contexts, t, path):
     charts.save(fig, path)
 
 
-def savings_chart(costs, t, path):
-    """What the sessions cost in each arm, keyed as ARMS is, in each case `costs` holds, as
-    {case: {arm: dollars}}: a pair of bars per case, the saving named beside sparkjoy's."""
-    fig, ax = plt.subplots(figsize=(9, 2.4))
+def savings_chart(bars, t, path):
+    """What the sessions cost, one bar each for `bars`, as (name, dollars, arm): Claude Code's bars in
+    "without", sparkjoy's last in "with", each of Claude Code's named with what sparkjoy saves on it."""
+    fig, ax = plt.subplots(figsize=(9, 2.2))
     charts.style(ax, t)
     ax.grid(axis="y", visible=False)
     ax.grid(axis="x", color=t["grid"], lw=0.8)
@@ -162,55 +162,28 @@ def savings_chart(costs, t, path):
     ax.spines["left"].set_visible(True)
     ax.spines["left"].set_color(t["muted"])
     ax.spines["left"].set_linewidth(0.8)
-    top = max(v for arms in costs.values() for v in arms.values())
-    centres = []
-    for i, arms in enumerate(costs.values()):
-        centre = -1.6 * i
-        centres.append(centre)
-        for key, dy in (("without", 0.22), ("with", -0.22)):
-            v = arms[key]
-            ax.barh(centre + dy, v, height=0.4, color=t[key], lw=0)
-            note = (
-                f"${v:,.0f}"
-                if key == "without"
-                else f"${v:,.0f}, {1 - v / arms['without']:.0%} less"
-            )
-            ax.annotate(
-                note,
-                (v, centre + dy),
-                xytext=(5, 0),
-                textcoords="offset points",
-                va="center",
-                fontsize=9,
-                color=t["ink"],
-            )
-    ax.set_yticks(centres, list(costs))
-    ax.tick_params(axis="y", labelsize=10, labelcolor=t["ink"])
-    ax.set_ylim(centres[-1] - 0.6, centres[0] + 0.6)
-    ax.set_xlim(0, top * 1.22)
-    ax.xaxis.set_major_formatter(lambda v, _: f"${v:,.0f}")
-    swatches = [
-        (plt.Rectangle((0, 0), 1, 1, color=t[key], lw=0), label)
-        for key, label in (
-            ("without", f"without {PLUGIN}, replayed"),
-            ("with", f"with {PLUGIN}"),
+    ours = bars[-1][1]
+    for i, (_, v, key) in enumerate(bars):
+        ax.barh(-i, v, height=0.62, color=t[key], lw=0)
+        note = (
+            f"${v:,.0f}"
+            if key == "with"
+            else f"${v:,.0f} ({PLUGIN} saves {1 - ours / v:.0%})"
         )
-    ]
-    handles, labels = zip(*swatches, strict=True)
-    ax.legend(
-        handles,
-        labels,
-        frameon=False,
-        fontsize=9,
-        labelcolor=t["ink"],
-        loc="lower right",
-        bbox_to_anchor=(1, 1),
-        ncols=2,
-        borderaxespad=0.2,
-        handlelength=1.3,
-        handletextpad=0.5,
-        columnspacing=1.1,
-    )
+        ax.annotate(
+            note,
+            (v, -i),
+            xytext=(5, 0),
+            textcoords="offset points",
+            va="center",
+            fontsize=9,
+            color=t["ink"],
+        )
+    ax.set_yticks([-i for i in range(len(bars))], [name for name, _, _ in bars])
+    ax.tick_params(axis="y", labelsize=10, labelcolor=t["ink"])
+    ax.set_ylim(-len(bars) + 0.4, 0.6)
+    ax.set_xlim(0, max(v for _, v, _ in bars) * 1.32)
+    ax.xaxis.set_major_formatter(lambda v, _: f"${v:,.0f}")
     ax.set_xlabel("Cost of the sessions", color=t["muted"], fontsize=10)
     charts.save(fig, path)
 
@@ -244,22 +217,21 @@ def main():
     checks = [
         (int(np.searchsorted(one.t, v.t)) - 1, v.kind == "compacted") for v in asked
     ]
-    # Each session priced as if none had Claude Code's idle compaction, and as if all had it.
-    costs = {}
-    for opened, case in (
-        (False, "without Claude Code's\nidle compaction"),
-        (True, "with Claude Code's\nidle compaction"),
+    # Claude Code's default, each session priced as if none had its idle compaction and as if all had
+    # it, then sparkjoy as each session ran.
+    bars = []
+    for opened, name in (
+        (False, "Claude Code"),
+        (True, "Claude Code with\nidle compaction"),
     ):
         priced = [d for s in S if (d := fit.as_run(s, p, opened, fit.MODEL)[0])]
-        costs[case] = {
-            "with": sum(d[0] for d in priced),
-            "without": sum(d[1] for d in priced),
-        }
+        bars.append((name, sum(d[1] for d in priced), "without"))
+    bars.append((PLUGIN, with_, "with"))
     a.out.mkdir(parents=True, exist_ok=True)
     for theme, t in charts.THEMES.items():
         session_chart(traces, checks, t, a.out / f"session-{theme}.svg")
         context_chart(contexts, t, a.out / f"context-{theme}.svg")
-        savings_chart(costs, t, a.out / f"savings-{theme}.svg")
+        savings_chart(bars, t, a.out / f"savings-{theme}.svg")
 
     n = len(contexts["with"])
     logged = 0.0
@@ -286,11 +258,15 @@ def main():
         f"requests at {LONG // 1000}k+: {(contexts['without'] >= LONG).mean():.0%} without, "
         f"{(contexts['with'] >= LONG).mean():.0%} with"
     )
-    for case, arms in costs.items():
-        print(
-            f"savings chart, {case.replace(chr(10), ' ')}: ${arms['without']:,.0f} without, ${arms['with']:,.0f} with "
-            f"({arms['with'] / arms['without'] - 1:+.1%})"
+    print(
+        "savings chart: "
+        + "; ".join(f"{name.replace(chr(10), ' ')} ${v:,.0f}" for name, v, _ in bars)
+        + "; "
+        + ", ".join(
+            f"{PLUGIN} saves {1 - with_ / v:.1%} on {name.replace(chr(10), ' ')}"
+            for name, v, _ in bars[:-1]
         )
+    )
     every = [v for s, *_ in runs for v in s.verdicts if v.kind in ("compacted", "kept")]
     print(
         f"verdicts: {len(every)}, compacted after {sum(v.kind == 'compacted' for v in every)}"
