@@ -17,8 +17,9 @@ Because it asks after a turn ends and again just before the cache expires,
 asking is [very cheap](#faq), and the compacted session is ready for you when
 you return.
 
-In comparison, Claude Code and `/autocompact` compact at a set size, whether or
-not the existing context is valuable:
+In comparison, Claude Code requires waiting for the compaction after running
+`/compact` yourself, and `/autocompact` compacts at a set size, whether or not
+the existing context is valuable:
 
 |                | When it compacts                                                                    |
 | -------------- | ----------------------------------------------------------------------------------- |
