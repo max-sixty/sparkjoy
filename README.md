@@ -10,9 +10,10 @@ the cost of long sessions by 24% to 31%, depending on how you run Claude Code
 ([What it saves](#what-it-saves)).
 
 Once the session has built up some context, sparkjoy asks the session's own
-model whether to compact, and tells it what keeping the context and compacting
-it each cost. It asks at the end of each turn, and just before an idle
-session's prompt cache expires ([How it decides](#how-it-decides)).
+model whether to compact, at the end of each turn and just before an idle
+session's prompt cache expires. The question lists the cost of compacting and
+the cost of keeping the context at its current size
+([How it decides](#how-it-decides)).
 
 In comparison, Claude Code and `/autocompact` compact at a set size, whether or
 not the existing context is valuable:
@@ -178,8 +179,8 @@ reason. The fork goes from Claude Code to the session's own model, so the
 conversation goes only where the session already sends it.
 
 The question asks whether the next turns will need detail a summary drops, such
-as failed attempts or a design still taking shape, and states what compacting
-and keeping the context each cost at its current size.
+as failed attempts or a design still taking shape, and lists the cost of
+compacting and the cost of keeping the context at its current size.
 
 ### The prompt
 
@@ -354,10 +355,10 @@ of a turn:
   says whether the task is done, and its answer sets how long the plugin waits,
   60 seconds or up to 8 minutes. From 350k it compacts as soon as the turn ends.
 
-Both decide from under 8,000 characters of the transcript, and neither tells its
-model what keeping or compacting costs. sparkjoy asks the session's own model,
-which reads the whole transcript, and tells it what each costs at the context's
-size.
+Both decide from under 8,000 characters of the transcript, and neither gives its
+model the cost of keeping or compacting. sparkjoy asks the session's own model,
+which reads the whole transcript, and gives it both costs at the context's
+current size.
 
 </details>
 
@@ -379,8 +380,8 @@ Code's updates or nonessential traffic are turned off.
 
 # Cost model
 
-sparkjoy's default floors come from a model of what keeping a context and
-compacting it cost, fitted to my sessions.
+sparkjoy's default floors come from a model of the cost of keeping a context
+and the cost of compacting it, fitted to my sessions.
 
 <!-- Generated from docs/cost-model.md by docs/embed.py; edit that file. -->
 <details>
