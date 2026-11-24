@@ -14,9 +14,8 @@ cached context and a small prompt which lists the cost of compacting and the
 cost of keeping the context at its current size
 ([How it decides](#how-it-decides)).
 
-By querying after the end of the turn (and also before the cache expires), it's
-[very cheap](#faq) to query, and the compacted session is ready for you when you
-return.
+Because it asks after a turn ends, or just before the cache expires, asking is
+[very cheap](#faq), and the compacted session is ready for you when you return.
 
 In comparison, Claude Code and `/autocompact` compact at a set size, whether or
 not the existing context is valuable:
