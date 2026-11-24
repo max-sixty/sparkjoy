@@ -1,16 +1,11 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.12"
-# dependencies = ["numpy>=2.1", "scipy>=1.14"]
-# ///
 """Measures what fills the context a compaction leaves, K - P in docs/cost-model.md, by source.
 
-    uv run --script model/context.py                        # the last 14 days of ~/.claude/projects
-    uv run --script model/context.py --since 2026-11-18T00:00Z --until 2026-11-23T00:00Z
+docs.py calls `measure(S, p)` with the sessions `fit.read` returns and `fit.measure`'s parameters
+for them, and the figures it returns land in docs/figures.json's `context` section.
 
-It reads the sessions and requests fit.py reads, with fit.py's reader, one transcript at a time.
-Transcripts log each request as Claude Code sent it: an `api-request` record names its messages by
-hash, an `api-request-blob` holds a message's content, and a message with no blob is rebuilt from the
+It reads the requests of the sessions fit.py reads, one transcript at a time. Transcripts log each
+request as Claude Code sent it: an `api-request` record names its messages by hash, an
+`api-request-blob` holds a message's content, and a message with no blob is rebuilt from the
 transcript's user and assistant lines, whose hash (sha256 of the message's sorted, compact JSON)
 names it. Each text block is split by the renderings of the attachment lines logged beside the
 request, so every character goes to the attachment that put it there (the instruction files, the
@@ -20,20 +15,30 @@ next message.
 
 Characters become tokens by kind of content (prose, listings, file text, JSON, thinking), at
 ratios fitted by non-negative least squares to the logged usage of the first requests after a
-compaction that read the whole system prompt from the cache; it prints their leave-one-out error.
-In the other first requests the system prompt changed across the compaction or its cache lapsed,
-and what the messages don't account for is the part of it written again.
+compaction that read the whole system prompt from the cache (`first_request_ratios`, with the
+leave-one-out error of the written context as a share of it; a kind the fit counts as no tokens
+has null characters per token). In the other first requests the system prompt changed across
+the compaction or its cache lapsed, and what the messages don't account for is the part of it
+written again.
+
+`first_request` gives, for each source, its tokens per compaction in W, the context the first
+request after a compaction writes (its size less its cache read): the median, the mean with its 90%
+interval from resampling the first requests the ratios are fitted to, its share of the mean W and
+the compactions it appears in; `written` is W itself.
+What the sources leave of W is `system_prompt` where the system prompt changed or lapsed and
+`unattributed` where it was cached, and `checks` compares the two groups, with the system
+prompt's blocks from the third on (the session's) at the prose ratio. `fit_comparison` sets the
+mean W beside fit.py's first request less P, and the mean W plus E beside its K - P.
 
 E, the extra tokens the requests after a compaction add, is split over the same turns fit.py's
 `excess` uses: each request's growth by source, from its new messages at ratios fitted to the growth
-of later requests over the request before, and the response before it at its output tokens. Each
-source's part of E is `excess` of that source's growth, so the parts sum to fit.py's E.
-
-It prints the two tables, with 90% intervals from resampling, and writes the mean tokens per
-compaction of each source to context-parts.json beside this script.
+of later requests over the request before (`growth_ratios`), and the response before it at its
+output tokens. `E_turns` and `E` give the mean tokens requests 2 to fit.SPAN add in turns of at
+least fit.SPAN requests after a compaction and after a turn end, in all and by source; each
+source's part of E, its `difference`, is `excess` of that source's growth, so the parts sum to
+fit.py's E, in `E_total`. Its 90% intervals come from resampling sessions.
 """
 
-import argparse
 import hashlib
 import json
 import re
@@ -46,7 +51,6 @@ import fit
 import numpy as np
 from scipy.optimize import nnls
 
-OUT = Path(__file__).with_name("context-parts.json")
 TAG = ("<system-reminder>\n", "\n</system-reminder>")
 # Text no attachment line beside the request accounts for, by how it opens: reminders logged
 # outside the request's span of lines, and text Claude Code writes without an attachment line.
@@ -394,8 +398,8 @@ def read_requests(path, s):
 # ---- Kinds of content, each with its own characters per token ----
 
 LISTINGS = ("skill_listing", "agent_listing_delta", "deferred_tools_delta")
-FIRST_KINDS = ["prose", "file text", "JSON", "thinking", "listings"]
-TAIL_KINDS = ["prose", "file text", "tool output", "JSON"]
+FIRST_KINDS = ["prose", "file_text", "json", "thinking", "listings"]
+TAIL_KINDS = ["prose", "file_text", "tool_output", "json"]
 ASSISTANT = (
     "assistant text",
     "assistant tool_use",
@@ -405,9 +409,9 @@ ASSISTANT = (
 
 def first_kind(src):
     if src in ("file", "kept: tool_result"):
-        return "file text"
+        return "file_text"
     if src in ("deferred tool schemas", "kept: assistant tool_use"):
-        return "JSON"
+        return "json"
     if "thinking" in src:
         return "thinking"
     return "listings" if src in LISTINGS else "prose"
@@ -415,10 +419,10 @@ def first_kind(src):
 
 def tail_kind(src):
     if src.startswith("Read:") or src == "file":
-        return "file text"
+        return "file_text"
     if src.startswith("tool_result:"):
-        return "tool output"
-    return "JSON" if src == "deferred tool schemas" else "prose"
+        return "tool_output"
+    return "json" if src == "deferred tool schemas" else "prose"
 
 
 def bash(src, verbs=None):
@@ -428,114 +432,67 @@ def bash(src, verbs=None):
     )
 
 
-# The sources of the first request after a compaction, and of the growth that makes up E: each a
-# key for context-parts.json, its label, and which sources it takes. The first that matches takes it.
+# The parts of the first request after a compaction, and of the growth that makes up E: each a key
+# of the figures and which sources it takes. The first that matches takes it.
 FIRST_PARTS = [
-    ("summary", "compaction summary", lambda k: k == "summary"),
-    (
-        "skill_bodies",
-        "skill bodies re-injected (invoked_skills)",
-        lambda k: k == "invoked_skills",
-    ),
-    ("skill_listing", "skill listing", lambda k: k == "skill_listing"),
-    ("user_claude_md", "~/.claude/CLAUDE.md", lambda k: k == "instructions:User"),
-    (
-        "project_instructions",
-        "project AGENTS.md, CLAUDE.md and imports",
-        lambda k: k == "instructions:Project",
-    ),
-    ("memory_index", "MEMORY.md index", lambda k: k == "instructions:MEMORY.md"),
-    (
-        "instructions_wrapper",
-        "instructions' wrapper text",
-        lambda k: k.startswith("instructions:"),
-    ),
-    ("files", "files re-attached", lambda k: k in ("file", "compact_file_reference")),
-    ("agent_listing", "agent listing", lambda k: k == "agent_listing_delta"),
-    (
-        "mcp_instructions",
-        "MCP server instructions",
-        lambda k: k == "mcp_instructions_delta",
-    ),
+    ("summary", lambda k: k == "summary"),
+    ("skill_bodies", lambda k: k == "invoked_skills"),  # re-injected
+    ("skill_listing", lambda k: k == "skill_listing"),
+    ("user_claude_md", lambda k: k == "instructions:User"),  # ~/.claude/CLAUDE.md
+    # The project's AGENTS.md, CLAUDE.md and their imports.
+    ("project_instructions", lambda k: k == "instructions:Project"),
+    ("memory_index", lambda k: k == "instructions:MEMORY.md"),
+    ("instructions_wrapper", lambda k: k.startswith("instructions:")),
+    ("files", lambda k: k in ("file", "compact_file_reference")),  # re-attached
+    ("agent_listing", lambda k: k == "agent_listing_delta"),
+    ("mcp_instructions", lambda k: k == "mcp_instructions_delta"),
+    # Deferred tools' names, and the schemas of those loaded.
     (
         "deferred_tools",
-        "deferred tools: names and loaded schemas",
         lambda k: k in ("deferred_tools_delta", "deferred tool schemas"),
     ),
-    (
-        "kept_messages",
-        "messages kept from before (thinking dropped)",
-        lambda k: k.startswith("kept:"),
-    ),
-    (
-        "next_message",
-        "the next message (typed, command, notification)",
-        lambda k: k.startswith("next message:"),
-    ),
-    ("hooks", "hook additional context", lambda k: k.startswith("hook:")),
-    (
-        "other_reminders",
-        "other reminders (env, git status, style, date, tasks)",
-        lambda k: True,
-    ),
+    ("kept_messages", lambda k: k.startswith("kept:")),  # thinking dropped
+    # The next message: typed, a command or a notification.
+    ("next_message", lambda k: k.startswith("next message:")),
+    ("hooks", lambda k: k.startswith("hook:")),  # hook additional context
+    # The other reminders: environment, git status, output style, date, tasks.
+    ("other_reminders", lambda k: True),
 ]
-FIRST_REST = [
-    ("system_prompt", "system prompt written, not read (remainder where it changed)"),
-    ("unattributed", "unattributed (remainder where it was cached)"),
-]
+FIRST_REST = ["system_prompt", "unattributed"]
 E_PARTS = [
-    (
-        "response_before",
-        "the response before (text, tool calls, thinking)",
-        lambda k: k == "_out",
-    ),
-    (
-        "read_across_compaction",
-        "Read: a file read before the compaction, again",
-        lambda k: k == "Read: re-read across a compaction",
-    ),
-    (
-        "read_since_compaction",
-        "Read: a file read since the last compaction, again",
-        lambda k: k == "Read: re-read, no compaction since",
-    ),
-    (
-        "read_new_file",
-        "Read: a file not read before",
-        lambda k: k == "Read: first read of the file",
-    ),
+    # The response before: its text, tool calls and thinking.
+    ("response_before", lambda k: k == "_out"),
+    # Reads of a file read before the compaction, of one read since it, and of one not read before.
+    ("read_across_compaction", lambda k: k == "Read: re-read across a compaction"),
+    ("read_since_compaction", lambda k: k == "Read: re-read, no compaction since"),
+    ("read_new_file", lambda k: k == "Read: first read of the file"),
     (
         "bash_printing_files",
-        "Bash printing files (sed, cat, head, tail, awk, nl)",
         lambda k: bash(k, ("sed", "cat", "head", "tail", "awk", "nl", "less", "bat")),
     ),
     (
         "bash_searching",
-        "Bash searching (grep, rg, ls, find, fd, wc, jq)",
         lambda k: bash(k, ("grep", "rg", "ls", "find", "fd", "wc", "jq", "tree")),
     ),
-    ("bash_git", "Bash git and gh", lambda k: bash(k, ("git", "gh"))),
-    ("bash_other", "Bash, the rest (tests, scripts, leaf, ...)", lambda k: bash(k)),
-    ("other_tools", "other tool results", lambda k: k.startswith("tool_result:")),
-    ("skill_bodies", "skill bodies loaded", lambda k: "skill body" in k),
-    (
-        "subdirectory_agents_md",
-        "subdirectory AGENTS.md (PostToolUse hook)",
-        lambda k: k.endswith(": instruction files"),
-    ),
-    ("leaf_hooks", "Leaf hooks", lambda k: k.startswith("hook:")),
+    ("bash_git", lambda k: bash(k, ("git", "gh"))),
+    ("bash_other", lambda k: bash(k)),  # tests, scripts, leaf, ...
+    ("other_tools", lambda k: k.startswith("tool_result:")),
+    ("skill_bodies", lambda k: "skill body" in k),  # loaded
+    # Subdirectories' AGENTS.md, which a PostToolUse hook adds.
+    ("subdirectory_agents_md", lambda k: k.endswith(": instruction files")),
+    ("leaf_hooks", lambda k: k.startswith("hook:")),
+    # Messages: typed, queued, notifications.
     (
         "messages",
-        "messages (typed, queued, notifications)",
         lambda k: k.startswith(("next message:", "kept:")) or k == "queued_command",
     ),
-    ("other_reminders", "other reminders and attachments", lambda k: True),
+    ("other_reminders", lambda k: True),  # and other attachments
 ]
-E_REST = [("unattributed", "unattributed (growth not matched to a logged tail)")]
+E_REST = ["unattributed"]  # growth not matched to a logged tail
 
 
 def part_of(parts, src):
-    return next(i for i, (_, _, test) in enumerate(parts) if test(src))
+    return next(i for i, (_, test) in enumerate(parts) if test(src))
 
 
 def fit_ratios(A, y):
@@ -543,17 +500,20 @@ def fit_ratios(A, y):
     return nnls(np.asarray(A, float), np.asarray(y, float))[0]
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    fit.window_args(ap)
-    a = ap.parse_args()
-    S, since, until = fit.read(a)
+def characters_per_token(kinds, ratio):
+    """Each kind's characters per token, from its tokens per character; inf for none."""
+    return {k: 1 / t if t else np.inf for k, t in zip(kinds, ratio, strict=False)}
+
+
+def measure(S, p):
+    """The figures of what fills the context a compaction leaves, for the sessions `S` that
+    `fit.read` returns and `fit.measure`'s parameters `p` for them, as the module docstring
+    describes them."""
     R, shapes = [], {}
     for s in S:
         reqs, sh = read_requests(s.path, s)
         R.append(reqs)
         shapes.update(sh)
-    p = fit.measure(S, fit.usual(s.ttl for s in S))
     rng = np.random.default_rng(0)
 
     # ---- 1. The first request after a compaction ----
@@ -618,52 +578,8 @@ def main():
         [sum(shapes[r["shape"]][2:]) for _, _, r, _ in first], float
     )
     rest = T[:, len(FIRST_PARTS) :].sum(1)
-
-    print(
-        f"{len(first)} compactions in {len(S)} sessions, {since:%Y-%m-%d %H:%M}Z to {until:%Y-%m-%d %H:%M}Z; {cached.sum()} "
-        "whose first request read the whole system prompt from the cache fit the token ratios"
-    )
-    print(
-        "characters per token: "
-        + ", ".join(
-            f"{k} {1 / t:.2f}" if t else f"{k} counted as 0 tokens"
-            for k, t in zip(FIRST_KINDS, ratio, strict=True)
-        )
-    )
-    print(
-        f"  leave-one-out error of the written context: median |error| {np.median(np.abs(loo)):.2%}, "
-        f"90% within {np.percentile(np.abs(loo), 90):.2%}"
-    )
-    print(
-        "\n1. First request after a compaction: written context W = size - cache read, tokens per compaction"
-    )
-    print(f"   {'source':58s} {'median':>8s} {'mean':>8s}  {'share':>6s}  in")
-    labels = [label for _, label, _ in FIRST_PARTS] + [label for _, label in FIRST_REST]
-    for i, label in enumerate(labels):
-        col = T[:, i]
-        print(
-            f"   {label:58s} {np.median(col):8,.0f} {col.mean():8,.0f}  {col.mean() / W.mean():6.1%}  {(col != 0).sum():3d}"
-            f"   mean 90%: {ci[0, i]:,.0f} to {ci[1, i]:,.0f}"
-        )
-    print(f"   {'measured W':58s} {np.median(W):8,.0f} {W.mean():8,.0f}")
-    print(
-        f"   checks: remainder where the system prompt was cached ({cached.sum()}): median {np.median(rest[cached]):+,.0f}, "
-        f"mean {rest[cached].mean():+,.0f}, 90% within {np.percentile(np.abs(rest[cached]), 90):,.0f}"
-    )
-    print(
-        f"           where it changed or lapsed ({(~cached).sum()}, {(read == 0).sum()} reading nothing): remainder median "
-        f"{np.median(rest[~cached]):,.0f}; its session block (system[2]) alone is a median "
-        f"{np.median(session_block[~cached]) * ratio[0]:,.0f} tokens at the prose ratio; cache read there median "
-        f"{np.median(read[~cached]):,.0f} vs {np.median(read[cached]):,.0f}"
-    )
     summary = np.array([r["chars"].get("summary", 0) for _, _, r, _ in first])
-    print(
-        f"   the summary at 4 characters per token: a median {np.median(summary) / 4:,.0f}; at the fitted ratio {np.median(T[:, 0]):,.0f}"
-    )
-    print(
-        f"   fit.py: first request {p.first_request:,.0f} - P {p.P:,.0f} = {p.first_request - p.P:,.0f}; mean W + E "
-        f"= {W.mean() + p.E:,.0f} against K - P = {p.K - p.P:,.0f}"
-    )
+    first_keys = [k for k, _ in FIRST_PARTS] + FIRST_REST
 
     # ---- 2. E ----
     def exact(prev, r):
@@ -695,16 +611,6 @@ def main():
     XB, yB = np.array(XB, float), np.array(yB, float)
     ratioB = fit_ratios(XB, yB)
     tauB = dict(zip(TAIL_KINDS, ratioB, strict=False))
-    print(
-        f"\ncharacters per token in the {len(yB):,} later requests' growth over the request before: "
-        + ", ".join(
-            f"{k} {1 / t:.2f}" for k, t in zip(TAIL_KINDS, ratioB, strict=False)
-        )
-        + f"; the response before enters at {ratioB[-1]:.3f} tokens per output token, so thinking stays within a turn"
-    )
-    print(
-        f"  median |error| {np.median(np.abs(yB - XB @ ratioB)):,.0f} tokens per request"
-    )
 
     # Each request's growth (fit.py's grew) by source; what its logged tail doesn't account for is unattributed.
     turns = []  # per session, fit.turn_list's turns with each request's growth by source
@@ -752,51 +658,67 @@ def main():
         for after in ("compaction", "turn")
     }
     C, N = added["compaction"], added["turn"]
-    print(
-        f"\n2. E over {len(C)} turns after a compaction and {len(N)} after a turn end, each of at least {fit.SPAN} requests: "
-        f"tokens their requests 2-{fit.SPAN} add, mean per turn"
-    )
-    print(
-        f"   {'source':58s} {'after compaction':>16s} {'after turn end':>15s} {'difference':>11s}"
-    )
-    for i, label in enumerate(
-        [label for _, label, _ in E_PARTS] + [label for _, label in E_REST]
-    ):
-        print(
-            f"   {label:58s} {C[:, i].mean():16,.0f} {N[:, i].mean():15,.0f} {E[i]:+11,.0f}"
-            f"   90%: {eci[0, i]:+,.0f} to {eci[1, i]:+,.0f}"
-        )
-    print(
-        f"   {'E, in all (fit.py: ' + f'{p.E:,.0f})':58s} {C.sum(1).mean():16,.0f} {N.sum(1).mean():15,.0f} {E.sum():+11,.0f}"
-    )
+    e_keys = [k for k, _ in E_PARTS] + E_REST
 
-    keys = [k for k, _, _ in FIRST_PARTS] + [k for k, _ in FIRST_REST]
-    OUT.write_text(
-        json.dumps(
-            {
-                "since": f"{since:%Y-%m-%dT%H:%M}Z",
-                "until": f"{until:%Y-%m-%dT%H:%M}Z",
-                "sessions": len(S),
-                "compactions": len(first),
-                "first_request": {
-                    k: round(float(v)) for k, v in zip(keys, T.mean(0), strict=True)
-                },
-                "E": {
-                    k: round(float(v))
-                    for k, v in zip(
-                        [k for k, _, _ in E_PARTS] + [k for k, _ in E_REST],
-                        E,
-                        strict=True,
-                    )
-                },
-                "E_total": round(float(E.sum())),
+    return {
+        "compactions": len(first),
+        "sessions": len(S),
+        "first_request_ratios": {
+            "compactions": cached.sum(),
+            "characters_per_token": characters_per_token(FIRST_KINDS, ratio),
+            "median_abs_relative_error": np.median(np.abs(loo)),
+            "p90_abs_relative_error": np.percentile(np.abs(loo), 90),
+        },
+        "first_request": {
+            k: {
+                "median": np.median(T[:, i]),
+                "mean": {"value": T[:, i].mean(), "interval_90": ci[:, i]},
+                "share": T[:, i].mean() / W.mean(),
+                "compactions": (T[:, i] != 0).sum(),
+            }
+            for i, k in enumerate(first_keys)
+        },
+        "written": {"median": np.median(W), "mean": W.mean()},
+        "checks": {
+            "cached": {
+                "remainder_median": np.median(rest[cached]),
+                "remainder_mean": rest[cached].mean(),
+                "remainder_p90_abs": np.percentile(np.abs(rest[cached]), 90),
+                "cache_read_median": np.median(read[cached]),
             },
-            indent=2,
-        )
-        + "\n"
-    )
-    print(f"\nwrote {OUT}")
-
-
-if __name__ == "__main__":
-    main()
+            "changed_or_lapsed": {
+                "compactions": (~cached).sum(),
+                "reading_nothing": (read == 0).sum(),
+                "remainder_median": np.median(rest[~cached]),
+                "session_block_median": np.median(session_block[~cached]) * ratio[0],
+                "cache_read_median": np.median(read[~cached]),
+            },
+        },
+        "summary_median_at_4_characters_per_token": np.median(summary) / 4,
+        "fit_comparison": {
+            "first_request": p.first_request,
+            "P": p.P,
+            "first_request_minus_P": p.first_request - p.P,
+            "mean_written_plus_E": W.mean() + p.E,
+            "K_minus_P": p.K - p.P,
+        },
+        "growth_ratios": {
+            "requests": len(yB),
+            "characters_per_token": characters_per_token(TAIL_KINDS, ratioB),
+            "response_tokens_per_output_token": ratioB[-1],
+            "median_abs_error": np.median(np.abs(yB - XB @ ratioB)),
+        },
+        "E_turns": {
+            "after_compaction": {"turns": len(C), "tokens_added": C.sum(1).mean()},
+            "after_turn_end": {"turns": len(N), "tokens_added": N.sum(1).mean()},
+        },
+        "E": {
+            k: {
+                "after_compaction": C[:, i].mean(),
+                "after_turn_end": N[:, i].mean(),
+                "difference": {"value": E[i], "interval_90": eci[:, i]},
+            }
+            for i, k in enumerate(e_keys)
+        },
+        "E_total": E.sum(),
+    }
