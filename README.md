@@ -99,41 +99,6 @@ New sessions pick it up. To see its verdicts before it compacts anything, run
   agree. When one of sparkjoy's lines reports a bug, such as a question that
   failed, the next line suggests running `/sparkjoy bug`.
 
-## Settings
-
-```
-/sparkjoy on         ask, and compact when the model says to (the default)
-/sparkjoy classify   ask and show each verdict, but compact nothing
-/sparkjoy off        ask nothing
-/sparkjoy            show the mode, and the floors it asks from
-```
-
-| setting        | default                     | what it sets                                                         |
-| -------------- | --------------------------- | -------------------------------------------------------------------- |
-| `mode`         | `on`                        | `on`, `classify` or `off`, as the commands above set it              |
-| `floor`        | the report's fit, else 250k | the context, in tokens, from which sparkjoy asks at a turn end       |
-| `idle_floor`   | the report's fit, else 175k | the context from which it asks in an idle session                    |
-| `instructions` | none                        | your own guidance, added to its question ([The prompt](#the-prompt)) |
-
-`/config` lists them under sparkjoy, and changes reach open sessions too. In
-`~/.claude/settings.json`, where Claude sets them when you ask, they look like
-this:
-
-```json
-{
-  "pluginConfigs": {
-    "sparkjoy@sparkjoy": {
-      "options": {
-        "mode": "classify",
-        "floor": 300000,
-        "idle_floor": 200000,
-        "instructions": "Keep the context while a pull request awaits review."
-      }
-    }
-  }
-}
-```
-
 ## What it saves
 
 Every request reads the whole context, so a larger context makes each request
@@ -302,6 +267,41 @@ question.
     The [evals](evals/README.md) put the question to the model at turn
     ends from my sessions.
 -->
+
+## Settings
+
+```
+/sparkjoy on         ask, and compact when the model says to (the default)
+/sparkjoy classify   ask and show each verdict, but compact nothing
+/sparkjoy off        ask nothing
+/sparkjoy            show the mode, and the floors it asks from
+```
+
+| setting        | default                     | what it sets                                                         |
+| -------------- | --------------------------- | -------------------------------------------------------------------- |
+| `mode`         | `on`                        | `on`, `classify` or `off`, as the commands above set it              |
+| `floor`        | the report's fit, else 250k | the context, in tokens, from which sparkjoy asks at a turn end       |
+| `idle_floor`   | the report's fit, else 175k | the context from which it asks in an idle session                    |
+| `instructions` | none                        | your own guidance, added to its question ([The prompt](#the-prompt)) |
+
+`/config` lists them under sparkjoy, and changes reach open sessions too. In
+`~/.claude/settings.json`, where Claude sets them when you ask, they look like
+this:
+
+```json
+{
+  "pluginConfigs": {
+    "sparkjoy@sparkjoy": {
+      "options": {
+        "mode": "classify",
+        "floor": 300000,
+        "idle_floor": 200000,
+        "instructions": "Keep the context while a pull request awaits review."
+      }
+    }
+  }
+}
+```
 
 ## Limits
 
