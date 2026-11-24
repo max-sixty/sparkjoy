@@ -1451,17 +1451,24 @@ def main():
         f"  {'idle sessions only, from ' + k(CC_IDLE) + ', as Claude Code compacts on its own':58s} {pct(claude_open)}"
     )
     # The first row of the table below: sparkjoy's compactions as they ran, against Claude Code alone, in
-    # each session as it ran and as if every session were background or open.
+    # each session as it ran and as if every session were background or open, with the saving's 90%
+    # interval over the sessions resampled, and how much each of the costliest quarter of sessions saved.
     for opened, label in (
         (None, "each session as it ran"),
         (False, "as if every session were in the background"),
         (True, "as if every session were open"),
     ):
-        runs = [d for s in S if (d := as_run(s, p, opened, a.model)[0])]
-        ran, without, checks = (sum(d[i] for d in runs) for i in (0, 1, 2))
+        ran, without, checks = np.array([as_run(s, p, opened, a.model)[0] for s in S]).T
+        lo, hi = np.percentile(
+            [1 - ran[d].sum() / without[d].sum() for d in draws], [5, 95]
+        )
+        costly = without > np.percentile(without, 75)
+        each = 1 - ran[costly] / without[costly]
         print(
-            f"sparkjoy as it ran, {label}: saved {1 - ran / without:.1%}; {len(runs)} sessions, "
-            f"${ran:,.0f} with sparkjoy, its questions ${checks:,.0f} ({checks / ran:.2%}), ${without:,.0f} without"
+            f"sparkjoy as it ran, {label}: saved {1 - ran.sum() / without.sum():.1%} ({lo:.1%} to {hi:.1%}); "
+            f"{len(S)} sessions, ${ran.sum():,.0f} with sparkjoy, its questions ${checks.sum():,.0f} "
+            f"({checks.sum() / ran.sum():.2%}), ${without.sum():,.0f} without;\n  each of the costliest quarter "
+            f"saved a median {np.median(each):.0%}, 10th to 90th percentile {np.percentile(each, 10):.0%} to {np.percentile(each, 90):.0%}"
         )
 
     # Mid-turn or at a turn end: each policy at its most efficient thresholds, with each mid-turn compaction
