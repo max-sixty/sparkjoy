@@ -5,11 +5,9 @@
   </picture>
 </h1>
 
-A Claude Code plugin that lets the model decide when to compact[^name]. In my
-sessions, mostly run in the background, it cut the cost by 31% against Claude
-Code's default. In sessions open in a terminal or editor, where Claude Code also
-compacts idle sessions itself, it would have cut it by 24% ([What it
-saves](#what-it-saves)).
+A Claude Code plugin that lets the model decide when to compact[^name]. It cuts
+the cost of long sessions by 24% to 31%, depending on how you run Claude Code
+([What it saves](#what-it-saves)).
 
 Once the session has built up some context, sparkjoy asks the session's own
 model whether to compact, and tells it what keeping the context and compacting
