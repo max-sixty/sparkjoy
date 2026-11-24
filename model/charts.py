@@ -54,9 +54,9 @@ plt.rcParams.update(
 # ramp against its page (validate_palette.js --ordinal). "parts" are the steps, faint to strong, that
 # `parts` takes from the page toward "cost" to colour a cost's parts. "lapse" colours the part a lapse of the
 # cache adds, the cache write of the context, apart from the parts that are there anyway; it is a step of "beta"'s
-# hue, validated against its neighbouring parts (validate_palette.js). "with" and "without" are the README's two arms,
-# sparkjoy's compactions as they ran and the replay without them, validated as a categorical pair
-# against each page.
+# hue, validated against its neighbouring parts (validate_palette.js). "with" is sparkjoy, in the logo's pink,
+# and "without" is Claude Code's default, in Anthropic's orange (#d97757, a step darker on the dark page
+# to stay in its lightness band), validated as a categorical pair against each page.
 THEMES = {
     "light": {
         "ink": "#0b0b0b",
@@ -70,8 +70,8 @@ THEMES = {
         "parts": (0.2, 0.36, 0.7),
         "lapse": "#5799e9",
         "band": 0.14,
-        "with": "#2a78d6",
-        "without": "#eb6834",
+        "with": "#bf397a",
+        "without": "#d97757",
     },
     "dark": {
         "ink": "#f0efec",
@@ -85,8 +85,8 @@ THEMES = {
         "parts": (0.3, 0.5, 0.9),
         "lapse": "#2c64a7",
         "band": 0.18,
-        "with": "#3987e5",
-        "without": "#d95926",
+        "with": "#bf397a",
+        "without": "#d57353",
     },
 }
 RAMP = (0, 0.3, 0.6, 1, 2)  # the β each step of the "beta" ramp stands for
