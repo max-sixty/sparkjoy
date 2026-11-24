@@ -332,12 +332,13 @@ on its history more than other work, a difference in β, and that a compaction a
 a turn end in the middle of a task drops more of what the next turns need than
 one at a turn end that finishes a piece of work, a difference in D.
 
-A classifier that tells these apart lets each compact where it costs least.
-sparkjoy's question is one: at each turn end past its 250k floor, it reads the
-context and says whether to keep it or compact it. Each question is a request
-that reads the context, and every saving below counts their cost. With no
-information, a classifier can do no better than one threshold for all the work,
-so each table below gives that case too.
+A classifier that tells these kinds of work apart can compact each where it
+costs least. sparkjoy is such a classifier. At each turn end past its 250k
+floor, it asks a model to read the context and say whether to keep it or compact
+it. Each question is a request that reads the context, and every saving below
+counts what the questions cost. With no information, a classifier can do no
+better than one threshold for all the work, so each table below gives that case
+too.
 
 The model takes as inputs how widely work differs and how often the classifier
 is right. No session of mine measures them yet, so the sections below give what
