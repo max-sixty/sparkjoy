@@ -10,10 +10,11 @@ the cost of long sessions by 24% to 31%, depending on how you run Claude Code
 ([What it saves](#what-it-saves)).
 
 Once the session has built up some context, sparkjoy asks the session's own
-model whether to compact, at the end of each turn and just before an idle
-session's prompt cache expires. The question lists the cost of compacting and
-the cost of keeping the context at its current size
-([How it decides](#how-it-decides)).
+model whether to compact at the end of each turn. It also asks just before an
+idle session's prompt cache expires, so a compaction can still read the
+conversation from the cache and has finished by the time you return. The
+question lists the cost of compacting and the cost of keeping the context at
+its current size ([How it decides](#how-it-decides)).
 
 In comparison, Claude Code and `/autocompact` compact at a set size, whether or
 not the existing context is valuable:
