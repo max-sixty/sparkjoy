@@ -13,8 +13,9 @@ At the end of each turn, sparkjoy asks the model whether to compact. It uses the
 cached context and a small prompt which explains the tradeoff of compacting vs
 keeping the existing context ([How it decides](#how-it-decides)).
 
-Because it asks after a turn ends, or just before the cache expires, asking is
-[very cheap](#faq), and the compacted session is ready for you when you return.
+Because it asks after a turn ends and again just before the cache expires,
+asking is [very cheap](#faq), and the compacted session is ready for you when
+you return.
 
 In comparison, Claude Code and `/autocompact` compact at a set size, whether or
 not the existing context is valuable:
