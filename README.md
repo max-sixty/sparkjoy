@@ -62,7 +62,7 @@ New sessions pick it up. To see its verdicts before it compacts anything, run
 - **It asks the session's own model whether to compact now**, and compacts if
   the model says to. It asks when a turn ends, and in an idle session just
   before the prompt cache expires: after 55 minutes on the one-hour cache, or 4
-  on the five-minute one.
+  on the five-minute one. An idle compaction finishes before you return.
 - **It prints each verdict** in the transcript, as a dim line with its reason.
   In the session above, it kept the context while a move was half done:
 
