@@ -42,22 +42,28 @@ November on Opus 5.5[^sessions]:
 
 <!-- What sparkjoy saves -->
 
-| policy                                                         | how much a request gets done with a smaller context                       | in the background | open in a terminal or editor |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------- | ---------------------------- |
-| sparkjoy as it ran                                             | as much as with a larger one                                              | 31%               | 24%                          |
-| compacting at turn ends from 250k and idle sessions from 175k  | the base case: half as much at 250k as at 1M                              | 11%               | 6%                           |
-| compacting at turn ends from 250k and idle sessions from 175k  | varies: a quarter of the work needs much more context, the rest much less | 0%                | −5%                          |
-| compacting where sparkjoy's judgment says, right 9 times in 10 | varies: a quarter of the work needs much more context, the rest much less | 10%               | 5%                           |
+| policy                                                         | how much a request gets done with a smaller context                       | without Claude Code's idle compaction[^idle] | with it |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------- | ------- |
+| sparkjoy as it ran                                             | as much as with a larger one                                              | 31%                                          | 24%     |
+| compacting at turn ends from 250k and idle sessions from 175k  | the base case: half as much at 250k as at 1M                              | 11%                                          | 6%      |
+| compacting at turn ends from 250k and idle sessions from 175k  | varies: a quarter of the work needs much more context, the rest much less | 0%                                           | −5%     |
+| compacting where sparkjoy's judgment says, right 9 times in 10 | varies: a quarter of the work needs much more context, the rest much less | 10%                                          | 5%      |
 
-Claude Code's default compacts near 965k, and in an open session also an idle
-context from 200k. The last three rows replay my sessions ([A replay of my
-sessions](#a-replay-of-my-sessions)). The last compacts where the judgment says,
-from 280k for work that needs less context and from 900k for work that needs
-more, the thresholds that cost least in hindsight ([A
+Claude Code's default compacts near 965k, and where its idle compaction runs,
+also an idle context from 200k. The last three rows replay my sessions ([A
+replay of my sessions](#a-replay-of-my-sessions)). The last compacts where the
+judgment says, from 280k for work that needs less context and from 900k for work
+that needs more, the thresholds that cost least in hindsight ([A
 classifier](#a-classifier)). How much less a request gets done with a smaller
 context ([Cost and context](#cost-and-context)), and how often the judgment is
 right, are assumed, not yet measured. Every row counts what sparkjoy's questions
 cost.
+
+Resampling my sessions gives the first row a 90% interval of 29–32% without
+Claude Code's idle compaction and 22–26% with it. A single session's saving
+varies more. Of the quarter of sessions that cost the most under Claude Code's
+default, eight in ten saved 22% to 43% without its idle compaction, and 17% to
+39% with it.
 
 <!-- End of what sparkjoy saves. -->
 
@@ -320,7 +326,7 @@ later, while β is the same at both.
 The table below [replays](#a-replay-of-my-sessions) my sessions at the base
 case, β = 0.5, with each policy at its most efficient thresholds and also
 compacting idle sessions from 175k. Its savings are against Claude Code's
-default in a background session.
+default without its idle compaction.
 
 | policy                                          | thresholds          | saves, at ΔD = 0 | compactions mid-turn | costs as much as compacting after any request once ΔD reaches |
 | ----------------------------------------------- | ------------------- | ---------------- | -------------------- | ------------------------------------------------------------- |
@@ -405,12 +411,12 @@ for that row. An idle session compacts from 175k, or from the higher threshold
 when the classifier expects β = 1.25 work next. No compaction loses detail the
 work needs.
 
-| against Claude Code's default                                                     | thresholds for β = 0.25 and β = 1.25 work | in a background session | in an open session |
-| --------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------- | ------------------ |
-| compacting at every turn end past sparkjoy's floors                               | 250k for both                             | 0.0%                    | −4.7%              |
-| compacting where its judgment says, right 9 times in 10                           | 280k and 900k                             | 9.7%                    | 4.9%               |
-| compacting where its judgment says, right every time                              | 260k and 900k                             | 12.0%                   | 7.2%               |
-| compacting where its judgment says, right 9 times in 10, in stretches of 20 turns | 260k and 930k                             | 10.7%                   | 5.6%               |
+| against Claude Code's default                                                     | thresholds for β = 0.25 and β = 1.25 work | without Claude Code's idle compaction | with it |
+| --------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------- | ------- |
+| compacting at every turn end past sparkjoy's floors                               | 250k for both                             | 0.0%                                  | −4.7%   |
+| compacting where its judgment says, right 9 times in 10                           | 280k and 900k                             | 9.7%                                  | 4.9%    |
+| compacting where its judgment says, right every time                              | 260k and 900k                             | 12.0%                                 | 7.2%    |
+| compacting where its judgment says, right 9 times in 10, in stretches of 20 turns | 260k and 930k                             | 10.7%                                 | 5.6%    |
 
 ### Turn ends that differ in lost detail
 
@@ -474,7 +480,7 @@ logged request and moves only the compactions.
 </picture>
 
 The table below takes the base case and compacts no idle sessions. Its savings
-are against Claude Code's default in a background session.
+are against Claude Code's default without its idle compaction.
 
 | model                                          | most efficient threshold | saves |
 | ---------------------------------------------- | ------------------------ | ----- |
@@ -490,11 +496,11 @@ asks at each of them, and its answer decides where to compact.
 
 ### Floors
 
-| policy, at the base case                                                         | saved in a background session | in an open session |
-| -------------------------------------------------------------------------------- | ----------------------------- | ------------------ |
-| turn ends from 250k and idle sessions from 175k, sparkjoy's default floors       | 11.5%                         | 6.3%               |
-| turn ends from 250k and idle sessions from 150k, the floors fitted by cost alone | 11.5%                         | 6.3%               |
-| turn ends from 300k and idle sessions from 150k, the most efficient pair         | 11.9%                         | 6.7%               |
+| policy, at the base case                                                         | saved without Claude Code's idle compaction | with it |
+| -------------------------------------------------------------------------------- | ------------------------------------------- | ------- |
+| turn ends from 250k and idle sessions from 175k, sparkjoy's default floors       | 11.5%                                       | 6.3%    |
+| turn ends from 250k and idle sessions from 150k, the floors fitted by cost alone | 11.5%                                       | 6.3%    |
+| turn ends from 300k and idle sessions from 150k, the most efficient pair         | 11.9%                                       | 6.7%    |
 
 Compacting idle sessions gets much of the saving of a lower turn-end threshold:
 with idle sessions from 150k, every turn-end floor from 250k to 450k comes
@@ -625,6 +631,17 @@ Claude Code's default:
     sparkjoy ran, the sessions cost within 3% of what their transcripts log.
     On a subscription, the same tokens count against usage limits rather than
     a bill.
+
+[^idle]:
+    Claude Code's idle compaction compacts a conversation of 200k tokens or more
+    just before its one-hour prompt cache expires. It runs only in an
+    interactive session in a terminal, in VS Code's chat panel or in the
+    desktop app's Code tab, and only while
+    [`idleCompaction`](https://code.claude.com/docs/en/settings-reference#idlecompaction)
+    is on, as it is by default. It doesn't run in a session started with
+    `claude --bg` or from agent view (`claude agents`)
+    ([#103866](https://github.com/anthropics/claude-code/issues/103866)). 144 of
+    my 163 sessions ran in agent view.
 
 [^parts]:
     Every part except the read of the context is measured from the 67,388
