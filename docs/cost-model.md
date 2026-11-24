@@ -170,7 +170,7 @@ cache lapses ([Idle sessions](#idle-sessions)):
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-lapse-dark.svg">
-  <img alt="What a compaction costs against the context it compacts, from 139k to 965k. While the prompt cache holds the context, the line stays near $1: $0.96 at 200k and $1.02 at 500k. After the cache lapses, the line climbs steeply: $2.26 at 200k, $4.66 at 500k, and about $8.40 at 965k." src="../assets/model-lapse-light.svg">
+  <img alt="A compaction's cost by part after the prompt cache lapses, against the context x, from 0 to 965k, in dollars; parts named in orange are fitted to the sessions. At the bottom, as in the chart of F(x) above, the compaction request's output and the cache write of the context after it, in three bands, about $0.92 together at any context. Above them, the cache write of the context after a lapse grows with the context, and the cache read of the context lies on top. In all, $2.26 at 200k against $0.96 while the cache holds the context, $4.66 at 500k against $1.02, and about $8.40 at 965k." src="../assets/model-lapse-light.svg">
 </picture>
 
 The larger the context, the sooner a compaction pays for itself. After a
