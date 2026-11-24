@@ -133,10 +133,10 @@ sparkjoy saves, in my sessions of 18 to 22 November[^sessions]:
 
 <!-- Generated from docs/cost-model.md's Results by docs/embed.py; edit that file. -->
 
-| policy                                                         | what a smaller context costs the work                                     | in the background | open in a terminal or editor |
+| policy                                                         | how much a request gets done with a smaller context                       | in the background | open in a terminal or editor |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------- | ---------------------------- |
-| sparkjoy as it ran                                             | nothing: a request gets as much done at any context                       | 31%               | 24%                          |
-| compacting at turn ends from 250k and idle sessions from 175k  | the base case: a request at 250k gets half as much done as one at 1M      | 11%               | 6%                           |
+| sparkjoy as it ran                                             | as much as with a larger one                                              | 31%               | 24%                          |
+| compacting at turn ends from 250k and idle sessions from 175k  | the base case: half as much at 250k as at 1M                              | 11%               | 6%                           |
 | compacting at turn ends from 250k and idle sessions from 175k  | varies: a quarter of the work needs much more context, the rest much less | 0%                | −5%                          |
 | compacting where sparkjoy's judgment says, right 9 times in 10 | varies: a quarter of the work needs much more context, the rest much less | 10%               | 5%                           |
 
@@ -145,9 +145,10 @@ context from 200k. The last three rows replay my sessions ([A replay of my
 sessions](docs/cost-model.md#a-replay-of-my-sessions)). The last compacts where the judgment says,
 from 280k for work that needs less context and from 900k for work that needs
 more, the thresholds that cost least in hindsight ([A
-classifier](docs/cost-model.md#a-classifier)). How much a smaller context costs the work ([Cost
-and context](docs/cost-model.md#cost-and-context)), and how often the judgment is right, are
-assumed, not yet measured. Every row counts what sparkjoy's questions cost.
+classifier](docs/cost-model.md#a-classifier)). How much less a request gets done with a smaller
+context ([Cost and context](docs/cost-model.md#cost-and-context)), and how often the judgment is
+right, are assumed, not yet measured. Every row counts what sparkjoy's questions
+cost.
 
 <!-- End of what sparkjoy saves. -->
 
@@ -408,10 +409,10 @@ November on Opus 5.5[^sessions]:
 
 <!-- What sparkjoy saves -->
 
-| policy                                                         | what a smaller context costs the work                                     | in the background | open in a terminal or editor |
+| policy                                                         | how much a request gets done with a smaller context                       | in the background | open in a terminal or editor |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------- | ---------------------------- |
-| sparkjoy as it ran                                             | nothing: a request gets as much done at any context                       | 31%               | 24%                          |
-| compacting at turn ends from 250k and idle sessions from 175k  | the base case: a request at 250k gets half as much done as one at 1M      | 11%               | 6%                           |
+| sparkjoy as it ran                                             | as much as with a larger one                                              | 31%               | 24%                          |
+| compacting at turn ends from 250k and idle sessions from 175k  | the base case: half as much at 250k as at 1M                              | 11%               | 6%                           |
 | compacting at turn ends from 250k and idle sessions from 175k  | varies: a quarter of the work needs much more context, the rest much less | 0%                | −5%                          |
 | compacting where sparkjoy's judgment says, right 9 times in 10 | varies: a quarter of the work needs much more context, the rest much less | 10%               | 5%                           |
 
@@ -420,9 +421,10 @@ context from 200k. The last three rows replay my sessions ([A replay of my
 sessions](docs/cost-model.md#a-replay-of-my-sessions)). The last compacts where the judgment says,
 from 280k for work that needs less context and from 900k for work that needs
 more, the thresholds that cost least in hindsight ([A
-classifier](docs/cost-model.md#a-classifier)). How much a smaller context costs the work ([Cost
-and context](docs/cost-model.md#cost-and-context)), and how often the judgment is right, are
-assumed, not yet measured. Every row counts what sparkjoy's questions cost.
+classifier](docs/cost-model.md#a-classifier)). How much less a request gets done with a smaller
+context ([Cost and context](docs/cost-model.md#cost-and-context)), and how often the judgment is
+right, are assumed, not yet measured. Every row counts what sparkjoy's questions
+cost.
 
 <!-- End of what sparkjoy saves. -->
 
@@ -554,9 +556,9 @@ compaction included, against \$0.159 under Claude Code's default.
 ## Cost and context
 
 A request's effectiveness η(x) is how much it gets done with context x. If a
-larger context helps the work, compacting costs more than tokens, since the
-requests after a compaction work with less context. The most efficient threshold
-then minimizes J, a cycle's cost per unit of its effectiveness:
+request gets more done with a larger context, compacting costs more than tokens,
+since the requests after a compaction work with less context. The most efficient
+threshold then minimizes J, a cycle's cost per unit of its effectiveness:
 
 $`\displaystyle J(X) = \frac{g\,F(X) + \int_K^X c(x)\,dx}{\int_K^X \eta(x)\,dx}`$
 
@@ -704,12 +706,13 @@ measured](docs/cost-model.md#what-the-model-needs-measured)).
 ### Work that differs in β
 
 β sets how much the requests between two compactions get done. So the classifier
-sorts the work between compactions into two groups, by whether it judges that
-the context helps the work, and the session compacts each group's work at that
-group's own most efficient threshold. With $`s_k`$ the share of the work of kind
-k, $`q_k`$ the share of it the classifier says to compact, and $`J_k`$ the cost
-per unit of work of kind k at its own β, from [Cost and
-context](docs/cost-model.md#cost-and-context), the classifier's cost per unit of work is
+sorts the work between compactions into two groups, by whether it judges that a
+larger context lets the requests get much more done or only a little more, and
+the session compacts each group's work at that group's own most efficient
+threshold. With $`s_k`$ the share of the work of kind k, $`q_k`$ the share of it
+the classifier says to compact, and $`J_k`$ the cost per unit of work of kind k
+at its own β, from [Cost and context](docs/cost-model.md#cost-and-context), the classifier's cost
+per unit of work is
 
 $`\displaystyle J_\text{classifier} = \min_{X_1} \sum_k q_k\,s_k\,J_k(X_1) + \min_{X_0} \sum_k (1 - q_k)\,s_k\,J_k(X_0)`$
 
@@ -717,10 +720,10 @@ against $`J_\text{default} = \sum_k s_k\,J_k(965\text{k})`$ under Claude Code's
 default, which the most efficient single threshold, $`J_\text{single} = \min_X
 \sum_k s_k\,J_k(X)`$, never exceeds. Below, the classifier is right the same
 share of the time in each group. The chart measures its accuracy by its
-information: the mutual information between its verdict and whether the context
-helps the work, as a share of a perfect classifier's. A classifier right 9 times
-in 10 has about half a perfect classifier's information, and one right 99 times
-in 100 has about 90%.
+information: the mutual information between its verdict and which β the work
+has, as a share of a perfect classifier's. A classifier right 9 times in 10 has
+about half a perfect classifier's information, and one right 99 times in 100 has
+about 90%.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-voi-dark.svg">
@@ -913,7 +916,7 @@ July 2026, treats when to restart a prompt-cached session as an economic order
 quantity and as ski rental, and prices the rebuild at the cache-write rate. It
 and the closest cost rule,
 [Nadir's](https://getnadir.com/blog/mask-dont-summarize-agent-context-cache-cost/),
-leave out what a smaller context costs the work. The closest studies, from
+assume a request gets as much done at any context. The closest studies, from
 August to October 2026, sweep the threshold on benchmarks ([Satish et
 al.](https://arxiv.org/abs/2609.32961), [Nguyen et
 al.](https://arxiv.org/abs/2609.26779)) or measure what a compaction drops

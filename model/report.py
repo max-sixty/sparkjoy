@@ -690,7 +690,7 @@ def page(
                 f"Never compacting keeps only Claude "
                 f"Code's compaction when the window fills, and your /compact. Of the floors tried, the "
                 f"fitted ones cost least. The last row compares each with never compacting by cost per unit "
-                f"of work, which also counts what the smaller context costs the work: it takes a request at "
+                f"of work, which also counts how much less a request gets done with a smaller context: it takes a request at "
                 f"250k to get half as much done as one at 1M, the cost model's base case, "
                 f"β = {fit.BASE:g}.</p>"
                 f"<p class=note>Fitted to {len(S):,} sessions and the {f['compactions']:,} compactions in "
