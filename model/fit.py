@@ -1151,56 +1151,6 @@ def judging(S, p, c, ttl, draws, start, mix=MIX, idle=IDLE_FLOOR):
     return pair, J(pair)
 
 
-def saves(S, model, draws, judge_at):
-    """What sparkjoy saves against Claude Code's default, as the cost model's Results for my sessions and the
-    README's What it saves give it: for a five-minute cache, and a one-hour cache in a background session and
-    in an open one, where Claude Code also compacts every idle context from CC_IDLE. Each is, compacting at
-    every turn end from FLOOR and every idle session from IDLE_FLOOR, the saving for the same requests (β = 0)
-    and for the same work at BASE; then on MIX, over `draws` of `kinds`, compacting so, and compacting where
-    the judgment says, from the pair of thresholds `judge_at` holds for the cache lifetime, found by
-    `judging` where it holds none; and that pair. Every saving counts the questions sparkjoy asks, from
-    its floors."""
-    out = {}
-    for t, where, claude in (
-        (300, "five-minute cache", None),
-        (3600, "one-hour cache, background", None),
-        (3600, "one-hour cache, open", CC_IDLE),
-    ):
-        q, cq = measure(S, t), prices(model, t)
-        if t not in judge_at:
-            judge_at[t], _ = judging(S, q, cq, t, draws, (400_000, 800_000))
-        cf, ef = arm(S, q, cq, t, FLOOR, (0.0, BASE), idle=IDLE_FLOOR, asks=ASKS)
-        cn, en = arm(S, q, cq, t, np.inf, (0.0, BASE), idle=claude)
-        same, work = (
-            1 - cf.sum() / ef[:, i].sum() / (cn.sum() / en[:, i].sum()) for i in (0, 1)
-        )
-        default = shared(*mixed(S, q, cq, t, draws, np.inf, idle=claude))
-        at_floors = shared(
-            *mixed(S, q, cq, t, draws, FLOOR, idle=IDLE_FLOOR, asks=ASKS)
-        )
-        judged = shared(
-            *mixed(
-                S,
-                q,
-                cq,
-                t,
-                draws,
-                judge_at[t],
-                judged=True,
-                claude_idle=claude,
-                asks=ASKS,
-            )
-        )
-        out[where] = (
-            same,
-            work,
-            1 - at_floors / default,
-            1 - judged / default,
-            judge_at[t],
-        )
-    return out
-
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     window_args(ap)
@@ -1450,9 +1400,9 @@ def main():
     print(
         f"  {'idle sessions only, from ' + k(CC_IDLE) + ', as Claude Code compacts on its own':58s} {pct(claude_open)}"
     )
-    # The first row of the table below: sparkjoy's compactions as they ran, against Claude Code alone, in
-    # each session as it ran and as if every session were background or open, with the saving's 90%
-    # interval over the sessions resampled, and how much each of the costliest quarter of sessions saved.
+    # The README's What it saves: sparkjoy's compactions as they ran, against Claude Code alone, in each
+    # session as it ran and as if every session were background or open, with the saving's 90% interval
+    # over the sessions resampled, and how much each of the costliest quarter of sessions saved.
     for opened, label in (
         (None, "each session as it ran"),
         (False, "as if every session were in the background"),
@@ -1577,7 +1527,6 @@ def main():
         f"every time, and saves more than that single threshold from "
         f"{next(a for a in np.arange(0.5, 1.0001, 0.005) if judged(a) < single.min()):.1%} right"
     )
-    judge_at = {}  # the judgment's thresholds by cache lifetime, right RIGHT of the time
     for label, stretch, right in (
         (f"right {RIGHT:.0%} of the time", STRETCH, RIGHT),
         ("right every time", STRETCH, 1.0),
@@ -1586,7 +1535,6 @@ def main():
         rng = np.random.default_rng(0)
         draws = [kinds(S, rng, MIX, stretch, right) for _ in range(MIX_DRAWS)]
         pair, _ = judging(S, p, c, ttl, draws, (400_000, 800_000))
-        judge_at.setdefault(ttl, pair)
         at_floors = shared(
             *mixed(S, p, c, ttl, draws, FLOOR, idle=IDLE_FLOOR, asks=ASKS)
         )
@@ -1613,21 +1561,6 @@ def main():
             f"compacting at every turn end from sparkjoy's floors, {saved['background'][0]:.1%} and {saved['open'][0]:.1%}"
         )
 
-    # The table the cost model's Results for my sessions gives and the README's What it saves quotes.
-    rng = np.random.default_rng(0)
-    draws = [kinds(S, rng) for _ in range(MIX_DRAWS)]
-    print(
-        f"\nsaved against Claude Code's default, compacting from sparkjoy's floors, {k(FLOOR)} at a turn end and "
-        f"{k(IDLE_FLOOR)} idle, its questions included; where work differs, at every turn end from them, then with "
-        f"the judgment right {RIGHT:.0%} of the time"
-    )
-    for where, (same, work, differs, judged, pair) in saves(
-        S, a.model, draws, judge_at
-    ).items():
-        print(
-            f"  {where:27s} same requests {same:.1%}; same work at β = {BASE:g} {work:.1%}; where work differs "
-            f"{differs:.1%}, with the judgment {judged:.1%} (from {k(pair[0])} or {k(pair[1])})"
-        )
     gaps = np.concatenate(
         [np.append(s.gap[1:], 0)[s.end] for s in S]
     )  # from each turn end to the next request
