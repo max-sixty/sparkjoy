@@ -399,8 +399,8 @@ Code's updates or nonessential traffic are turned off.
 </details>
 
 [^name]:
-    The name comes from Marie Kondo, who tidies by keeping only the things that
-    spark joy.
+    The name comes from
+    [Marie Kondo](https://www.youtube.com/watch?v=-3VCoY27fFI).
 
 # Cost model
 
