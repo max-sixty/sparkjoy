@@ -562,10 +562,10 @@ parameter and where it comes from.
 A compaction costs about \$1 whatever the context it compacts[^parts], since
 most of it is the cache write of the context it leaves.
 
-Once the prompt cache lapses, as in a session left idle for an hour, the
-compaction first writes the context to the cache again, so a compaction at 500k
-costs \$4.66 rather than \$1.02. sparkjoy asks an idle session whether to
-compact before its cache lapses ([Idle sessions](docs/cost-model.md#idle-sessions)):
+Once the prompt cache lapses, the compaction first writes the context to the
+cache again, so a compaction at 500k costs \$4.66 rather than \$1.02. sparkjoy
+asks an idle session whether to compact before its cache lapses
+([Idle sessions](docs/cost-model.md#idle-sessions)):
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-lapse-dark.svg">
