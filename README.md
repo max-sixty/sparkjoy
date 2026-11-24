@@ -45,6 +45,12 @@ At the prompt of a Claude Code session:
 /plugin install sparkjoy --marketplace max-sixty/sparkjoy
 ```
 
+Or in a terminal:
+
+```
+claude plugin install sparkjoy --marketplace max-sixty/sparkjoy
+```
+
 New sessions pick it up. To see its verdicts before it compacts anything, run
 `/sparkjoy classify`, then `/sparkjoy on` to let it compact
 ([Settings](#settings)).
