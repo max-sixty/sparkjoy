@@ -553,8 +553,10 @@ def lapse(out, p, c):
     """What a compaction costs after the prompt cache lapses, as in a session left idle past the cache's
     lifetime, by part, in the form of inputs' compaction panel. The compaction request first writes all of
     the context but the shared prefix P to the cache, so on top of F(x)'s parts it pays the part a request
-    pays after a lapse, the cache write of the context, (w - 1)(x - P) reads."""
-    marks = (200_000, 500_000)
+    pays after a lapse, the cache write of the context, (w - 1)(x - P) reads. It also prints how many tokens
+    may follow the first part of a context that is dropped in place of compacting it, such as old tool
+    results, before the next request's cache write of them costs as much as the compaction."""
+    marks = (200_000, 500_000, fit.AUTO)
     x = np.unique([1_000, p.P, p.K, *marks, fit.AUTO])
     held = compaction_parts(x, p, c)
     lapse_write = (c.write - 1) * np.maximum(x - p.P, 0)
@@ -571,7 +573,9 @@ def lapse(out, p, c):
         j = np.abs(x - v).argmin()
         print(
             f"model-lapse: a compaction at {v / 1e3:.0f}k costs ${(total[j] - lapse_write[j]) * c.read:.2f} "
-            f"while the cache holds the context, and ${total[j] * c.read:.2f} after it lapses"
+            f"while the cache holds the context, and ${total[j] * c.read:.2f} after it lapses; dropping part of "
+            f"the context in its place costs as much once {(v + F0) / (c.write - 1) / 1e3:.0f}k tokens follow the "
+            f"first part dropped"
         )
     for theme, t in THEMES.items():
         fig, ax = plt.subplots(figsize=(9, 2.8))

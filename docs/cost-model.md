@@ -5,6 +5,24 @@ affects what a session costs and how much context its requests have. The model
 finds when a session should compact, and what sparkjoy saves against Claude
 Code's default.
 
+## Salient points about compactions
+
+There's a lot of detail here about compactions. These are the points I find most
+interesting:
+
+- Compacting while the cache is warm is cheap. Even at 965k, where Claude Code
+  compacts on its own, a compaction costs \$1.12.
+- Missing the cache is expensive. After the cache lapses, the same compaction
+  costs \$8.38.
+- The compaction's summary is small, about 5k tokens, so the compaction
+  request's output costs only \$0.10.
+- Most of a compaction's cost, \$0.82, is the cache write of the first request
+  after it, which writes the context the compaction leaves.
+- Because writing the cache is the expensive part, dropping old tool results in
+  place of compacting isn't much cheaper. The next request writes everything
+  after the first result dropped, and once about 130k tokens follow it, that
+  costs as much as a compaction.
+
 ## The models
 
 As with any model, there's a trade-off between simplicity and completeness. A
