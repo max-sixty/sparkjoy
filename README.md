@@ -130,7 +130,7 @@ cost more, and each compaction costs about $1. What my sessions of
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/savings-dark.svg">
-  <img alt="What 163 sessions cost with sparkjoy and in a replay without it, as a pair of bars for each case. Without Claude Code's idle compaction, $9,539 without sparkjoy and $6,621 with it, 31% less. With Claude Code's idle compaction, $8,672 without sparkjoy and $6,577 with it, 24% less." src="assets/savings-light.svg">
+  <img alt="What 163 sessions cost, as three bars: $9,539 under Claude Code's default in a replay without its idle compaction, $8,672 in a replay with it, and $6,612 with sparkjoy as the sessions ran, 31% and 24% less." src="assets/savings-light.svg">
 </picture>
 
 The replay prices the same requests without sparkjoy's compactions or its
@@ -455,7 +455,7 @@ and in a replay without it:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/savings-dark.svg">
-  <img alt="What 163 sessions cost with sparkjoy and in a replay without it, as a pair of bars for each case. Without Claude Code's idle compaction, $9,539 without sparkjoy and $6,621 with it, 31% less. With Claude Code's idle compaction, $8,672 without sparkjoy and $6,577 with it, 24% less." src="assets/savings-light.svg">
+  <img alt="What 163 sessions cost, as three bars: $9,539 under Claude Code's default in a replay without its idle compaction, $8,672 in a replay with it, and $6,612 with sparkjoy as the sessions ran, 31% and 24% less." src="assets/savings-light.svg">
 </picture>
 
 The replay prices the same requests without sparkjoy's compactions or its
