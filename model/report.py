@@ -426,7 +426,9 @@ def summary(found, S, verdicts, saving, unpriced, rows, fitted, saved, projects)
             + " without sparkjoy's compactions."
         )
         out.append(
-            f"Replayed at the list prices of each session's model, these sessions cost {usd(ran)} with "
+            f"Replayed at the list prices of each session's model, with Claude Code compacting on its own "
+            f"when the window fills and, in a session you had open, an idle context from "
+            f"{tokens(fit.CC_IDLE)}, these sessions cost {usd(ran)} with "
             f"sparkjoy's compactions, "
             f"{usd(checks)} of it for its checks, against {usd(without)} without them.{left}"
         )

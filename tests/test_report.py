@@ -178,18 +178,20 @@ def test_counts_verdicts_and_returns(tmp_path):
     summary, page = report(tmp_path, session_with_compactions())
     # The page opens on the same paragraphs, with the counts of each kind of verdict after the first.
     assert summary == [
-        "Cost $1.68 more, 17% more than these sessions would have cost without sparkjoy's compactions.",
+        "Cost $5.31 more, 90% more than these sessions would have cost without sparkjoy's compactions.",
         "7 verdicts in 1 of 1 sessions: 3 compacted, 1 would compact, 1 kept, 0 unreadable, "
         "1 no verdict, 0 dropped, 1 failed; 2 missed the prompt cache",
-        "Replayed at the list prices of each session's model, these sessions cost $11 with "
-        "sparkjoy's compactions, $3.70 of it for its checks, against $9.60 without them.",
-        "Asking from 350k at turn ends and 125k in idle sessions costs least in this session's "
+        "Replayed at the list prices of each session's model, with Claude Code compacting on its own "
+        "when the window fills and, in a session you had open, an idle context from 200k, these "
+        "sessions cost $11 with "
+        "sparkjoy's compactions, $3.70 of it for its checks, against $5.93 without them.",
+        "Asking from 350k at turn ends and 250k in idle sessions costs least in this session's "
         "replay, of the floors it tried.",
         "3 returns after an hour or more idle to sessions left with 175k or more in context; 2 had "
         "been compacted in between (1 by /compact, 1 by sparkjoy). The other 1 wrote 230k tokens to "
         "the cache again, for $1.84.",
     ]
-    assert '<p class="lead"><b>Cost $1.68 more</b>, 17% more' in page
+    assert '<p class="lead"><b>Cost $5.31 more</b>, 90% more' in page
     assert '<span class="mark would-compact"' in page
     assert "Fix the parser" in page
     assert "hooks.json" not in page
@@ -216,12 +218,12 @@ def test_a_first_run_leads_with_what_the_fitted_floors_would_have_saved(tmp_path
         ],
     )
     assert summary[:2] == [
-        "Compacting at every turn end from 350k and in every idle session from 125k would have cut "
-        "this session's cost from $7.58 to $7.53 (1%), replayed at Opus 5.5 list prices.",
+        "Compacting at every turn end from 350k and in every idle session from 250k would have left "
+        "this session's cost at $7.58, replayed at Opus 5.5 list prices.",
         "sparkjoy logged no verdict in this session, which reached one of its default floors: 250k "
         "at a turn end, or 175k before the session sat idle.",
     ]
-    assert "<b>from $7.58 to $7.53</b>" in page and "Verdicts" not in page
+    assert "<b>$7.58</b>" in page and "Verdicts" not in page
 
 
 def test_sessions_on_a_200k_window_say_sparkjoy_cannot_act(tmp_path):
@@ -283,10 +285,10 @@ def test_saves_the_figures_the_question_states(tmp_path):
     # 1k-token summary times the 1.5 output per visible token of the reply its size. Every request ends
     # its turn, and two of the four between the first request and the user's compaction came more than
     # an hour after the one before, past the cache's lifetime. Opus 5.5 prices that hour-long cache.
-    # The floors are the replay's cheapest pair on fit.py's grids.
+    # The floors are the replay's cheapest pair on fit.py's grids, counting the questions each asks.
     assert json.loads(figures.read_text()) == {
         "FLOOR": 350_000,
-        "IDLE_FLOOR": 125_000,
+        "IDLE_FLOOR": 250_000,
         "K": 225_002,
         "P": 30_000,
         "SUMMARY": 1_500,
@@ -297,12 +299,12 @@ def test_saves_the_figures_the_question_states(tmp_path):
         "OUTPUT": 100,
     }
     assert (
-        "Asking from 350k at turn ends and 125k in idle sessions costs least in this session's "
+        "Asking from 350k at turn ends and 250k in idle sessions costs least in this session's "
         "replay, of the floors it tried, and sparkjoy asks from them from the next turn end, "
         "except where you set your own."
     ) in summary
     assert summary[-1].startswith(
-        "Fitted figures: floor at turn ends 350k; floor in idle sessions 125k; context after a "
+        "Fitted figures: floor at turn ends 350k; floor in idle sessions 250k; context after a "
         "compaction 225k;"
     )
     assert (
