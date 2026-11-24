@@ -7,9 +7,10 @@ Code's default.
 
 ## The models
 
-A simple model gives a formula that shows which parameters matter, and a fuller
-one follows real sessions more closely. Each model below adds something the one
-before it leaves out:
+As with any model, there's a trade-off between simplicity and completeness. A
+simple model gives a formula that shows which parameters matter, and a fuller
+one follows real sessions more closely. There are a few models, each in a
+section below, and each adds something the one before it leaves out:
 
 - **[Cost alone](#cost-alone).** It assumes a request gets as much done at any
   context, so only tokens count, and that the context grows by the same number
