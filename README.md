@@ -15,9 +15,10 @@ it each cost. It asks at the end of each turn, and just before an idle
 session's prompt cache expires ([How it decides](#how-it-decides)).
 
 In comparison, Claude Code and `/autocompact` compact at a set size, whatever
-the work needs. After a finished fix, the next task does as well from a summary,
-but while a design is still taking shape, a summary would drop the options
-already rejected and why.
+the work needs. After a finished fix, the next task goes as well from a summary
+as from the whole transcript, but while a design is still taking shape, a
+summary would drop the options already rejected and the reasons for rejecting
+them.
 
 |                | When it compacts                                                                                                              |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -87,7 +88,7 @@ New sessions pick it up. To see its verdicts before it compacts anything, run
 - **`/sparkjoy bug`** drafts a bug report from the session's transcript, with
   sparkjoy's settings and what you say went wrong, and files it here once you
   agree. When one of sparkjoy's lines reports a bug, such as a question that
-  failed, the next line suggests it.
+  failed, the next line suggests running `/sparkjoy bug`.
 
 ## Settings
 
@@ -141,11 +142,12 @@ sparkjoy saves, in my sessions of 18 to 22 November[^sessions]:
 
 Claude Code's default compacts near 965k, and in an open session also an idle
 context from 200k. The last three rows replay my sessions ([A replay of my
-sessions](docs/cost-model.md#a-replay-of-my-sessions)), the judgment at the thresholds that cost
-least in hindsight, 280k and 900k ([A classifier](docs/cost-model.md#a-classifier)). How much a
-smaller context costs the work ([Cost and context](docs/cost-model.md#cost-and-context)), and how
-often the judgment is right, are assumed, not yet measured. Every row counts
-what sparkjoy's questions cost.
+sessions](docs/cost-model.md#a-replay-of-my-sessions)). The last compacts where the judgment says,
+from 280k for work that needs less context and from 900k for work that needs
+more, the thresholds that cost least in hindsight ([A
+classifier](docs/cost-model.md#a-classifier)). How much a smaller context costs the work ([Cost
+and context](docs/cost-model.md#cost-and-context)), and how often the judgment is right, are
+assumed, not yet measured. Every row counts what sparkjoy's questions cost.
 
 <!-- End of what sparkjoy saves. -->
 
@@ -242,9 +244,9 @@ Answer with one JSON object and nothing else, filling its fields in order:
 </details>
 
 Your [`instructions`](#settings) go in both versions as a paragraph of their
-own, between "Weigh what keeping costs…" and "Answer with one JSON object…":
-the line "The user added these instructions for this decision:", then your
-text. Unset, the question is as shown.
+own, between "Weigh what keeping costs…" and "Answer with one JSON object…": the
+line "The user added these instructions for this decision:", then your text.
+When `instructions` is unset, the question is as shown.
 
 <!-- The Evals block waits until the mid-task verdicts' swing between batches is explained. Remove this line and the closing one to restore it.
 ### Evals
@@ -309,9 +311,10 @@ question.
   itself, before sparkjoy would ask, unless
   [`idleCompaction`](https://code.claude.com/docs/en/settings-reference#idlecompaction)
   is `false`.
-- I run sparkjoy without `/autocompact`. If you set it, keep it above
-  sparkjoy's turn-end floor: at or below the floor, Claude Code compacts
-  mid-turn before any turn end reaches it, so sparkjoy never asks at a turn end.
+- I run sparkjoy without `/autocompact`. If you set it, keep it above sparkjoy's
+  turn-end floor: at or below the floor, Claude Code compacts mid-turn before
+  the context reaches the floor at any turn end, so sparkjoy never asks at a
+  turn end.
 
 ## FAQ
 
@@ -379,19 +382,21 @@ section below, and each adds something the one before it leaves out:
   context, so only tokens count, and that the context grows by the same number
   of tokens with each request. The most efficient threshold, where a request
   costs least on average, then has a closed form.
-- **[Cost and context](docs/cost-model.md#cost-and-context).** It assumes a larger context gets
-  more done, by a power β of its size, with one β for all work. The most
-  efficient threshold is then the one where the cost per unit of work done is
-  lowest.
-- **[Idle sessions](docs/cost-model.md#idle-sessions).** It adds sessions that go idle. Compacting
-  just before the prompt cache lapses pays at a smaller context.
+- **[Cost and context](docs/cost-model.md#cost-and-context).** It assumes a request gets more done
+  with a larger context, in proportion to a power β of the context's size, with
+  one β for all work. The most efficient threshold is then the one where the
+  cost per unit of work done is lowest.
+- **[Idle sessions](docs/cost-model.md#idle-sessions).** It adds sessions that go idle. An idle
+  session is worth compacting just before its prompt cache lapses, at a smaller
+  context than a session in use.
 - **[Mid-turn or at a turn end](docs/cost-model.md#mid-turn-or-at-a-turn-end).** It assumes a
   compaction also wastes D requests on the detail it drops, more in the middle
   of a turn than at its end. Asking only at turn ends avoids the larger D, but
-  lets a long turn carry the context past the most efficient threshold.
+  during a long turn the context can grow past the most efficient threshold.
 - **[A classifier](docs/cost-model.md#a-classifier).** It assumes β and D vary with the work
-  ahead. A question that tells these kinds of work apart, as sparkjoy's aims to,
-  lets each compact where it costs least.
+  ahead. A classifier that tells work with a high β or D from work with a low
+  one, as sparkjoy's question aims to, lets the session compact each kind of
+  work where it costs least.
 - **[A replay of my sessions](docs/cost-model.md#a-replay-of-my-sessions).** It keeps every logged
   request and moves only the compactions, so it includes what the other models
   leave out: uneven growth, long turns, cache lapses and sessions that end.
@@ -412,19 +417,20 @@ November on Opus 5.5[^sessions]:
 
 Claude Code's default compacts near 965k, and in an open session also an idle
 context from 200k. The last three rows replay my sessions ([A replay of my
-sessions](docs/cost-model.md#a-replay-of-my-sessions)), the judgment at the thresholds that cost
-least in hindsight, 280k and 900k ([A classifier](docs/cost-model.md#a-classifier)). How much a
-smaller context costs the work ([Cost and context](docs/cost-model.md#cost-and-context)), and how
-often the judgment is right, are assumed, not yet measured. Every row counts
-what sparkjoy's questions cost.
+sessions](docs/cost-model.md#a-replay-of-my-sessions)). The last compacts where the judgment says,
+from 280k for work that needs less context and from 900k for work that needs
+more, the thresholds that cost least in hindsight ([A
+classifier](docs/cost-model.md#a-classifier)). How much a smaller context costs the work ([Cost
+and context](docs/cost-model.md#cost-and-context)), and how often the judgment is right, are
+assumed, not yet measured. Every row counts what sparkjoy's questions cost.
 
 <!-- End of what sparkjoy saves. -->
 
 ## Costs
 
 The models before the replay price a session as cycles, each a run of requests
-and the compaction that ends it. This section gives what each costs, in symbols
-and then in my sessions' figures.
+and the compaction that ends it. This section gives what a request and a
+compaction cost, in symbols and then in my sessions' figures.
 
 <details>
 <summary>The model's symbols</summary>
@@ -464,9 +470,9 @@ and then in my sessions' figures.
 
 **Result**
 
-| symbol | what it is                                                                                                                                               |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| X\*(β) | Most efficient threshold, the value of X that makes J lowest at a given β, in tokens. X\*(0) counts cost alone. Where the β is clear, it is written X\*. |
+| symbol | what it is                                                                                                                                                                                   |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| X\*(β) | Most efficient threshold, the value of X that makes J lowest at a given β, in tokens. X\*(0) is the most efficient threshold when only cost counts. Where the β is clear, it is written X\*. |
 
 </details>
 
@@ -554,9 +560,9 @@ then minimizes J, a cycle's cost per unit of its effectiveness:
 
 $`\displaystyle J(X) = \frac{g\,F(X) + \int_K^X c(x)\,dx}{\int_K^X \eta(x)\,dx}`$
 
-J is lowest at X\*(β), where one more request's cost, c(X) plus the g tokens it
-adds to the compaction's read, per unit of what that request gets done, equals
-the cycle's average:
+J is lowest at X\*(β), where one more request costs as much per unit of what it
+gets done as the cycle's average. That request's cost is c(X) plus the g tokens
+it adds to the compaction's read:
 
 $`\displaystyle \frac{c(X^*) + g}{\eta(X^*)} = J(X^*)`$
 
@@ -584,11 +590,11 @@ threshold moves with β.
 
 η depends only on the context's size, so a request right after a compaction, at
 K, counts as getting as much done as one at K before any compaction. At β above
-0, a summary that keeps everything the work needs does better than that, so
-compacting pays more than the model says. A summary that drops detail the next
-turns need costs more, in a mistake, a correction from the user or a step run
-again, which [Mid-turn or at a turn end](docs/cost-model.md#mid-turn-or-at-a-turn-end) adds as D
-wasted requests.
+0, the requests after a summary that keeps everything the work needs get more
+done than requests at K before any compaction, so compacting pays more than the
+model says. A summary that drops detail the next turns need costs more, in a
+mistake, a correction from the user or a step run again, which [Mid-turn or at a
+turn end](docs/cost-model.md#mid-turn-or-at-a-turn-end) adds as D wasted requests.
 
 ### Cost at each threshold
 
@@ -610,8 +616,9 @@ of that.
 </picture>
 
 Across their 90% intervals, the measured parameters move the most efficient
-threshold by 9k at most. β moves it much further: at 0.25 it is 287k, and at 1
-no compaction short of Claude Code's own pays.
+threshold by 9k at most. β moves it much further. At β = 0.25 it is 287k, and at
+β = 1 no threshold below Claude Code's default costs less per unit of work than
+the default.
 
 That interval covers only my sessions, and K differs more between users, since
 most of it beyond the shared system prompt is the user's own instructions and
@@ -640,9 +647,10 @@ Claude Code compacts after whichever request fills the window, and
 `/autocompact` after whichever request reaches its threshold, so most of their
 compactions fall in the middle of a turn. sparkjoy asks only at turn ends, on
 the assumption that in the middle of a turn the work ahead nearly always needs
-the context's detail. A long turn can then carry the context far past the most
-efficient threshold before it ends. `/autocompact` set above sparkjoy's floor
-would compact those long turns as a backstop, but in their middle.
+the context's detail. During a long turn, the context can then grow far past the
+most efficient threshold before the turn ends. `/autocompact` set above
+sparkjoy's floor would compact during those long turns as a backstop, but in the
+middle of a turn.
 
 The model assumes a compaction wastes D requests on the detail it dropped, such
 as failed tool calls, repeated lookups and corrections, each priced as a request
@@ -651,16 +659,17 @@ the middle of a turn, smaller at a turn end in the middle of a task, and close
 to 0 once a piece of work is finished. Here each compaction in the middle of a
 turn wastes ΔD more requests than one at a turn end.
 
-β and D differ in which requests pay for a compaction. β's cost falls on every
-request until the next compaction, and grows the more a compaction shrinks the
-context. D's falls on the few requests right after a compaction, whatever the
-context. So D can differ between two moments in one piece of work, such as the
-middle of a turn and the turn end a few requests later, while β is the same at
-both.
+β and D put a compaction's cost on different requests. Through β, every request
+until the next compaction gets less done, and the more a compaction shrinks the
+context, the less each gets done. The D wasted requests come right after a
+compaction, whatever the context. So D can differ between two moments in one
+piece of work, such as the middle of a turn and the turn end a few requests
+later, while β is the same at both.
 
-In the [replay](docs/cost-model.md#a-replay-of-my-sessions) at the base case, β = 0.5, with each
-policy at its most efficient thresholds and also compacting idle sessions from
-175k, against Claude Code's default in a background session:
+The table below [replays](docs/cost-model.md#a-replay-of-my-sessions) my sessions at the base
+case, β = 0.5, with each policy at its most efficient thresholds and also
+compacting idle sessions from 175k. Its savings are against Claude Code's
+default in a background session.
 
 | policy                                          | thresholds          | saves, at ΔD = 0 | compactions mid-turn | costs as much as compacting after any request once ΔD reaches |
 | ----------------------------------------------- | ------------------- | ---------------- | -------------------- | ------------------------------------------------------------- |
@@ -687,20 +696,20 @@ counts what the questions cost. With no information, a classifier can do no
 better than one threshold for all the work, so each table below gives that case
 too.
 
-The model takes as inputs how widely work differs and how often the classifier
-is right. No session of mine measures them yet, so the sections below give what
-a classifier saves across a range of each ([What the model needs
+The model takes as inputs how widely β and D differ across work, and how often
+the classifier is right. No session of mine measures them yet, so the sections
+below give what a classifier saves across a range of each ([What the model needs
 measured](docs/cost-model.md#what-the-model-needs-measured)).
 
 ### Work that differs in β
 
-β belongs to the work between two compactions: it sets how much the requests in
-between get done. So the classifier sorts the work into two groups, by whether
-it judges that the context helps the work, and each group compacts at its own
-most efficient threshold. With $`s_k`$ the share of the work of kind k, $`q_k`$
-the share of it the classifier says to compact, and $`J_k`$ the cost per unit of
-work of kind k at its own β, from [Cost and context](docs/cost-model.md#cost-and-context), the
-classifier's cost per unit of work is
+β sets how much the requests between two compactions get done. So the classifier
+sorts the work between compactions into two groups, by whether it judges that
+the context helps the work, and the session compacts each group's work at that
+group's own most efficient threshold. With $`s_k`$ the share of the work of kind
+k, $`q_k`$ the share of it the classifier says to compact, and $`J_k`$ the cost
+per unit of work of kind k at its own β, from [Cost and
+context](docs/cost-model.md#cost-and-context), the classifier's cost per unit of work is
 
 $`\displaystyle J_\text{classifier} = \min_{X_1} \sum_k q_k\,s_k\,J_k(X_1) + \min_{X_0} \sum_k (1 - q_k)\,s_k\,J_k(X_0)`$
 
@@ -718,11 +727,12 @@ in 100 has about 90%.
   <img alt="What a classifier saves against Claude Code's default, after what its questions cost, by its accuracy as a share of a perfect classifier's information, for 50% of the work at β = 1, 25% at β = 2 and 10% at β = 5, the rest at β = 0. With no information the β = 1 line starts at 1.3%, what the most efficient single threshold saves less the questions, and the other two at −1.6%, the questions' cost alone, since for them that threshold is Claude Code's own. A perfect classifier saves 15%, 23% and 26%. The β = 1 line climbs fastest at first, the β = 2 line crosses 0 at 15% of the information and then rises nearly straight, and the β = 5 line stays below 0 until about 45% of the information and reaches half its saving only at about 90%." src="assets/model-voi-light.svg">
 </picture>
 
-Each line of the chart is a mix of work with mean β 0.5, the base case, with one
-share at the β shown and the rest at β = 0. The table adds the base case where
-work differs, which also has mean β 0.5. Its three quarters at β = 0.25 stand
-for work whose context loses its worth quickly but not entirely, and its quarter
-at β = 1.25 for work that needs much more of its context.
+Each line of the chart shows a mix of work with mean β 0.5, the base case, in
+which one share of the work is at the β shown and the rest at β = 0. The table
+adds the base case where work differs, which also has mean β 0.5. In it, three
+quarters of the work is at β = 0.25, work that gets only a little more done with
+a larger context, and a quarter is at β = 1.25, work that gets much more done
+with one.
 
 | mix                                                                   | most efficient single threshold | it saves | a perfect classifier saves | right 9 times in 10, a classifier saves | a classifier saves more than the single threshold once right |
 | --------------------------------------------------------------------- | ------------------------------- | -------- | -------------------------- | --------------------------------------- | ------------------------------------------------------------ |
@@ -732,13 +742,14 @@ at β = 1.25 for work that needs much more of its context.
 | 75% at β = 0.25 and 25% at β = 1.25, the base case where work differs | 617k                            | 3.9%     | 19.1%                      | 14.1%                                   | 64%                                                          |
 
 The [replay](docs/cost-model.md#a-replay-of-my-sessions) asks the classifier at turn ends, as
-sparkjoy does, on the base case where work differs. Each session's turns come
-in stretches of one kind of work, 5 turns long on average unless a row says
+sparkjoy does, on the base case where work differs. Each session's turns come in
+stretches of one kind of work, 5 turns long on average unless a row says
 otherwise. At each turn end the classifier names the next turn's kind, and the
-session compacts if its context has passed that kind's threshold. Each row of
-the judgment uses the pair of thresholds that costs least for it. An idle
-session compacts from 175k, or from the higher threshold when the classifier
-expects β = 1.25 work next. No compaction loses detail the work needs.
+session compacts if its context has passed that kind's threshold. Each row that
+compacts where the judgment says uses the pair of thresholds that costs least
+for that row. An idle session compacts from 175k, or from the higher threshold
+when the classifier expects β = 1.25 work next. No compaction loses detail the
+work needs.
 
 | against Claude Code's default                                                     | thresholds for β = 0.25 and β = 1.25 work | in a background session | in an open session |
 | --------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------- | ------------------ |
@@ -762,12 +773,13 @@ $`\displaystyle \bar D(a) = D\,\frac{m\,(1-a)}{m\,(1-a) + (1-m)\,a}`$
 
 and the session compacts at the threshold where J, with that cost added to each
 compaction, is lowest. Waiting for a turn end the classifier calls finished
-moves each compaction later. A lower floor makes up for the average wait, and J
-changes little near its lowest point, so the spread around it costs little, and
-the model leaves the wait out.
+moves each compaction later. A lower floor makes up for the average wait. The
+wait also varies around that average, but J changes little near its lowest
+point, so the variation costs little, and the model leaves the wait out.
 
-At the base case, with half of turn ends in the middle of a task, against Claude
-Code's default, whose compactions fall mid-turn and each waste D:
+The table below takes the base case, with half of turn ends in the middle of a
+task. Its savings are against Claude Code's default, whose compactions fall
+mid-turn and each waste D.
 
 | D, at a turn end in the middle of a task | most efficient single threshold | it saves | a perfect classifier saves | right 9 times in 10, a classifier saves | a classifier saves more than the single threshold once right |
 | ---------------------------------------- | ------------------------------- | -------- | -------------------------- | --------------------------------------- | ------------------------------------------------------------ |
@@ -778,14 +790,14 @@ Code's default, whose compactions fall mid-turn and each waste D:
 
 At D = 12, a compaction wastes 6 requests on average, as many as my sessions'
 compactions did ([Parameter values](docs/cost-model.md#parameter-values)). A perfect classifier's
-compactions lose none of that detail. So the more a compaction loses, the more
-a classifier saves over the single threshold, since each turn end it gets right
-avoids D outright, while each turn end it asks at costs a question.
+compactions lose none of that detail. So the more a compaction loses, the more a
+classifier saves over the single threshold, since at each turn end it judges
+right the session avoids all D wasted requests, while the session pays for a
+question at every turn end it asks at.
 
-sparkjoy's question goes further than this classifier. It states what keeping
-the context costs, so the session's model can compact at a turn end in the
-middle of a task once keeping costs more than the detail a compaction would
-drop.
+Unlike this classifier, sparkjoy's question also states what keeping the context
+costs, so the session's model can compact at a turn end in the middle of a task
+once keeping costs more than the detail a compaction would drop.
 
 ### What the model needs measured
 
@@ -805,20 +817,20 @@ logged request and moves only the compactions.
   <img alt="Most efficient threshold against β from 0 to 1, with 90% bands. The steady-state model's, compacting after any request (grey), rises from 253k at β = 0 to 363k at 0.5, crosses 400k at 0.57 and reaches 965k, where Claude Code compacts, from 0.83. The replay's most efficient turn-end threshold (black) stays lower: 210k at β = 0, 220k from 0.1 to 0.3, 270k to 280k from 0.35 to 0.5, 330k at 0.6 and 860k at 0.85 and 0.9, then 890k. A vertical line marks the base case, β = 0.5, and a horizontal one 250k, sparkjoy's default floor." src="assets/model-threshold-light.svg">
 </picture>
 
-At the base case, compacting no idle sessions, against Claude Code's default in
-a background session:
+The table below takes the base case and compacts no idle sessions. Its savings
+are against Claude Code's default in a background session.
 
 | model                                          | most efficient threshold | saves |
 | ---------------------------------------------- | ------------------------ | ----- |
 | Cost and context, compacting after any request | 363k                     | 15.3% |
 | the replay, compacting only at turn ends       | 280k                     | 11.8% |
 
-The replay's threshold is lower, since a long turn can carry the context far
-past it before it ends. It saves less, since real sessions often end before
-their context fills the window. Both assume a compaction loses no detail the
-work needs, and the replay compacts at every turn end past the threshold with no
-question asked; sparkjoy instead asks at each of them, and its answer decides
-where to compact.
+The replay's threshold is lower, since during a long turn the context can grow
+far past the threshold before the turn ends and the session can compact. It
+saves less, since real sessions often end before their context fills the window.
+Both assume a compaction loses no detail the work needs, and the replay compacts
+at every turn end past the threshold with no question asked; sparkjoy instead
+asks at each of them, and its answer decides where to compact.
 
 ### Floors
 
@@ -835,9 +847,10 @@ question at every turn end and idle session past it.
 
 A floor is where sparkjoy starts asking, and its question decides at which turn
 ends above the floor to compact. So sparkjoy puts its floors at the most
-efficient threshold that cost alone gives, the lowest any β gives. Its defaults
-come from that fit to earlier sessions of mine, and save as much as the fit to
-these.
+efficient thresholds that cost alone gives, since a β above 0 only raises them.
+Its default floors, 250k and 175k, come from fitting cost alone to earlier
+sessions of mine, and in these sessions they save as much as the pair fitted to
+these sessions by cost alone, 250k and 150k.
 
 On the five-minute cache, where the cache lapses after half of turn ends,
 compacting at turn ends from 250k saves 18.8%, and also asking after 4 minutes
@@ -848,20 +861,20 @@ idle from 175k saves 20.3%.
 <details>
 <summary>My sessions' value for each parameter, and its source</summary>
 
-| parameter                                       | value                      | source                                                                                                                                                                                                                                                                                                                            |
-| ----------------------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| K, context after a compaction                   | 139k                       | measured[^sessions], 90% interval 135–142k: the first request after a compaction holds 128k, and the next few requests read 11k of files again                                                                                                                                                                                    |
-| g, growth of the context per request            | 1,627                      | measured, 1,585–1,667: the mean over the sessions' requests except the first few after a compaction, since K counts the files those read again                                                                                                                                                                                    |
-| P, system prompt and tools                      | 33.5k                      | measured, 33.3–33.5k                                                                                                                                                                                                                                                                                                              |
-| ℓ, share of requests that find the cache lapsed | 0.48%                      | measured, 0.44–0.52%: the one-hour cache expires after an hour idle                                                                                                                                                                                                                                                               |
-| N, output of the compaction request             | 5.1k                       | measured, 5.0–5.3k: the summary's text is a median 3.3k tokens, and requests with about 3.3k tokens of visible output produce 1.56 times that in all, thinking included                                                                                                                                                           |
-| w, price of a token's cache write               | 40 cached reads            | list price, for the one-hour cache; a write to the five-minute cache costs 25                                                                                                                                                                                                                                                     |
-| o, price of an output token                     | 100 cached reads           | list price                                                                                                                                                                                                                                                                                                                        |
-| β, growth of effectiveness with the context     | 0.5                        | assumed, since no session measures it: a request at 250k gets half as much done as one at 1M                                                                                                                                                                                                                                      |
-| D, requests a compaction wastes                 | about 6                    | measured, very noisily, over two months of my sessions to 15 November, since it needs many: after a compaction, nearly always at a turn end or in an idle session, they had about 6 more wasted requests than usual, such as failed tool calls, repeated lookups and corrections. sparkjoy's question gives the model this figure |
-| h, cost per request of a token in the context   | 1.19                       | derived                                                                                                                                                                                                                                                                                                                           |
-| c₀, fixed cost of a request                     | 128k cached reads, \$0.026 | derived                                                                                                                                                                                                                                                                                                                           |
-| F₀, fixed cost of a compaction                  | 4.62M cached reads, \$0.92 | derived                                                                                                                                                                                                                                                                                                                           |
+| parameter                                       | value                      | source                                                                                                                                                                                                                                                                                                                                      |
+| ----------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| K, context after a compaction                   | 139k                       | measured[^sessions], 90% interval 135–142k: the first request after a compaction holds 128k, and the next few requests read 11k of files again                                                                                                                                                                                              |
+| g, growth of the context per request            | 1,627                      | measured, 1,585–1,667: the mean over the sessions' requests except the first few after a compaction, since K counts the files those read again                                                                                                                                                                                              |
+| P, system prompt and tools                      | 33.5k                      | measured, 33.3–33.5k                                                                                                                                                                                                                                                                                                                        |
+| ℓ, share of requests that find the cache lapsed | 0.48%                      | measured, 0.44–0.52%: the one-hour cache expires after an hour idle                                                                                                                                                                                                                                                                         |
+| N, output of the compaction request             | 5.1k                       | measured, 5.0–5.3k: the summary's text is a median 3.3k tokens, and requests with about 3.3k tokens of visible output produce 1.56 times that in all, thinking included                                                                                                                                                                     |
+| w, price of a token's cache write               | 40 cached reads            | list price, for the one-hour cache; a write to the five-minute cache costs 25                                                                                                                                                                                                                                                               |
+| o, price of an output token                     | 100 cached reads           | list price                                                                                                                                                                                                                                                                                                                                  |
+| β, growth of effectiveness with the context     | 0.5                        | assumed, since no session measures it: a request at 250k gets half as much done as one at 1M                                                                                                                                                                                                                                                |
+| D, requests a compaction wastes                 | about 6                    | measured, very noisily, over two months of my sessions to 15 November, since it needs many: after a compaction, nearly always at a turn end or in an idle session, they had about 6 more wasted requests than usual, such as failed tool calls, repeated lookups and corrections. sparkjoy's question gives the session's model this figure |
+| h, cost per request of a token in the context   | 1.19                       | derived                                                                                                                                                                                                                                                                                                                                     |
+| c₀, fixed cost of a request                     | 128k cached reads, \$0.026 | derived                                                                                                                                                                                                                                                                                                                                     |
+| F₀, fixed cost of a compaction                  | 4.62M cached reads, \$0.92 | derived                                                                                                                                                                                                                                                                                                                                     |
 
 </details>
 
@@ -900,10 +913,11 @@ July 2026, treats when to restart a prompt-cached session as an economic order
 quantity and as ski rental, and prices the rebuild at the cache-write rate. It
 and the closest cost rule,
 [Nadir's](https://getnadir.com/blog/mask-dont-summarize-agent-context-cache-cost/),
-leave out quality. The closest studies, from August to October 2026, sweep the
-threshold on benchmarks ([Satish et al.](https://arxiv.org/abs/2609.32961),
-[Nguyen et al.](https://arxiv.org/abs/2609.26779)) or measure what a compaction
-drops ([Salle et al.](https://arxiv.org/abs/2610.31778),
+leave out what a smaller context costs the work. The closest studies, from
+August to October 2026, sweep the threshold on benchmarks ([Satish et
+al.](https://arxiv.org/abs/2609.32961), [Nguyen et
+al.](https://arxiv.org/abs/2609.26779)) or measure what a compaction drops
+([Salle et al.](https://arxiv.org/abs/2610.31778),
 [Liu](https://arxiv.org/abs/2608.16370)). Salle et al. also find accuracy
 similar across thresholds from 160k to 380k. None lets a request's effectiveness
 depend on its context or limits compaction to turn ends.
@@ -914,16 +928,17 @@ depend on its context or limits compaction to turn ends.
 <summary>Why a power law?</summary>
 
 It has one parameter with a plain meaning: each doubling of the context makes a
-request $`2^\beta`$ times as effective, wherever it starts. The cost uses only
-the curve from about 150k to 965k, under three doublings. Over that range a
+request $`2^\beta`$ times as effective, wherever it starts. J depends on η only
+from about 150k to 965k, a range of under three doublings. Over that range a
 saturating form, levelling off once the context holds what the work needs, could
 serve as well. The two differ on one question: does doubling an agent's context
 from 400k to 800k improve its next steps about as much as doubling it from 100k
 to 200k? Under the power law, both doublings improve them by the same factor.
 Under a saturating form, the later doubling improves them less. A logarithm, η =
-ln(x / 45k), gives a request at 150k as much against one at 1M as β = 0.5 does,
-and puts the most efficient threshold at 389k, saving 17.4% against Claude
-Code's default, where the power law puts it at 363k, saving 15.3%.
+ln(x / 45k), gives a request at 150k the same effectiveness, relative to one at
+1M, as β = 0.5 does, and puts the most efficient threshold at 389k, saving 17.4%
+against Claude Code's default, where the power law puts it at 363k, saving
+15.3%.
 
 </details>
 
