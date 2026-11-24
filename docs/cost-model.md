@@ -161,6 +161,18 @@ the context it leaves. My skills, instruction files and memory make up \$0.52 of
 that write. The system prompt and tools, P, stay in a cache Claude Code shares
 across sessions, so a compaction doesn't write them again.
 
+That holds while the prompt cache still holds the context. Once the cache
+lapses, as it does in a session left idle for an hour, the compaction request
+first writes all of the context but P to the cache. A compaction at 200k then
+costs \$2.26 rather than \$0.96, and one at 500k costs \$4.66 rather than
+\$1.02. So sparkjoy asks an idle session whether to compact just before its
+cache lapses ([Idle sessions](#idle-sessions)):
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/model-lapse-dark.svg">
+  <img alt="What a compaction costs against the context it compacts, from 139k to 965k. While the prompt cache holds the context, the line stays near $1: $0.96 at 200k and $1.02 at 500k. After the cache lapses, the line climbs steeply: $2.26 at 200k, $4.66 at 500k, and about $8.40 at 965k." src="../assets/model-lapse-light.svg">
+</picture>
+
 The larger the context, the sooner a compaction pays for itself. After a
 compaction at 700k, each later request reads 561k fewer tokens, and the
 compaction pays for itself within 8 requests; at 400k within 17, and at 200k
