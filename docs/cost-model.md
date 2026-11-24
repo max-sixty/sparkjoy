@@ -63,8 +63,8 @@ it.
 
 <!-- TODO: Work through the cost model to give sparkjoy's saving per unit of work beside its saving in cost.
 If a request at 250k gets half as much done as one at 1M (β = 0.5), sparkjoy as it ran saves 11.3% per unit
-of work without Claude Code's idle compaction and 6.5% with it, against 30.6% and 24.2% in cost; fit.py doesn't
-print these yet. -->
+of work without Claude Code's idle compaction and 6.5% with it, against 30.6% and 24.2% in cost; model/docs.py
+doesn't compute these yet. -->
 
 ## Costs
 
@@ -629,7 +629,10 @@ Claude Code's default:
 [^sessions]:
     My 163 sessions of 18 to 22 November 2026, all on the one-hour cache.
     Every figure here comes from them except D's, and the measured parameters
-    have 90% intervals from resampling sessions. Every cost is at Opus 5.5's
+    have 90% intervals from resampling sessions.
+    [`model/docs.py`](../model/docs.py) writes them all to
+    [`docs/figures.json`](../docs/figures.json), and `model/calibrate.py` adds
+    D's. Every cost is at Opus 5.5's
     list prices for the one-hour cache, unless a figure names the five-minute
     cache. The formulas count costs in cached reads, the price of reading one
     token from the prompt cache, \$0.20 per million tokens on Opus 5.5
