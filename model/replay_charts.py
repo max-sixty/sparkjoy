@@ -15,7 +15,6 @@ session someone had open, also an idle context from fit.CC_IDLE. The charts:
 
   session.svg   one session's context per request, with and without sparkjoy
   context.svg   the share of the window's requests at each context size, with and without
-  cost.svg      the replayed cost of the window's sessions, with and without
 """
 
 import argparse
@@ -150,63 +149,6 @@ def context_chart(contexts, t, path):
     charts.save(fig, path)
 
 
-def cost_chart(without, with_, judge, t, path):
-    """The sessions' cost without and with sparkjoy, in dollars, the latter's questions, `judge`,
-    marked within it."""
-    fig, ax = plt.subplots(figsize=(9, 1.5))
-    charts.style(ax, t)
-    ax.grid(False)
-    ax.spines["bottom"].set_visible(False)
-    ax.barh([1, 0], [without, with_], color=[t["without"], t["with"]], height=0.62)
-    ax.barh([0], [judge], left=[with_ - judge], color=t["ink"], height=0.62)
-    for y, v, label in (
-        (1, without, f"without {PLUGIN}"),
-        (0, with_, f"with {PLUGIN}"),
-    ):
-        ax.text(
-            -without * 0.01,
-            y,
-            label,
-            ha="right",
-            va="center",
-            fontsize=10,
-            color=t["ink"],
-        )
-        ax.text(
-            v + without * 0.01,
-            y,
-            f"${v:,.0f}",
-            ha="left",
-            va="center",
-            fontsize=10,
-            color=t["ink"],
-        )
-    ax.text(
-        with_ + without * 0.09,
-        0,
-        charts.percent(with_ / without - 1),
-        ha="left",
-        va="center",
-        fontsize=10,
-        color=t["muted"],
-    )
-    ax.annotate(
-        f"{PLUGIN}'s questions, ${judge:,.0f}",
-        (with_ - judge / 2, -0.31),
-        xytext=(0, -12),
-        textcoords="offset points",
-        ha="center",
-        va="top",
-        fontsize=9,
-        color=t["muted"],
-        arrowprops={"arrowstyle": "-", "color": t["muted"], "lw": 0.8},
-    )
-    ax.set_xlim(0, without * 1.12)
-    ax.set_yticks([])
-    ax.set_xticks([])
-    charts.save(fig, path)
-
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     fit.window_args(ap)
@@ -240,7 +182,6 @@ def main():
     for theme, t in charts.THEMES.items():
         session_chart(traces, checks, t, a.out / f"session-{theme}.svg")
         context_chart(contexts, t, a.out / f"context-{theme}.svg")
-        cost_chart(without, with_, judge, t, a.out / f"cost-{theme}.svg")
 
     n = len(contexts["with"])
     logged = 0.0

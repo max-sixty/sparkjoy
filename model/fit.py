@@ -66,9 +66,6 @@ MIX = ((0.75, 0.25), (0.25, 1.25))
 RIGHT = 0.9  # how often sparkjoy's judgment names the kind of work that comes next
 STRETCH = 5  # turns in a row of one kind of work, on average
 MIX_DRAWS = 10  # draws of which turns are of which kind, pooled
-# Values of D, the detail a compaction drops, in dollars, for the table under "What does the model assume a
-# compaction loses?" in docs/cost-model.md. The doc fits no value of D.
-LOST = (0.25, 1, 4)
 # From below K, where every turn end compacts, to just short of AUTO.
 THRESHOLDS = np.arange(50_000, 960_001, 10_000)
 DRAWS = 200  # bootstrap resamples of sessions
@@ -1315,19 +1312,7 @@ def main():
         f"  with η = ln(x / {x0 / 1e3:.0f}k), a request at 150k as effective against 1M as at β = {BASE:g}: "
         f"{k(Xl)}, saving {1 - Jl:.1%}"
     )
-    print(
-        "  a cycle compacting at "
-        + ", ".join(
-            f"{k(x)} has {(x - p.K) / p.g:.0f} requests at ${per_unit(p, c, x, 0) * c.read:.3f} each on average, "
-            f"J {J0(x):.1%} of Claude Code's default"
-            for x in (175_000, closed_form(p, c), X0, 600_000, AUTO)
-        )
-    )
-    for d in LOST:
-        print(
-            f"  with each compaction losing ${d:.2f} of detail: most efficient threshold {k(steady(p, c, BASE, d / c.read))}"
-        )
-    for x in (400_000, 700_000):
+    for x in (700_000,):
         d = lost_for(p, c, x, BASE)
         print(
             f"  D, the detail a compaction loses, that puts the most efficient threshold at {k(x)}: "
@@ -1672,7 +1657,7 @@ def main():
     if a.charts:
         import charts
 
-        charts.draw(a.charts, S, p, c, boot, cost, effectiveness, BT, BX)
+        charts.draw(a.charts, p, c, boot, cost, effectiveness, BT, BX)
 
 
 if __name__ == "__main__":

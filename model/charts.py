@@ -8,7 +8,6 @@ from one read of the sessions:
                  after a compaction split by what fills the context (context.py's context-parts.json)
   payback        how many later requests a compaction takes to pay for itself, against the context it
                  compacts, for the README's What it saves
-  bill           the sessions' cost by kind of token
   average        a request's mean cost over a cycle against the compaction threshold, with the marginal cost,
                  as a schematic
   effectiveness  a request's effectiveness against its context, at the base case for β (fit.BASE),
@@ -20,7 +19,6 @@ from one read of the sessions:
                  base case
   threshold      the most efficient threshold against β, in the steady state and the replay
   voi            the expected value of a classifier's information, on three mixes of work
-  voi-point      the compaction threshold of the work a classifier says to compact, on the same mixes
 
 It also prints, drawing nothing, what a classifier saves where work differs in the detail a
 compaction loses rather than in β (voi_lost).
@@ -354,7 +352,7 @@ def inputs(out, p, c):
     # Each part says whether it comes from what the sessions measured (output, growth, lapses, K, P,
     # N) or not: the cache read of the context is the context itself.
     # Each part also names its step of the ramp: output 0, cache writes 1 (2 for the lapse's), the cache
-    # read of the context the strongest, as the bill chart colours the same kinds.
+    # read of the context the strongest.
     request = [
         (
             "output and uncached input",
@@ -528,74 +526,6 @@ def payback(out, p, c):
         )
         axis_name(ax, "Later requests until the compaction pays for itself", t)
         save(fig, out / f"model-payback-{theme}.svg")
-
-
-def bill(out, S, p, c):
-    """The sessions' cost by kind of token, as one stacked bar: each request's
-    logged usage at the prices c, in cached reads. The transcripts don't log a compaction's own request, so its
-    tokens come from the model and join their kinds: it reads the context it compacts and writes N
-    output tokens. The request after it, which writes the compacted context to the cache, is logged
-    like any other."""
-    n_comp = sum(len(s.compactions) for s in S)
-    comp_read = sum(
-        float(x[-1]) for s in S for x in s.compactions
-    )  # a compaction's last field: tokens before it
-    comp_out = n_comp * c.output * p.N
-    # Each kind, in the order the inputs chart stacks them, with its step of that chart's ramp.
-    kinds = [
-        (
-            "Output, thinking included",
-            sum(float(s.out.sum()) for s in S) * c.output + comp_out,
-            0,
-        ),
-        ("Cache writes", sum(float(s.write.sum()) for s in S) * c.write, 1),
-        ("Cache reads", sum(float(s.read.sum()) for s in S) + comp_read, 3),
-    ]
-    uncached = sum(float(s.inp.sum()) for s in S) * c.input
-    total = sum(v for _, v, _ in kinds) + uncached
-    after = (
-        sum(
-            float(s.write[(s.kind == fit.USER) | (s.kind == fit.POLICY)].sum())
-            for s in S
-        )
-        * c.write
-    )
-    print(
-        "model-bill: "
-        + ", ".join(f"{name.lower()} {v / total:.2%}" for name, v, _ in kinds)
-        + f", uncached input {uncached / total:.3%}"
-    )
-    print(
-        f"model-bill, compactions' part: their own requests' reads {comp_read / total:.2%} and output "
-        f"{comp_out / total:.2%}, the cache write after them {after / total:.2%}; "
-        f"{(comp_read + comp_out + after) / total:.2%} in all"
-    )
-
-    for theme, t in THEMES.items():
-        ramp = parts(t)
-        fig, ax = plt.subplots(figsize=(9, 1.1))
-        ax.set_axis_off()
-        left = 0.0
-        for i, (name, v, step) in enumerate(kinds):
-            share = v / total
-            ax.barh(
-                0, share, left=left, height=0.5, color=ramp[step], ec=t["page"], lw=1.5
-            )
-            # Each kind named from its segment's left edge, above and below the bar in turn so that names
-            # longer than their segments don't meet.
-            ax.text(
-                left + 0.004,
-                0.36 if i % 2 == 0 else -0.36,
-                f"{name}, {share:.0%}",
-                ha="left",
-                va="bottom" if i % 2 == 0 else "top",
-                fontsize=9,
-                color=t["ink"],
-            )
-            left += share
-        ax.set_xlim(0, 1)
-        ax.set_ylim(-0.6, 0.6)
-        save(fig, out / f"model-bill-{theme}.svg")
 
 
 def average(out, p, c):
@@ -1104,8 +1034,7 @@ def voi(out, p, c):
     from fit.FLOOR, as fit.cycle counts them, and the x axis is the mutual
     information between the classifier's verdict and the kind of work, as a share of a perfect
     classifier's. With no information it compacts all the work at the most efficient single
-    threshold. A second chart, model-voi-point, draws the most efficient threshold of the group to
-    compact against the same axis."""
+    threshold."""
     # Denser near 1, where a classifier's saving on rare, steep work climbs fastest.
     A = np.unique(
         np.round(
@@ -1123,7 +1052,7 @@ def voi(out, p, c):
 
     # On fit.steady's 100-token grid, so the most efficient threshold of the work at β = 0 is the doc's 262k.
     X, J0 = fit.curve(p, c, 0, step=100)
-    Xq, J0q = fit.curve(p, c, 0, step=100, asks=fit.FLOOR)  # with sparkjoy's questions
+    J0q = fit.curve(p, c, 0, step=100, asks=fit.FLOOR)[1]  # with sparkjoy's questions
     lines = []
     for share, beta, step in mixes:
         Js = np.array([J0, fit.curve(p, c, beta, step=100)[1]])
@@ -1141,10 +1070,8 @@ def voi(out, p, c):
             ]
         )
         saved = 1 - both / default
-        point = np.array([Xq[((w - k)[:, None] * Jq).sum(0).argmin()] for k in keep])
-        kept_at = np.array([Xq[(k[:, None] * Jq).sum(0).argmin()] for k in keep])
         info = (H(share * A + (1 - share) * (1 - A)) - H(A)) / H(share)
-        lines.append((share, beta, step, saved, info, point))
+        lines.append((share, beta, step, saved, info))
         at = [int(np.abs(A - a).argmin()) for a in (0.8, 0.9, 0.99, 1.0)]
         print(
             f"model-voi, {share:.0%} at β = {beta}, saved against Claude Code's default: most efficient single "
@@ -1155,18 +1082,12 @@ def voi(out, p, c):
             )
             + f"; saves more than the single threshold from {A[np.argmax(saved > 1 - single.min() / default)]:.1%} right"
         )
-        print(
-            f"model-voi-point, {share:.0%} at β = {beta}: compacts the group to compact at "
-            + ", ".join(f"{tokens(point[i])} right {A[i]:.0%}" for i in at)
-            + f"; first below {tokens(fit.AUTO)} at {info[np.argmax(point < fit.AUTO)]:.0%} of the information;"
-            + f" compacts the rest at {tokens(fit.AUTO)} from {A[np.argmax(kept_at == fit.AUTO)]:.0%} right"
-        )
 
     for theme, t in THEMES.items():
         fig, ax = plt.subplots(figsize=(8, 4.2))
         style(ax, t)
         ends = []
-        for share, beta, step, saved, info, _ in lines:
+        for share, beta, step, saved, info in lines:
             ax.plot(info, saved, color=t["beta"][step], lw=2, clip_on=False)
             ends.append((saved[-1], f"{share:.0%} at β = {beta}", t["ink"]))
         label_ends(ax, ends, gap=0.02)
@@ -1184,32 +1105,6 @@ def voi(out, p, c):
         )
         axis_name(ax, "Saved against Claude Code's default (% of cost)", t)
         save(fig, out / f"model-voi-{theme}.svg")
-
-        fig, ax = plt.subplots(figsize=(8, 3.6))
-        style(ax, t)
-        for share, beta, step, _, info, point in lines:
-            ax.plot(
-                info,
-                point,
-                color=t["beta"][step],
-                lw=2,
-                clip_on=False,
-                label=f"{share:.0%} at β = {beta}",
-            )
-        ax.legend(frameon=False, fontsize=9, labelcolor=t["ink"], loc="upper right")
-        ax.set_xlim(0, 1)
-        ax.set_xticks([0, 0.25, 0.5, 0.75, 1])
-        ax.xaxis.set_major_formatter(percent)
-        ax.set_ylim(fit.FLOOR - 40_000, fit.AUTO + 20_000)
-        ax.set_yticks([fit.FLOOR, 500_000, 750_000, fit.AUTO])
-        ax.yaxis.set_major_formatter(tokens)
-        ax.set_xlabel(
-            "Accuracy (% of a perfect classifier's information)",
-            color=t["muted"],
-            fontsize=10,
-        )
-        axis_name(ax, "Compaction threshold of the work it says to compact (tokens)", t)
-        save(fig, out / f"model-voi-point-{theme}.svg")
 
 
 # The share of turn ends in the middle of a task, and the wasted requests D that a compaction at one
@@ -1260,8 +1155,8 @@ def voi_lost(p, c):
         )
 
 
-def draw(out, S, p, c, boot, cost, effectiveness, BT, BX):
-    """Draw each chart the docstring lists into `out`, from fit.py's sessions S, their parameters p and
+def draw(out, p, c, boot, cost, effectiveness, BT, BX):
+    """Draw each chart the docstring lists into `out`, from the parameters p of fit.py's sessions and
     `boot`, the parameters of each resample of them, the prices c, and the replay's cost and
     effectiveness with BT and BX, the most efficient turn-end threshold and steady-state threshold of each resample."""
     out.mkdir(parents=True, exist_ok=True)
@@ -1269,7 +1164,6 @@ def draw(out, S, p, c, boot, cost, effectiveness, BT, BX):
     cycles(out, p, c)
     inputs(out, p, c)
     payback(out, p, c)
-    bill(out, S, p, c)
     average(out, p, c)
     effectiveness_curve(out)
     cost_curve(out, p, c)
