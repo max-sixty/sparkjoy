@@ -8,7 +8,7 @@ a compaction drops, as the extra wasted requests after a compaction, which spark
 states (WASTED in hooks/register.ts).
 
     uv run --script model/calibrate.py --since 2026-09-17T00:00Z --until 2026-11-16T00:00Z \
-        --costs-since 2026-11-07T12:00Z --costs-until 2026-11-16T00:00Z
+        --costs-since 2026-11-18T00:00Z --costs-until 2026-11-23T00:00Z
 
 Effectiveness isn't logged, so the script measures what lowers it, as trouble, and how trouble
 varies with the context within a session. A request is in trouble when a tool call it made
@@ -16,7 +16,19 @@ failed or when it repeated a lookup its context already held; a turn is in troub
 user's next message corrects it or they interrupt it. Regressions with a fixed effect for each
 session estimate how trouble changes with the context, and how much more of it follows a
 compaction, which gives D, with 90% intervals from resampling sessions. Outcomes need many sessions, so the
-cost model that prices D and finds X* can come from a shorter, more recent window.
+cost model that prices D and finds X* can come from a shorter, more recent window: the docs take
+docs.py's.
+
+It writes its figures to the `calibrate` section of docs/figures.json, with the windows it read
+(`window`, and `costs_window` for the cost model's). `outcomes` gives each outcome's mean, per
+request or per turn weighted by its requests, and how it moves from the session's own mean per
+e-fold of context, in the first fit.SPAN requests or the first turn after a compaction, and at the
+session's start. A request is wasted when it failed or looked again; `failed_guard_aside` leaves out
+requests whose failures were all the worktree guard's; it explored when every call it made was a
+lookup. `corrected` counts CORRECTION's matches, which J scales to `corrections_share`, the share of
+requests in turns the user corrected. Trouble is against REFERENCE's band, and the thresholds are at
+fit.BASE's β. `D_top_usd` is D at the top of its interval, and `replayed` the best turn-end
+threshold, with its saving and the saving at fit.FLOOR.
 """
 
 import argparse
@@ -356,14 +368,14 @@ def main():
     a = ap.parse_args()
     S, since, until = fit.read(a)
     # Outcomes need many sessions; the cost model can come from fewer, more recent ones.
-    C = (
+    C, costs_since, costs_until = (
         fit.read(
             argparse.Namespace(
                 since=a.costs_since, until=a.costs_until, projects=a.projects
             )
-        )[0]
+        )
         if a.costs_since
-        else S
+        else (S, since, until)
     )
     ttl = fit.usual(s.ttl for s in C)
     c = fit.prices(a.model, ttl)
@@ -385,100 +397,126 @@ def main():
         boot_x.append(derived(boot_e[-1], means(dd), j=j, cost=price))
     E = {k: interval([b[k] for b in boot_e]) for k in e}
     X = {k: interval([b[k] for b in boot_x]) for k in x}
+    est = lambda k, v=e, ci=E: {"value": v[k], "interval_90": ci[k]}
+    stamp = lambda t: f"{t:%Y-%m-%dT%H:%M}Z"
 
-    print(
-        f"{len(S)} sessions, {len(d['x']):,} requests, {len(d['tx']):,} turns the user answered, "
-        f"{since:%Y-%m-%d %H:%M}Z to {until:%Y-%m-%d %H:%M}Z"
-    )
+    figures = {
+        "window": {
+            "since": stamp(since),
+            "until": stamp(until),
+            "sessions": len(S),
+            "requests": len(d["x"]),
+            "answered_turns": len(d["tx"]),
+        }
+    }
     if a.costs_since:
-        print(
-            f"cost model from {len(C)} sessions, {a.costs_since} to {a.costs_until or 'now'}"
-        )
+        figures["costs_window"] = {
+            "since": stamp(costs_since),
+            "until": stamp(costs_until),
+            "sessions": len(C),
+        }
     by = defaultdict(list)
     for s in S:
         for _, how, pre in s.compactions:
             by[how].append(pre or 0)
-    print("\ncompactions   n   context before: median (10th to 90th percentile)")
+    figures["compactions"] = {}
     for how, v in sorted(by.items(), key=lambda kv: -len(kv[1])):
-        lo, mid, hi = np.percentile(v, [10, 50, 90]) / 1e3
-        print(f"  {how:9s} {len(v):4d}   {mid:.0f}k ({lo:.0f}k to {hi:.0f}k)")
+        lo, mid, hi = np.percentile(v, [10, 50, 90])
+        figures["compactions"][how] = {
+            "count": len(v),
+            "context_before": {"median": mid, "p10": lo, "p90": hi},
+        }
 
-    pct = lambda k, C=E, v=e: f"{v[k]:+.2%} ({C[k][0]:+.2%} to {C[k][1]:+.2%})"
-    print("\nper request or turn, against the session's own mean (90%)")
-    print(
-        "                       mean    per e-fold of context        after a compaction*           at the session's start*"
-    )
-    for name, mean in (
-        ("wasted", d["wasted"].mean()),
-        ("failed", d["failed"].mean()),
-        ("failed, guard aside", (d["failed"] & ~d["guard"]).mean()),
-        ("looked", d["looked"].mean()),
-        ("explored", d["explored"].mean()),
-        ("corrected", np.average(d["corrected"], weights=d["tlen"])),
-        ("interrupted", np.average(d["interrupted"], weights=d["tlen"])),
-    ):
-        print(
-            f"  {name:20s} {mean:6.2%}   {pct(name):28s} {pct(name + ' after'):29s} {pct(name + ' start')}"
+    figures["outcomes"] = {
+        name.replace(",", "").replace(" ", "_"): {
+            "mean": mean,
+            "per_e_fold": est(name),
+            "after_compaction": est(name + " after"),
+            "at_session_start": est(name + " start"),
+        }
+        for name, mean in (
+            ("wasted", d["wasted"].mean()),
+            ("failed", d["failed"].mean()),
+            ("failed, guard aside", (d["failed"] & ~d["guard"]).mean()),
+            ("looked", d["looked"].mean()),
+            ("explored", d["explored"].mean()),
+            ("corrected", np.average(d["corrected"], weights=d["tlen"])),
+            ("interrupted", np.average(d["interrupted"], weights=d["tlen"])),
         )
-    print(
-        f"  * the first {fit.SPAN} requests, or the first turn. Corrections are CORRECTION's matches, weighted by "
-        f"requests;\n    J = {J:.2f} scales them to corrections, {m['corrected'] / J:.1%} of requests. Explored: "
-        f"every call it made was a lookup."
-    )
+    }
+    figures["corrections_share"] = m["corrected"] / J
 
-    w = x["w"]
-    print(
-        f"\ntrouble, the share of requests wasted, by context band against {BINS[REFERENCE] / 1e3:.0f}k to "
-        f"{BINS[REFERENCE + 1] / 1e3:.0f}k (90%)"
-    )
-    for k in range(len(BINS) - 1):
-        hi = "" if BINS[k + 1] == np.inf else f"{BINS[k + 1] / 1e3:.0f}k"
-        print(
-            f"  {BINS[k] / 1e3:4.0f}k to {hi:5s} (mean {m['band x'][k] / 1e3:3.0f}k)  "
-            f"{x['profile'][k]:+.2%} ({X['profile'][0][k]:+.2%} to {X['profile'][1][k]:+.2%})"
-        )
-    print(f"  per e-fold: {pct('slope', X, x)}; mean trouble {w:.1%}")
+    figures["trouble"] = {
+        "bands": [
+            {
+                "from": BINS[k],
+                "to": BINS[k + 1],
+                "mean_context": m["band x"][k],
+                "against_reference": {
+                    "value": x["profile"][k],
+                    "interval_90": X["profile"][:, k],
+                },
+            }
+            for k in range(len(BINS) - 1)
+        ],
+        "per_e_fold": est("slope", x, X),
+        "mean": x["w"],
+    }
 
-    print(
-        f"\nD, from the extra trouble in each source's first {fit.SPAN} requests and two turns after a compaction:"
-    )
-    for key, label in (
-        ("", "all"),
-        (" sparkjoy", "sparkjoy's"),
-        (" other", "the user's and Claude Code's"),
-    ):
-        (lo, hi), (dlo, dhi) = X["D requests" + key], X["D" + key]
-        print(
-            f"  {label:28s} {x['D requests' + key]:+6.2f} requests ({lo:+.2f} to {hi:+.2f}; turns of "
-            f"{m['turn 1' + key]:.0f} and {m['turn 2' + key]:.0f} at {m['post x' + key] / 1e3:.0f}k), "
-            f"D = ${x['D' + key] * c.read:+.2f} ({dlo * c.read:+.2f} to {dhi * c.read:+.2f})"
+    figures["D"] = {
+        name: {
+            "wasted_requests": est("D requests" + key, x, X),
+            "first_turn_requests": m["turn 1" + key],
+            "second_turn_requests": m["turn 2" + key],
+            "mean_context": m["post x" + key],
+            "cost_usd": {
+                "value": x["D" + key] * c.read,
+                "interval_90": X["D" + key] * c.read,
+            },
+        }
+        for key, name in (
+            ("", "all"),
+            (" sparkjoy", "sparkjoy"),
+            (" other", "user_and_claude_code"),
         )
+    }
     # The fitted D is near zero, and below zero after sparkjoy's compactions, which come where a piece
     # of work ends. A threshold compacts anywhere, so the results take D as 0 or at the top of its
     # interval, where the user's and Claude Code's compactions reach.
     high = max(X["D"][1], X["D other"][1])
     wasted = price(m["post x"])  # a request after a compaction
-    for x in (400_000, 700_000):
-        lost = fit.lost_for(p, c, x, fit.BASE)
-        print(
-            f"  X* reaches {x // 1000}k at β = {fit.BASE:g} with D of, in wasted requests at ${wasted * c.read:.3f}: "
-            + ("none" if lost is None else f"${lost * c.read:.2f}, {lost / wasted:.0f}")
+    figures["D_for_steady_threshold"] = {
+        "request_usd": wasted * c.read,
+        "thresholds": [],
+    }
+    for threshold in (400_000, 700_000):
+        lost = fit.lost_for(p, c, threshold, fit.BASE)
+        figures["D_for_steady_threshold"]["thresholds"].append(
+            {
+                "threshold": threshold,
+                "cost_usd": None if lost is None else lost * c.read,
+                "wasted_requests": None if lost is None else lost / wasted,
+            }
         )
     # A LangWatch-style comparison, without the session effects or the context.
     first, rest = d["tpost"] == 1, d["tpost"] == 0
-    raw = lambda sel: ((d["corrected"][sel].mean() - (1 - SPECIFICITY)) / J, sel.sum())
-    (r1, n1), (r0, n0) = raw(first), raw(rest)
-    print(
-        f"  corrections answering the first turn after a compaction: {r1:.0%} of {n1}; after other turns: {r0:.0%} of {n0}"
-    )
+    raw = lambda sel: {
+        "share": (d["corrected"][sel].mean() - (1 - SPECIFICITY)) / J,
+        "turns": sel.sum(),
+    }
+    figures["raw_corrections"] = {
+        "first_turn_after_compaction": raw(first),
+        "other_turns": raw(rest),
+    }
 
-    k = lambda v: f"{v / 1e3:.0f}k"
-    print(
-        f"\nsteady-state X* at β = {fit.BASE:g} with D = 0, then with D at the top of its interval, "
-        f"${high * c.read:.2f}: {k(fit.steady(p, c, fit.BASE))}, {k(fit.steady(p, c, fit.BASE, high))}"
-    )
+    figures["D_top_usd"] = high * c.read
+    figures["steady_threshold"] = {
+        "D_zero": fit.steady(p, c, fit.BASE),
+        "D_top": fit.steady(p, c, fit.BASE, high),
+    }
     if not a.no_replay:
-        for lost, label in ((0.0, "D = 0"), (high, "D at the top of its interval")):
+        figures["replayed"] = {}
+        for lost, name in ((0.0, "D_zero"), (high, "D_top")):
             cost, effectiveness = fit.grid(C, p, c, ttl, betas=(fit.BASE,), lost=lost)
             (T,), (saved,) = fit.best(cost, effectiveness)
             at = list(fit.THRESHOLDS).index(fit.FLOOR)
@@ -487,10 +525,14 @@ def main():
                 / effectiveness[:, at, 0].sum()
                 / (cost[:, -1].sum() / effectiveness[:, -1, 0].sum())
             )
-            print(
-                f"best turn-end threshold at β = {fit.BASE:g}, replayed, {label}: {k(T)}, saving {1 - saved:.1%} "
-                f"(from {k(fit.FLOOR)}: {1 - floor:.1%})"
-            )
+            figures["replayed"][name] = {
+                "threshold": T,
+                "saving": 1 - saved,
+                "saving_at_floor": 1 - floor,
+            }
+
+    fit.save_figures({"calibrate": figures})
+    print(f"wrote the calibrate section of {fit.DOC_FIGURES}")
 
 
 if __name__ == "__main__":
