@@ -89,62 +89,62 @@ L 413.604624 27.179297
    </g>
    <g id="matplotlib.axis_2"/>
    <g id="line2d_9">
-    <path d="M 167.304403 282.203297 
-L 167.304403 27.179297 
+    <path d="M 159.909708 282.203297 
+L 159.909708 27.179297 
 " clip-path="url(#pea10e40f83)" style="fill: none; stroke: #3c6496; stroke-linecap: square"/>
    </g>
-   <g id="sens-N" aria-label="N, output of the compaction request (5.6k): 370k at half, 387k at twice, 375k–376k across its 90% interval">
-    <path d="M 163.878993 266.264297 
-L 173.922993 266.264297 
+   <g id="sens-N" aria-label="N, output of the compaction request (5.1k): 358k at half, 374k at twice, 363k–363k across its 90% interval">
+    <path d="M 156.716529 266.264297 
+L 166.005777 266.264297 
 " clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 1.6"/>
    </g>
    <g id="line2d_10">
-    <path d="M 166.897999 266.264297 
-L 167.65275 266.264297 
+    <path d="M 159.735535 266.264297 
+L 160.083881 266.264297 
 " clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 6"/>
    </g>
-   <g id="sens-P" aria-label="P, size of the system prompt and tools (30.4k): 389k at half, 346k at twice, 375k–376k across its 90% interval">
-    <path d="M 175.258322 226.416797 
-L 150.177351 226.416797 
+   <g id="sens-lapse" aria-label="ℓ, share of requests that find the cache lapsed (0.48%): 379k at half, 337k at twice, 360k–366k across its 90% interval">
+    <path d="M 169.37313 226.416797 
+L 145.04691 226.416797 
 " clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 1.6"/>
    </g>
    <g id="line2d_11">
-    <path d="M 167.014114 226.416797 
-L 167.362461 226.416797 
+    <path d="M 158.342147 226.416797 
+L 161.535327 226.416797 
 " clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 6"/>
    </g>
-   <g id="sens-lapse" aria-label="ℓ, share of requests that find the cache lapsed (0.56%): 395k at half, 347k at twice, 372k–379k across its 90% interval">
-    <path d="M 178.393444 186.569297 
-L 150.46764 186.569297 
+   <g id="sens-P" aria-label="P, size of the system prompt and tools (33.5k): 378k at half, 330k at twice, 363k–363k across its 90% interval">
+    <path d="M 168.618379 186.569297 
+L 140.692575 186.569297 
 " clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 1.6"/>
    </g>
    <g id="line2d_12">
-    <path d="M 164.982091 186.569297 
-L 169.336426 186.569297 
+    <path d="M 159.909708 186.569297 
+L 159.967766 186.569297 
 " clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 6"/>
    </g>
-   <g id="sens-g" aria-label="g, growth of the context per request (1.7k): 299k at half, 503k at twice, 369k–384k across its 90% interval">
-    <path d="M 122.890184 146.721797 
-L 241.095871 146.721797 
+   <g id="sens-g" aria-label="g, growth of the context per request (1.6k): 289k at half, 486k at twice, 360k–366k across its 90% interval">
+    <path d="M 117.121107 146.721797 
+L 231.146633 146.721797 
 " clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 1.6"/>
    </g>
    <g id="line2d_13">
-    <path d="M 163.240357 146.721797 
-L 172.123201 146.721797 
+    <path d="M 157.877685 146.721797 
+L 161.825616 146.721797 
 " clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 6"/>
    </g>
-   <g id="sens-K" aria-label="K, context after a compaction (142k): 266k at half, 583k at twice, 367k–385k across its 90% interval">
-    <path d="M 103.653531 106.874297 
-L 287.465038 106.874297 
+   <g id="sens-K" aria-label="K, context after a compaction (139k): 254k at half, 566k at twice, 358k–367k across its 90% interval">
+    <path d="M 96.763004 106.874297 
+L 277.726676 106.874297 
 " clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 1.6"/>
    </g>
    <g id="line2d_14">
-    <path d="M 162.263696 106.874297 
-L 172.62186 106.874297 
+    <path d="M 156.73743 106.874297 
+L 162.473906 106.874297 
 " clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 6"/>
    </g>
-   <g id="sens-β" aria-label="β, growth of effectiveness with the context (0.5, not measured): 297k at half, 965k at twice">
-    <path d="M 121.438738 67.026797 
+   <g id="sens-β" aria-label="β, growth of effectiveness with the context (0.5, not measured): 287k at half, 965k at twice">
+    <path d="M 115.553546 67.026797 
 L 509.4 67.026797 
 " clip-path="url(#pea10e40f83)" style="fill: none; stroke: #5c9cea; stroke-width: 1.6"/>
    </g>
@@ -154,7 +154,7 @@ L 509.4 282.203297
 " style="fill: none; stroke: #c3c2b7; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
    <g id="text_6">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="171.949027" y="37.204172" transform="rotate(-0 171.949027 37.204172)">376k, with every parameter as measured</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="164.554332" y="37.204172" transform="rotate(-0 164.554332 37.204172)">363k, with every parameter as measured</text>
    </g>
    <g id="line2d_15">
     <defs>
@@ -171,7 +171,7 @@ z
 " style="stroke: #5c9cea; stroke-width: 1.6"/>
     </defs>
     <g>
-     <use xlink:href="#mb3ed5fc97d" x="163.878993" y="266.264297" style="fill: #0d1117; stroke: #5c9cea; stroke-width: 1.6"/>
+     <use xlink:href="#mb3ed5fc97d" x="156.716529" y="266.264297" style="fill: #0d1117; stroke: #5c9cea; stroke-width: 1.6"/>
     </g>
    </g>
    <g id="line2d_16">
@@ -189,82 +189,82 @@ z
 " style="stroke: #0d1117"/>
     </defs>
     <g>
-     <use xlink:href="#m64c9e0e0a3" x="173.922993" y="266.264297" style="fill: #5c9cea; stroke: #0d1117"/>
+     <use xlink:href="#m64c9e0e0a3" x="166.005777" y="266.264297" style="fill: #5c9cea; stroke: #0d1117"/>
     </g>
    </g>
    <g id="text_7">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #f0efec" x="158.65379" y="268.874648" transform="rotate(-0 158.65379 268.874648)">370k</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #f0efec" x="151.491327" y="268.874648" transform="rotate(-0 151.491327 268.874648)">358k</text>
    </g>
    <g id="text_8">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="179.148195" y="268.874648" transform="rotate(-0 179.148195 268.874648)">387k</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="171.23098" y="268.874648" transform="rotate(-0 171.23098 268.874648)">374k</text>
    </g>
    <g id="line2d_17">
     <g>
-     <use xlink:href="#mb3ed5fc97d" x="175.258322" y="226.416797" style="fill: #0d1117; stroke: #5c9cea; stroke-width: 1.6"/>
+     <use xlink:href="#mb3ed5fc97d" x="169.37313" y="226.416797" style="fill: #0d1117; stroke: #5c9cea; stroke-width: 1.6"/>
     </g>
    </g>
    <g id="line2d_18">
     <g>
-     <use xlink:href="#m64c9e0e0a3" x="150.177351" y="226.416797" style="fill: #5c9cea; stroke: #0d1117"/>
+     <use xlink:href="#m64c9e0e0a3" x="145.04691" y="226.416797" style="fill: #5c9cea; stroke: #0d1117"/>
     </g>
    </g>
    <g id="text_9">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #f0efec" x="144.952149" y="229.027148" transform="rotate(-0 144.952149 229.027148)">346k</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #f0efec" x="139.821708" y="229.027148" transform="rotate(-0 139.821708 229.027148)">337k</text>
    </g>
    <g id="text_10">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="180.483525" y="229.027148" transform="rotate(-0 180.483525 229.027148)">389k</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="174.598332" y="229.027148" transform="rotate(-0 174.598332 229.027148)">379k</text>
    </g>
    <g id="line2d_19">
     <g>
-     <use xlink:href="#mb3ed5fc97d" x="178.393444" y="186.569297" style="fill: #0d1117; stroke: #5c9cea; stroke-width: 1.6"/>
+     <use xlink:href="#mb3ed5fc97d" x="168.618379" y="186.569297" style="fill: #0d1117; stroke: #5c9cea; stroke-width: 1.6"/>
     </g>
    </g>
    <g id="line2d_20">
     <g>
-     <use xlink:href="#m64c9e0e0a3" x="150.46764" y="186.569297" style="fill: #5c9cea; stroke: #0d1117"/>
+     <use xlink:href="#m64c9e0e0a3" x="140.692575" y="186.569297" style="fill: #5c9cea; stroke: #0d1117"/>
     </g>
    </g>
    <g id="text_11">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #f0efec" x="145.242438" y="189.179648" transform="rotate(-0 145.242438 189.179648)">347k</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #f0efec" x="135.467373" y="189.179648" transform="rotate(-0 135.467373 189.179648)">330k</text>
    </g>
    <g id="text_12">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="183.618646" y="189.179648" transform="rotate(-0 183.618646 189.179648)">395k</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="173.843581" y="189.179648" transform="rotate(-0 173.843581 189.179648)">378k</text>
    </g>
    <g id="line2d_21">
     <g>
-     <use xlink:href="#mb3ed5fc97d" x="122.890184" y="146.721797" style="fill: #0d1117; stroke: #5c9cea; stroke-width: 1.6"/>
+     <use xlink:href="#mb3ed5fc97d" x="117.121107" y="146.721797" style="fill: #0d1117; stroke: #5c9cea; stroke-width: 1.6"/>
     </g>
    </g>
    <g id="line2d_22">
     <g>
-     <use xlink:href="#m64c9e0e0a3" x="241.095871" y="146.721797" style="fill: #5c9cea; stroke: #0d1117"/>
+     <use xlink:href="#m64c9e0e0a3" x="231.146633" y="146.721797" style="fill: #5c9cea; stroke: #0d1117"/>
     </g>
    </g>
    <g id="text_13">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #f0efec" x="117.664981" y="149.332148" transform="rotate(-0 117.664981 149.332148)">299k</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #f0efec" x="111.895905" y="149.332148" transform="rotate(-0 111.895905 149.332148)">289k</text>
    </g>
    <g id="text_14">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="246.321074" y="149.332148" transform="rotate(-0 246.321074 149.332148)">503k</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="236.371835" y="149.332148" transform="rotate(-0 236.371835 149.332148)">486k</text>
    </g>
    <g id="line2d_23">
     <g>
-     <use xlink:href="#mb3ed5fc97d" x="103.653531" y="106.874297" style="fill: #0d1117; stroke: #5c9cea; stroke-width: 1.6"/>
+     <use xlink:href="#mb3ed5fc97d" x="96.763004" y="106.874297" style="fill: #0d1117; stroke: #5c9cea; stroke-width: 1.6"/>
     </g>
    </g>
    <g id="line2d_24">
     <g>
-     <use xlink:href="#m64c9e0e0a3" x="287.465038" y="106.874297" style="fill: #5c9cea; stroke: #0d1117"/>
+     <use xlink:href="#m64c9e0e0a3" x="277.726676" y="106.874297" style="fill: #5c9cea; stroke: #0d1117"/>
     </g>
    </g>
    <g id="text_15">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #f0efec" x="98.428329" y="109.484648" transform="rotate(-0 98.428329 109.484648)">266k</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #f0efec" x="91.537802" y="109.484648" transform="rotate(-0 91.537802 109.484648)">254k</text>
    </g>
    <g id="text_16">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="292.69024" y="109.484648" transform="rotate(-0 292.69024 109.484648)">583k</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="282.951879" y="109.484648" transform="rotate(-0 282.951879 109.484648)">566k</text>
    </g>
    <g id="line2d_25">
     <g>
-     <use xlink:href="#mb3ed5fc97d" x="121.438738" y="67.026797" style="fill: #0d1117; stroke: #5c9cea; stroke-width: 1.6"/>
+     <use xlink:href="#mb3ed5fc97d" x="115.553546" y="67.026797" style="fill: #0d1117; stroke: #5c9cea; stroke-width: 1.6"/>
     </g>
    </g>
    <g id="line2d_26">
@@ -273,25 +273,25 @@ z
     </g>
    </g>
    <g id="text_17">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #f0efec" x="116.213536" y="69.637148" transform="rotate(-0 116.213536 69.637148)">297k</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #f0efec" x="110.328344" y="69.637148" transform="rotate(-0 110.328344 69.637148)">287k</text>
    </g>
    <g id="text_18">
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #f0efec" x="509.4" y="81.746297" transform="rotate(-0 509.4 81.746297)">965k, where Claude Code compacts</text>
    </g>
    <g id="text_19">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="7.2" y="254.824959" transform="rotate(-0 7.2 254.824959)">N, output of the compaction request (5.6k)</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="7.2" y="254.824959" transform="rotate(-0 7.2 254.824959)">N, output of the compaction request (5.1k)</text>
    </g>
    <g id="text_20">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="7.2" y="214.924022" transform="rotate(-0 7.2 214.924022)">P, size of the system prompt and tools (30.4k)</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="7.2" y="214.977459" transform="rotate(-0 7.2 214.977459)">ℓ, share of requests that find the cache lapsed (0.48%)</text>
    </g>
    <g id="text_21">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="7.2" y="175.129959" transform="rotate(-0 7.2 175.129959)">ℓ, share of requests that find the cache lapsed (0.56%)</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="7.2" y="175.076522" transform="rotate(-0 7.2 175.076522)">P, size of the system prompt and tools (33.5k)</text>
    </g>
    <g id="text_22">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="7.2" y="135.167147" transform="rotate(-0 7.2 135.167147)">g, growth of the context per request (1.7k)</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="7.2" y="135.167147" transform="rotate(-0 7.2 135.167147)">g, growth of the context per request (1.6k)</text>
    </g>
    <g id="text_23">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="7.2" y="95.434959" transform="rotate(-0 7.2 95.434959)">K, context after a compaction (142k)</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #e39457" x="7.2" y="95.434959" transform="rotate(-0 7.2 95.434959)">K, context after a compaction (139k)</text>
    </g>
    <g id="text_24">
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #f0efec" x="7.2" y="55.472147" transform="rotate(-0 7.2 55.472147)">β, growth of effectiveness with the context (0.5, not measured)</text>

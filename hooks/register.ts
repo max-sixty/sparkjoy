@@ -54,7 +54,8 @@ import { checkForUpdate } from './update'
 const COMPACTING = { plugin: 'sparkjoy', key: 'compacting' } as const
 
 // The floors sparkjoy asks from and the figures the question states, as my
-// sessions measured them (docs/cost-model.md, 7-15 Nov 2026).
+// sessions of 7-15 Nov 2026 measured them (docs/cost-model.md); FLOOR's
+// comment gives what my sessions of 18-22 Nov 2026 say of the floors.
 // `/sparkjoy report` fits the same figures to the user's own sessions and
 // saves them (`FIGURES`), and sparkjoy uses those instead (`fitted`), falling
 // back to these figure by figure. A floor the user set in their settings wins
@@ -66,13 +67,14 @@ const COMPACTING = { plugin: 'sparkjoy', key: 'compacting' } as const
 const AUTHOR = {
   // The judge is asked at a turn end only from FLOOR context tokens, and in
   // an idle session from IDLE_FLOOR. In docs/cost-model.md's replay of my
-  // sessions ("Floors"), this pair costs least counting cost alone, and
-  // at the model's base case for β it comes 0.8 points short of the most efficient
-  // pair. The pair is fitted by cost alone, since the question decides above
-  // it. The report finds the pair that minimizes the cost of the user's
-  // sessions (`floors` in model/fit.py). Compacting just before the
-  // cache lapses pays from about 160k on a one-hour cache and 172k on a
-  // five-minute one, counting only the next request, whose cache write it
+  // sessions of 18-22 Nov 2026 ("Floors"), the pair that costs least counting cost alone is
+  // 250k and 150k; this one saves as much at the model's base case for β,
+  // 0.4 points short of the most efficient pair. The pair is fitted by cost
+  // alone, since the question decides above it. The report finds the pair
+  // that minimizes the cost of the user's sessions (`floors` in
+  // model/fit.py). Compacting just before the cache lapses pays from about
+  // 155k on a one-hour cache and 166k on a five-minute one, counting only the
+  // next request, whose cache write it
   // shrinks. Claude Code's own idle compaction acts only from 200k, only on a
   // one-hour cache, and only in a session someone is attending (a terminal, VS
   // Code, the desktop app), so a five-minute cache or a background session

@@ -128,61 +128,61 @@ L 530.18 23.49655
     </g>
    </g>
    <g id="line2d_15">
-    <path d="M 102.122019 189.81655 
-L 102.122019 23.49655 
+    <path d="M 100.177345 189.81655 
+L 100.177345 23.49655 
 " clip-path="url(#p8128184367)" style="fill: none; stroke: #e4e3df; stroke-width: 1.2; stroke-linecap: square"/>
    </g>
    <g id="line2d_16">
-    <path d="M 121.153257 -1 
-L 122.418185 10.839939 
-L 123.979429 23.526439 
-L 125.540672 34.521406 
-L 127.101916 44.142002 
-L 128.663159 52.630763 
-L 130.224403 60.176329 
-L 132.306061 69.022854 
-L 134.387719 76.727892 
-L 136.469377 83.498986 
-L 138.551035 89.496241 
-L 140.632693 94.845143 
-L 142.714351 99.645441 
-L 144.796009 103.977416 
-L 147.398082 108.832217 
-L 150.000154 113.159321 
-L 152.602227 117.040333 
-L 155.204299 120.540853 
-L 157.806372 123.714222 
-L 160.928859 127.15157 
-L 164.051346 130.242294 
-L 167.173833 133.036309 
-L 170.816734 135.974964 
-L 174.459636 138.617639 
-L 178.102538 141.006907 
-L 182.265854 143.471532 
-L 186.42917 145.692738 
-L 191.1129 147.94317 
-L 196.317045 150.181168 
-L 201.52119 152.184821 
-L 207.24575 154.159709 
-L 213.490724 156.082582 
-L 220.256113 157.936277 
-L 227.541916 159.708913 
-L 235.868548 161.4983 
-L 244.715595 163.170544 
-L 254.60347 164.809887 
-L 265.532175 166.390977 
-L 277.501709 167.896553 
-L 291.032486 169.368768 
-L 306.124506 170.78046 
-L 322.777771 172.114081 
-L 342.033108 173.425283 
-L 363.370102 174.652478 
-L 387.829584 175.833767 
-L 415.931968 176.963663 
-L 448.197667 178.034658 
-L 485.667512 179.05226 
-L 529.902745 180.024143 
-L 529.902745 180.024143 
+    <path d="M 118.475363 -1 
+L 119.953096 13.172734 
+L 121.514339 25.995401 
+L 123.075583 37.069523 
+L 124.636826 46.729927 
+L 126.19807 55.231082 
+L 127.759313 62.769842 
+L 129.840971 71.587106 
+L 131.92263 79.248007 
+L 134.004288 85.966028 
+L 136.085946 91.905148 
+L 138.167604 97.193406 
+L 140.249262 101.932234 
+L 142.33092 106.20303 
+L 144.932992 110.982845 
+L 147.535065 115.237405 
+L 150.137137 119.048783 
+L 152.73921 122.482796 
+L 155.341282 125.592845 
+L 158.463769 128.958363 
+L 161.586256 131.981625 
+L 164.708743 134.712314 
+L 168.351645 137.581968 
+L 171.994547 140.160498 
+L 176.157863 142.804627 
+L 180.321179 145.174041 
+L 185.004909 147.561626 
+L 189.68864 149.699347 
+L 194.892785 151.826627 
+L 200.617345 153.912023 
+L 206.862319 155.931759 
+L 213.627707 157.868884 
+L 220.91351 159.712235 
+L 228.719728 161.45537 
+L 237.566775 163.191461 
+L 246.934236 164.801528 
+L 257.342526 166.365391 
+L 268.791645 167.862644 
+L 281.802008 169.334937 
+L 296.373614 170.752086 
+L 312.506464 172.094186 
+L 330.720971 173.383708 
+L 351.537552 174.628606 
+L 374.956205 175.803655 
+L 402.017759 176.934403 
+L 433.24263 178.010789 
+L 469.671645 179.03664 
+L 512.345635 180.007719 
+L 530.039728 180.353817 
+L 530.039728 180.353817 
 " clip-path="url(#p8128184367)" style="fill: none; stroke: #0b0b0b; stroke-width: 2; stroke-linecap: square"/>
    </g>
    <g id="patch_3">
@@ -191,7 +191,7 @@ L 530.18 189.81655
 " style="fill: none; stroke: #52514e; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
    <g id="text_12">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #a3500c" x="108.366994" y="182.951013" transform="rotate(-0 108.366994 182.951013)">142k, what a compaction leaves</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #a3500c" x="106.422319" y="182.951013" transform="rotate(-0 106.422319 182.951013)">139k, what a compaction leaves</text>
    </g>
    <g id="line2d_17">
     <defs>
@@ -208,12 +208,12 @@ z
 " style="stroke: #ffffff; stroke-width: 1.5"/>
     </defs>
     <g clip-path="url(#p8128184367)">
-     <use xlink:href="#mc63cf4cb19" x="132.062902" y="66.73975" style="fill: #0b0b0b; stroke: #ffffff; stroke-width: 1.5"/>
+     <use xlink:href="#mc63cf4cb19" x="132.062902" y="78.38215" style="fill: #0b0b0b; stroke: #ffffff; stroke-width: 1.5"/>
     </g>
    </g>
    <g id="text_13">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(139.348705 49.067663)">74 requests at 200k,</text>
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(139.348705 57.961667)">each reading 58k less</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(139.348705 60.710063)">67 requests at 200k,</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(139.348705 69.604067)">each reading 61k less</text>
    </g>
    <g id="line2d_18">
     <g clip-path="url(#p8128184367)">
@@ -222,16 +222,16 @@ z
    </g>
    <g id="text_14">
     <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(243.431606 143.870063)">17 requests at 400k,</text>
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(243.431606 152.764067)">each reading 258k less</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(243.431606 152.764067)">each reading 261k less</text>
    </g>
    <g id="line2d_19">
     <g clip-path="url(#p8128184367)">
-     <use xlink:href="#mc63cf4cb19" x="392.270155" y="174.84775" style="fill: #0b0b0b; stroke: #ffffff; stroke-width: 1.5"/>
+     <use xlink:href="#mc63cf4cb19" x="392.270155" y="176.51095" style="fill: #0b0b0b; stroke: #ffffff; stroke-width: 1.5"/>
     </g>
    </g>
    <g id="text_15">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(399.555959 157.175663)">9 requests at 700k,</text>
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(399.555959 166.069667)">each reading 558k less</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(399.555959 158.838863)">8 requests at 700k,</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #0b0b0b" transform="translate(399.555959 167.732867)">each reading 561k less</text>
    </g>
   </g>
  </g>
