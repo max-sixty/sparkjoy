@@ -1,12 +1,5 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.12"
-# dependencies = ["numpy>=2.1", "matplotlib>=3.9"]
-# ///
-"""Draws the README's replay charts, in a light and a dark theme, and prints the figures it quotes.
-
-    uv run --script model/replay_charts.py --since 2026-11-18T00:00Z --until 2026-11-23T00:00Z \
-        --session 00e0c1c4 --out assets
+"""Draws the README's replay charts, in a light and a dark theme, and returns the figures the README
+quotes from them, which docs.py writes to docs/figures.json's `replay` section.
 
 The replay is the cost model's `as_run` (model/fit.py): it prices each session twice from its
 logged requests, at fit.MODEL's list prices, "with" sparkjoy's compactions where they happened and
@@ -18,9 +11,6 @@ session someone had open, also an idle context from fit.CC_IDLE. The charts:
   savings.svg   what the window's sessions cost under Claude Code's default, as if none had its idle
                 compaction and as if all had it, and with sparkjoy as they ran
 """
-
-import argparse
-from pathlib import Path
 
 import charts
 import fit
@@ -188,54 +178,42 @@ def savings_chart(bars, t, path):
     charts.save(fig, path)
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    fit.window_args(ap)
-    ap.add_argument(
-        "--session",
-        required=True,
-        help="a prefix of the id of the session the session chart shows, from the window",
-    )
-    ap.add_argument(
-        "--out", type=Path, required=True, help="the directory the SVGs go to"
-    )
-    a = ap.parse_args()
-    S, since, until = fit.read(a)
-    p = fit.measure(S, fit.usual(s.ttl for s in S))
-    runs = [(s, *r) for s in S if (r := fit.as_run(s, p, model=fit.MODEL))[0]]
-    without, with_, judge = (sum(d[i] for _, d, _, _ in runs) for i in (1, 0, 2))
+def draw(out, S, runs, session):
+    """Draw the charts into `out` and return their figures, from the sessions S and `runs`, each
+    session's `fit.as_run` at fit.MODEL's prices as it ran (None), as if in the background (False) and
+    as if open (True), keyed by that argument; `session` is a prefix of the id of the session the
+    session chart shows."""
+    ran = runs[None]
+    with_ = sum(r[0][0] for r in ran)
     contexts = {
-        "with": np.concatenate([w for _, _, w, _ in runs]),
-        "without": np.concatenate([wo for _, _, _, wo in runs]),
+        "with": np.concatenate([r[1] for r in ran]),
+        "without": np.concatenate([r[2] for r in ran]),
     }
-    one = next(s for s in S if s.path.name.startswith(a.session))
-    (one_with, one_without, _), traces = (
-        (d := fit.as_run(one, p, model=fit.MODEL))[0],
-        {"with": d[1], "without": d[2]},
-    )
+    i, one = next((i, s) for i, s in enumerate(S) if s.path.name.startswith(session))
+    (one_with, one_without, _), *trace = ran[i]
+    traces = dict(zip(("with", "without"), trace, strict=True))
     asked = [v for v in one.verdicts if v.kind in ("compacted", "kept")]
     checks = [
         (int(np.searchsorted(one.t, v.t)) - 1, v.kind == "compacted") for v in asked
     ]
     # Claude Code's default, each session priced as if none had its idle compaction and as if all had
     # it, then sparkjoy as each session ran.
-    bars = []
-    for opened, name in (
-        (False, "Claude Code"),
-        (True, "Claude Code with\nidle compaction"),
-    ):
-        priced = [d for s in S if (d := fit.as_run(s, p, opened, fit.MODEL)[0])]
-        bars.append((name, sum(d[1] for d in priced), "without"))
+    bars = [
+        (name, sum(r[0][1] for r in runs[opened]), "without")
+        for opened, name in (
+            (False, "Claude Code"),
+            (True, "Claude Code with\nidle compaction"),
+        )
+    ]
     bars.append((PLUGIN, with_, "with"))
-    a.out.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True, exist_ok=True)
     for theme, t in charts.THEMES.items():
-        session_chart(traces, checks, t, a.out / f"session-{theme}.svg")
-        context_chart(contexts, t, a.out / f"context-{theme}.svg")
-        savings_chart(bars, t, a.out / f"savings-{theme}.svg")
+        session_chart(traces, checks, t, out / f"session-{theme}.svg")
+        context_chart(contexts, t, out / f"context-{theme}.svg")
+        savings_chart(bars, t, out / f"savings-{theme}.svg")
 
-    n = len(contexts["with"])
     logged = 0.0
-    for s, *_ in runs:
+    for s in S:
         c = fit.prices(fit.MODEL, s.ttl)
         logged += (
             float(
@@ -246,45 +224,39 @@ def main():
             )
             * c.read
         )
-    print(
-        f"{len(runs)} sessions, {n:,} requests, {since:%Y-%m-%d %H:%M}Z to {until:%Y-%m-%d %H:%M}Z; "
-        f"the requests' logged tokens at {fit.MODEL} prices ${logged:,.0f}"
-    )
-    print(
-        f"cost: ${without:,.0f} without, ${with_:,.0f} with ({with_ / without - 1:+.1%}); its questions ${judge:,.0f}"
-    )
-    print(
-        f"mean context {contexts['without'].mean() / 1000:.0f}k without, {contexts['with'].mean() / 1000:.0f}k with; "
-        f"requests at {LONG // 1000}k+: {(contexts['without'] >= LONG).mean():.0%} without, "
-        f"{(contexts['with'] >= LONG).mean():.0%} with"
-    )
-    print(
-        "savings chart: "
-        + "; ".join(f"{name.replace(chr(10), ' ')} ${v:,.0f}" for name, v, _ in bars)
-        + "; "
-        + ", ".join(
-            f"{PLUGIN} saves {1 - with_ / v:.1%} on {name.replace(chr(10), ' ')}"
-            for name, v, _ in bars[:-1]
-        )
-    )
-    every = [v for s, *_ in runs for v in s.verdicts if v.kind in ("compacted", "kept")]
-    print(
-        f"verdicts: {len(every)}, compacted after {sum(v.kind == 'compacted' for v in every)}"
-    )
-    days = (one.t[-1] - one.t[0]) / 86_400
-    print(
-        f"session chart: {one.path.name}, {len(one.t):,} requests over {days:.1f} days, "
-        f"${one_without:,.0f} without, ${one_with:,.0f} with ({one_with / one_without - 1:+.1%}); "
-        f"asked {len(asked)} times, {sum(v.idle is None for v in asked)} at turn ends and "
-        f"{sum(v.idle is not None for v in asked)} when idle; kept going {sum(not c for _, c in checks)} times; compacted at "
-        f"{', '.join(f'{traces["with"][i] / 1000:.0f}k' for i, c in checks if c)}; without, Claude Code compacts "
-        f"{int((np.diff(traces['without']) < -300_000).sum())} times"
-    )
-    for v in asked:
-        print(
-            f"  {v.kind} at {v.tokens // 1000}k{'' if v.idle is None else ', idle'}: {v.reason}"
-        )
-
-
-if __name__ == "__main__":
-    main()
+    every = [v for s in S for v in s.verdicts if v.kind in ("compacted", "kept")]
+    return {
+        # The requests' logged tokens at fit.MODEL's prices; docs.py's `as_ran` holds what the replay
+        # prices, the savings chart's bars included.
+        "logged_usd": logged,
+        # What sparkjoy as the sessions ran saves against each of the savings chart's Claude Code bars.
+        "savings_chart_saved": {
+            "claude_code": 1 - with_ / bars[0][1],
+            "claude_code_with_idle_compaction": 1 - with_ / bars[1][1],
+        },
+        "mean_context": {k: v.mean() for k, v in contexts.items()},
+        f"share_at_{LONG // 1000}k": {
+            k: (v >= LONG).mean() for k, v in contexts.items()
+        },
+        "verdicts": {
+            "asked": len(every),
+            "compacted": sum(v.kind == "compacted" for v in every),
+        },
+        "session": {
+            "requests": len(one.t),
+            "days": (one.t[-1] - one.t[0]) / 86_400,
+            "without_usd": one_without,
+            "with_usd": one_with,
+            "asked_at_turn_ends": sum(v.idle is None for v in asked),
+            "asked_idle": sum(v.idle is not None for v in asked),
+            "kept_going": sum(not c for _, c in checks),
+            "compacted_at": [traces["with"][i] for i, c in checks if c],
+            "asked": [
+                {"kind": v.kind, "tokens": v.tokens, "idle": v.idle is not None}
+                for v in asked
+            ],
+            "peak_without": traces["without"].max(),
+            # Claude Code's own compactions without sparkjoy, where the context falls by over 300k.
+            "compactions_without": int((np.diff(traces["without"]) < -300_000).sum()),
+        },
+    }

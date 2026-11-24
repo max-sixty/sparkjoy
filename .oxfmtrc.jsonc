@@ -8,5 +8,7 @@
   "ignorePatterns": [
     // TOML keeps its authors' layout: Ruff's rule selections are grouped by line.
     "**/*.toml",
+    // model/docs.py and model/calibrate.py write it.
+    "docs/figures.json",
   ],
 }

@@ -1,11 +1,11 @@
-"""Draws the charts of docs/cost-model.md, in a light and a dark theme, and prints the figures
-the doc quotes from them. fit.py's --charts draws each of these as model-<name>-{light,dark}.svg,
-from one read of the sessions:
+"""Draws the charts of docs/cost-model.md, in a light and a dark theme, and returns the figures
+the doc quotes from them, which docs.py writes to docs/figures.json's `charts` section. docs.py
+draws each of these as model-<name>-{light,dark}.svg, from one read of the sessions:
 
   cycles         the context and each request's cost over 600 requests, at four compaction thresholds, as a
                  schematic: axes in the model's symbols
   inputs         a request's cost and a compaction's cost by part, against the context, the cache write
-                 after a compaction split by what fills the context (context.py's context-parts.json)
+                 after a compaction split by what fills the context (context.py's measurement)
   payback        how many later requests a compaction takes to pay for itself, against the context it
                  compacts, for the README's What it saves
   lapse          a compaction's cost by part after the prompt cache lapses, against the context, in the form
@@ -22,13 +22,11 @@ from one read of the sessions:
   threshold      the most efficient threshold against β, in the steady state and the replay
   voi            the expected value of a classifier's information, on three mixes of work
 
-It also prints, drawing nothing, what a classifier saves where work differs in the detail a
+It also returns, drawing nothing, what a classifier saves where work differs in the detail a
 compaction loses rather than in β (voi_lost).
 """
 
 import html
-import json
-from pathlib import Path
 
 import matplotlib
 
@@ -222,8 +220,8 @@ def cycles(out, p, c):
     """The trade a compaction makes, request by request: the context, and a request's cost with its
     share of the compaction that ends its cycle, at each of fit.points, which are also points on the
     average chart's curve. It assumes nothing about effectiveness. The doc draws it under The model, so
-    its axes carry the model's symbols and no figures; the shapes come from the fitted values, and fit.py
-    prints the numbers the doc's Trade-off table quotes. The column titles say where each column
+    its axes carry the model's symbols and no figures; the shapes come from the fitted values. The column
+    titles say where each column
     compacts against X*(0), so the peaks carry no labels but the last, where Claude Code compacts."""
     h, c0, F0 = fit.terms(p, c)
     R = 600  # requests drawn
@@ -314,13 +312,12 @@ def cycles(out, p, c):
         save(fig, out / f"model-cycles-{theme}.svg")
 
 
-def written(p):
+def written(p, parts):
     """What the cache write after a compaction writes, K - P tokens in all, by where it comes from:
-    each group's mean tokens per compaction in context.py's measurement of the same sessions, scaled
-    so the groups sum to K - P. The measurement's first request plus E comes within about 2% of K - P,
-    which takes medians where the measurement takes means."""
-    m = json.loads(Path(__file__).with_name("context-parts.json").read_text())
-    first = m["first_request"]
+    each group's mean tokens per compaction in `parts`, context.py's measurement of the same sessions,
+    scaled so the groups sum to K - P. The measurement's first request plus E comes within about 2% of
+    K - P, which takes medians where the measurement takes means."""
+    first = {k: v["mean"]["value"] for k, v in parts["first_request"].items()}
     groups = {
         "files, re-attached or read again": ("files", "E"),
         "skills, instructions and memory": (
@@ -333,7 +330,7 @@ def written(p):
         ),
     }
     sizes = {
-        what: sum(m["E_total"] if k == "E" else first[k] for k in keys)
+        what: sum(parts["E_total"] if k == "E" else first[k] for k in keys)
         for what, keys in groups.items()
     }
     taken = {k for keys in groups.values() for k in keys}
@@ -345,7 +342,7 @@ def written(p):
     return [(what, (p.K - p.P) * v / total) for what, v in sizes.items()]
 
 
-def compaction_parts(x, p, c):
+def compaction_parts(x, p, c, parts):
     """F(x) = x + F0 by part, in reads, as (name, values, fitted, colour): the parts that don't grow with
     the context first, so they stack at the bottom. A part is fitted when it comes from what the sessions
     measured (output, growth, lapses, K, P, N); the cache read of the context is the context itself. The
@@ -356,7 +353,7 @@ def compaction_parts(x, p, c):
         ("output of the compaction request", np.full_like(x, c.output * p.N), True, 0),
         *[
             (f"cache write of {what}", np.full_like(x, w1 * tokens), True, 1)
-            for what, tokens in written(p)
+            for what, tokens in written(p, parts)
         ],
         ("cache read of the context", x, False, 2),
     ]
@@ -413,9 +410,10 @@ def bands(ax, x, stack, cap, step, t, c):
     ax.yaxis.set_major_formatter(dollars)
 
 
-def inputs(out, p, c):
+def inputs(out, p, c, parts):
     """What the costs are made of: a request's cost at its context by part, and a compaction's cost by
-    part, on one axis. Parts that come from the sessions' fitted parameters are named in the fit colour."""
+    part, on one axis. Parts that come from the sessions' fitted parameters are named in the fit colour.
+    Returns each part's cost in dollars, and the total, for a request and a compaction at K and 700k."""
     h, c0, F0 = fit.terms(p, c)
     w1 = c.write - 1
     # Every part is linear in x but for the lapse's kink at P, so the ends and P draw the same bands as
@@ -443,17 +441,22 @@ def inputs(out, p, c):
         ),
         ("cache read of the context", x, False, 2),
     ]
-    compaction = compaction_parts(x, p, c)
+    compaction = compaction_parts(x, p, c, parts)
     assert np.allclose(sum(v for _, v, _, _ in request)[x > p.P], (h * x + c0)[x > p.P])
     assert np.allclose(sum(v for _, v, _, _ in compaction), x + F0)
-    for name, stack in (("request", request), ("compaction", compaction)):
-        for v in (p.K, 700_000):
-            j = np.abs(x - v).argmin()
-            print(
-                f"model-inputs, a {name} at {tokens(v)}: "
-                + ", ".join(f"{k} ${val[j] * c.read:.3f}" for k, val, _, _ in stack)
-                + f"; ${sum(val[j] for _, val, _, _ in stack) * c.read:.3f} in all"
+    figures = {
+        name: {
+            at: {
+                **{k: val[j] * c.read for k, val, _, _ in stack},
+                "total": sum(val[j] for _, val, _, _ in stack) * c.read,
+            }
+            for at, j in (
+                ("K", np.abs(x - p.K).argmin()),
+                ("700k", np.abs(x - 700_000).argmin()),
             )
+        }
+        for name, stack in (("request_usd", request), ("compaction_usd", compaction))
+    }
 
     for theme, t in THEMES.items():
         fit_c = t["fit"]
@@ -484,23 +487,31 @@ def inputs(out, p, c):
             color=fit_c,
         )
         save(fig, out / f"model-inputs-{theme}.svg")
+    return figures
 
 
 def payback(out, p, c):
     """How many later requests a compaction takes to pay for itself, against the context x it compacts:
     its cost, x + F0 cached reads, over what each later request saves, h (x - K), with every request
     alike (β = 0). Each later request reads x - K less, so the curve rises without bound as x falls to
-    K, which a line marks. Dots mark the three sizes the README names."""
+    K, which a line marks. Dots mark the three sizes the README's What it saves names. Returns, for each
+    size the docs name, the requests a compaction there takes to pay for itself, what it costs, how much
+    less each later request reads, and how many requests the context takes to grow back."""
     h, _, F0 = fit.terms(p, c)
     X = np.arange(p.K + 1_000, fit.AUTO + 1, 1_000.0)
     N = (X + F0) / (h * (X - p.K))
     marks = (200_000, 400_000, 700_000)
-    each = {x: int(np.ceil((x + F0) / (h * (x - p.K)))) for x in marks}
-    for x in marks:
-        print(
-            f"model-payback: at {x / 1e3:.0f}k each later request reads {(x - p.K) / 1e3:.0f}k less, and the "
-            f"compaction (${(x + F0) * c.read:.2f}) pays for itself after {each[x]} requests"
-        )
+    sizes = (200_000, 250_000, 300_000, 400_000, 500_000, 600_000, 700_000)
+    each = {x: int(np.ceil((x + F0) / (h * (x - p.K)))) for x in sizes}
+    figures = {
+        tokens(x): {
+            "requests": each[x],
+            "compaction_usd": (x + F0) * c.read,
+            "reads_less": x - p.K,
+            "grows_back_in": (x - p.K) / p.g,
+        }
+        for x in sizes
+    }
     top = 100
     for theme, t in THEMES.items():
         fig, ax = plt.subplots(figsize=(9, 3))
@@ -547,18 +558,20 @@ def payback(out, p, c):
         )
         axis_name(ax, "Later requests until the compaction pays for itself", t)
         save(fig, out / f"model-payback-{theme}.svg")
+    return figures
 
 
-def lapse(out, p, c):
+def lapse(out, p, c, parts):
     """What a compaction costs after the prompt cache lapses, as in a session left idle past the cache's
     lifetime, by part, in the form of inputs' compaction panel. The compaction request first writes all of
     the context but the shared prefix P to the cache, so on top of F(x)'s parts it pays the part a request
-    pays after a lapse, the cache write of the context, (w - 1)(x - P) reads. It also prints how many tokens
-    may follow the first part of a context that is dropped in place of compacting it, such as old tool
-    results, before the next request's cache write of them costs as much as the compaction."""
+    pays after a lapse, the cache write of the context, (w - 1)(x - P) reads. Returns, at each size it
+    marks, the compaction's cost while the cache holds the context and after it lapses, and how many
+    tokens may follow the first part of a context that is dropped in place of compacting it, such as old
+    tool results, before the next request's cache write of them costs as much as the compaction."""
     marks = (200_000, 500_000, fit.AUTO)
     x = np.unique([1_000, p.P, p.K, *marks, fit.AUTO])
-    held = compaction_parts(x, p, c)
+    held = compaction_parts(x, p, c, parts)
     lapse_write = (c.write - 1) * np.maximum(x - p.P, 0)
     stack = [
         *held[:-1],
@@ -569,14 +582,14 @@ def lapse(out, p, c):
     after = x > p.P
     total = sum(v for _, v, _, _ in stack)
     assert np.allclose(total[after], (p.P + c.write * (x - p.P) + F0)[after])
+    figures = {}
     for v in marks:
         j = np.abs(x - v).argmin()
-        print(
-            f"model-lapse: a compaction at {v / 1e3:.0f}k costs ${(total[j] - lapse_write[j]) * c.read:.2f} "
-            f"while the cache holds the context, and ${total[j] * c.read:.2f} after it lapses; dropping part of "
-            f"the context in its place costs as much once {(v + F0) / (c.write - 1) / 1e3:.0f}k tokens follow the "
-            f"first part dropped"
-        )
+        figures[tokens(v)] = {
+            "warm_usd": (total[j] - lapse_write[j]) * c.read,
+            "lapsed_usd": total[j] * c.read,
+            "drop_break_even": (v + F0) / (c.write - 1),
+        }
     for theme, t in THEMES.items():
         fig, ax = plt.subplots(figsize=(9, 2.8))
         style(ax, t)
@@ -598,6 +611,7 @@ def lapse(out, p, c):
             color=t["fit"],
         )
         save(fig, out / f"model-lapse-{theme}.svg")
+    return figures
 
 
 def average(out, p, c):
@@ -615,10 +629,11 @@ def average(out, p, c):
     M = h * X + c0 + p.g
     j = A.argmin()
     cross = np.abs(M - A)[: len(X) - 1].argmin()
-    print(
-        f"model-average: least at {X[j] / 1e3:.0f}k, ${A[j] * c.read:.3f} a request; "
-        f"the marginal cost crosses it at {X[cross] / 1e3:.0f}k"
-    )
+    figures = {
+        "least_at": X[j],
+        "least_usd": A[j] * c.read,
+        "marginal_crosses_at": X[cross],
+    }
     best = fit.points(p, c)[1]
     least = cycle(p, c, best)[
         1
@@ -677,6 +692,7 @@ def average(out, p, c):
         ax.set_xlabel("Compaction threshold X (tokens)", color=t["muted"], fontsize=10)
         axis_name(ax, "Cost per request", t)
         save(fig, out / f"model-average-{theme}.svg")
+    return figures
 
 
 def effectiveness_curve(out):
@@ -730,8 +746,25 @@ def cost_curve(out, p, c):
     both by Claude Code's default compares an average with an average, and puts the cost line below a β's line
     wherever compacting there costs less per unit than Claude Code's default. A dot marks the lowest point of
     each β's cost per unit (fit.steady), and each line is named by its β alone, since the axes give the
-    points' values."""
+    points' values. Returns, relative to Claude Code's default, the cost's lowest point, and for each β
+    the effectiveness at K, the threshold from which the cost line is below the effectiveness line, and
+    the lowest cost per unit, where a threshold short of fit.AUTO pays."""
     betas = (0, fit.BASE / 2, fit.BASE, fit.BASE * 2)
+    X, A = fit.curve(p, c, 0)
+    cost = A / A[-1]
+    figures = {"cost_least": {"at": X[cost.argmin()], "relative": cost.min()}}
+    for b in betas:
+        mean = fit.cycle(p, c, X, b)[1] / (X - p.K)
+        below = cost[:-1] < (mean / mean[-1])[:-1]
+        Xb, J = fit.curve(p, c, b)
+        best = fit.steady(p, c, b)
+        figures[f"beta_{b:g}"] = {
+            "effectiveness_at_K": mean[0] / mean[-1],
+            "cost_below_from": X[np.argmax(below)] if below.any() else np.inf,
+            "least": None
+            if best >= fit.AUTO
+            else {"at": best, "relative": J[Xb >= best][0] / J[-1]},
+        }
     for theme, t in THEMES.items():
         fig, (top, low) = plt.subplots(
             2,
@@ -847,6 +880,7 @@ def cost_curve(out, p, c):
             low, "Cost per unit of effectiveness, relative to Claude Code's default", t
         )
         save(fig, out / f"model-cost-{theme}.svg")
+    return figures
 
 
 def sensitivity(out, p, c, boot):
@@ -1125,7 +1159,7 @@ def voi(out, p, c):
     # On fit.steady's 100-token grid, so the most efficient threshold of the work at β = 0 is the doc's 262k.
     X, J0 = fit.curve(p, c, 0, step=100)
     J0q = fit.curve(p, c, 0, step=100, asks=fit.FLOOR)[1]  # with sparkjoy's questions
-    lines = []
+    lines, figures = [], {}
     for share, beta, step in mixes:
         Js = np.array([J0, fit.curve(p, c, beta, step=100)[1]])
         Jq = np.array([J0q, fit.curve(p, c, beta, step=100, asks=fit.FLOOR)[1]])
@@ -1145,15 +1179,15 @@ def voi(out, p, c):
         info = (H(share * A + (1 - share) * (1 - A)) - H(A)) / H(share)
         lines.append((share, beta, step, saved, info))
         at = [int(np.abs(A - a).argmin()) for a in (0.8, 0.9, 0.99, 1.0)]
-        print(
-            f"model-voi, {share:.0%} at β = {beta}, saved against Claude Code's default: most efficient single "
-            f"threshold {tokens(X[single.argmin()])}, saving {1 - single.min() / default:.1%}; "
-            + ", ".join(
-                f"right {A[i]:.0%}, saves {saved[i]:.1%} ({info[i]:.0%} of the information)"
-                for i in at
-            )
-            + f"; saves more than the single threshold from {A[np.argmax(saved > 1 - single.min() / default)]:.1%} right"
-        )
+        # Saved against Claude Code's default.
+        figures[f"{share:g}_at_beta_{beta:g}"] = {
+            "single_threshold": X[single.argmin()],
+            "single_saved": 1 - single.min() / default,
+            "by_accuracy": {
+                f"{A[i]:g}": {"saved": saved[i], "information": info[i]} for i in at
+            },
+            "beats_single_from": A[np.argmax(saved > 1 - single.min() / default)],
+        }
 
     for theme, t in THEMES.items():
         fig, ax = plt.subplots(figsize=(8, 4.2))
@@ -1177,6 +1211,7 @@ def voi(out, p, c):
         )
         axis_name(ax, "Saved against Claude Code's default (% of cost)", t)
         save(fig, out / f"model-voi-{theme}.svg")
+    return figures
 
 
 # The share of turn ends in the middle of a task, and the wasted requests D that a compaction at one
@@ -1197,7 +1232,7 @@ def voi_lost(p, c):
     D·MID(1 - a) / (MID(1 - a) + (1 - MID)a), and the threshold moves to where that costs least.
     Waiting for such a turn end moves each compaction later by about the same amount, which the
     threshold makes up for. Claude Code's own compaction at fit.AUTO falls in the middle of a turn, and
-    so of a task, and costs D. Prints, for each D, the most efficient single threshold and what it saves,
+    so of a task, and costs D. Returns, for each D, the most efficient single threshold and what it saves,
     what a perfect classifier and one right 9 times in 10 save after the questions they ask from
     fit.FLOOR, all against Claude Code's default, and the accuracy from which a classifier saves more
     than the single threshold."""
@@ -1212,6 +1247,7 @@ def voi_lost(p, c):
         J[-1] = fit.per_unit(p, c, fit.AUTO, fit.BASE, D, asks)
         return X[J.argmin()], J.min()
 
+    figures = {"mid_task_share": MID}
     for n in LOST_REQUESTS:
         D = n * wasted
         X, single = lowest(MID * D, D)
@@ -1219,28 +1255,34 @@ def voi_lost(p, c):
         picked = D * MID * (1 - A) / (MID * (1 - A) + (1 - MID) * A)
         saved = np.array([1 - lowest(d, D, fit.FLOOR)[1] / default for d in picked])
         right = {a: saved[np.abs(A - a).argmin()] for a in (0.9, 1.0)}
-        print(
-            f"voi-lost, {MID:.0%} of turn ends mid-task losing {n} wasted requests (${D * c.read:.2f}), saved against "
-            f"Claude Code's default: most efficient single threshold {tokens(X)}, saving {1 - single / default:.1%}; "
-            f"a perfect classifier {right[1.0]:.1%}, one right 9 times in 10 {right[0.9]:.1%}; more than the single "
-            f"threshold from {A[np.argmax(saved > 1 - single / default)]:.1%} right"
-        )
+        figures[f"{n}_wasted_requests"] = {
+            "D_usd": D * c.read,
+            "single_threshold": X,
+            "single_saved": 1 - single / default,
+            "perfect_saved": right[1.0],
+            "right_0.9_saved": right[0.9],
+            "beats_single_from": A[np.argmax(saved > 1 - single / default)],
+        }
+    return figures
 
 
-def draw(out, p, c, boot, cost, effectiveness, BT, BX):
-    """Draw each chart the docstring lists into `out`, from the parameters p of fit.py's sessions and
-    `boot`, the parameters of each resample of them, the prices c, and the replay's cost and
-    effectiveness with BT and BX, the most efficient turn-end threshold and steady-state threshold of each resample."""
+def draw(out, p, c, boot, cost, effectiveness, BT, BX, parts):
+    """Draw each chart the docstring lists into `out`, and return the figures the doc quotes from them,
+    by chart, from the parameters p of the sessions and `boot`, the parameters of each resample of them,
+    the prices c, the replay's cost and effectiveness with BT and BX, the most efficient turn-end
+    threshold and steady-state threshold of each resample, and `parts`, context.py's measurement."""
     out.mkdir(parents=True, exist_ok=True)
-    print()
     cycles(out, p, c)
-    inputs(out, p, c)
-    payback(out, p, c)
-    lapse(out, p, c)
-    average(out, p, c)
+    figures = {
+        "inputs": inputs(out, p, c, parts),
+        "payback": payback(out, p, c),
+        "lapse": lapse(out, p, c, parts),
+        "average": average(out, p, c),
+    }
     effectiveness_curve(out)
-    cost_curve(out, p, c)
+    figures["cost"] = cost_curve(out, p, c)
     sensitivity(out, p, c, boot)
     thresholds(out, cost, effectiveness, BT, BX, p, c)
-    voi(out, p, c)
-    voi_lost(p, c)
+    figures["voi"] = voi(out, p, c)
+    figures["voi_lost"] = voi_lost(p, c)
+    return figures
