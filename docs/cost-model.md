@@ -133,7 +133,7 @@ uncached input, and the cache write of its g new tokens.
 
 A compaction at X reads the whole context and outputs N tokens of summary and
 thinking, at o cached reads each. The requests after it make a cache write of
-the K tokens left after it, all but the P tokens of system prompt and tools,
+the K tokens of context after it, all but the P tokens of system prompt and tools,
 which Claude Code keeps in a cache shared across sessions:
 
 ```math
@@ -152,11 +152,12 @@ parameter and where it comes from.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/model-inputs-dark.svg">
-  <img alt="Two panels against the context x, from 0 to 965k, in dollars; parts named in orange are fitted to the sessions. Top, c(x), a request's cost by part, the fixed parts at the bottom: output and uncached input, and the cache write of the new tokens, about $0.027 together; above them the cache write of the context after a lapse and the cache read of the context, both growing; $0.059 in all at 139k and $0.192 at 700k. Bottom, F(x), a compaction's cost by part, about $1 at any context: the compaction request's output, $0.10; the cache write of the context after it, $0.82, in three bands by source, the summary and the rest of the context $0.17, files re-attached or read again $0.12, and skills, instructions and memory $0.52; and the cache read of the context, the only part that grows; $1.06 at 700k." src="../assets/model-inputs-light.svg">
+  <img alt="Two panels against the context x, from 0 to 965k, in dollars; parts named in orange are fitted to the sessions. Top, a request's cost by part with the cache warm, the fixed parts at the bottom: output and uncached input, and the cache write of the new tokens, about $0.027 together; above them the cache read of the context, the only part that grows; $0.055 in all at 139k and $0.167 at 700k. Bottom, F(x), a compaction's cost by part, about $1 at any context: the compaction request's output, $0.10; the cache write of the context after it, $0.82, in three bands by source, the summary and the rest of the context $0.17, files re-attached or read again $0.12, and skills, instructions and memory $0.52; and the cache read of the context, the only part that grows; $1.06 at 700k." src="../assets/model-inputs-light.svg">
 </picture>
 
 A compaction costs about \$1 whatever the context it compacts[^parts], since
-most of it is the cache write of the context it leaves.
+most of it is the cache write of the context after it, and nearly all of that
+context is loaded again.
 
 Once the prompt cache lapses, the compaction first writes the context to the
 cache again, so a compaction at 500k costs \$4.66 rather than \$1.02. sparkjoy
