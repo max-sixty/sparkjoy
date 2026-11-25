@@ -244,7 +244,7 @@ def render(source: Path, reply: str, case: dict) -> str:
         str(case["tokens"]),
     ]
     if case["kind"] == "idle":
-        args.append(str(IDLE_MINUTES))
+        args += ["--idle", str(IDLE_MINUTES)]
     return subprocess.run(
         args, input=reply, capture_output=True, text=True, check=True
     ).stdout

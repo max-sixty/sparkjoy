@@ -50,16 +50,18 @@ and in a replay without it:
 The replay prices the same requests without sparkjoy's compactions or its
 questions, so Claude Code compacts on its own near 965k, and where its idle
 compaction runs[^idle], also an idle context from 200k. If a request gets less
-done with a smaller context ([Cost and context](#cost-and-context)), sparkjoy
-saves less per unit of work than it saves in cost.
+done with a smaller context, sparkjoy saves less per unit of work than it saves
+in cost, as modeled below in [Cost and context](#cost-and-context).
 
-Resampling my sessions gives the saving a 90% interval of 29–32% without Claude
-Code's idle compaction and 22–26% with it. A single session's saving varies
-more. Of the quarter of sessions that cost the most under Claude Code's default,
-eight in ten saved 22% to 43% without its idle compaction, and 17% to 39% with
-it.
+Resampling my sessions puts the saving between 22% and 32%, whether or not
+Claude Code's idle compaction runs.
 
 <!-- End of what sparkjoy saves. -->
+
+That range joins two 90% intervals: 29–32% without Claude Code's idle
+compaction and 22–26% with it. A single session's saving varies more: of the
+quarter of sessions that cost the most, eight in ten saved 22% to 43%, or 17%
+to 39% where Claude Code's idle compaction runs.
 
 <!-- TODO: Work through the cost model to give sparkjoy's saving per unit of work beside its saving in cost.
 If a request at 250k gets half as much done as one at 1M (β = 0.5), sparkjoy as it ran saves 11.3% per unit

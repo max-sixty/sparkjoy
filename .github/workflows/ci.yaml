@@ -40,4 +40,6 @@ jobs:
       - uses: actions/checkout@v7
       # setup-uv publishes no major-version tag.
       - uses: astral-sh/setup-uv@v10.3.3
+      # docs/embed.py renders the README's copies of the question with bun.
+      - uses: oven-sh/setup-bun@v2
       - run: uvx pytest tests
