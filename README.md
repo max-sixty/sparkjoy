@@ -17,13 +17,12 @@
 A small Claude Code plugin that lets Claude decide when to compact. It [cuts the
 total cost of long sessions by 20% to 35%](#cost-saving), depending on your usage patterns and configs.
 
-It does this by sending the cached context and [a small prompt](#how-it-decides) at the end of each turn asking whether to compact, and compacting if the model chooses to compact. Because almost all the context is cached,
-it's [very cheap](#faq).
+Sparkjoy does this by sending the cached context plus [a small prompt](#how-it-decides) at the end of each turn asking whether to compact. If the model decides to compact, the session compacts, and is ready for the next prompt on your return.
 
-Then, on your return, the session is compacted and ready for the next prompt.
+Because almost all the context of the request is cached, the requests are [very cheap](#faq).
 
-In comparison, Claude Code requires waiting for the compaction after running
-`/compact` yourself; and `/autocompact` compacts at a set size, whether or not
+In comparison, Claude Code requires you to judge whether the session is ready to compact, run
+`/compact` yourself and wait for it to finish; and `/autocompact` compacts at a set size, whether or not
 the existing context is valuable:
 
 |                | When it compacts                                                    |
@@ -43,11 +42,11 @@ A comparison of context lengths of a real session, with sparkjoy vs. modeled wit
 </picture>
 
 Every request reads the whole context, so the area under each line is the number of tokens read during the session. Each dot marks a time the plugin asked the session's
-model whether to compact. The larger dots mark the times the session compacted.
+model whether to compact; the larger dots mark the times the session compacted.
 
 ## Install
 
-At the prompt of Claude Code:
+At the Claude Code prompt:
 
 ```
 /plugin install sparkjoy --marketplace max-sixty/sparkjoy
@@ -59,16 +58,15 @@ Or in a terminal:
 claude plugin install sparkjoy --marketplace max-sixty/sparkjoy
 ```
 
-To see its verdicts before it compacts anything, run
-`/sparkjoy classify`, then `/sparkjoy on` to let it compact
-([Settings](#settings)).
+To see its verdicts without compacting anything, run
+`/sparkjoy classify`; then later turn on compaction with `/sparkjoy on`.
 
 ## What it does
 
-- **It asks the session's model whether to compact now**, and compacts if
+- **It asks the session's model whether to compact now**, compacting if
   the model says to. It asks when a turn ends, and in an idle session just
   before the prompt cache expires: after 55 minutes on the one-hour cache, or 4
-  minutes on the 5 minute one. The compaction then finishes before you return.
+  minutes on the 5-minute cache. Claude Code keeps the session tagged as `Working` until the compaction is complete, so a session is ready for the next prompt on your return.
 - **It prints each verdict** in the transcript, as a dim line with its reason.
   In the session above, it kept the context while a move was half done:
 
@@ -76,7 +74,7 @@ To see its verdicts before it compacts anything, run
   sparkjoy: Kept at 362k tokens: The README move is half done: unpushed files, a helper still running, and a page rebuild that hasn't been run yet
   ```
 
-  Once the move was on main, it compacted the session:
+  ...and then once the changes were on main, it compacted the session:
 
   ```
   sparkjoy: Compacting at 404k tokens: Move is finished and pushed; file paths, commands and conventions fit in a summary, and files can be re-read
@@ -105,23 +103,29 @@ To see its verdicts before it compacts anything, run
 
 ## Surprising facts about compactions
 
-The [cost model](#cost-model) has a lot of detail about compactions. In doing this work, some points that surprised me:
+The [cost model](#cost-model) has a lot of detail about compactions. In doing this work, some points that I found interesting[^prices]:
 
 - Compacting while the cache is warm is cheap. Even at Claude Code's default of 965k, a cache-warm compaction costs \$1.12.
-- Missing the cache is expensive. After the cache lapses, the same compaction
+- But missing the cache is very expensive. After the cache lapses, the same compaction
   costs \$8.38.
 - The compaction's produced summary is small, about 5k tokens, so the compaction
   request's output contributes only \$0.10 of the \$1.12.
 - Most of a compaction's cost, \$0.82, is the cache write of the subsequent request after compaction, mostly files, skills, instructions and
   memory read again.
 - Because the cache write contributes most of the cost, other forms of context reduction, such as dropping old tool results in
-  place of compacting, aren't necessarily cheaper. (Once about 130k tokens
+  place of compacting, are rarely cheaper. (Once about 130k tokens
   follow the first result dropped, the cache write costs as much as a
   compaction.)
-- Getting compacting right is really important for costs, particularly for long
-  sessions, and using the full context is arguably very worthwhile to get that
-  right: in my sessions the \$47 cost of the requests compares to a \$2,905 overall saving.
+- Getting compacting policy right is really important for costs, particularly for long
+  sessions
+  - ...and so using the full context is worthwhile to get that
+    right: in my sessions the \$47 cost of the requests compares to a \$2,905 overall saving.
 - This shape of costs is particularly prominent since the recent changes in Opus & Fable cache-read costs; where Fable 5.2 and Opus 5.5 cut their cache-read costs by 80% & 60% respectively.
+
+[^prices]:
+    Prices are Opus 5.5's API prices throughout. On a subscription, the same
+    usage costs a small fraction of that, but the proportions between cache
+    reads, cache writes and output are broadly the same.
 
 ## Cost saving
 
