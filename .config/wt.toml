@@ -1,4 +1,16 @@
-# A hook that rewrites (ruff, oxfmt, the whitespace fixers) fails the merge and
-# leaves the rewrite uncommitted in the worktree; `wt merge` again sweeps it in.
+# `wt merge` runs the checks CI runs (.github/workflows/ci.yaml) after rebasing, so
+# the tree they check is the one that becomes main. A hook that rewrites (ruff,
+# oxfmt, the whitespace fixers) fails the merge and leaves the rewrite uncommitted
+# in the worktree; `wt merge` again sweeps it in. Since a rewrite fails the merge
+# whatever the other checks find, the three run at once rather than lint first.
 [pre-merge]
 lint = "pre-commit run --all-files"
+pytest = "uvx pytest tests"
+plugin = "claude plugin validate . && claude plugin test"
+
+[aliases]
+# The pre-merge checks, on the worktree as it stands.
+test = "wt hook pre-merge"
+# The report skill's page of what sparkjoy did in your sessions, from this
+# checkout's model: `wt report --since=2026-11-01`.
+report = "uv run --script --locked model/report.py {{ args }}"
