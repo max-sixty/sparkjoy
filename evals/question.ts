@@ -4,21 +4,21 @@
 //   bun evals/question.ts <checkout>/hooks/register.ts <tokens> [idle-minutes] < reply
 //
 // `question()` isn't exported, so this imports a copy of register.ts that
-// exports it. It passes each parameter by name: `reply`, `tokens` (the
-// context's size), `idleMinutes`, `figures` and `instructions`, so a checkout
-// whose question takes fewer of them is called with just those. `figures` and
-// `instructions` are left out, so the question states the figures in `AUTHOR`,
-// which come from my sessions, as the cases do, and carries no instructions of
-// a user's.
+// exports it, written beside the original so that the copy's imports of the
+// files next to it resolve, and removed once imported. It passes each
+// parameter by name: `reply`, `tokens` (the context's size), `idleMinutes`,
+// `figures` and `instructions`, so a checkout whose question takes fewer of
+// them is called with just those. `figures` and `instructions` are left out, so
+// the question states the figures in `AUTHOR`, which come from my sessions, as
+// the cases do, and carries no instructions of a user's.
 
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 
 const [registerPath, tokens, idleMinutes] = process.argv.slice(2)
-const copy = join(mkdtempSync(join(tmpdir(), 'sparkjoy-question-')), 'register.ts')
+const copy = resolve(dirname(registerPath), `.question-${process.pid}.ts`)
 writeFileSync(copy, `${readFileSync(registerPath, 'utf8')}\nexport { question }\n`)
-const { question } = await import(copy)
+const { question } = await import(copy).finally(() => unlinkSync(copy))
 
 const params = /^function question\(([^)]*)\)/.exec(question.toString())![1]
 const names = params.split(',').map(p => p.trim().split(/[\s:=?]/)[0])

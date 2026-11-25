@@ -10,45 +10,40 @@
 >
 > — Marie Kondo, _The Life-Changing Magic of Tidying Up_
 
-A Claude Code plugin that delegates when to compact to the model. It [cuts the
-total cost of long sessions by 20% to 35%](#what-it-saves), depending on how you
-run Claude Code.
+A small Claude Code plugin that lets Claude decide when to compact. It [cuts the
+total cost of long sessions by 20% to 35%](#cost-saving), depending on your usage patterns and configs.
 
-At the end of each turn, sparkjoy asks the model whether to compact. It uses the
-cached context and a small prompt which [explains the tradeoff](#how-it-decides)
-of compacting vs keeping the existing context.
+It does this by sending the cached context and [a small prompt](#how-it-decides) at the end of each turn asking whether to compact, and compacting if the model chooses to compact. Because almost all the context is cached,
+it's [very cheap](#faq).
 
-Because it asks after a turn ends and again just before the cache expires,
-asking is [very cheap](#faq), and the compacted session is ready for you when
-you return.
+Then, on your return, the session is compacted and ready for the next prompt.
 
 In comparison, Claude Code requires waiting for the compaction after running
-`/compact` yourself, and `/autocompact` compacts at a set size, whether or not
+`/compact` yourself; and `/autocompact` compacts at a set size, whether or not
 the existing context is valuable:
 
-|                | When it compacts                                                                    |
-| -------------- | ----------------------------------------------------------------------------------- |
-| `/compact`     | when you type it                                                                    |
-| Claude Code    | at about 965k, even mid-turn                                                        |
-| Claude Code    | when idle, just before the one-hour cache expires, from 200k[^idle]                 |
-| `/autocompact` | at the size you set, even mid-turn                                                  |
-| sparkjoy       | at a turn end from 250k, if the session's model says to                             |
-| sparkjoy       | when idle, just before the cache expires, from 175k, if the session's model says to |
+|                | When it compacts                                                    |
+| -------------- | ------------------------------------------------------------------- |
+| `/compact`     | you type it                                                         |
+| Claude Code    | at ~965k                                                            |
+| Claude Code    | when idle, just before the one-hour cache expires, from 200k[^idle] |
+| `/autocompact` | at a set size, even mid-turn                                        |
+| **sparkjoy**   | at a turn end, on the model's decision (min 250k)                   |
+| **sparkjoy**   | just before the cache expires, on the model's decision (min 175k)   |
+
+A comparison of context lengths of a real session, with sparkjoy vs. modeled without:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/session-dark.svg">
   <img alt="Context per request across one session of 3,506 requests over four days. With sparkjoy, dots mark the 68 times the plugin asked whether to compact, 62 at turn ends and 6 when idle. At 32 of them the session kept going, 16 times in a row as it grew from 445k to 700k, and at the other 36 it compacted, at sizes from 154k to 713k tokens. In a replay without it, the context climbs to about 960k each time before Claude Code compacts, seven times in all." src="assets/session-light.svg">
 </picture>
 
-Every request reads the whole context, so the area under each line counts the
-tokens the session read. Each dot marks a time the plugin asked the session's
+Every request reads the whole context, so the area under each line is the number of tokens read during the session. Each dot marks a time the plugin asked the session's
 model whether to compact. The larger dots mark the times the session compacted.
-Claude Code's idle compaction didn't apply to this session[^idle], so in the
-replay without sparkjoy, Claude Code compacts only when the window fills.
 
 ## Install
 
-At the prompt of a Claude Code session:
+At the prompt of Claude Code:
 
 ```
 /plugin install sparkjoy --marketplace max-sixty/sparkjoy
@@ -60,16 +55,16 @@ Or in a terminal:
 claude plugin install sparkjoy --marketplace max-sixty/sparkjoy
 ```
 
-New sessions pick it up. To see its verdicts before it compacts anything, run
+To see its verdicts before it compacts anything, run
 `/sparkjoy classify`, then `/sparkjoy on` to let it compact
 ([Settings](#settings)).
 
 ## What it does
 
-- **It asks the session's own model whether to compact now**, and compacts if
+- **It asks the session's model whether to compact now**, and compacts if
   the model says to. It asks when a turn ends, and in an idle session just
   before the prompt cache expires: after 55 minutes on the one-hour cache, or 4
-  on the five-minute one. An idle compaction finishes before you return.
+  minutes on the 5 minute one. The compaction then finishes before you return.
 - **It prints each verdict** in the transcript, as a dim line with its reason.
   In the session above, it kept the context while a move was half done:
 
@@ -104,32 +99,29 @@ New sessions pick it up. To see its verdicts before it compacts anything, run
   agree. When one of sparkjoy's lines reports a bug, such as a question that
   failed, the next line suggests running `/sparkjoy bug`.
 
-## Salient points about compactions
+## Surprising facts about compactions
 
-The [cost model](#cost-model) has a lot of detail about compactions. These are
-the points I find most interesting:
+The [cost model](#cost-model) has a lot of detail about compactions. In doing this work, some points that surprised me:
 
-- Compacting while the cache is warm is cheap. Even at 965k, where Claude Code
-  compacts on its own, a compaction costs \$1.12.
+- Compacting while the cache is warm is cheap. Even at Claude Code's default of 965k, a cache-warm compaction costs \$1.12.
 - Missing the cache is expensive. After the cache lapses, the same compaction
   costs \$8.38.
-- The compaction's summary is small, about 5k tokens, so the compaction
-  request's output costs only \$0.10.
-- Most of a compaction's cost, \$0.82, is the cache write of the context after
-  it, and nearly all of that context is loaded again: skills, instructions and
-  memory, and files re-attached or read again.
-- Because writing the cache is the expensive part, dropping old tool results in
-  place of compacting isn't much cheaper. The next request writes everything
-  after the first result dropped, and once about 130k tokens follow it, that
-  costs as much as a compaction.
+- The compaction's produced summary is small, about 5k tokens, so the compaction
+  request's output contributes only \$0.10 of the \$1.12.
+- Most of a compaction's cost, \$0.82, is the cache write of the subsequent request after compaction, mostly files, skills, instructions and
+  memory read again.
+- Because the cache write contributes most of the cost, other forms of context reduction, such as dropping old tool results in
+  place of compacting, aren't necessarily cheaper. (Once about 130k tokens
+  follow the first result dropped, the cache write costs as much as a
+  compaction.)
 - Getting compacting right is really important for costs, particularly for long
   sessions, and using the full context is arguably very worthwhile to get that
-  right: in my sessions the \$47 cost of asking compares to a \$2,905 saving.
+  right: in my sessions the \$47 cost of the requests compares to a \$2,905 overall saving.
+- This shape of costs is particularly prominent since the recent changes in Opus & Fable cache-read costs; where Fable 5.2 and Opus 5.5 cut their cache-read costs by 80% & 60% respectively.
 
-## What it saves
+## Cost saving
 
-Every request reads the whole context, so a larger context makes each request
-cost more, and each compaction costs about $1. What my sessions of
+What my sessions of
 18 to 22 November cost[^sessions], with sparkjoy and in a replay without it:
 
 <!-- Generated from docs/cost-model.md's Results by docs/embed.py; edit that file. -->
@@ -142,14 +134,11 @@ cost more, and each compaction costs about $1. What my sessions of
 The replay prices the same requests without sparkjoy's compactions or its
 questions, so Claude Code compacts on its own near 965k, and where its idle
 compaction runs[^idle], also an idle context from 200k. If a request gets less
-done with a smaller context ([Cost and context](docs/cost-model.md#cost-and-context)), sparkjoy
-saves less per unit of work than it saves in cost.
+done with a smaller context, sparkjoy saves less per unit of work than it saves
+in cost, as modeled below in [Cost and context](docs/cost-model.md#cost-and-context).
 
-Resampling my sessions gives the saving a 90% interval of 29–32% without Claude
-Code's idle compaction and 22–26% with it. A single session's saving varies
-more. Of the quarter of sessions that cost the most under Claude Code's default,
-eight in ten saved 22% to 43% without its idle compaction, and 17% to 39% with
-it.
+Resampling my sessions puts the saving between 22% and 32%, whether or not
+Claude Code's idle compaction runs.
 
 <!-- End of what sparkjoy saves. -->
 
@@ -165,29 +154,29 @@ each request carried, as sparkjoy ran and in a replay without it:
 
 sparkjoy asks the session's own model whether now is a good time to compact, at
 each turn end from 250k and again just before an idle session's prompt cache
-lapses. It never asks in the middle of a turn, where the work ahead nearly
-always needs the context's detail. To ask, it forks the conversation for one
+lapses. It asks at the end of a turn because that's the most likely point where the prior details in the context are likely to no longer be needed.
+
+To ask, it forks the conversation for one
 request. The fork reads the whole conversation, which is already in the prompt
-cache. In my sessions, the questions cost $47 in all, against $6,612 for the
-sessions. The model answers in about a hundred tokens, a verdict and a one-line
+cache. The model answers in about a hundred tokens, a verdict and a one-line
 reason. The fork goes from Claude Code to the session's own model, so the
 conversation goes only where the session already sends it.
 
-The question asks whether the next turns will need detail a summary drops, such
-as failed attempts or a design still taking shape, and lists the cost of
+The question asks whether the next turns are likely to need the details which a summary would drop (such
+as failed attempts or a design still taking shape), and lists the cost of
 compacting and the cost of keeping the context at its current size.
 
 ### The prompt
 
 <details>
-<summary>At the end of a turn, for a 500k context</summary>
+<summary>At the end of a turn, for a 500k context, with default params</summary>
 
-```
-The goal of this request is to decide whether to compact this session now. It comes from the sparkjoy plugin, not from the user, and a program reads your answer. Use no tools.
+````
+Decide whether to compact this session now. This request comes from the sparkjoy plugin, not from the user, and a program reads your answer.
 
 Your turn just ended.
 
-Nearly every long transcript is mostly finished work, so that alone is no reason to compact. What decides it is whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
+Nearly every long transcript is mostly finished work, so that alone is no reason to compact. Base the decision on whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
 
 What a compaction costs:
 - It takes about a minute, and the request that writes its summary outputs about 6k tokens, thinking included.
@@ -206,21 +195,37 @@ What lost detail costs:
 
 Weigh what keeping costs against what losing the detail would cost the next turns. The larger the context, the more detail a compaction can drop and still pay.
 
-Answer with one JSON object and nothing else, filling its fields in order:
-{"next": "what most likely comes next, in a few words", "needs_detail": true or false, "compact": true or false, "reason": "one short line saying why"}
+The user added these instructions for this decision:
+$CUSTOM_INSTRUCTIONS
+
+Answer with nothing but one JSON object that matches this schema, filling its fields in the order listed:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "next": {"type": "string", "description": "what most likely comes next, in a few words"},
+    "needs_detail": {"type": "boolean", "description": "whether the next turns will need detail a summary drops"},
+    "compact": {"type": "boolean", "description": "whether to compact now"},
+    "reason": {"type": "string", "description": "one short line saying why"}
+  },
+  "required": ["next", "needs_detail", "compact", "reason"],
+  "additionalProperties": false
+}
 ```
+````
 
 </details>
 
 <details>
 <summary>In a session idle for 55 minutes, for a 500k context</summary>
 
-```
-The goal of this request is to decide whether to compact this session now, before its prompt cache lapses. It comes from the sparkjoy plugin, not from the user, and a program reads your answer. Use no tools.
+````
+Decide whether to compact this session now, before its prompt cache lapses. This request comes from the sparkjoy plugin, not from the user, and a program reads your answer.
 
 Your turn ended 55 minutes ago, and nothing has happened since.
 
-Nearly every long transcript is mostly finished work, so that alone is no reason to compact. What decides it is whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
+Nearly every long transcript is mostly finished work, so that alone is no reason to compact. Base the decision on whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
 
 What a compaction costs:
 - It takes about a minute, and the request that writes its summary outputs about 6k tokens, thinking included.
@@ -239,16 +244,29 @@ What lost detail costs:
 
 Weigh what keeping costs against what losing the detail would cost the next turns. The larger the context, the more detail a compaction can drop and still pay.
 
-Answer with one JSON object and nothing else, filling its fields in order:
-{"next": "what most likely comes next, in a few words", "needs_detail": true or false, "compact": true or false, "reason": "one short line saying why"}
+The user added these instructions for this decision:
+$CUSTOM_INSTRUCTIONS
+
+Answer with nothing but one JSON object that matches this schema, filling its fields in the order listed:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "next": {"type": "string", "description": "what most likely comes next, in a few words"},
+    "needs_detail": {"type": "boolean", "description": "whether the next turns will need detail a summary drops"},
+    "compact": {"type": "boolean", "description": "whether to compact now"},
+    "reason": {"type": "string", "description": "one short line saying why"}
+  },
+  "required": ["next", "needs_detail", "compact", "reason"],
+  "additionalProperties": false
+}
 ```
+````
 
 </details>
 
-Your [`instructions`](#settings) go in both versions as a paragraph of their
-own, between "Weigh what keeping costs…" and "Answer with one JSON object…": the
-line "The user added these instructions for this decision:", then your text.
-When `instructions` is unset, the question is as shown.
+Parameters are fitted to your own sessions by running `/sparkjoy report`.
 
 <!-- The Evals block waits until the mid-task verdicts' swing between batches is explained. Remove this line and the closing one to restore it.
 ### Evals
@@ -311,9 +329,8 @@ question.
 | `idle_floor`   | the report's fit, else 175k | the context from which it asks in an idle session                    |
 | `instructions` | none                        | your own guidance, added to its question ([The prompt](#the-prompt)) |
 
-`/config` lists them under sparkjoy, and changes reach open sessions too. In
-`~/.claude/settings.json`, where Claude sets them when you ask, they look like
-this:
+`/config` lists them under sparkjoy. In `~/.claude/settings.json`, they look
+like this:
 
 ```json
 {
@@ -366,6 +383,18 @@ When a question reads less than nine tenths of its input from the cache,
 sparkjoy prints a line saying so, and when the turn before it had just written
 to the cache, the line reports a bug. `/sparkjoy report` counts the questions
 that missed the cache.
+
+</details>
+
+<details>
+<summary>What if I didn't want the compaction?</summary>
+
+Press Esc twice, pick the last prompt before the compaction, and choose Restore
+conversation. This rewinds one turn too far, dropping Claude's reply to that
+prompt, because Claude Code has no rewind point at the compaction itself.
+
+To have the model keep the context in cases like yours, describe them in
+sparkjoy's [`instructions`](#settings).
 
 </details>
 
@@ -463,16 +492,18 @@ and in a replay without it:
 The replay prices the same requests without sparkjoy's compactions or its
 questions, so Claude Code compacts on its own near 965k, and where its idle
 compaction runs[^idle], also an idle context from 200k. If a request gets less
-done with a smaller context ([Cost and context](docs/cost-model.md#cost-and-context)), sparkjoy
-saves less per unit of work than it saves in cost.
+done with a smaller context, sparkjoy saves less per unit of work than it saves
+in cost, as modeled below in [Cost and context](docs/cost-model.md#cost-and-context).
 
-Resampling my sessions gives the saving a 90% interval of 29–32% without Claude
-Code's idle compaction and 22–26% with it. A single session's saving varies
-more. Of the quarter of sessions that cost the most under Claude Code's default,
-eight in ten saved 22% to 43% without its idle compaction, and 17% to 39% with
-it.
+Resampling my sessions puts the saving between 22% and 32%, whether or not
+Claude Code's idle compaction runs.
 
 <!-- End of what sparkjoy saves. -->
+
+That range joins two 90% intervals: 29–32% without Claude Code's idle
+compaction and 22–26% with it. A single session's saving varies more: of the
+quarter of sessions that cost the most, eight in ten saved 22% to 43%, or 17%
+to 39% where Claude Code's idle compaction runs.
 
 <!-- TODO: Work through the cost model to give sparkjoy's saving per unit of work beside its saving in cost.
 If a request at 250k gets half as much done as one at 1M (β = 0.5), sparkjoy as it ran saves 11.3% per unit
