@@ -1,4 +1,4 @@
-"""Measures what fills the context a compaction leaves, K - P in docs/cost-model.md, by source.
+"""Measures what fills the context after a compaction, K - P in docs/cost-model.md, by source.
 
 docs.py calls `measure(S, p)` with the sessions `fit.read` returns and `fit.measure`'s parameters
 for them, and the figures it returns land in docs/figures.json's `context` section.
@@ -506,7 +506,7 @@ def characters_per_token(kinds, ratio):
 
 
 def measure(S, p):
-    """The figures of what fills the context a compaction leaves, for the sessions `S` that
+    """The figures of what fills the context after a compaction, for the sessions `S` that
     `fit.read` returns and `fit.measure`'s parameters `p` for them, as the module docstring
     describes them."""
     R, shapes = [], {}

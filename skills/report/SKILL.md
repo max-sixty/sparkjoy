@@ -15,7 +15,7 @@ uv run --script --locked "${CLAUDE_PLUGIN_ROOT}/model/report.py" --figures
 ```
 
 With `--figures` it also saves the floors sparkjoy asks from and the figures its
-question states, such as the context a compaction leaves and the requests in a
+question states, such as the context after a compaction and the requests in a
 turn, fitted to the same sessions, to `sparkjoy/figures.json` in the same
 directory as `projects`. From the next turn end, the plugin uses them in place
 of its defaults, except for a floor the user set in sparkjoy's settings.
