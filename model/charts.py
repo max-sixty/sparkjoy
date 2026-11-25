@@ -518,7 +518,7 @@ def payback(out, p, c):
         ax.text(
             p.K + 12_000,
             3,
-            f"{p.K / 1e3:.0f}k, what a compaction leaves",
+            f"{p.K / 1e3:.0f}k, the context after a compaction",
             ha="left",
             va="bottom",
             fontsize=9,

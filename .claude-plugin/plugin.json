@@ -19,7 +19,7 @@
     "floor": {
       "type": "number",
       "title": "Floor at turn ends",
-      "description": "The context, in tokens, from which sparkjoy asks at a turn end: above the context a compaction leaves and below 1000000. Unset, it is the floor /sparkjoy report fitted, or 250000."
+      "description": "The context, in tokens, from which sparkjoy asks at a turn end: above the context after a compaction and below 1000000. Unset, it is the floor /sparkjoy report fitted, or 250000."
     },
     "idle_floor": {
       "type": "number",

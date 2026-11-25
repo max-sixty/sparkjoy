@@ -191,7 +191,7 @@ L 530.18 189.81655
 " style="fill: none; stroke: #52514e; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
    </g>
    <g id="text_12">
-    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #a3500c" x="106.422319" y="182.951013" transform="rotate(-0 106.422319 182.951013)">139k, what a compaction leaves</text>
+    <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #a3500c" x="106.422319" y="182.951013" transform="rotate(-0 106.422319 182.951013)">139k, the context after a compaction</text>
    </g>
    <g id="line2d_17">
     <defs>

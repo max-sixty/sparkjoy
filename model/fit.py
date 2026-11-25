@@ -20,7 +20,7 @@ import numpy as np
 # $/MTok: input, output, 5-minute cache write, 1-hour cache write, cache read.
 # https://platform.claude.com/docs/en/about-claude/pricing (November 2026). Of
 # these only Claude Haiku 5.5 has a long-context tier, from 100k, and its row is
-# that tier's: a compaction leaves the context above 100k, so nearly every request is.
+# that tier's: the context after a compaction is above 100k, so nearly every request is.
 PRICES = {
     "claude-opus-5-5": (4, 20, 5, 8, 0.20),
     "claude-sonnet-5-5": (2, 10, 2.5, 4, 0.10),
@@ -685,8 +685,8 @@ def rereads(S):
 def terms(p, c):
     """c(x) = h x + c0 and F(x) = x + F0, from what a request and a compaction write and read:
     a request reads x and writes the g new tokens, or after a lapse everything but the shared
-    prefix, x - P; the requests after a compaction write what it leaves but the shared prefix,
-    K - P. Returns h, c0 and F0."""
+    prefix, x - P; the requests after a compaction write the context after it but the shared
+    prefix, K - P. Returns h, c0 and F0."""
     h = 1 + p.lapse * (c.write - 1)
     c0 = (
         c.output * p.out
@@ -851,7 +851,8 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0, asks=None)
     threshold, lost = (np.broadcast_to(v, len(s.size)) for v in (threshold, lost))
     idle = None if idle is None else np.broadcast_to(idle, len(s.size))
     lapse = lapsed(s, ttl)
-    # Each compaction an arm makes leaves K, the E tokens read again included, all at once, so
+    # Each compaction an arm makes brings the context to K, the E tokens read again included, all
+    # at once, so
     # the requests after a dropped one give up E of their growth, the earliest first, where the
     # re-reading falls.
     growth = s.grew.astype(float)
@@ -889,7 +890,7 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0, asks=None)
                 cost += (
                     ctx + c.output * p.N + lost[j - 1]
                 )  # read from the cache, which the turn end left warm
-                # A compaction leaves K, or less where the context held less to begin with,
+                # After a compaction the context is K, or less where it held less to begin with,
                 # which happens only below K, at a session's first turn ends.
                 left = min(K, ctx)
                 ctx, written = left + grew, left - P + grew

@@ -219,7 +219,8 @@ function engine(
 }
 
 // Figures the report fitted to a user on a five-minute cache, whose
-// compactions leave less and write a longer summary than the author's.
+// context after a compaction is smaller, and whose summary longer, than the
+// author's.
 const FITTED = JSON.stringify({
   WRITE: 25,
   OUTPUT: 100,
@@ -434,7 +435,7 @@ test(
 )
 
 test(
-  'a floor the user set at or below what a compaction leaves gives way to the default',
+  'a floor the user set at or below the context after a compaction gives way to the default',
   { options: { floor: 140_000 } },
   async ($, on) => {
     const { begin, forks, turn, type } = engine(on, { verdict: KEEP, tokens: 200_000 })
@@ -452,7 +453,7 @@ test(
 )
 
 test(
-  'a floor the user set above what the report measured a compaction leaves keeps that measure',
+  'a floor the user set above the report’s measure of the context after a compaction keeps that measure',
   { options: { floor: 400_000 } },
   async ($, on) => {
     // A report that measured K, above the default floor, but fitted no floors.
