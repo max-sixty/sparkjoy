@@ -1,9 +1,11 @@
-"""Copies docs/cost-model.md into the README's Cost model section, collapsed, so the model reads both
-on its own page and in the README, and the doc's account of what sparkjoy saves into the README's
-What it saves. Edit the doc, then run `python3 docs/embed.py`; `--check` exits 1 when the README's copies
-are out of date."""
+"""Writes the README's copies of what other files own: docs/cost-model.md, collapsed in the Cost model
+section, so the model reads both on its own page and in the README; the doc's account of what sparkjoy
+saves in Cost saving; and in The prompt, the question `question()` in hooks/register.ts asks at a turn end
+and in an idle session, rendered by evals/question.ts with bun. Edit the owning file, then run
+`python3 docs/embed.py`; `--check` exits 1 when the README's copies are out of date."""
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -48,13 +50,52 @@ SAVES, SAVES_END = (
 SAVES_START = "<!-- Generated from docs/cost-model.md's Results by docs/embed.py; edit that file. -->"
 
 
+# Each copy of the question sits between one of these lines and QUESTION_END, as question() renders it
+# for the arguments evals/question.ts takes after the context's size. `$CUSTOM_INSTRUCTIONS` stands
+# where a user's `instructions` go.
+QUESTIONS = {
+    "<!-- Generated from question() in hooks/register.ts, at a turn end, by docs/embed.py; edit that"
+    " function. -->": ["500000"],
+    "<!-- Generated from question() in hooks/register.ts, in an idle session, by docs/embed.py; edit"
+    " that function. -->": ["500000", "--idle", "55"],
+}
+QUESTION_END = "<!-- End of the generated question. -->"
+
+
+def question(args):
+    """The question in a fence of four backticks, which holds the fence of three inside it."""
+    text = subprocess.run(
+        [
+            "bun",
+            ROOT / "evals/question.ts",
+            ROOT / "hooks/register.ts",
+            *args,
+            "--instructions",
+            "$CUSTOM_INSTRUCTIONS",
+        ],
+        input="",
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    return f"````\n{text}\n````"
+
+
+def between(text, start, end, body):
+    """`text` with what stands between the lines `start` and `end` replaced by `body`."""
+    first = text.index(start)
+    last = text.index(end, first) + len(end)
+    return f"{text[:first]}{start}\n\n{body}\n\n{end}{text[last:]}"
+
+
 def embedded(readme, doc):
     start, end = readme.index(START), readme.index(END) + len(END)
     readme = readme[:start] + section(doc) + readme[end:]
     saves = from_root(doc[doc.index(SAVES) + len(SAVES) : doc.index(SAVES_END)].strip())
-    start = readme.index(SAVES_START)
-    end = readme.index(SAVES_END, start) + len(SAVES_END)
-    return f"{readme[:start]}{SAVES_START}\n\n{saves}\n\n{SAVES_END}{readme[end:]}"
+    readme = between(readme, SAVES_START, SAVES_END, saves)
+    for marker, args in QUESTIONS.items():
+        readme = between(readme, marker, QUESTION_END, question(args))
+    return readme
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ draws each of these as model-<name>-{light,dark}.svg, from one read of the sessi
                  the context, the cache write after a compaction split by what fills the context
                  (context.py's measurement)
   payback        how many later requests a compaction takes to pay for itself, against the context it
-                 compacts, for the README's What it saves
+                 compacts, for the README's Cost saving
   lapse          a compaction's cost by part after the prompt cache lapses, against the context, in the form
                  of inputs' compaction panel
   average        a request's mean cost over a cycle against the compaction threshold, with the marginal cost,
@@ -492,7 +492,7 @@ def payback(out, p, c):
     """How many later requests a compaction takes to pay for itself, against the context x it compacts:
     its cost, x + F0 cached reads, over what each later request saves, h (x - K), with every request
     alike (β = 0). Each later request reads x - K less, so the curve rises without bound as x falls to
-    K, which a line marks. Dots mark the three sizes the README's What it saves names. Returns, for each
+    K, which a line marks. Dots mark the three sizes the README's Cost saving names. Returns, for each
     size the docs name, the requests a compaction there takes to pay for itself, what it costs, how much
     less each later request reads, and how many requests the context takes to grow back."""
     h, _, F0 = fit.terms(p, c)

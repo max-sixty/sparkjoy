@@ -564,9 +564,9 @@ function hash(text: string) {
 // The question opens with its goal, then lists what a compaction, keeping the
 // context and lost detail each cost. Asked of an idle session, it says the
 // prompt cache is about to lapse, so keeping costs the cache write that
-// follows. README.md shows both versions verbatim with the figures in `AUTHOR`,
-// for a 500k context. The user's `instructions` add a paragraph of their own
-// before the answer's format and change nothing else, so the question keeps
+// follows. README.md shows both versions with the figures in `AUTHOR`, for a
+// 500k context, and `$CUSTOM_INSTRUCTIONS` where the user's `instructions` add
+// a paragraph of their own. They change nothing else, so the question keeps
 // its figures and the format the hook parses whatever they say.
 //
 // The fork replays the turn's last request, which ends before the reply the
@@ -592,8 +592,8 @@ function question(
   const now = thousands(tokens)
   const isIdle = idleMinutes !== undefined
   const goal = isIdle
-    ? 'The goal of this request is to decide whether to compact this session now, before its prompt cache lapses.'
-    : 'The goal of this request is to decide whether to compact this session now.'
+    ? 'Decide whether to compact this session now, before its prompt cache lapses.'
+    : 'Decide whether to compact this session now.'
   const opening = isIdle
     ? `Your turn ended ${idleMinutes} minutes ago, and nothing has happened since.`
     : 'Your turn just ended.'
@@ -615,11 +615,11 @@ So compact unless the next turn continues work that needs the transcript's detai
   const added = instructions
     ? `\n\nThe user added these instructions for this decision:\n${instructions}`
     : ''
-  return `${goal} It comes from the sparkjoy plugin, not from the user, and a program reads your answer. Use no tools.
+  return `${goal} This request comes from the sparkjoy plugin, not from the user, and a program reads your answer.
 
 ${opening}
 
-Nearly every long transcript is mostly finished work, so that alone is no reason to compact. What decides it is whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
+Nearly every long transcript is mostly finished work, so that alone is no reason to compact. Base the decision on whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
 
 What a compaction costs:
 - It takes about a minute, and the request that writes its summary outputs about ${thousands(SUMMARY)} tokens, thinking included.
@@ -634,8 +634,21 @@ What lost detail costs:
 
 Weigh what keeping costs against what losing the detail would cost the next turns. The larger the context, the more detail a compaction can drop and still pay.${added}
 
-Answer with one JSON object and nothing else, filling its fields in order:
-{"next": "what most likely comes next, in a few words", "needs_detail": true or false, "compact": true or false, "reason": "one short line saying why"}`
+Answer with nothing but one JSON object that matches this schema, filling its fields in the order listed:
+
+\`\`\`json
+{
+  "type": "object",
+  "properties": {
+    "next": {"type": "string", "description": "what most likely comes next, in a few words"},
+    "needs_detail": {"type": "boolean", "description": "whether the next turns will need detail a summary drops"},
+    "compact": {"type": "boolean", "description": "whether to compact now"},
+    "reason": {"type": "string", "description": "one short line saying why"}
+  },
+  "required": ["next", "needs_detail", "compact", "reason"],
+  "additionalProperties": false
+}
+\`\`\``
 }
 
 // How many later requests a compaction at `tokens` takes to pay for itself:

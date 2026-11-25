@@ -470,7 +470,7 @@ test(
 // What the question at 500k says between its costs and the answer's format.
 const INSTRUCTIONS =
   'Keep the context while a pull request awaits review, and compact once it merges.'
-const ADDED = `still pay.\n\nThe user added these instructions for this decision:\n${INSTRUCTIONS}\n\nAnswer with one JSON object`
+const ADDED = `still pay.\n\nThe user added these instructions for this decision:\n${INSTRUCTIONS}\n\nAnswer with`
 
 test(
   'the user’s instructions join both questions before the answer’s format',
@@ -504,7 +504,7 @@ for (const [name, options] of [
 
       await turn($, 't1')
 
-      expect(forks[0]).toContain('still pay.\n\nAnswer with one JSON object')
+      expect(forks[0]).toContain('still pay.\n\nAnswer with')
     },
   )
 }
