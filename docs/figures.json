@@ -1828,17 +1828,15 @@
       "request_usd": {
         "K": {
           "output and uncached input": 0.014269467026770344,
-          "cache write of the new tokens": 0.012631905299007824,
-          "cache write of the context after a lapse": 0.003945907867629559,
+          "cache write of the new tokens": 0.012692897980248268,
           "cache read of the context": 0.027746092184355295,
-          "total": 0.05859337237776302
+          "total": 0.054708457191373905
         },
         "700k": {
           "output and uncached input": 0.014269467026770344,
-          "cache write of the new tokens": 0.012631905299007824,
-          "cache write of the context after a lapse": 0.024982869347496207,
+          "cache write of the new tokens": 0.012692897980248268,
           "cache read of the context": 0.13999999999999999,
-          "total": 0.19188424167327436
+          "total": 0.1669623650070186
         }
       },
       "compaction_usd": {

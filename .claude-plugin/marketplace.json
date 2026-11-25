@@ -5,7 +5,7 @@
     {
       "name": "sparkjoy",
       "source": "./",
-      "description": "Lets the model decide when to compact a Claude Code session."
+      "description": "Delegates when to compact to the model."
     }
   ]
 }
