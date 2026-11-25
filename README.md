@@ -21,8 +21,8 @@ Sparkjoy does this by sending the cached context plus [a small prompt](#how-it-d
 
 Because almost all the context of the request is cached, the requests are [very cheap](#faq).
 
-In comparison, Claude Code requires you to evaluate whether the model is compaction-ready, and waiting for the compaction to run after running
-`/compact` yourself; and `/autocompact` compacts at a set size, whether or not
+In comparison, Claude Code requires you to judge whether the session is ready to compact, run
+`/compact` yourself and wait for it to finish; and `/autocompact` compacts at a set size, whether or not
 the existing context is valuable:
 
 |                | When it compacts                                                    |
