@@ -119,7 +119,7 @@ The [cost model](#cost-model) has a lot of detail about compactions. In doing th
 - Getting compacting policy right is really important for costs, particularly for long
   sessions
   - ...and so using the full context is worthwhile to get that
-  right: in my sessions the \$47 cost of the requests compares to a \$2,905 overall saving.
+    right: in my sessions the \$47 cost of the requests compares to a \$2,905 overall saving.
 - This shape of costs is particularly prominent since the recent changes in Opus & Fable cache-read costs; where Fable 5.2 and Opus 5.5 cut their cache-read costs by 80% & 60% respectively.
 
 [^prices]:
