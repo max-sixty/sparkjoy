@@ -802,8 +802,8 @@ def main():
     verdicts = sorted(((s, v) for s in S for v in s.verdicts), key=lambda sv: -sv[1].t)
     p = fitted = saved = None
     unfit = (
-        "Floors can be fitted once these sessions include a compaction, which shows how much "
-        "context one leaves."
+        "Floors can be fitted once these sessions include a compaction, which shows how large "
+        "the context is after one."
     )
     kept = "the window holds no compactions to fit them to"  # why the question keeps the figures it has
     if any(((s.kind == fit.USER) | (s.kind == fit.POLICY)).any() for s in S):

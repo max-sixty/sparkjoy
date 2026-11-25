@@ -585,7 +585,7 @@ within 67:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/model-payback-dark.svg">
-  <img alt="Later requests until a compaction pays for itself, against the context it compacts. The curve falls steeply from above 100 just past 139k, what a compaction leaves, to 67 requests at 200k, where each later request reads 61k less, 17 at 400k, reading 261k less, and 8 at 700k, reading 561k less, then flattens toward 6 near 965k." src="assets/model-payback-light.svg">
+  <img alt="Later requests until a compaction pays for itself, against the context it compacts. The curve falls steeply from above 100 just past 139k, the context after a compaction, to 67 requests at 200k, where each later request reads 61k less, 17 at 400k, reading 261k less, and 8 at 700k, reading 561k less, then flattens toward 6 near 965k." src="assets/model-payback-light.svg">
 </picture>
 
 ## Cost alone

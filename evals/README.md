@@ -92,7 +92,7 @@ next) are in `cases.json`.
 | leaf-ui-fixes-idle          | idle | 290k     | compact  | idle 55 minutes after everything landed                      |
 
 The two small natural breaks are the same kind of moment as the compact cases
-above them. They are labelled keep because a compaction leaves about 142k, so
+above them. They are labelled keep because the context after a compaction is about 142k, so
 at 210k it saves each later request about 68k while making a cache write of
 about 110k and losing detail. The idle case is labelled compact at 290k because its
 cache lapses either way.
@@ -101,13 +101,13 @@ cache lapses either way.
 
 From `run.py --report` on 16 to 19 November 2026; each cell counts the runs
 that matched the label. `main` is the question published at 02beed1;
-`sized-question` (cdfc871) adds the context's size, what a compaction leaves
+`sized-question` (cdfc871) adds the context's size, its size after a compaction
 and how many requests it takes to pay back; `detail` (0915ee8) says what
 decides it; `measured` (1f004a4, 17 November) weighs what keeping costs
 against what a compaction loses ([Context size](#context-size));
 `model-costs` (75fa52f) is `measured` with its costs from the cost model;
 `one-figure` (88ca497) states the compaction request's output as measured and
-one figure for what a compaction leaves; `noisy` (0465741, 18 November, run
+one figure for the context after a compaction; `noisy` (0465741, 18 November, run
 again on 19 November) opens the wasted-request figure with "It's very noisy and
 hard to judge, but as some indication"; `goal-first` (b4b3308, 19 November)
 opens with the request's goal and lists the costs; `no-fields` is
@@ -217,8 +217,8 @@ end from about 250k costs least when a compaction loses nothing. Its response to
 compaction "cost the requests after it little", compacted in 46 of 48 runs.
 
 `model-costs` is `measured` with the costs it states from the cost model
-([e36d81d](https://github.com/max-sixty/sparkjoy/commit/e36d81d)): what a
-compaction leaves, 122k, of which all but 30k takes a cache write, against 142k
+([e36d81d](https://github.com/max-sixty/sparkjoy/commit/e36d81d)): the context
+after a compaction, 122k, of which all but 30k takes a cache write, against 142k
 for the requests after it, and a payback rounded up, such as 13 requests at
 500k where `measured` said 14. It compacts at the same cases, and keeps in 3 of
 the 8 mid-task runs (both at leaf-menu-design, one at
@@ -227,7 +227,7 @@ case, that difference is within the noise above (Fisher's exact test, p = 0.2).
 
 `one-figure` states the compaction request's output as measured, about 6k tokens
 with its thinking, where `model-costs` gave a 4k summary, and gives one figure
-for what a compaction leaves, 142k, the files read again after it included. Its
+for the context after a compaction, 142k, the files read again after it included. Its
 paybacks run about 3% longer, still 13 requests at 500k. It compacts at the
 same cases, and also keeps in 3 of the 8 mid-task runs, though not all at the
 same cases: both at leaf-menu-design and one at leaf-send-hover-fix.

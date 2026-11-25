@@ -18,7 +18,7 @@ the cache lifetime most sessions used. It writes every figure to docs/figures.js
             parameter and with β; the replay's most efficient turn-end threshold and pairs of
             floors; what sparkjoy saved as the sessions ran; compacting mid-turn against at turn
             ends; work that differs; and each model's prices
-  context   what fills the context a compaction leaves (context.py)
+  context   what fills the context after a compaction (context.py)
   charts    the figures the cost model quotes from its charts (charts.py)
   replay    the figures the README quotes from its charts (replay_charts.py)
 

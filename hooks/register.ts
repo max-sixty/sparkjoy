@@ -670,11 +670,11 @@ function saving(tokens: number, { WRITE, K, LAPSE }: Figures) {
 // floor the user set wins over the one `/sparkjoy report` last saved, and each
 // figure the report saved wins over `AUTHOR`'s. A source whose value the
 // question's sums can't use gives way to the next: a floor outside the window,
-// a cache write no dearer than a read, a compaction that leaves no more than
-// the cached system prompt and tools or at least the FLOOR the question is
-// asked from at a turn end, a lapse share outside 0 to 1, or a turn of under
+// a cache write no dearer than a read, a context after a compaction no larger
+// than the cached system prompt and tools or at least the FLOOR the question
+// is asked from at a turn end, a lapse share outside 0 to 1, or a turn of under
 // one request. The user's floor at a turn end must also lie above the context
-// a compaction leaves, where a compaction can pay for itself.
+// after a compaction, where a compaction can pay for itself.
 // Read for each question, so a report run mid-session counts from the next one;
 // a configuration directory or file that can't be found or read leaves every
 // figure but the user's floors at `AUTHOR`'s. The directory is
@@ -722,11 +722,11 @@ async function fitted($: EngineInterface, settings: Settings) {
   const inWindow = (v: number) => v > 0 && v < WINDOW
   const below = (floor: number) => (v: number) => v > 0 && v < floor
   // The K the question states with the turn-end floor `floor`.
-  const leaves = (floor: number) => value('K', below(floor), 'report') ?? AUTHOR.K
+  const contextAfter = (floor: number) => value('K', below(floor), 'report') ?? AUTHOR.K
   // FLOOR before K, and K before P, so each is held below the one before; the
-  // user's FLOOR is held above the K it leaves.
+  // user's FLOOR is held above its K.
   take('FLOOR', inWindow)
-  take('FLOOR', v => inWindow(v) && v > leaves(v), 'setting')
+  take('FLOOR', v => inWindow(v) && v > contextAfter(v), 'setting')
   take('IDLE_FLOOR', inWindow)
   take('IDLE_FLOOR', inWindow, 'setting')
   take('WRITE', v => v > 1)
