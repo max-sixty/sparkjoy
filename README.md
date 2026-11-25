@@ -171,6 +171,8 @@ compacting and the cost of keeping the context at its current size.
 <details>
 <summary>At the end of a turn, for a 500k context, with default params</summary>
 
+<!-- Generated from question() in hooks/register.ts, at a turn end, by docs/embed.py; edit that function. -->
+
 ````
 Decide whether to compact this session now. This request comes from the sparkjoy plugin, not from the user, and a program reads your answer.
 
@@ -215,10 +217,14 @@ Answer with nothing but one JSON object that matches this schema, filling its fi
 ```
 ````
 
+<!-- End of the generated question. -->
+
 </details>
 
 <details>
 <summary>In a session idle for 55 minutes, for a 500k context</summary>
+
+<!-- Generated from question() in hooks/register.ts, in an idle session, by docs/embed.py; edit that function. -->
 
 ````
 Decide whether to compact this session now, before its prompt cache lapses. This request comes from the sparkjoy plugin, not from the user, and a program reads your answer.
@@ -263,6 +269,8 @@ Answer with nothing but one JSON object that matches this schema, filling its fi
 }
 ```
 ````
+
+<!-- End of the generated question. -->
 
 </details>
 

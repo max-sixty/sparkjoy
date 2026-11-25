@@ -1,21 +1,27 @@
 // Prints the question a checkout of sparkjoy asks, for one case, so the evals
-// ask exactly what the plugin would.
+// and the README's copies of the question show exactly what the plugin asks.
 //
-//   bun evals/question.ts <checkout>/hooks/register.ts <tokens> [idle-minutes] < reply
+//   bun evals/question.ts <checkout>/hooks/register.ts <tokens> [--idle <minutes>] [--instructions <text>] < reply
 //
 // `question()` isn't exported, so this imports a copy of register.ts that
 // exports it, written beside the original so that the copy's imports of the
 // files next to it resolve, and removed once imported. It passes each
 // parameter by name: `reply`, `tokens` (the context's size), `idleMinutes`,
 // `figures` and `instructions`, so a checkout whose question takes fewer of
-// them is called with just those. `figures` and `instructions` are left out, so
-// the question states the figures in `AUTHOR`, which come from my sessions, as
-// the cases do, and carries no instructions of a user's.
+// them is called with just those. `figures` is left out, so the question
+// states the figures in `AUTHOR`, which come from my sessions, as the cases do.
 
 import { readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
+import { parseArgs } from 'node:util'
 
-const [registerPath, tokens, idleMinutes] = process.argv.slice(2)
+const {
+  positionals: [registerPath, tokens],
+  values: { idle, instructions },
+} = parseArgs({
+  allowPositionals: true,
+  options: { idle: { type: 'string' }, instructions: { type: 'string' } },
+})
 const copy = resolve(dirname(registerPath), `.question-${process.pid}.ts`)
 writeFileSync(copy, `${readFileSync(registerPath, 'utf8')}\nexport { question }\n`)
 const { question } = await import(copy).finally(() => unlinkSync(copy))
@@ -25,9 +31,9 @@ const names = params.split(',').map(p => p.trim().split(/[\s:=?]/)[0])
 const values: Record<string, unknown> = {
   reply: await Bun.stdin.text(),
   tokens: Number(tokens),
-  idleMinutes: idleMinutes === undefined ? undefined : Number(idleMinutes),
+  idleMinutes: idle === undefined ? undefined : Number(idle),
   figures: undefined,
-  instructions: undefined,
+  instructions,
 }
 const unknown = names.filter(name => !(name in values))
 if (unknown.length > 0)
