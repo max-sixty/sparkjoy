@@ -10,5 +10,7 @@
     "**/*.toml",
     // model/docs.py and model/calibrate.py write it.
     "docs/figures.json",
+    // `uvx tend init` writes them, and Tend's install test compares them byte for byte.
+    ".github/workflows/tend-*.yaml",
   ],
 }
