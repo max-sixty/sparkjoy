@@ -286,7 +286,7 @@ def pairs_of_floors(S, p, c, ttl, cost, effectiveness):
 
 
 def as_ran(runs, draws):
-    """The README's What it saves: sparkjoy's compactions as they ran, against Claude Code alone, with
+    """The README's Cost saving: sparkjoy's compactions as they ran, against Claude Code alone, with
     each session as it ran and as if every session were in the background or open, with the saving's
     90% interval over the sessions resampled, and how much each of the costliest quarter saved."""
     out = {}

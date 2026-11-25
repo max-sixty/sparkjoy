@@ -1,6 +1,6 @@
 """Copies docs/cost-model.md into the README's Cost model section, collapsed, so the model reads both
 on its own page and in the README, and the doc's account of what sparkjoy saves into the README's
-What it saves. Edit the doc, then run `python3 docs/embed.py`; `--check` exits 1 when the README's copies
+Cost saving. Edit the doc, then run `python3 docs/embed.py`; `--check` exits 1 when the README's copies
 are out of date."""
 
 import re
