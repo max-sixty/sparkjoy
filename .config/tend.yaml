@@ -1,0 +1,6 @@
+bot_name: sparkjoy-bot
+
+workflows:
+  ci-failures:
+    watched_workflows:
+      - ci
