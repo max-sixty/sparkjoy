@@ -399,7 +399,9 @@ that missed the cache.
 
 Press Esc twice, pick the last prompt before the compaction, and choose Restore
 conversation. This rewinds one turn too far, dropping Claude's reply to that
-prompt, because Claude Code has no rewind point at the compaction itself.
+prompt, because Claude Code has no rewind point at the compaction itself. Follow
+[anthropics/claude-code#112303](https://github.com/anthropics/claude-code/issues/112303),
+which asks for one.
 
 To have the model keep the context in cases like yours, describe them in
 sparkjoy's [`instructions`](#settings).
