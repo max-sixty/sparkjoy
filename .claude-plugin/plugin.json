@@ -1,6 +1,6 @@
 {
   "name": "sparkjoy",
-  "description": "Lets the model decide when to compact a Claude Code session. At each turn end, and before an idle session's prompt cache lapses, it asks the session's own model whether to compact.",
+  "description": "Delegates when to compact to the model. At each turn end, and before an idle session's prompt cache lapses, it asks the session's own model whether to compact.",
   "author": { "name": "Maximilian Roos" },
   "homepage": "https://github.com/max-sixty/sparkjoy",
   "icon": "./assets/icon.png",

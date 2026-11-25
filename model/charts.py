@@ -4,8 +4,9 @@ draws each of these as model-<name>-{light,dark}.svg, from one read of the sessi
 
   cycles         the context and each request's cost over 600 requests, at four compaction thresholds, as a
                  schematic: axes in the model's symbols
-  inputs         a request's cost and a compaction's cost by part, against the context, the cache write
-                 after a compaction split by what fills the context (context.py's measurement)
+  inputs         a request's cost and a compaction's cost by part while the cache holds the context, against
+                 the context, the cache write after a compaction split by what fills the context
+                 (context.py's measurement)
   payback        how many later requests a compaction takes to pay for itself, against the context it
                  compacts, for the README's What it saves
   lapse          a compaction's cost by part after the prompt cache lapses, against the context, in the form
@@ -27,6 +28,7 @@ compaction loses rather than in β (voi_lost).
 """
 
 import html
+from dataclasses import replace
 
 import matplotlib
 
@@ -411,15 +413,17 @@ def bands(ax, x, stack, cap, step, t, c):
 
 
 def inputs(out, p, c, parts):
-    """What the costs are made of: a request's cost at its context by part, and a compaction's cost by
-    part, on one axis. Parts that come from the sessions' fitted parameters are named in the fit colour.
-    Returns each part's cost in dollars, and the total, for a request and a compaction at K and 700k."""
-    h, c0, F0 = fit.terms(p, c)
-    w1 = c.write - 1
-    # Every part is linear in x but for the lapse's kink at P, so the ends and P draw the same bands as
-    # any finer grid; K and 700k are where the figures below are read.
-    x = np.unique([1_000, p.P, p.K, 700_000, fit.AUTO])
-    # c(x) = h x + c0 by part, in the form of compaction_parts.
+    """What the costs are made of while the cache holds the context: a request's cost at its context
+    by part, and a compaction's cost by part, on one axis. The request is one that finds the cache
+    holding its context, c(x) at ℓ = 0: the share ℓ of requests that find it lapsed is an average
+    that h carries, not a part of any one request. Parts that come from the sessions' fitted
+    parameters are named in the fit colour. Returns each part's cost in dollars, and the total, for a
+    request and a compaction at K and 700k."""
+    _, c0, F0 = fit.terms(replace(p, lapse=0), c)
+    # Every part is linear in x, so the ends draw the same bands as any finer grid; K and 700k are
+    # where the figures below are read.
+    x = np.unique([1_000, p.K, 700_000, fit.AUTO])
+    # c(x) = x + c0 at ℓ = 0 by part, in the form of compaction_parts.
     request = [
         (
             "output and uncached input",
@@ -429,20 +433,14 @@ def inputs(out, p, c, parts):
         ),
         (
             "cache write of the new tokens",
-            np.full_like(x, (1 - p.lapse) * w1 * p.g),
+            np.full_like(x, (c.write - 1) * p.g),
             True,
             1,
-        ),
-        (
-            "cache write of the context after a lapse",
-            p.lapse * w1 * np.maximum(x - p.P, 0),
-            True,
-            "lapse",
         ),
         ("cache read of the context", x, False, 2),
     ]
     compaction = compaction_parts(x, p, c, parts)
-    assert np.allclose(sum(v for _, v, _, _ in request)[x > p.P], (h * x + c0)[x > p.P])
+    assert np.allclose(sum(v for _, v, _, _ in request), x + c0)
     assert np.allclose(sum(v for _, v, _, _ in compaction), x + F0)
     figures = {
         name: {
@@ -474,7 +472,7 @@ def inputs(out, p, c, parts):
             color=t["muted"],
             fontsize=10,
         )
-        axis_name(mid, "Cost per request c(x) by part ($)", t)
+        axis_name(mid, "Cost per request by part, with the cache warm ($)", t)
         axis_name(low, "Cost per compaction F(x) by part ($)", t)
         mid.text(
             1,
