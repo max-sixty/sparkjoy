@@ -101,7 +101,9 @@ def credential() -> dict[str, str]:
 
 def digest(message: dict) -> str:
     """A message's hash, as Claude Code's request records name it."""
-    text = json.dumps(message, separators=(",", ":"), sort_keys=True, ensure_ascii=False)
+    text = json.dumps(
+        message, separators=(",", ":"), sort_keys=True, ensure_ascii=False
+    )
     return hashlib.sha256(text.encode()).hexdigest()
 
 
@@ -134,9 +136,13 @@ def fork_request(entries: list[dict]) -> tuple[dict, dict, list[dict]]:
     A message the record holds no blob of is held by the transcript's lines: an
     assistant message by its lines merged by message id, a user message by a
     line or a run of them, one per result of parallel tool calls."""
-    blobs = {e["hash"]: e["message"] for e in entries if e.get("type") == "api-request-blob"}
+    blobs = {
+        e["hash"]: e["message"] for e in entries if e.get("type") == "api-request-blob"
+    }
     shapes = {
-        e["shapeHash"]: e["shape"] for e in entries if e.get("type") == "api-request-shape"
+        e["shapeHash"]: e["shape"]
+        for e in entries
+        if e.get("type") == "api-request-shape"
     }
     requests = {e["id"]: e for e in entries if e.get("type") == "api-request"}
     reply = entries[-1]
@@ -175,7 +181,9 @@ def fork_request(entries: list[dict]) -> tuple[dict, dict, list[dict]]:
     for i, h in enumerate(hashes(request)):
         message = blobs.get(h) or lines.get(h)
         if message is None:
-            raise LookupError(f"message {i} of the recorded request is in no blob or line")
+            raise LookupError(
+                f"message {i} of the recorded request is in no blob or line"
+            )
         messages.append(uncached(message))
     messages.append(
         {"role": "assistant", "content": uncached(by_id[reply["message"]["id"]])}
@@ -190,14 +198,16 @@ def body_of(request: dict, shape: dict, messages: list[dict], question: str) -> 
     system[-1] |= {"cache_control": {"type": "ephemeral"}}
     reply = messages[-1]
     reply = reply | {
-        "content": reply["content"][:-1]
-        + [reply["content"][-1] | {"cache_control": {"type": "ephemeral"}}]
+        "content": [
+            *reply["content"][:-1],
+            reply["content"][-1] | {"cache_control": {"type": "ephemeral"}},
+        ]
     }
     params = {k: v for k, v in request["params"].items() if k != "betas"}
     return params | {
         "system": system,
         "tools": uncached(shape["tools"]),
-        "messages": messages[:-1] + [reply, {"role": "user", "content": question}],
+        "messages": [*messages[:-1], reply, {"role": "user", "content": question}],
         "stream": True,
     }
 
@@ -226,9 +236,13 @@ def stream(body: dict, headers: dict) -> tuple[list[dict], str | None, dict]:
                 if delta["type"] == f"{field}_delta":
                     block[field] = block.get(field, "") + delta[field]
             if delta["type"] == "input_json_delta":
-                inputs[event["index"]] = inputs.get(event["index"], "") + delta["partial_json"]
+                inputs[event["index"]] = (
+                    inputs.get(event["index"], "") + delta["partial_json"]
+                )
         elif kind == "content_block_stop" and event["index"] in inputs:
-            blocks[event["index"]]["input"] = json.loads(inputs.pop(event["index"]) or "{}")
+            blocks[event["index"]]["input"] = json.loads(
+                inputs.pop(event["index"]) or "{}"
+            )
         elif kind == "message_delta":
             stop = event["delta"].get("stop_reason")
             usage = usage | (event.get("usage") or {})
@@ -257,14 +271,24 @@ def ask(body: dict, headers: dict) -> tuple[str, dict]:
         ) or 0
         calls = [b for b in blocks if b["type"] == "tool_use"]
         if stop != "tool_use" or not calls:
-            return "".join(b.get("text", "") for b in blocks if b["type"] == "text"), used
+            return "".join(
+                b.get("text", "") for b in blocks if b["type"] == "text"
+            ), used
         denied = [
-            {"type": "tool_result", "tool_use_id": c["id"], "content": DENIED, "is_error": True}
+            {
+                "type": "tool_result",
+                "tool_use_id": c["id"],
+                "content": DENIED,
+                "is_error": True,
+            }
             for c in calls
         ]
         body = body | {
             "messages": body["messages"]
-            + [{"role": "assistant", "content": blocks}, {"role": "user", "content": denied}]
+            + [
+                {"role": "assistant", "content": blocks},
+                {"role": "user", "content": denied},
+            ]
         }
 
 
@@ -336,7 +360,9 @@ def row_of(case: dict, source: Path, request: dict, text: str, used: dict) -> di
             sum(
                 n * p
                 for n, p in zip(
-                    (used["input_tokens"], used["output_tokens"], read, write), prices
+                    (used["input_tokens"], used["output_tokens"], read, write),
+                    prices,
+                    strict=False,
                 )
             )
             / 1e6,
@@ -352,7 +378,9 @@ def row_of(case: dict, source: Path, request: dict, text: str, used: dict) -> di
     return row
 
 
-def run(cases: list[dict], sources: list[Path], repeat: int, jobs: int, results: Path) -> None:
+def run(
+    cases: list[dict], sources: list[Path], repeat: int, jobs: int, results: Path
+) -> None:
     auth = credential()
 
     def one_case(case: dict) -> list[dict]:

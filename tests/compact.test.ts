@@ -1002,9 +1002,7 @@ test('an idle session on a five-minute cache is asked after 4 minutes', async ($
   await clock.settle()
   expect(forks.length).toBe(1)
   expect(forks[0]).toContain('Your turn ended 4 minutes ago')
-  expect(forks[0]).toContain(
-    'the prompt cache holding it lapses within a few minutes',
-  )
+  expect(forks[0]).toContain('the prompt cache holding it lapses within a few minutes')
 
   // Kept, the context stays as it was, and nothing asks again at 55 minutes.
   await clock.advance(IDLE)

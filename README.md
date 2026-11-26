@@ -168,8 +168,8 @@ reason. The fork goes from Claude Code to the session's own model, so the
 conversation goes only where the session already sends it.
 
 The question asks whether the next turns are likely to need the details which a summary would drop (such
-as failed attempts or a design still taking shape), and lists the cost of
-compacting and the cost of keeping the context at its current size.
+as failed attempts or a design still taking shape), and how many requests a
+compaction takes to pay for itself at the context's current size.
 
 ### The prompt
 
@@ -254,46 +254,35 @@ Parameters are fitted to your own sessions by running `/sparkjoy report`.
 ### Evals
 
 <details>
-<summary>The question's verdicts at 16 turn ends from my sessions</summary>
+<summary>The question's verdicts at 13 turn ends from my sessions</summary>
 
 Each turn end's label is chosen from what the session did next, and each run
-asks the question above, on 25 November 2026, with Claude Code's default tools
-in the request as a session has them[^evals]:
+sends the request the plugin's fork would have sent there, rebuilt from the
+session's own records, with the question above, on 25 November 2026[^evals]:
 
-| turn ends                                                                                  | context   | label   | runs that matched it |
-| ------------------------------------------------------------------------------------------ | --------- | ------- | -------------------- |
-| five that finished a piece of work                                                         | 479k–742k | compact | 40 of 40             |
-| one idle for 55 minutes after everything landed                                            | 290k      | compact | 8 of 8               |
-| four in the middle of a task                                                               | 519k–681k | keep    | 9 of 48              |
-| two that stop to ask before going on, where the next turn needed detail the ask leaves out | 490k–599k | keep    | 20 of 20             |
-| two that stop to ask, where the ask holds all the next turn needed                         | 403k–479k | compact | 22 of 24             |
-| two natural breaks, but small                                                              | 210k–296k | keep    | 0 of 16              |
+| turn ends                                                           | context   | label   | runs that matched it |
+| ------------------------------------------------------------------- | --------- | ------- | -------------------- |
+| five that finished a piece of work                                  | 479k–742k | compact | 20 of 20             |
+| one idle for 55 minutes after everything landed                     | 290k      | compact | 4 of 4               |
+| four in the middle of a task                                        | 519k–681k | keep    | 13 of 16             |
+| one that stops to ask, where the ask holds all the next turn needed | 479k      | compact | 4 of 4               |
+| two natural breaks, but small                                       | 210k–296k | keep    | 0 of 8               |
 
 At the two small natural breaks the question compacts, though sparkjoy asks
 only from 250k, so it would never ask at the 210k one. Some labels are
 uncertain, since each records what the session did next rather than what it
 needed ([Where this leaves them](evals/README.md#where-this-leaves-them)).
 
-In the middle of a task the question mostly compacts, and how often moves from
-one batch of runs to the next. Claude Code's model decides at each request
-whether to think before it answers, and there that decision goes with the
-verdict: of the runs that thought, nearly all compacted, and most of those that
-didn't kept the context. How often the model thinks there moves with small
-changes to the question's wording and the request, so the same question and
-transcripts kept the context at those four turn ends in none of 16 runs one
-morning and in 24 of 32 that afternoon ([Thinking](evals/README.md#thinking)).
-Asked whether the next turns will need the detail, without the costs, the model
-kept the context there in 31 of 32 runs, thinking or not.
+In the middle of a task, an earlier question that stated each figure behind
+the costs compacted in all 32 runs, though in most it answered that the next
+turns would need the detail. With the costs summed into the one figure above,
+the model kept the context there in 25 of 32 runs
+([Results](evals/README.md#results)).
 
 The hook reads only `compact` and `reason`, yet the question asks for `next` and
-`needs_detail` first, because without them the model almost never keeps the
-context. At the mid-task turn ends, in the batches that ran both, versions of
-the question with the two fields kept it in 16 of 64 runs, and versions that ask
-only for `compact` and `reason` in 3 of 96 (p = 0.03, an exact test within
-batches). In one of those batches neither kept. Among the versions without them,
-one asks first for a `reason` that says what most likely comes next and whether
-it needs detail a summary drops, and another tells the model to consider those
-two things before it answers. The two fields cost about 20 output tokens a
+`needs_detail` first, because without them the model seldom keeps the context:
+at the mid-task turn ends it kept in 13 of 16 runs with the two fields and in 3
+of 16 without them (p = 0.001). The two fields cost about 20 output tokens a
 question.
 
 </details>
@@ -346,8 +335,6 @@ like this:
   sessions that hold less would do better with lower floors. `/sparkjoy report`
   fits the floors to your own sessions, and you can set them yourself
   ([Settings](#settings)).
-- The report fits every figure the question states except the count of wasted
-  requests after a compaction, which takes months of sessions to measure.
 - It leaves Claude Code's own compaction on, so Claude Code still compacts when
   a turn fills the window. Where Claude Code's idle compaction runs[^idle], it
   also compacts an idle context of 200k or more itself, before sparkjoy would
@@ -983,8 +970,8 @@ Prices for the one-hour cache. Every other section's figures are for Opus 5.5.
 `/sparkjoy report` fits the model to your sessions of the last 14 days, and its
 Thresholds section gives the pair of floors that minimizes their cost. From then
 on, sparkjoy asks once the context reaches those floors, unless you set floors
-of your own, and its question states the parameters the report measured in
-place of mine. The fit needs some compactions in those sessions, to measure K
+of your own, and its question's sums use the parameters the report measured
+in place of mine. The fit needs some compactions in those sessions, to measure K
 and N.
 
 ## Questions about the model

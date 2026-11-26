@@ -561,9 +561,9 @@ function hash(text: string) {
 // the format the hook parses whatever they say.
 //
 // An earlier question stated every figure behind the sum, and the cost of each
-// side in its own list. Asked as the fork asks it, it compacted at every turn
-// end in the middle of a task, though in a quarter of its answers it said the
-// next turns would need the detail; this one keeps there in most runs
+// side in its own list. Asked as the fork asks it, at the turn ends in the
+// middle of a task it compacted in all 16 runs, though in 12 it answered that
+// the next turns would need the detail; this one keeps there in 25 of 32
 // (evals/README.md, "Results").
 //
 // The fork sends the turn's last request with the turn's reply after it, so
