@@ -107,9 +107,10 @@ a JSON Schema. `haste` (the question now) adds a closing line to it: "You have
 no tools here. Answer straight away, without thinking it over." `deliberate`
 closes instead with "Think it over before you answer: what comes next, what it
 would need from the transcript, and what keeping and compacting would each
-cost." `haste-no-fields` is `haste` asking only for `compact` and `reason`. Each
-ran four times at each case, and `haste` ran four more times at the mid-task
-cases and the ones that stop to ask, a few minutes later.
+cost." `haste-no-fields` is `haste` asking only for `compact` and `reason`.
+`main@6f2013a`, `haste` and `deliberate` ran four times at every case. A few
+minutes later, `haste` ran four more times at the mid-task cases and the ones
+that stop to ask, beside `haste-no-fields`.
 
 | case                        | recorded | replayed | expected | main@6f2013a    | haste           | deliberate      | haste-no-fields |
 | --------------------------- | -------- | -------- | -------- | --------------- | --------------- | --------------- | --------------- |
@@ -160,10 +161,10 @@ in none of 8 and kept in all of them. Between batches of one question the
 record is thinner. Run again on 25 November, `fork-no-reply` kept at the
 mid-task cases in 17 of 32 runs, against 23 of 32, 24 of 32 and 27 of 64 in the
 three batches of 20 November's afternoon. The last two of those record output
-tokens: a keep there came with a median of about 85, the answer alone, and a
-compaction with about 340. The batch of that morning that kept in none of 16
-recorded none, so whether its model thought more often isn't known. The client
-doesn't explain it: run alternately in one batch, Claude Code 2.1.329 and
+tokens, though not thinking: a keep there came with a median of about 85, and a
+compaction with about 340. On 25 November an answer without thinking took about 85. The batch of that morning that kept in none of 16 recorded no output
+tokens, so whether its model thought more often isn't known. Nor does one test
+pin it on the client: run alternately in a later batch, Claude Code 2.1.329 and
 2.1.330 kept at the mid-task cases in 14 and 13 of 32 runs.
 
 The request's own settings don't settle whether the model thinks. At the four
@@ -179,17 +180,18 @@ thought in 6 of 20 runs; with thinking enabled and a budget of 4,000 tokens
 | leaf-ring-test-rewrite-wait | keep     | 1/8 (0 thought)     | 0/4 (2 thought)        | 0/4 (3 thought)               | 0/4 (2 thought)         |
 | leaf-panzoom-drop-ask       | compact  |                     | 1/4 (1 thought)        | 1/4 (1 thought)               | 1/4 (1 thought)         |
 
-The question's own words do settle it. `haste` thought in 9 of its 96 runs,
-all at two cases where the verdict is the same either way, and `deliberate` in
-62 of its 64. Under either, every case gave one verdict in all its runs, and
-the two differ only at the four mid-task cases and leaf-panzoom-drop-ask.
-`deliberate` also asks the model to weigh the costs, so its words may move the
-verdict apart from the thinking. It compacts at every case but the two turn
-ends that stop to ask about detail the next turn needed. That is close to
-compacting at every turn end, the policy the cost model finds cheapest when a
-compaction loses nothing. `haste` keeps where the work is mid-task, which is
-the distinction the labels draw. Its runs all came within a few minutes, so
-whether it holds on another day is untested.
+The question's own words come much closer. `haste` thought in 9 of its 96 runs,
+none of them at a mid-task case and all at two cases where the verdict is the
+same either way, and `deliberate` in 62 of its 64. Under either, every case
+gave one verdict in all its runs, and the two differ only at the four mid-task
+cases and leaf-panzoom-drop-ask. `deliberate` also asks the model to weigh the
+costs, so its words may move the verdict apart from the thinking. It compacts
+at every case but the two turn ends that stop to ask about detail the next turn
+needed. That is close to compacting at every turn end from 250k, and the [cost
+model](../docs/cost-model.md) puts the cheapest turn-end threshold between 210k
+and 280k, depending on β, when a compaction loses no detail. `haste` keeps
+where the work is mid-task, which is the distinction the labels draw. Its runs
+all came within a few minutes, so whether it holds on another day is untested.
 
 Each row of `results.jsonl` records the Claude Code version that ran it from
 the afternoon of 20 November, and its thinking tokens from 25 November. A
@@ -223,10 +225,10 @@ read](#fields-the-hook-doesnt-read) describes. `reply-message` (20 November) is
 `fork-no-reply` run with `--keep-reply`, so the session ends with the turn's
 reply and the question follows it. `fork-no-reply` ran in four batches, which
 kept at the mid-task cases in 6 of 16, 0 of 16, 23 of 32 and 24 of 32 runs
-([Thinking](#thinking)). The four cases that stop to ask ran only in the last two
-batches, and its last batch ran as `power-law@929a9bd`, the same question. A fifth batch, which
-compared two clients and kept at the mid-task cases in 27 of 64 runs, came
-after the table.
+([Thinking](#thinking)). The four cases that stop to ask ran only in the
+fourth, which ran as `power-law@929a9bd`, the same question.
+A fifth batch, which compared two clients and kept at the mid-task cases in 27
+of 64 runs, came after the table.
 
 | case                        | recorded | replayed | expected | main | sized-question | detail | measured | model-costs | one-figure | noisy | goal-first | no-fields | fork | fork-no-fields | fork-no-reply | fork-neither | reply-message |
 | --------------------------- | -------- | -------- | -------- | ---- | -------------- | ------ | -------- | ----------- | ---------- | ----- | ---------- | --------- | ---- | -------------- | ------------- | ------------ | ------------- |
@@ -450,7 +452,8 @@ compacts at every finished case, the idle one and both small breaks, and keeps
 at the four mid-task cases, the two asks whose next turn needed detail, and
 leaf-panzoom-drop-ask. Told to think it over instead, the model compacts at the
 mid-task cases and at leaf-panzoom-drop-ask. These cases can't say which of the
-two the plugin should ask, since there the labels and the cost model disagree.
+two the plugin should ask. At the mid-task cases the labels say keep and the
+cost model says compact, and at leaf-panzoom-drop-ask both say compact.
 
 Some labels are themselves uncertain. Each records what the session did next,
 which needn't be what it needed: at three of the four mid-task cases the next

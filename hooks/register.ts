@@ -584,9 +584,9 @@ function hash(text: string) {
 // decides for each request whether to think first. In the evals, where the
 // work is mid-task, no run that thought kept the context, and most runs that
 // didn't think kept it. How often the model thought there moved with small
-// changes to the question's wording and between batches of runs, and the
-// verdict moved with it. Told to answer straight away, it rarely thinks, and
-// each case gets one verdict in every run (evals/README.md, "Thinking"). A low
+// changes to the question's wording, and the verdict moved with it. Told to
+// answer straight away, it rarely thinks, and each case gets one verdict in
+// every run (evals/README.md, "Thinking"). A low
 // `effort` doesn't do the same: at low effort the model still thought in 9 of
 // 20 eval runs, and on a model that takes effort only for a whole request, a
 // fork at another level writes the whole conversation to the cache again.

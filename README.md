@@ -311,15 +311,16 @@ needed ([Where this leaves
 them](evals/README.md#where-this-leaves-them)).
 
 The question ends by telling the model to answer without thinking it over.
-Claude Code's model decides at each request whether to think before it
-answers. At the four turn ends in the middle of a task, none of the 53 runs
-that thought kept the context, and most of those that didn't think kept it.
-How often the model thought there moved with small changes to the question's
-wording and between batches of runs. So before the question settled it, the
-same question and transcripts kept the context at those four turn ends in none
-of 16 runs one morning and in 24 of 32 that afternoon
-([Thinking](evals/README.md#thinking)). Told to think it over instead, the
-model compacts at all four.
+Claude Code's model decides at each request whether to think before it answers.
+At the four turn ends in the middle of a task, across every question and
+setting tried, none of the 53 runs that thought kept the context, and most of
+those that didn't think kept it; under the question as it stands, no run there
+thought. How often the model thought there moved with small changes to the
+question's wording. Before the question settled it, the same question's
+verdicts there also moved from batch to batch: it kept the context at those
+four turn ends in none of 16 runs one morning and in 24 of 32 that afternoon
+([Thinking](evals/README.md#thinking)). Those batches didn't record thinking.
+Told to think it over instead, the model compacts at all four.
 
 The hook reads only `compact` and `reason`, yet the question asks for `next`
 and `needs_detail` first. Asked for only `compact` and `reason`, the question
