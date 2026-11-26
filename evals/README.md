@@ -500,15 +500,15 @@ few days of use will give live verdicts to compare the harness against.
 
 ## Where this leaves them
 
-The question as it stands gives one verdict at every case but the four mid-task
-ones, where it compacts in most runs, against the labels, at a rate that moves
-with whether the model thinks. Asked without the costs, the model keeps there
-in 31 of 32 runs and gives every other case one verdict, and its verdict is
-then its answer to whether the next turns will need the detail. Told to think
-it over, it compacts at the mid-task cases and at leaf-panzoom-drop-ask. These
-cases can't say which the plugin should ask. At the mid-task cases the labels
-say keep and the cost model says compact, and at leaf-panzoom-drop-ask both say
-compact.
+The question as it stands gives one verdict in nearly every run at every case
+but the four mid-task ones, where it compacts in most runs, against the labels,
+at a rate that moves with whether the model thinks. Asked without the costs,
+the model keeps there in 31 of 32 runs and gives every other case one verdict,
+and its verdict is then its answer to whether the next turns will need the
+detail. Told to think it over, it compacts at the mid-task cases and at
+leaf-panzoom-drop-ask. These cases can't say which the plugin should ask. At
+the mid-task cases the labels say keep and the cost model says compact, and at
+leaf-panzoom-drop-ask both say compact.
 
 Some labels are themselves uncertain. Each records what the session did next,
 which needn't be what it needed: at three of the four mid-task cases the next
