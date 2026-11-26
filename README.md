@@ -261,7 +261,8 @@ Parameters are fitted to your own sessions by running `/sparkjoy report`.
 
 Each turn end's label is chosen from what the session did next, and each run
 sends the request the plugin's fork would have sent there, rebuilt from the
-session's own records, with the question above, on 25 and 26 November 2026[^evals]:
+session's own records, on 25 and 26 November 2026, with the question above
+before it said the plugin compacts from 900k[^evals]:
 
 | turn ends                                                           | context   | label   | runs that matched it |
 | ------------------------------------------------------------------- | --------- | ------- | -------------------- |
@@ -272,7 +273,8 @@ session's own records, with the question above, on 25 and 26 November 2026[^eval
 | one that stops to ask, where the ask holds all the next turn needed | 479k      | compact | 4 of 4               |
 | two natural breaks, but small                                       | 210k–296k | keep    | 0 of 8               |
 
-At the two small natural breaks the question compacts, though sparkjoy asks
+As it stands, the question gave the same verdicts at seven of these turn ends,
+in 14 runs. At the two small natural breaks the question compacts, though sparkjoy asks
 only from 250k, so it would never ask at the 210k one. Some labels are
 uncertain, since each records what the session did next rather than what it
 needed ([Where this leaves them](evals/README.md#where-this-leaves-them)).
