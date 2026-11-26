@@ -580,9 +580,9 @@ function hash(text: string) {
 // TODO(2026-11-25): ask only whether the next turns need the transcript's
 // detail, without the costs, and compact when they don't. Where the work is
 // mid-task this question's verdict moves from run to run with whether the
-// model thinks first, and it mostly compacts; asked without the costs, the
-// model gave every eval case one verdict in every run (evals/README.md,
-// "Thinking").
+// model thinks first, and it mostly compacts. Asked without the costs, the
+// model gave each eval case one verdict in all but one of 128 runs, thinking
+// or not (evals/README.md, "Thinking").
 function question(
   tokens: number,
   idleMinutes?: number,
