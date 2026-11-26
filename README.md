@@ -400,6 +400,23 @@ that missed the cache.
 </details>
 
 <details>
+<summary>sparkjoy compacts once my work is finished, just before I close the session. Isn't that a waste?</summary>
+
+It is, but a small one. sparkjoy compacts only while the cache holds the context,
+so at 500k the compaction request costs \$0.20: \$0.10 to read the context from the
+cache and \$0.10 for the summary. The other \$0.82 of the compaction's \$1.02 is
+the cache write of the next request, and a session you close never sends one.
+
+If you resume the session after its cache has expired, the context has to be
+written to the cache again, so compacting then costs \$4.66 instead of \$1.02
+([What a request and a compaction
+cost](docs/cost-model.md#what-a-request-and-a-compaction-cost)). Compacting before
+you close costs less overall once you resume more than about one session in
+twenty, or one in twelve at sparkjoy's 250k floor.
+
+</details>
+
+<details>
 <summary>What if I didn't want the compaction?</summary>
 
 Press Esc twice, pick the last prompt before the compaction, and choose Restore
