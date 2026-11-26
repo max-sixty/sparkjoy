@@ -168,8 +168,8 @@ reason. The fork goes from Claude Code to the session's own model, so the
 conversation goes only where the session already sends it.
 
 The question asks whether the next turns are likely to need the details which a summary would drop (such
-as failed attempts or a design still taking shape), and how many requests a
-compaction takes to pay for itself at the context's current size.
+as failed attempts or a design still taking shape), and states how many
+requests a compaction takes to pay for itself at the context's current size.
 
 ### The prompt
 
@@ -868,9 +868,10 @@ classifier saves over the single threshold, since at each turn end it judges
 right the session avoids all D wasted requests, while the session pays for a
 question at every turn end it asks at.
 
-Unlike this classifier, sparkjoy's question also states what keeping the context
-costs, so the session's model can compact at a turn end in the middle of a task
-once keeping costs more than the detail a compaction would drop.
+sparkjoy's question also states what a compaction saves at the context's size,
+but in the evals its verdict follows its answer about the detail whatever size
+it states ([Results](evals/README.md#results)), so in the middle of a task
+it acts as this classifier does.
 
 ### What the model needs measured
 

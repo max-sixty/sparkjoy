@@ -16,8 +16,8 @@
 // The judge is the session's model over the whole transcript rather than a
 // small model over the last reply: which parts the work ahead still needs
 // depends on the work, and the fork reads it from cache. The question gives
-// the judge the saving, summed for the context it holds, to weigh rather than
-// a rule, and never names the floor. Its figures are the user's own
+// the judge what a compaction would save at the context it holds and what a
+// summary drops, and never names the floor. Its figures are the user's own
 // once `/sparkjoy report` has fitted them. The mod runs only where a person is
 // at the prompt: a `-p` run or an SDK host keeps the engine's own compaction, so
 // no script pays for a judge or finds its conversation changed.
