@@ -1,6 +1,5 @@
 """Runs model/bug.py on a synthetic transcript: `uvx pytest tests`. It needs uv."""
 
-import os
 import subprocess
 from pathlib import Path
 
@@ -8,6 +7,7 @@ from test_report import (
     ROOT,
     boundary,
     compact_summary,
+    isolated,
     line,
     prompt,
     request,
@@ -64,7 +64,7 @@ def test_drafts_sparkjoys_lines_beside_the_requests_around_them(tmp_path):
         ],
         capture_output=True,
         text=True,
-        env={"PATH": os.environ["PATH"], "TMPDIR": str(tmp_path), "TZ": "UTC"},
+        env=isolated(tmp_path, TZ="UTC"),
         check=True,
     )
     path, where = run.stdout.splitlines()

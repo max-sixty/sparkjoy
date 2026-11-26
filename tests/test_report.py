@@ -9,6 +9,21 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 DAY = "2026-11-02T"
 ids = count()
+PROXY = [
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "no_proxy",
+]
+
+
+def isolated(tmp_path, **extra):
+    """An environment for uv that keeps out the user's settings but keeps any proxy, which a
+    sandbox may need to reach the script's dependencies."""
+    env = {name: os.environ[name] for name in PROXY if name in os.environ}
+    return {**env, "PATH": os.environ["PATH"], "TMPDIR": str(tmp_path), **extra}
 
 
 def request(time, read, write, model="claude-opus-5-5", text="Done.", output=500):
@@ -110,7 +125,7 @@ def report(tmp_path, entries, *args):
         ],
         capture_output=True,
         text=True,
-        env={"PATH": os.environ["PATH"], "TMPDIR": str(tmp_path)},
+        env=isolated(tmp_path),
         check=True,
     )
     *summary, page = run.stdout.splitlines()
