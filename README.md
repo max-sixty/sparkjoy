@@ -220,6 +220,8 @@ Answer with nothing but one JSON object that matches this schema, filling its fi
   "additionalProperties": false
 }
 ```
+
+You have no tools here. Answer straight away, without thinking it over.
 ````
 
 <!-- End of the generated question. -->
@@ -273,6 +275,8 @@ Answer with nothing but one JSON object that matches this schema, filling its fi
   "additionalProperties": false
 }
 ```
+
+You have no tools here. Answer straight away, without thinking it over.
 ````
 
 <!-- End of the generated question. -->
@@ -281,50 +285,52 @@ Answer with nothing but one JSON object that matches this schema, filling its fi
 
 Parameters are fitted to your own sessions by running `/sparkjoy report`.
 
-<!-- The Evals block waits until the mid-task verdicts' swing between batches is explained. Remove this line and the closing one to restore it.
 ### Evals
 
 <details>
 <summary>The question's verdicts at 16 turn ends from my sessions</summary>
 
 Each turn end's label is chosen from what the session did next, and each run
-asks the question above, on 19 and 20 November 2026[^evals]:
+asks the question above, on 25 November 2026[^evals]:
 
 | turn ends                                                                                  | context   | label   | runs that matched it |
 | ------------------------------------------------------------------------------------------ | --------- | ------- | -------------------- |
-| five that finished a piece of work                                                         | 479k–742k | compact | 10 of 10             |
-| one idle for 55 minutes after everything landed                                            | 290k      | compact | 2 of 2               |
-| four in the middle of a task                                                               | 519k–681k | keep    | 80 of 160            |
+| five that finished a piece of work                                                         | 479k–742k | compact | 20 of 20             |
+| one idle for 55 minutes after everything landed                                            | 290k      | compact | 4 of 4               |
+| four in the middle of a task                                                               | 519k–681k | keep    | 32 of 32             |
 | two that stop to ask before going on, where the next turn needed detail the ask leaves out | 490k–599k | keep    | 16 of 16             |
 | two that stop to ask, where the ask holds all the next turn needed                         | 403k–479k | compact | 8 of 16              |
-| two natural breaks, but small                                                              | 210k–296k | keep    | 0 of 4               |
+| two natural breaks, but small                                                              | 210k–296k | keep    | 0 of 8               |
 
-At the two small natural breaks the [cost model](#cost-model) also says to
-compact. At the mid-task turn ends, the same question and transcripts kept the
-context in 6 of 16 runs on the evening of 19 November, in none of 16 on the
-morning of 20 November, and in 23 of 32, 24 of 32 and 27 of 64 in three batches
-that afternoon, so two versions of the question compare only when run in the
-same batch. Some labels are uncertain, since each records what the session did
-next rather than what it needed ([Where this leaves
+Each turn end got the same verdict in every run. At the two small natural
+breaks it compacts, though sparkjoy asks only from 250k, so it would never ask
+at the 210k one. At the ask that missed, the question kept a fix the turn had
+left half done. Some labels are
+uncertain, since each records what the session did next rather than what it
+needed ([Where this leaves
 them](evals/README.md#where-this-leaves-them)).
 
-The hook reads only `compact` and `reason`, yet the question asks for `next` and
-`needs_detail` first, because without them the model almost never keeps the
-context. At the mid-task turn ends, in the batches that ran both, versions of
-the question with the two fields kept it in 16 of 64 runs, and versions that ask
-only for `compact` and `reason` in 3 of 96 (p = 0.03, an exact test within
-batches). In one of those batches neither kept. Among the versions without them,
-one asks first for a `reason` that says what most likely comes next and whether
-it needs detail a summary drops, and another tells the model to consider those
-two things before it answers. The two fields cost about 20 output tokens a
-question.
+The question ends by telling the model to answer without thinking it over.
+Claude Code's model decides at each request whether to think before it
+answers. At the four turn ends in the middle of a task, none of the 53 runs
+that thought kept the context, and most of those that didn't think kept it.
+How often the model thought there moved with small changes to the question's
+wording and between batches of runs. So before the question settled it, the
+same question and transcripts kept the context at those four turn ends in none
+of 16 runs one morning and in 24 of 32 that afternoon
+([Thinking](evals/README.md#thinking)). Told to think it over instead, the
+model compacts at all four.
+
+The hook reads only `compact` and `reason`, yet the question asks for `next`
+and `needs_detail` first. Asked for only `compact` and `reason`, the question
+compacted in every run at two of the four turn ends in the middle of a task.
+The two fields cost about 20 output tokens a question.
 
 </details>
 
 [^evals]:
     The [evals](evals/README.md) put the question to the model at turn
     ends from my sessions.
--->
 
 ## Settings
 

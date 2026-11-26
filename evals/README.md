@@ -21,7 +21,7 @@ uv run --script evals/run.py --report                           # the results ta
 uv run --script evals/check.py                                  # the publishing sweep over the fixtures
 ```
 
-They need `claude` (tested on 2.1.325), `bun` and `uv`, and a Claude Code login
+They need `claude` (tested on 2.1.332), `bun` and `uv`, and a Claude Code login
 or `ANTHROPIC_API_KEY`. `--question-from` can be given more than once, and
 every run appends a row to `results.jsonl`.
 
@@ -99,7 +99,106 @@ cache lapses either way.
 
 ## Results
 
-From `run.py --report` on 16 to 19 November 2026; each cell counts the runs
+From `run.py --report` on 25 November 2026, on Claude Code 2.1.332. Each cell
+counts the runs that matched the label, and in brackets the runs in which the
+model thought before it answered. `main@6f2013a` is the question as published
+at 6f2013a: `fork-no-reply` below, reworded, with its answer's format given as
+a JSON Schema. `haste` (the question now) adds a closing line to it: "You have
+no tools here. Answer straight away, without thinking it over." `deliberate`
+closes instead with "Think it over before you answer: what comes next, what it
+would need from the transcript, and what keeping and compacting would each
+cost." `haste-no-fields` is `haste` asking only for `compact` and `reason`. Each
+ran four times at each case, and `haste` ran four more times at the mid-task
+cases and the ones that stop to ask, a few minutes later.
+
+| case                        | recorded | replayed | expected | main@6f2013a    | haste           | deliberate      | haste-no-fields |
+| --------------------------- | -------- | -------- | -------- | --------------- | --------------- | --------------- | --------------- |
+| leaf-scaling-closeout       | 742k     | 516k     | compact  | 4/4 (1 thought) | 4/4 (0 thought) | 4/4 (4 thought) |                 |
+| leaf-hover-closeout         | 736k     | 488k     | compact  | 4/4 (4 thought) | 4/4 (0 thought) | 4/4 (4 thought) |                 |
+| leaf-followups-merged       | 643k     | 402k     | compact  | 4/4 (0 thought) | 4/4 (0 thought) | 4/4 (2 thought) |                 |
+| leaf-scroll-fix-merged      | 608k     | 324k     | compact  | 4/4 (4 thought) | 4/4 (0 thought) | 4/4 (4 thought) |                 |
+| worktrunk-release-tagged    | 479k     | 312k     | compact  | 4/4 (2 thought) | 4/4 (0 thought) | 4/4 (4 thought) |                 |
+| leaf-send-hover-fix         | 570k     | 273k     | keep     | 4/4 (0 thought) | 8/8 (0 thought) | 0/4 (4 thought) | 4/4 (0 thought) |
+| leaf-menu-design            | 551k     | 276k     | keep     | 0/4 (4 thought) | 8/8 (0 thought) | 0/4 (4 thought) | 4/4 (0 thought) |
+| tend-eval-rerun-wait        | 519k     | 275k     | keep     | 2/4 (2 thought) | 8/8 (0 thought) | 0/4 (4 thought) | 0/4 (1 thought) |
+| leaf-ring-test-rewrite-wait | 681k     | 348k     | keep     | 1/4 (0 thought) | 8/8 (0 thought) | 0/4 (4 thought) | 0/4 (0 thought) |
+| tend-sandbox-bind-ask       | 599k     | 344k     | keep     | 4/4 (4 thought) | 8/8 (6 thought) | 4/4 (4 thought) | 4/4 (4 thought) |
+| leaf-escape-stack-ask       | 490k     | 214k     | keep     | 4/4 (4 thought) | 8/8 (0 thought) | 4/4 (4 thought) | 4/4 (0 thought) |
+| leaf-save-icon-merge-ask    | 479k     | 253k     | compact  | 4/4 (0 thought) | 8/8 (0 thought) | 4/4 (4 thought) | 4/4 (0 thought) |
+| leaf-panzoom-drop-ask       | 403k     | 204k     | compact  | 0/4 (0 thought) | 0/8 (0 thought) | 4/4 (4 thought) | 0/4 (0 thought) |
+| worktrunk-repairs-merged    | 210k     | 89k      | keep     | 0/4 (0 thought) | 0/4 (0 thought) | 0/4 (4 thought) |                 |
+| leaf-data-attrs-merged      | 296k     | 148k     | keep     | 0/4 (4 thought) | 0/4 (3 thought) | 0/4 (4 thought) |                 |
+| leaf-ui-fixes-idle (idle)   | 290k     | 154k     | compact  | 4/4 (3 thought) | 4/4 (0 thought) | 4/4 (4 thought) |                 |
+
+`haste` gives each case one verdict in every run and matches the label at 13
+of the 16 cases. It compacts at both small natural breaks, though the plugin
+asks only from 250k, so it would never ask at the 210k one. It keeps at
+leaf-panzoom-drop-ask ([Turn ends that stop to
+ask](#turn-ends-that-stop-to-ask)). Without `next` and `needs_detail` it
+compacts in every run at two of the four mid-task cases, so the question still
+asks for them ([Fields the hook doesn't read](#fields-the-hook-doesnt-read)).
+
+### Thinking
+
+Claude Code runs Opus 5.5 with adaptive thinking, so at each request the model
+decides whether to think before it answers. The plugin's fork thinks as the
+session does, and so does a run here, at `xhigh` effort.
+
+At the four mid-task cases, a run that thought compacted. Of the 25 November
+runs there, under every question and setting in the two tables here, none of
+the 53 that thought kept the context, and 84 of the 107 that didn't think kept
+it. Under `main@6f2013a` alone, counting the runs below that change its
+request's settings, 28 thought and all compacted, and 27 of the 36 that didn't
+think kept. At leaf-panzoom-drop-ask the 7 runs that thought compacted and the
+25 that didn't kept. These runs can't tell whether thinking leads the model to
+compact or whether it thinks when it leans that way.
+
+How often the model thinks at a case moves with changes that look incidental.
+At leaf-menu-design, `main@6f2013a` thought in all 4 runs and compacted, while
+`fork-no-reply-rerun`, the question of 20 November run again beside it, thought
+in none of 8 and kept in all of them. Between batches of one question the
+record is thinner. Run again on 25 November, `fork-no-reply` kept at the
+mid-task cases in 17 of 32 runs, against 23 of 32, 24 of 32 and 27 of 64 in the
+three batches of 20 November's afternoon. The last two of those record output
+tokens: a keep there came with a median of about 85, the answer alone, and a
+compaction with about 340. The batch of that morning that kept in none of 16
+recorded none, so whether its model thought more often isn't known. The client
+doesn't explain it: run alternately in one batch, Claude Code 2.1.329 and
+2.1.330 kept at the mid-task cases in 14 and 13 of 32 runs.
+
+The request's own settings don't settle whether the model thinks. At the four
+mid-task cases and leaf-panzoom-drop-ask, `main@6f2013a` sent as one block
+thought in 6 of 20 runs; with thinking enabled and a budget of 4,000 tokens
+(`-thinking-enabled`), in 10 of 20; and at `low` effort (`-effort-low`), in 9 of 20. Opus 5.5 refuses thinking disabled.
+
+| case                        | expected | fork-no-reply-rerun | main@6f2013a-one-block | main@6f2013a-thinking-enabled | main@6f2013a-effort-low |
+| --------------------------- | -------- | ------------------- | ---------------------- | ----------------------------- | ----------------------- |
+| leaf-send-hover-fix         | keep     | 8/8 (0 thought)     | 4/4 (0 thought)        | 4/4 (0 thought)               | 4/4 (0 thought)         |
+| leaf-menu-design            | keep     | 8/8 (0 thought)     | 2/4 (2 thought)        | 2/4 (2 thought)               | 1/4 (3 thought)         |
+| tend-eval-rerun-wait        | keep     | 0/8 (8 thought)     | 3/4 (1 thought)        | 0/4 (4 thought)               | 0/4 (3 thought)         |
+| leaf-ring-test-rewrite-wait | keep     | 1/8 (0 thought)     | 0/4 (2 thought)        | 0/4 (3 thought)               | 0/4 (2 thought)         |
+| leaf-panzoom-drop-ask       | compact  |                     | 1/4 (1 thought)        | 1/4 (1 thought)               | 1/4 (1 thought)         |
+
+The question's own words do settle it. `haste` thought in 9 of its 96 runs,
+all at two cases where the verdict is the same either way, and `deliberate` in
+62 of its 64. Under either, every case gave one verdict in all its runs, and
+the two differ only at the four mid-task cases and leaf-panzoom-drop-ask.
+`deliberate` also asks the model to weigh the costs, so its words may move the
+verdict apart from the thinking. It compacts at every case but the two turn
+ends that stop to ask about detail the next turn needed. That is close to
+compacting at every turn end, the policy the cost model finds cheapest when a
+compaction loses nothing. `haste` keeps where the work is mid-task, which is
+the distinction the labels draw. Its runs all came within a few minutes, so
+whether it holds on another day is untested.
+
+Each row of `results.jsonl` records the Claude Code version that ran it from
+the afternoon of 20 November, and its thinking tokens from 25 November. A
+question that leaves thinking to the model compares with another only in runs
+made in the same batch.
+
+## Earlier questions
+
+From `run.py --report` on 16 to 21 November 2026; each cell counts the runs
 that matched the label. `main` is the question published at 02beed1;
 `sized-question` (cdfc871) adds the context's size, its size after a compaction
 and how many requests it takes to pay back; `detail` (0915ee8) says what
@@ -115,17 +214,19 @@ opens with the request's goal and lists the costs; `no-fields` is
 November), the session stops before the reply, as the plugin's fork does
 ([How a run works](#how-a-run-works)), where every earlier column ran with the
 reply at the end of the transcript as well as in the question. `fork` is
-`goal-first`; `fork-no-fields` is `no-fields`; `fork-no-reply` (the question
-now) is `goal-first` without the quoted reply, so the model sees no reply at
+`goal-first`; `fork-no-fields` is `no-fields`; `fork-no-reply` is `goal-first`
+without the quoted reply, so the model sees no reply at
 all; `fork-neither` is `fork-no-reply` asking only for `compact` and `reason`.
 `reason-first`, `why-first` and `consider` (20 November) are `fork-no-reply`
 asking only for fields the hook reads, as [Fields the hook doesn't
 read](#fields-the-hook-doesnt-read) describes. `reply-message` (20 November) is
 `fork-no-reply` run with `--keep-reply`, so the session ends with the turn's
-reply and the question follows it. `fork-no-reply` ran in three batches, which
+reply and the question follows it. `fork-no-reply` ran in four batches, which
 kept at the mid-task cases in 6 of 16, 0 of 16, 23 of 32 and 24 of 32 runs
-([Batches](#batches)). The four cases that stop to ask ran only in the last two
-batches, and its last batch ran as `power-law@929a9bd`, the same question.
+([Thinking](#thinking)). The four cases that stop to ask ran only in the last two
+batches, and its last batch ran as `power-law@929a9bd`, the same question. A fifth batch, which
+compared two clients and kept at the mid-task cases in 27 of 64 runs, came
+after the table.
 
 | case                        | recorded | replayed | expected | main | sized-question | detail | measured | model-costs | one-figure | noisy | goal-first | no-fields | fork | fork-no-fields | fork-no-reply | fork-neither | reply-message |
 | --------------------------- | -------- | -------- | -------- | ---- | -------------- | ------ | -------- | ----------- | ---------- | ----- | ---------- | --------- | ---- | -------------- | ------------- | ------------ | ------------- |
@@ -140,10 +241,10 @@ batches, and its last batch ran as `power-law@929a9bd`, the same question.
 | tend-eval-rerun-wait        | 519k     | 279k     | keep     | 0/3  | 0/3            | 4/4    | 0/2      | 0/2         | 0/2        | 1/4   | 0/2        | 0/2       | 0/4  | 0/4            | 7/24          | 0/4          | 7/8           |
 | leaf-data-attrs-merged      | 296k     | 150k     | keep     | 0/3  | 0/3            | 0/4    | 0/2      | 0/2         | 0/2        | 0/4   | 0/2        | 0/2       | 0/2  |                | 0/2           | 0/2          |               |
 | worktrunk-repairs-merged    | 210k     | 89k      | keep     | 0/3  | 0/3            | 0/4    | 0/2      | 0/2         | 0/2        | 0/4   | 0/2        | 0/2       | 0/2  |                | 0/2           | 0/2          |               |
-| tend-sandbox-bind-ask       | 599k     |          | keep     |      |                |        |          |             |            |       |            |           |      |                |               |              |               | 8/8 |     | 6/8 |
-| leaf-escape-stack-ask       | 490k     |          | keep     |      |                |        |          |             |            |       |            |           |      |                |               |              |               | 8/8 |     | 7/8 |
-| leaf-save-icon-merge-ask    | 479k     |          | compact  |      |                |        |          |             |            |       |            |           |      |                |               |              |               | 8/8 |     | 8/8 |
-| leaf-panzoom-drop-ask       | 403k     |          | compact  |      |                |        |          |             |            |       |            |           |      |                |               |              |               | 0/8 |     | 0/8 |
+| tend-sandbox-bind-ask       | 599k     |          | keep     |      |                |        |          |             |            |       |            |           |      |                | 8/8           |              | 6/8           |
+| leaf-escape-stack-ask       | 490k     |          | keep     |      |                |        |          |             |            |       |            |           |      |                | 8/8           |              | 7/8           |
+| leaf-save-icon-merge-ask    | 479k     |          | compact  |      |                |        |          |             |            |       |            |           |      |                | 8/8           |              | 8/8           |
+| leaf-panzoom-drop-ask       | 403k     |          | compact  |      |                |        |          |             |            |       |            |           |      |                | 0/8           |              | 0/8           |
 | leaf-ui-fixes-idle (idle)   | 290k     | 156k     | compact  | 3/3  | 3/3            | 4/4    | 2/2      | 2/2         | 2/2        | 4/4   | 2/2        | 2/2       | 2/2  |                | 2/2           | 2/2          | 2/2           |
 
 The first two questions said compact in all 73 runs. Their reasons agree: the
@@ -262,6 +363,11 @@ idle one and both small breaks, and keeps in 6 of the 16 mid-task runs against
 each of the four mid-task cases the turn's tool calls and results already show
 where the work stands.
 
+`reply-message` kept in 24 of the 32 mid-task runs, and `fork-no-reply`, run in
+the same quarter hour, in 23 of 32 (p = 1.0). Ending the session with the
+turn's reply changed no verdict the evals can measure, as quoting the reply
+didn't. Both compacted at every finished case and the idle one.
+
 `fork-neither` gives the same verdicts as `fork-no-reply` at every finished
 case, the idle one and both small breaks, but keeps in none of the 16 mid-task
 runs, against 6 (p = 0.02). The fields are the only difference between the
@@ -293,32 +399,6 @@ The runner sends each question as two text blocks, where the plugin sends one
 difference at leaf-menu-design and leaf-send-hover-fix: it kept in 1 of 8
 runs, against 2 of 8 as two blocks in the same hour.
 
-### Batches
-
-The same question on the same transcripts keeps at the mid-task cases at very
-different rates from one batch of runs to the next. `fork-no-reply` kept in 6 of
-16 runs on the evening of 19 November, in none of 16 on the morning of 20
-November, and in 23 of 32 and 24 of 32 in two batches that afternoon (p = 1e-6
-between the morning and the first afternoon batch). The
-finished cases, the idle one and both small breaks gave the same verdict in
-every batch.
-
-The cause isn't known. Claude Code updated from 2.1.329 to 2.1.330 between the
-morning batch and the first afternoon one, but the client doesn't explain the
-swing: run alternately in one batch an hour later, the two versions kept at the
-mid-task cases in 14 and 13 of 32 runs. In the runs that record output tokens, a
-keep comes with a median of about 85, the answer alone, and a compaction with
-about 340, so the model compacts when it thinks before answering, and batches
-differ in how often it does. A comparison between two questions therefore holds
-only between runs made in the same batch, and each batch should include the
-question as it stands. From 20 November on, each row of `results.jsonl` records
-the Claude Code version that ran it and the answer's output tokens.
-
-`reply-message` kept in 24 of the 32 mid-task runs, and `fork-no-reply`, run in
-the same quarter hour, in 23 of 32 (p = 1.0). Ending the session with the
-turn's reply changed no verdict the evals can measure, as quoting the reply
-didn't. Both compacted at every finished case and the idle one.
-
 ### Turn ends that stop to ask
 
 Four cases stop where the turn asks the user before going on. At
@@ -326,7 +406,8 @@ Four cases stop where the turn asks the user before going on. At
 the ask doesn't restate, so they keep; at `leaf-save-icon-merge-ask` and
 `leaf-panzoom-drop-ask` the ask holds all the next turn needed, and a
 compaction keeps the turn's final reply word for word, so they compact. In the
-afternoon batch the question matched three of the four in all 8 runs. At
+afternoon batch of 20 November, `fork-no-reply` matched three of the four in
+all 8 runs. At
 `leaf-panzoom-drop-ask` it kept in all 8, with reasons such as "half-done
 Panzoom fix with six precise reviewer findings … needs exact detail"; the label
 rests on what the user did next, a `/compact` one turn later and then "do #3".
@@ -364,9 +445,12 @@ few days of use will give live verdicts to compare the harness against.
 
 ## Where this leaves them
 
-The question as it stands compacts at every finished case and both small
-breaks. At the mid-task cases it keeps in anywhere from none of 16 runs to 24
-of 32, depending on the batch. These cases can't say which rate is right.
+The question as it stands gives each case one verdict in every run. It
+compacts at every finished case, the idle one and both small breaks, and keeps
+at the four mid-task cases, the two asks whose next turn needed detail, and
+leaf-panzoom-drop-ask. Told to think it over instead, the model compacts at the
+mid-task cases and at leaf-panzoom-drop-ask. These cases can't say which of the
+two the plugin should ask, since there the labels and the cost model disagree.
 
 Some labels are themselves uncertain. Each records what the session did next,
 which needn't be what it needed: at three of the four mid-task cases the next
@@ -384,9 +468,9 @@ loses is very noisy and hard to judge, but as some indication, my
 sessions had about 6 more wasted requests than usual after one.
 
 Live verdicts graded by what followed each one can settle it, since they would
-measure the detail lost at each kind of turn end. By 17 November sparkjoy had
-logged 127 in 65 sessions, most under `detail` and the old 400k floor. The
-comparison waits until there are more under the question as it stands.
+measure the detail lost at each kind of turn end. Every verdict logged before
+25 November came from a question that left thinking to the model, so the
+comparison waits for verdicts under the question as it stands.
 
 ## Fixtures
 

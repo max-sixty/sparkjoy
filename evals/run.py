@@ -356,7 +356,7 @@ def row_of(case: dict, source: Path, out: dict, claude: str) -> dict:
     usage = out.get("usage") or {}
     verdict = parse(out.get("result") or "")
     got = None if verdict is None else ("compact" if verdict["compact"] else "keep")
-    return {
+    row = {
         "case": case["id"],
         "question": label(source),
         "at": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -376,6 +376,12 @@ def row_of(case: dict, source: Path, out: dict, claude: str) -> dict:
         "cost": out.get("total_cost_usd"),
         "claude": claude,
     }
+    # The thinking tokens among the output, where the client reports them, so
+    # that a row without them reads as unmeasured rather than as no thinking.
+    details = usage.get("output_tokens_details") or {}
+    if "thinking_tokens" in details:
+        row["thinking"] = details["thinking_tokens"]
+    return row
 
 
 def run(
@@ -388,7 +394,8 @@ def run(
 ) -> None:
     credential, proxy = access_token(), start_proxy()
     # The mid-task verdicts have moved between batches of the same question and
-    # transcripts, so each row records the client that ran it.
+    # transcripts, with how often the model thinks before answering, so each
+    # row records the client that ran it and its thinking tokens.
     claude = subprocess.run(
         ["claude", "--version"], capture_output=True, text=True, check=True
     ).stdout.split()[0]
@@ -472,12 +479,22 @@ def report(cases: list[dict], results: Path) -> None:
     print("|---|---|---|---|---|" + "---|" * len(questions))
     for case in cases:
         mine = [r for r in rows if r["case"] == case["id"]]
-        replayed = max((r["context"] for r in mine), default=0)
+        # The latest run's, since the client's own prompt changes its size.
+        replayed = mine[-1]["context"] if mine else 0
         cells = []
         for q in questions:
             runs = [r for r in mine if r["question"] == q]
             passed = sum(r["got"] == case["expected"] for r in runs)
-            cells.append(f"{passed}/{len(runs)}" if runs else "")
+            cell = f"{passed}/{len(runs)}" if runs else ""
+            # Rows from before 25 November 2026 don't record thinking.
+            if recorded := [r for r in runs if "thinking" in r]:
+                thought = sum(bool(r["thinking"]) for r in recorded)
+                cell += (
+                    f" ({thought} thought)"
+                    if len(recorded) == len(runs)
+                    else f" ({thought} of {len(recorded)} thought)"
+                )
+            cells.append(cell)
         print(
             f"| {case['id']} | {case['kind']} | {case['tokens'] // 1000}k | {replayed // 1000}k | {case['expected']} | "
             + " | ".join(cells)
