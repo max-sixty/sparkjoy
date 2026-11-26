@@ -592,6 +592,47 @@ test('a question read from the prompt cache adds no line', async ($, on) => {
   expect(logs).toEqual(['Compacting at 500k tokens: the PR merged'])
 })
 
+// The verdict from 900k context tokens.
+const PAST_CEILING = 'past 900k, where even work that needs the detail compacts'
+
+test('from 900k a turn end compacts without asking', async ($, on) => {
+  const { begin, compactions, forks, logs, turn } = engine(on, {
+    tokens: 920_000,
+    verdict: KEEP,
+  })
+  await begin($)
+
+  await turn($, 't1')
+
+  expect(forks).toEqual([])
+  expect(compactions).toEqual([''])
+  expect(logs).toEqual([`Compacting at 920k tokens: ${PAST_CEILING}`])
+})
+
+test(
+  'classifying, from 900k a turn end and an idle session say they would compact without asking',
+  { options: { mode: 'classify' } },
+  async ($, on) => {
+    const { begin, clock, compactions, forks, logs, turn } = engine(on, {
+      tokens: 920_000,
+      verdict: KEEP,
+      idleVerdict: KEEP,
+    })
+    await begin($)
+
+    await turn($, 't1')
+    await clock.advance(IDLE)
+    await clock.settle()
+
+    expect(forks).toEqual([])
+    expect(compactions).toEqual([])
+    expect(logs).toEqual([
+      `Would compact at 920k tokens: ${PAST_CEILING}`,
+      `Would compact at 920k tokens, idle 55 minutes: ${PAST_CEILING}`,
+    ])
+  },
+)
+
 // The line sparkjoy adds after one reporting a bug.
 const BUG = 'That looks like a bug: /sparkjoy bug drafts a report of it.'
 
@@ -1156,6 +1197,7 @@ test(
 
     expect(text).toBe(
       "On. It asks whether to compact at a turn end from 300k (your setting) and in an idle session from 120k (the report's fit).\n" +
+        "From 900k it doesn't ask: its verdict is to compact.\n" +
         'Its question carries no instructions of yours.\n' +
         '/sparkjoy on compacts when the model says to, /sparkjoy classify only shows its verdicts, and /sparkjoy off asks nothing. /config sets the floors and instructions.',
     )
@@ -1247,6 +1289,7 @@ test(
     expect(prompts).toEqual([
       "The user typed /sparkjoy bug it compacted mid-debug. Run the sparkjoy:bug skill for them. The session's id is s1. /sparkjoy states its settings as:\n" +
         '> On. It asks whether to compact at a turn end from 250k (the default) and in an idle session from 175k (the default).\n' +
+        "> From 900k it doesn't ask: its verdict is to compact.\n" +
         `> Its question carries your instructions: "${INSTRUCTIONS}"`,
     ])
   },

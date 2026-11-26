@@ -468,8 +468,9 @@ question at every turn end it asks at.
 
 sparkjoy's question also states what a compaction saves at the context's size,
 but in the evals its verdict follows its answer about the detail whatever size
-it states ([Results](../evals/README.md#results)), so in the middle of a task
-it acts as this classifier does.
+it states ([Size](../evals/README.md#size)), so it acts as this classifier
+does. sparkjoy applies the threshold for work that needs its history itself:
+from 900k it compacts without asking.
 
 ### What the model needs measured
 
