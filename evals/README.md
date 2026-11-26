@@ -185,8 +185,11 @@ compacted:
 | `sweep-estimate`: states no size or cost, so its columns are repeats, and asks the same two estimates                                                                                                                 | mid-task  | 0/10 | 0/10  | 0/10  | 0/10  |
 |                                                                                                                                                                                                                       | finished  | 4/4  | 3/4   | 2/4   | 3/4   |
 
-No wording moved a turn end's verdict with the size it stated: a wording moves
-every size at once. The estimates of the requests a compaction would waste,
+No wording moved a turn end's verdict in step with the size it stated. Only at
+tend-eval-rerun-wait did a verdict move at all: `summarized` compacted in both
+runs at 700k and kept at the other sizes, and `sweep-weigh` kept in one of its
+two runs at 300k, each after thinking. Elsewhere a wording moves every size at
+once. The estimates of the requests a compaction would waste,
 asked without the size or the costs, were steady across runs and ordered by
 the work: 1 to 2 where three changes had landed, 4 to 6 after a release, 6 to
 10 while waiting on an eval rerun to turn into a PR, and 12 to 15 in the middle
