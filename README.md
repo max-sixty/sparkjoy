@@ -283,7 +283,8 @@ the costs compacted in all 32 runs, though in most it answered that the next
 turns would need the detail. Without that list the model keeps there, and its
 verdict follows its answer about the detail whatever the question says of the
 context's size. Telling it the context held 300k, 500k, 700k or 900k moved no
-turn end's verdict under any of three wordings, and five wordings kept in all 16
+turn end's verdict in step with the size under any of three wordings, and five
+wordings kept in all 16
 runs at real turn ends at 853k and 928k. So from 900k sparkjoy compacts without
 asking ([Size](evals/README.md#size)).
 
