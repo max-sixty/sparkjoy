@@ -56,7 +56,7 @@ turn end, its requests recorded as the SDK serialized them. The rebuilt request
 matched the live fork's model, token limit, thinking, effort, system prompt,
 tools and messages; one system-role message came as a list of one text block
 where the fork sent a string. It leaves out the billing header, `metadata`,
-`safeguards`, `data_flow` and the fork's cache breakpoints. Sent to the API, it
+`safeguards`, `data_flow`, `diagnostics` and the fork's cache breakpoints. Sent to the API, it
 was billed the same 891 input tokens as the live fork and read from the prompt
 cache the same 66,496, so none of what it leaves out reaches the model.
 
@@ -140,8 +140,9 @@ summarized question kept there in 14 of 16 runs, and gave every other case the
 same verdicts. Its two misses are at tend-eval-rerun-wait, where the next turn
 opened a PR from the rerun's report and the run's earlier findings, which the
 runs that compact say a summary would carry. Both followed thinking: across
-the summarized question's wordings below, of the 16 runs at the mid-task cases
-that thought first 13 compacted, and of the 80 that didn't 78 kept.
+the summarized question's two wordings with this closing, at every size they
+were told, of the 16 runs at the mid-task cases that thought first 13
+compacted, and of the 80 that didn't 78 kept.
 
 The costs the summarized question states hardly move its verdict. In all 52
 runs its verdict was the opposite of its answer to whether the next turns
@@ -171,9 +172,9 @@ sentence that keeping only puts it off. At the mid-task cases:
 
 The rule was "Keep the context if the next turns will need that detail, and
 compact if they won't." Every version gave the same verdicts as `summarized`
-at the other cases, but for one run of `detail-only` that kept at
-leaf-save-icon-merge-ask. The first batch and the runs told another size ran
-from the prototype of `run.py`, whose requests read the same cache entries
+at the other cases, but for one run of `detail-only` in the first batch that
+kept at leaf-save-icon-merge-ask. The first batch and the earlier wording's
+runs told another size ran from the prototype of `run.py`, whose requests read the same cache entries
 `run.py`'s did, so they sent the same bytes through the turn's reply.
 
 ### Fields the hook doesn't read

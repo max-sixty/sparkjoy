@@ -313,7 +313,11 @@ def request_messages(lines):
             blobs[e["hash"]] = e["message"]
         elif kind == "api-request":
             requests[e["id"]] = e
-        elif kind in ("user", "assistant") and isinstance(e.get("message"), dict):
+        elif (
+            kind in ("user", "assistant")
+            and isinstance(e.get("message"), dict)
+            and not e.get("isSidechain")
+        ):
             m = e["message"]
             content = m.get("content")
             add({"role": m.get("role"), "content": content})
