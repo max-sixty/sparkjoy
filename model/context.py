@@ -39,7 +39,6 @@ source's part of E, its `difference`, is `excess` of that source's growth, so th
 fit.py's E, in `E_total`. Its 90% intervals come from resampling sessions.
 """
 
-import hashlib
 import json
 import re
 from collections import defaultdict
@@ -73,14 +72,6 @@ FILE_HEADER = re.compile(
     r"Contents of (\S+) \([^)]*\):\n\n(.*?)(?=\n\nContents of \S+ \(|\n</system-reminder>|$)",
     re.S,
 )
-
-
-def digest(m):
-    return hashlib.sha256(
-        json.dumps(
-            m, separators=(",", ":"), sort_keys=True, ensure_ascii=False
-        ).encode()
-    ).hexdigest()
 
 
 def blocks_of(content):
@@ -177,15 +168,13 @@ def read_requests(path, s):
             lines.append(json.loads(raw))
         except json.JSONDecodeError:
             lines.append({})
-    blob, rebuilt, reqs, line_of, shapes = {}, {}, {}, {}, {}
+    reqs, messages = fit.request_messages(lines)
+    line_of, shapes = {}, {}
     atts, bounds, tools, first_seen = [], [], {}, {}
-    user_run, assistant_blocks = [], {}
     for i, e in enumerate(lines):
         kind = e.get("type")
-        if kind == "api-request-blob":
-            blob[e["hash"]] = e["message"]
-        elif kind == "api-request":
-            reqs[e["id"]], line_of[e["id"]] = e, i
+        if kind == "api-request":
+            line_of[e["id"]] = i
         elif kind == "api-request-shape":
             shapes[e.get("shapeHash")] = [
                 len(b.get("text") or "")
@@ -198,29 +187,9 @@ def read_requests(path, s):
         elif e.get("subtype") == "compact_boundary":
             bounds.append((i, e["timestamp"]))
         elif kind in ("user", "assistant"):
-            # A message as sent can merge consecutive user lines, or an assistant message's blocks,
-            # which the transcript logs one per line.
             m = e.get("message") or {}
-            c = blocks_of(m.get("content"))
-            rebuilt[digest({"role": m.get("role"), "content": m.get("content")})] = (
-                m.get("role"),
-                c,
-            )
-            if m.get("role") == "user":
-                user_run = user_run + c
-                rebuilt[digest({"role": "user", "content": user_run})] = (
-                    "user",
-                    user_run,
-                )
-            else:
-                user_run = []
-                blocks = assistant_blocks.setdefault(m.get("id"), [])
-                blocks.extend(c)
-                rebuilt[digest({"role": "assistant", "content": blocks})] = (
-                    "assistant",
-                    list(blocks),
-                )
-                for b in c:
+            if m.get("role") != "user":
+                for b in blocks_of(m.get("content")):
                     if b.get("type") == "tool_use":
                         tools[b.get("id")] = (
                             b.get("name"),
@@ -257,25 +226,6 @@ def read_requests(path, s):
             if any(max(earlier) < b < ts for b in bound_ts)
             else "Read: re-read, no compaction since"
         )
-
-    memo = {}
-
-    def messages(rid):
-        if rid not in memo:
-            r = reqs[rid]
-            base = (
-                messages(r["base"])[: r.get("keep", 0)] if r.get("base") in reqs else []
-            )
-            memo[rid] = base + [
-                blob.get(h)
-                or (
-                    {"role": rebuilt[h][0], "content": rebuilt[h][1]}
-                    if h in rebuilt
-                    else None
-                )
-                for h in r["tail"]
-            ]
-        return memo[rid]
 
     out = []
     for j in range(len(s.size)):

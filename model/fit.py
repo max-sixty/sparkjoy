@@ -7,6 +7,7 @@ transcripts modified since the window's start are opened, and `read` lowers the 
 priority, since a full scan of ~/.claude/projects is heavy.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -279,6 +280,75 @@ def typed(e):
         if text and not text.startswith(("<", "Another Claude session sent a message"))
         else None
     )
+
+
+def digest(message):
+    """A message's hash, as Claude Code's request records name it: sha256 of its JSON, keys sorted
+    and compact."""
+    return hashlib.sha256(
+        json.dumps(
+            message, separators=(",", ":"), sort_keys=True, ensure_ascii=False
+        ).encode()
+    ).hexdigest()
+
+
+def request_messages(lines):
+    """The requests a transcript records, by id, and a function giving a request's messages in
+    order, each None where neither a blob nor the transcript's lines hold it.
+
+    An `api-request` record lists its messages as its base's first `keep` and then the hashes of its
+    `tail`. An `api-request-blob` holds a message by its hash; the rest are rebuilt from the user and
+    assistant lines, whose hash names them: an assistant message from its lines merged by message
+    id, a user message from one line or a run of consecutive ones, as for the results of parallel
+    tool calls."""
+    blobs, rebuilt, requests = {}, {}, {}
+    run, by_id = [], {}
+
+    def add(message):
+        rebuilt[digest(message)] = message
+
+    for e in lines:
+        kind = e.get("type")
+        if kind == "api-request-blob":
+            blobs[e["hash"]] = e["message"]
+        elif kind == "api-request":
+            requests[e["id"]] = e
+        elif kind in ("user", "assistant") and isinstance(e.get("message"), dict):
+            m = e["message"]
+            content = m.get("content")
+            add({"role": m.get("role"), "content": content})
+            blocks = (
+                [{"type": "text", "text": content}]
+                if isinstance(content, str)
+                else list(content or [])
+            )
+            if m.get("role") == "user":
+                run.append(blocks)
+                for start in range(len(run)):
+                    add(
+                        {"role": "user", "content": [b for c in run[start:] for b in c]}
+                    )
+            else:
+                run = []
+                merged = by_id.setdefault(m.get("id"), [])
+                merged.extend(blocks)
+                add({"role": "assistant", "content": list(merged)})
+    memo = {}
+
+    def messages(rid):
+        # Down the chain of bases without recursion, since it runs hundreds of requests deep.
+        chain, r = [], rid
+        while r in requests and r not in memo:
+            chain.append(r)
+            r = requests[r].get("base")
+        for r in reversed(chain):
+            record = requests[r]
+            base = record.get("base")
+            head = memo[base][: record.get("keep", 0)] if base in memo else []
+            memo[r] = head + [blobs.get(h) or rebuilt.get(h) for h in record["tail"]]
+        return memo[rid]
+
+    return requests, messages
 
 
 def load(root, since, until):

@@ -42,7 +42,6 @@ token): the macOS keychain item `Claude Code-credentials`, or
 
 import argparse
 import getpass
-import hashlib
 import http.client
 import json
 import os
@@ -103,14 +102,6 @@ def credential() -> dict[str, str]:
     return {"authorization": f"Bearer {token}"}
 
 
-def digest(message: dict) -> str:
-    """A message's hash, as Claude Code's request records name it."""
-    text = json.dumps(
-        message, separators=(",", ":"), sort_keys=True, ensure_ascii=False
-    )
-    return hashlib.sha256(text.encode()).hexdigest()
-
-
 def uncached(value):
     """`value` without the cache breakpoints the main thread placed."""
     if isinstance(value, dict):
@@ -135,70 +126,43 @@ def entries_of(case: dict) -> list[dict]:
 
 def fork_request(entries: list[dict]) -> tuple[dict, dict, list[dict]]:
     """The recorded request the turn's reply answered, its shape (system prompt
-    and tools), and its messages rebuilt, with the reply after them.
-
-    A message the record holds no blob of is held by the transcript's lines: an
-    assistant message by its lines merged by message id, a user message by a
-    line or a run of them, one per result of parallel tool calls."""
-    blobs = {
-        e["hash"]: e["message"] for e in entries if e.get("type") == "api-request-blob"
-    }
+    and tools), and its messages as `fit.request_messages` rebuilds them, each
+    checked against its hash, with the reply after them."""
     shapes = {
         e["shapeHash"]: e["shape"]
         for e in entries
         if e.get("type") == "api-request-shape"
     }
-    requests = {e["id"]: e for e in entries if e.get("type") == "api-request"}
+    requests, messages = fit.request_messages(entries)
     reply = entries[-1]
     if "requestRef" not in reply:
         raise LookupError("its session has no request records")
     request = requests[reply["requestRef"]]
     if request["params"]["model"] not in fit.PRICES:
         raise LookupError(f"fit.PRICES has no price for {request['params']['model']}")
-    # The request's message hashes: its base's first `keep`, then its tail,
-    # down a chain of bases hundreds of requests long.
-    chain = [request]
-    while chain[-1].get("base"):
-        chain.append(requests[chain[-1]["base"]])
-    hashes: list[str] = []
-    for r in reversed(chain):
-        hashes = hashes[: r.get("keep", 0)] + r["tail"]
-
-    lines: dict[str, dict] = {}
-    by_id: dict[str, list] = {}
-    run: list[list] = []
-
-    def add(message: dict) -> None:
-        lines[digest(message)] = message
-
-    for e in entries:
-        if e.get("type") == "user" and isinstance(e.get("message"), dict):
-            content = e["message"]["content"]
-            add({"role": "user", "content": content})
-            if isinstance(content, str):
-                content = [{"type": "text", "text": content}]
-                add({"role": "user", "content": content})
-            run.append(content)
-            for start in range(len(run) - 1):
-                add({"role": "user", "content": [b for c in run[start:] for b in c]})
-        elif e.get("type") == "assistant":
-            run = []
-            add({"role": "assistant", "content": e["message"]["content"]})
-            by_id.setdefault(e["message"].get("id"), []).extend(e["message"]["content"])
-    for content in by_id.values():
-        add({"role": "assistant", "content": content})
-    messages = []
-    for i, h in enumerate(hashes):
-        message = blobs.get(h) or lines.get(h)
-        if message is None:
-            raise LookupError(
-                f"message {i} of the recorded request is in no blob or line"
-            )
-        messages.append(uncached(message))
-    messages.append(
-        {"role": "assistant", "content": uncached(by_id[reply["message"]["id"]])}
+    r = request
+    while r.get("base"):
+        if r["base"] not in requests:
+            raise LookupError(f"the record of request {r['base']} is missing")
+        r = requests[r["base"]]
+    rebuilt = messages(request["id"])
+    if None in rebuilt:
+        raise LookupError(
+            f"message {rebuilt.index(None)} of the recorded request is in no blob or line"
+        )
+    blocks = [
+        b
+        for e in entries
+        if e.get("type") == "assistant"
+        and e["message"].get("id") == reply["message"]["id"]
+        for b in e["message"]["content"]
+    ]
+    return (
+        request,
+        shapes[request["shapeHash"]],
+        [uncached(m) for m in rebuilt]
+        + [{"role": "assistant", "content": uncached(blocks)}],
     )
-    return request, shapes[request["shapeHash"]], messages
 
 
 def body_of(request: dict, shape: dict, messages: list[dict], question: str) -> dict:
