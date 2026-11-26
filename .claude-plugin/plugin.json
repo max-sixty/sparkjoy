@@ -19,12 +19,12 @@
     "floor": {
       "type": "number",
       "title": "Floor at turn ends",
-      "description": "The context, in tokens, from which sparkjoy asks at a turn end: above the context after a compaction and below 1000000. Unset, it is the floor /sparkjoy report fitted, or 250000."
+      "description": "The context, in tokens, from which sparkjoy asks at a turn end: above the context after a compaction and below 900000, from where it compacts without asking. Unset, it is the floor /sparkjoy report fitted, or 250000."
     },
     "idle_floor": {
       "type": "number",
       "title": "Floor in idle sessions",
-      "description": "The context, in tokens, from which sparkjoy asks before an idle session's prompt cache lapses: below 1000000. Unset, it is the floor /sparkjoy report fitted, or 175000."
+      "description": "The context, in tokens, from which sparkjoy asks before an idle session's prompt cache lapses: below 900000, from where it compacts without asking. Unset, it is the floor /sparkjoy report fitted, or 175000."
     },
     "instructions": {
       "type": "string",
