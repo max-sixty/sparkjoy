@@ -414,6 +414,10 @@ the whole context to the cache again. At 500k that costs \$3.73, \$2.89 more tha
 the first request after a compaction. So the compaction reduces costs if you
 continue even one session in 14.
 
+In my sessions of 18 to 22 November, 7 of sparkjoy's 470 compactions ended a
+session, while 131 were followed by a request after the cache had expired.
+`/sparkjoy report` counts both for your sessions.
+
 </details>
 
 <details>
