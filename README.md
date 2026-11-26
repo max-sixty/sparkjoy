@@ -18,9 +18,9 @@
 A small Claude Code plugin that lets Claude decide when to compact. It [cuts the
 total cost of long sessions by 20% to 35%](#cost-saving), depending on your usage patterns and configs.
 
-At the end of each turn, sparkjoy asks the model whether to compact, and if it says to, compacts the session, leaving it ready for your next prompt when you return. The question is [a small prompt](#how-it-decides) appended to the session's context, almost all of which is already cached, so asking is [very cheap](#faq).
+At the end of each turn, sparkjoy asks the model whether to compact and, if so, compacts the session, leaving it ready for your next prompt when you return. The question is [a small prompt](#how-it-decides) appended to the cached context, so asking is [very cheap](#faq).
 
-Without sparkjoy, you judge when the session is ready, then run `/compact` and wait for it to finish. Otherwise Claude Code compacts on its own, at a set size or once the session sits idle, whether or not the context is still valuable:
+Without sparkjoy, you need to judge the best time to compact and wait for `/compact` to run. Or Claude Code defaults to compacting at a set size or once the session sits idle, whether or not the context is still valuable:
 
 |                | When it compacts                                                    |
 | -------------- | ------------------------------------------------------------------- |
