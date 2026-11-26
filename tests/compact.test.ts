@@ -1205,6 +1205,21 @@ test(
   },
 )
 
+test(
+  '/sparkjoy says a floor from 900k is out of range, since from there sparkjoy compacts without asking',
+  { options: { floor: 950_000 } },
+  async ($, on) => {
+    const { begin, type } = engine(on)
+    await begin($)
+
+    const { text } = await type($, 'sparkjoy')
+
+    expect(text).toContain(
+      'at a turn end from 250k (the default, as your 950k is out of range)',
+    )
+  },
+)
+
 test('/sparkjoy says when the session’s window leaves it nothing to ask', async ($, on) => {
   const { begin, type } = engine(on, { tokens: 180_000, window: 200_000 })
   await begin($)
