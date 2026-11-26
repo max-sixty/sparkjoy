@@ -498,6 +498,11 @@ type Announcement = { at: string; messages: string[] }
 // some tenths of a second before its `turn.start` reaches this mod. That is no
 // bug, since the next turn end asks again, so `say` gives the engine's reason
 // without calling it one.
+//
+// `$.session.compact` takes instructions for the summary, and this passes
+// none. The summary is written from the same transcript the judge read, so
+// anything the mod could tell it, such as the verdict's `next` or `reason`, is
+// the judge's reading of what the summarizer already sees.
 async function compact($: EngineInterface, say: (text: string) => void, at: string) {
   const key = `compacting:${await $.session.id()}`
   await $.state.set(COMPACTING, true)
