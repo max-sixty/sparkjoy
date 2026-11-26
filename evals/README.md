@@ -122,10 +122,11 @@ ask holds all the next turn needed.
 From `run.py --report`, on requests rebuilt from the transcripts as the live
 fork sends them, on 25 and 26 November 2026. Each cell counts the runs that
 matched the label, and in brackets those in which the model thought before it
-answered. `summarized` is the question as it stands: the context's size, the
-requests a compaction takes to pay for itself and that keeping only puts it
-off, then what a summary drops and which work needs it, then "Weigh the saving
-against what losing that detail would cost the next turns."
+answered. `summarized` is the question as it stood before it said the plugin
+compacts from 900k: the context's size, the requests a compaction takes to pay
+for itself and that keeping only puts it off, then what a summary drops and
+which work needs it, then "Weigh the saving against what losing that detail
+would cost the next turns."
 `summarized-told-900k` is that question telling the model the context is 900k,
 where a compaction pays for itself after 7 requests. `detail-only` drops the
 costs and asks only whether the next turns will need detail a summary drops.
@@ -159,6 +160,11 @@ kept at 853k against its label ([Size](#size)). Its two misses are
 at tend-eval-rerun-wait, where the next turn opened a PR from the rerun's
 report and the run's earlier findings, which the runs that compact say a
 summary would carry. Both followed thinking.
+
+The question as it stands adds that the plugin compacts at the first turn end
+from 900k. Asked at seven cases on 26 November (the four mid-task ones,
+leaf-menu-build-wait, worktrunk-release-tagged and leaf-save-icon-merge-ask),
+it gave each, in all 14 runs, the verdict `summarized` gives it in most.
 
 All three compact at the two small natural breaks, against their labels,
 though sparkjoy asks only from 250k, so it would never ask at the 210k one.
