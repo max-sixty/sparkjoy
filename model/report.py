@@ -88,6 +88,21 @@ def returns(S):
     return sorted(rows, key=lambda r: -r[0].t[r[1]])
 
 
+def follows(S):
+    """What came after each compaction sparkjoy made, by its session's first request after it:
+    "lapsed" where, without the compaction, that request would have found the prompt cache lapsed
+    (fit.lapsed); "held" where it came sooner; and "none" where no request came by the window's
+    end."""
+    out = Counter()
+    for s in S:
+        lapsed = fit.lapsed(s, s.ttl)
+        for t, by, _ in s.compactions:
+            if by == "sparkjoy":
+                j = np.searchsorted(s.t, t)
+                out["none" if j == len(s.t) else "lapsed" if lapsed[j] else "held"] += 1
+    return out
+
+
 def cramped(s):
     """Claude Code compacted the session on its own before its context reached SMALL, as it does in
     a 200k context window, and sparkjoy gave no verdict in it. sparkjoy acts only in a 1M window
@@ -403,9 +418,8 @@ def summary(found, S, verdicts, saving, unpriced, rows, fitted, saved, projects)
     out = []
     n, small = len(S), len(found) - len(S)
     these = "this session's" if n == 1 else f"these {n:,} sessions'"
-    times = lambda k: f"{k:,} {'time' if k == 1 else 'times'}"
-    # The compactions sparkjoy made that the log shows ran, which a request after each needs
-    # for the replay to price.
+    times = lambda k: "once" if k == 1 else f"{k:,} times"
+    # The compactions sparkjoy made that the log shows ran.
     compacted = sum(by == "sparkjoy" for s in S for _, by, _ in s.compactions)
     if saving:
         ran, without, checks = saving
@@ -518,6 +532,25 @@ def summary(found, S, verdicts, saving, unpriced, rows, fitted, saved, projects)
         out.append(
             f"From the next turn end, sparkjoy asks from {tokens(turn)} at turn ends and "
             f"{tokens(idle)} in idle sessions, except where you set your own."
+        )
+    if compacted:
+        after = follows(S)
+        k = after["none"]
+        noun = "compaction" if compacted == 1 else "compactions"
+        out.append(
+            (
+                f"**{k:,} of sparkjoy's {compacted:,} {noun} ended a session**, with no request "
+                f"after {'it' if k == 1 else 'them'} by the window's end."
+                if k
+                else f"**None of sparkjoy's {compacted:,} {noun} ended a session.**"
+            )
+            + (
+                f" Of the {'other ' if k else ''}{compacted - k:,}, the next request came "
+                f"{times(after['held'])} before the prompt cache lapsed, and "
+                f"{times(after['lapsed'])} after it lapsed."
+                if compacted > k
+                else ""
+            )
         )
     if rows:
         lapsed = [r for r in rows if r[3] is None]

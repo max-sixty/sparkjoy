@@ -1012,12 +1012,17 @@ def as_run(s, p, opened=None, model=None):
     c = prices(model if priced else "claude-opus-5-5", s.ttl)
     opened = not s.background if opened is None else opened
     idle = CC_IDLE if opened and s.ttl == 3600 else None
-    # As compactions the user typed, sparkjoy's stay where the log has them.
+    # As compactions the user typed, sparkjoy's stay where the log has them. One after the
+    # session's last request has no request after it to mark, so a threshold of 0 after that
+    # request stands in for it, and the replay prices its summary.
+    last = np.full(len(s.size), np.inf)
+    if any(by == "sparkjoy" and t > s.t[-1] for t, by, _ in s.compactions):
+        last[-1] = 0
     ran, ran_trace, _ = replay(
         replace(s, kind=np.where(s.sparkjoy, USER, s.kind)),
         p,
         c,
-        np.inf,
+        last,
         s.ttl,
         idle=idle,
     )
