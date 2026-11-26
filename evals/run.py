@@ -11,8 +11,9 @@ Each run rebuilds a case's fixture as a session in a scratch Claude Code
 config, resumes it with `claude -p --resume <id> --fork-session`, and sends
 the question that `question()` in `<checkout>/hooks/register.ts` renders for
 the case's context size (`question.ts`), with the case's reply for a checkout
-whose question quotes it. The child has no tools, no
-MCP servers and no user instructions, skills or plugins. Each result is
+whose question quotes it. The child has Claude Code's default tools under
+`dontAsk`, as the fork has the session's with every call denied, and no MCP
+servers, user instructions, skills or plugins. Each result is
 appended to `results.jsonl` (or `--results`); `--report` prints the table
 README.md shows.
 
@@ -323,7 +324,9 @@ def send(
             "--effort",
             EFFORT,
             "--tools",
-            "",
+            "default",
+            "--permission-mode",
+            "dontAsk",
             "--strict-mcp-config",
             "--disable-slash-commands",
             "--input-format",
@@ -376,6 +379,10 @@ def row_of(case: dict, source: Path, out: dict, claude: str) -> dict:
         "cost": out.get("total_cost_usd"),
         "claude": claude,
     }
+    # Whether the answer said the next turns need the transcript's detail, for
+    # a question that asks.
+    if verdict is not None and "needs_detail" in verdict:
+        row["needs_detail"] = verdict["needs_detail"]
     # The thinking tokens among the output, where the client reports them, so
     # that a row without them reads as unmeasured rather than as no thinking.
     details = usage.get("output_tokens_details") or {}

@@ -42,8 +42,9 @@ resume sends the model, sanitized for publishing.
 `run.py` writes the fixture, without the turn's reply, as a session into a
 scratch `CLAUDE_CONFIG_DIR`, with every `CLAUDE*` and `ANTHROPIC*` variable
 unset, and resumes it with `claude -p --resume <id> --fork-session` on
-`claude-opus-5-5` at `xhigh` effort, as the sessions ran, with no tools, MCP
-servers, skills or instructions.
+`claude-opus-5-5` at `xhigh` effort, as the sessions ran, with Claude Code's
+default tools under `dontAsk`, which denies any call that would ask permission,
+and no MCP servers, skills or instructions.
 `question.ts` renders the question by calling `question()` from the chosen
 checkout's `hooks/register.ts`, so the evals ask exactly what the plugin asks.
 It passes the case's recorded context size as `tokens`, for a question that
@@ -63,7 +64,8 @@ A replay differs from the plugin's own fork in these ways:
   instructions, skills and tool listings, and Claude Code's `-p` system prompt
   is shorter than an interactive one. A question that states the size is told
   the recorded one; one that doesn't sees only the replayed transcript.
-- **The model has no tools**, where the fork has the session's.
+- **The model has Claude Code's default tools**, where the fork has the
+  session's, its MCP servers' included, with every call denied.
 - **The question comes in two blocks** when a case has more than one run: its
   opening through the quoted reply, then the rest (`run.py` says why).
 
@@ -99,18 +101,136 @@ cache lapses either way.
 
 ## Results
 
-From `run.py --report` on 25 November 2026, on Claude Code 2.1.332. Each cell
-counts the runs that matched the label, and in brackets the runs in which the
-model thought before it answered. `main@6f2013a` is the question as published
-at 6f2013a: `fork-no-reply` below, reworded, with its answer's format given as
-a JSON Schema. `haste` (the question now) adds a closing line to it: "You have
-no tools here. Answer straight away, without thinking it over." `deliberate`
-closes instead with "Think it over before you answer: what comes next, what it
-would need from the transcript, and what keeping and compacting would each
-cost." `haste-no-fields` is `haste` asking only for `compact` and `reason`.
-`main@6f2013a`, `haste` and `deliberate` ran four times at every case. A few
-minutes later, `haste` ran four more times at the mid-task cases and the ones
-that stop to ask, beside `haste-no-fields`.
+From `run.py --report` on 25 November 2026, on Claude Code 2.1.332, with Claude
+Code's default tools in each request ([How a run works](#how-a-run-works)).
+Each cell counts the runs that matched the label, and in brackets the runs in
+which the model thought before it answered. `main@6f2013a-tools` is the
+question as it stands: `fork-no-reply` below, reworded, with its answer's
+format given as a JSON Schema. `detail-only-tools` is that question without its
+sections of costs and the paragraph that asks the model to weigh them, so it
+asks only whether the next turns will need detail a summary drops.
+`haste-firm-tools` closes the question with "Don't think before you answer.
+Reply at once with the JSON object alone: this is a quick judgment, and every
+tool is denied for this request." `deliberate-tools` closes it instead with
+"Think it over before you answer: what comes next, what it would need from the
+transcript, and what keeping and compacting would each cost."
+`main@6f2013a-tools` and `haste-firm-tools` ran in two batches at every case
+and a third at seven, `detail-only-tools` in two and `deliberate-tools` in one,
+with four runs of each case in each batch, all within an hour.
+
+| case                        | recorded | replayed | expected | main@6f2013a-tools | detail-only-tools | haste-firm-tools  | deliberate-tools |
+| --------------------------- | -------- | -------- | -------- | ------------------ | ----------------- | ----------------- | ---------------- |
+| leaf-scaling-closeout       | 742k     | 538k     | compact  | 8/8 (8 thought)    | 8/8 (8 thought)   | 8/8 (0 thought)   | 4/4 (4 thought)  |
+| leaf-hover-closeout         | 736k     | 508k     | compact  | 8/8 (0 thought)    | 8/8 (0 thought)   | 8/8 (0 thought)   | 4/4 (4 thought)  |
+| leaf-followups-merged       | 643k     | 421k     | compact  | 8/8 (4 thought)    | 8/8 (6 thought)   | 8/8 (0 thought)   | 4/4 (4 thought)  |
+| leaf-scroll-fix-merged      | 608k     | 347k     | compact  | 8/8 (0 thought)    | 8/8 (1 thought)   | 8/8 (0 thought)   | 4/4 (4 thought)  |
+| worktrunk-release-tagged    | 479k     | 331k     | compact  | 8/8 (3 thought)    | 8/8 (4 thought)   | 8/8 (0 thought)   | 4/4 (4 thought)  |
+| leaf-send-hover-fix         | 570k     | 297k     | keep     | 2/12 (12 thought)  | 8/8 (2 thought)   | 9/12 (5 thought)  | 0/4 (4 thought)  |
+| leaf-menu-design            | 551k     | 297k     | keep     | 6/12 (6 thought)   | 8/8 (1 thought)   | 11/12 (1 thought) | 0/4 (4 thought)  |
+| tend-eval-rerun-wait        | 519k     | 298k     | keep     | 0/12 (12 thought)  | 7/8 (8 thought)   | 8/12 (4 thought)  | 0/4 (4 thought)  |
+| leaf-ring-test-rewrite-wait | 681k     | 372k     | keep     | 1/12 (5 thought)   | 8/8 (0 thought)   | 10/12 (0 thought) | 0/4 (4 thought)  |
+| tend-sandbox-bind-ask       | 599k     | 364k     | keep     | 12/12 (11 thought) | 8/8 (8 thought)   | 12/12 (1 thought) | 4/4 (4 thought)  |
+| leaf-escape-stack-ask       | 490k     | 233k     | keep     | 8/8 (8 thought)    | 8/8 (1 thought)   | 8/8 (1 thought)   | 4/4 (4 thought)  |
+| leaf-save-icon-merge-ask    | 479k     | 270k     | compact  | 11/12 (3 thought)  | 8/8 (6 thought)   | 12/12 (0 thought) | 4/4 (4 thought)  |
+| leaf-panzoom-drop-ask       | 403k     | 224k     | compact  | 11/12 (12 thought) | 0/8 (5 thought)   | 1/12 (2 thought)  | 4/4 (4 thought)  |
+| worktrunk-repairs-merged    | 210k     | 110k     | keep     | 0/8 (8 thought)    | 0/8 (7 thought)   | 0/8 (8 thought)   | 0/4 (4 thought)  |
+| leaf-data-attrs-merged      | 296k     | 166k     | keep     | 0/8 (8 thought)    | 0/8 (7 thought)   | 0/8 (0 thought)   | 0/4 (4 thought)  |
+| leaf-ui-fixes-idle (idle)   | 290k     | 174k     | compact  | 8/8 (3 thought)    | 8/8 (8 thought)   | 8/8 (1 thought)   | 4/4 (4 thought)  |
+
+The question as it stands gives one verdict in nearly every run at every case
+but the four mid-task ones. There it compacts in 39 of 48 runs, and how often
+varies by case: it kept in 6 of 12 runs at leaf-menu-design and in none of 12
+at tend-eval-rerun-wait. `detail-only-tools` kept at the mid-task cases in 31
+of 32 runs and gave every other case one verdict in every run. In all 128 of
+its runs it compacted exactly when it answered that the next turns won't need
+the detail. It matches the label at 13 of the 16 cases. It compacts at both
+small natural breaks, though sparkjoy asks only from 250k, so it would never
+ask at the 210k one, and it keeps at leaf-panzoom-drop-ask ([Turn ends that
+stop to ask](#turn-ends-that-stop-to-ask)). `haste-firm-tools` keeps at the
+mid-task cases more often than the question as it stands, in 38 of 48 runs,
+though not in every run, and `deliberate-tools` compacts at all of them.
+
+### Thinking
+
+Claude Code runs Opus 5.5 with adaptive thinking, so at each request the model
+decides whether to think before it answers. The plugin's fork thinks as the
+session does, and so does a run here, at `xhigh` effort.
+
+With the costs in the question, the verdict at the four mid-task cases goes
+with that decision. Across every question with them on 25 November, 4 of the
+115 runs there that thought with tools in the request kept the context, and 89
+of the 109 that didn't think kept it. Without tools, none of 53 that thought
+kept it, and 84 of 107 that didn't. These runs can't tell whether thinking
+leads the model to compact or whether it thinks when it leans that way. Asked
+without the costs, the model keeps at those cases whether or not it thinks:
+`detail-only-tools` kept in 10 of the 11 runs there that thought and in all 21
+that didn't.
+
+The model's answer to `needs_detail` holds steady where its verdict doesn't. At
+the mid-task cases, `main@6f2013a-tools` answered that the next turns will need
+the detail in 23 of its 32 runs that record the field, yet kept the context in
+only 4. So the costs, weighed most when the model thinks, are what move the
+verdict there.
+
+How often the model thinks at a case moves with small changes. With tools in
+the request, `haste` (`main@6f2013a` closed with "You have no tools here.
+Answer straight away, without thinking it over.") kept at leaf-menu-design
+without thinking in 4 of 4 runs, then thought and compacted in 4 of 4 a minute
+later, in a batch that sent it as two blocks beside three other questions.
+Sending the question as one block or two makes no difference overall:
+`main@6f2013a-tools-one-block` and `-two-blocks`, run alternately at the
+mid-task cases, kept in 6 and 8 of 32 runs. Without tools, at leaf-menu-design
+`main@6f2013a` thought in all 4 runs and compacted, while
+`fork-no-reply-rerun`, the question of 20 November run again beside it, thought
+in none of 8 and kept in all of them. Run again on 25 November, `fork-no-reply`
+kept at the mid-task cases in 17 of 32 runs, against 23 of 32, 24 of 32 and 27
+of 64 in the three batches of 20 November's afternoon. The last two of those
+record output tokens, though not thinking: a keep there came with a median of
+about 85, and a compaction with about 340. On 25 November an answer without
+thinking took about 85. The batch of that morning that kept in none of 16
+recorded no output tokens, so whether its model thought more often isn't known.
+Nor does one test pin it on the client: run alternately in a later batch,
+Claude Code 2.1.329 and 2.1.330 kept at the mid-task cases in 14 and 13 of 32
+runs.
+
+The request's own settings don't settle whether the model thinks. Without
+tools, at the four mid-task cases and leaf-panzoom-drop-ask, `main@6f2013a`
+sent as one block thought in 6 of 20 runs; with thinking enabled and a budget
+of 4,000 tokens (`-thinking-enabled`), in 10 of 20; and at `low` effort
+(`-effort-low`), in 9 of 20. Opus 5.5 refuses thinking disabled.
+
+| case                        | expected | fork-no-reply-rerun | main@6f2013a-one-block | main@6f2013a-thinking-enabled | main@6f2013a-effort-low |
+| --------------------------- | -------- | ------------------- | ---------------------- | ----------------------------- | ----------------------- |
+| leaf-send-hover-fix         | keep     | 8/8 (0 thought)     | 4/4 (0 thought)        | 4/4 (0 thought)               | 4/4 (0 thought)         |
+| leaf-menu-design            | keep     | 8/8 (0 thought)     | 2/4 (2 thought)        | 2/4 (2 thought)               | 1/4 (3 thought)         |
+| tend-eval-rerun-wait        | keep     | 0/8 (8 thought)     | 3/4 (1 thought)        | 0/4 (4 thought)               | 0/4 (3 thought)         |
+| leaf-ring-test-rewrite-wait | keep     | 1/8 (0 thought)     | 0/4 (2 thought)        | 0/4 (3 thought)               | 0/4 (2 thought)         |
+| leaf-panzoom-drop-ask       | compact  |                     | 1/4 (1 thought)        | 1/4 (1 thought)               | 1/4 (1 thought)         |
+
+Nor do the words that ask for haste, once tools are in the request. Without
+tools, `haste` thought in 9 of its 96 runs, none of them at a mid-task case,
+and kept at the mid-task cases in all 32. With tools, it thought in 18 of 60
+and kept there in 18 of 32, and `haste-firm-tools` thought in 23 of 156.
+`deliberate` thought in 62 of 64 runs without tools and 64 of 64 with them. It
+compacts at every case but the two turn ends that stop to ask about detail the
+next turn needed. That is close to compacting at every turn end from 250k, and
+the [cost model](../docs/cost-model.md) puts the cheapest turn-end threshold
+between 210k and 280k, depending on β, when a compaction loses no detail.
+
+Each row of `results.jsonl` records the Claude Code version that ran it from
+the afternoon of 20 November, its thinking tokens from 25 November, and its
+`needs_detail` from the runs with tools. A question that leaves thinking to the
+model compares with another only in runs made in the same batch.
+
+### Without tools
+
+Until 25 November the runner gave the model no tools. These runs, from that
+day, ask the same questions without them; `haste` is `main@6f2013a` closed with
+"You have no tools here. Answer straight away, without thinking it over.", and
+`haste-no-fields` is `haste` asking only for `compact` and `reason`.
+`main@6f2013a`, `haste` and `deliberate` ran four times at every case, and
+`haste` four more times at the mid-task cases and the ones that stop to ask,
+beside `haste-no-fields`, a few minutes later.
 
 | case                        | recorded | replayed | expected | main@6f2013a    | haste           | deliberate      | haste-no-fields |
 | --------------------------- | -------- | -------- | -------- | --------------- | --------------- | --------------- | --------------- |
@@ -130,73 +250,6 @@ that stop to ask, beside `haste-no-fields`.
 | worktrunk-repairs-merged    | 210k     | 89k      | keep     | 0/4 (0 thought) | 0/4 (0 thought) | 0/4 (4 thought) |                 |
 | leaf-data-attrs-merged      | 296k     | 148k     | keep     | 0/4 (4 thought) | 0/4 (3 thought) | 0/4 (4 thought) |                 |
 | leaf-ui-fixes-idle (idle)   | 290k     | 154k     | compact  | 4/4 (3 thought) | 4/4 (0 thought) | 4/4 (4 thought) |                 |
-
-`haste` gives each case one verdict in every run and matches the label at 13
-of the 16 cases. It compacts at both small natural breaks, though the plugin
-asks only from 250k, so it would never ask at the 210k one. It keeps at
-leaf-panzoom-drop-ask ([Turn ends that stop to
-ask](#turn-ends-that-stop-to-ask)). Without `next` and `needs_detail` it
-compacts in every run at two of the four mid-task cases, so the question still
-asks for them ([Fields the hook doesn't read](#fields-the-hook-doesnt-read)).
-
-### Thinking
-
-Claude Code runs Opus 5.5 with adaptive thinking, so at each request the model
-decides whether to think before it answers. The plugin's fork thinks as the
-session does, and so does a run here, at `xhigh` effort.
-
-At the four mid-task cases, a run that thought compacted. Of the 25 November
-runs there, under every question and setting in the two tables here, none of
-the 53 that thought kept the context, and 84 of the 107 that didn't think kept
-it. Under `main@6f2013a` alone, counting the runs below that change its
-request's settings, 28 thought and all compacted, and 27 of the 36 that didn't
-think kept. At leaf-panzoom-drop-ask the 7 runs that thought compacted and the
-25 that didn't kept. These runs can't tell whether thinking leads the model to
-compact or whether it thinks when it leans that way.
-
-How often the model thinks at a case moves with changes that look incidental.
-At leaf-menu-design, `main@6f2013a` thought in all 4 runs and compacted, while
-`fork-no-reply-rerun`, the question of 20 November run again beside it, thought
-in none of 8 and kept in all of them. Between batches of one question the
-record is thinner. Run again on 25 November, `fork-no-reply` kept at the
-mid-task cases in 17 of 32 runs, against 23 of 32, 24 of 32 and 27 of 64 in the
-three batches of 20 November's afternoon. The last two of those record output
-tokens, though not thinking: a keep there came with a median of about 85, and a
-compaction with about 340. On 25 November an answer without thinking took about 85. The batch of that morning that kept in none of 16 recorded no output
-tokens, so whether its model thought more often isn't known. Nor does one test
-pin it on the client: run alternately in a later batch, Claude Code 2.1.329 and
-2.1.330 kept at the mid-task cases in 14 and 13 of 32 runs.
-
-The request's own settings don't settle whether the model thinks. At the four
-mid-task cases and leaf-panzoom-drop-ask, `main@6f2013a` sent as one block
-thought in 6 of 20 runs; with thinking enabled and a budget of 4,000 tokens
-(`-thinking-enabled`), in 10 of 20; and at `low` effort (`-effort-low`), in 9 of 20. Opus 5.5 refuses thinking disabled.
-
-| case                        | expected | fork-no-reply-rerun | main@6f2013a-one-block | main@6f2013a-thinking-enabled | main@6f2013a-effort-low |
-| --------------------------- | -------- | ------------------- | ---------------------- | ----------------------------- | ----------------------- |
-| leaf-send-hover-fix         | keep     | 8/8 (0 thought)     | 4/4 (0 thought)        | 4/4 (0 thought)               | 4/4 (0 thought)         |
-| leaf-menu-design            | keep     | 8/8 (0 thought)     | 2/4 (2 thought)        | 2/4 (2 thought)               | 1/4 (3 thought)         |
-| tend-eval-rerun-wait        | keep     | 0/8 (8 thought)     | 3/4 (1 thought)        | 0/4 (4 thought)               | 0/4 (3 thought)         |
-| leaf-ring-test-rewrite-wait | keep     | 1/8 (0 thought)     | 0/4 (2 thought)        | 0/4 (3 thought)               | 0/4 (2 thought)         |
-| leaf-panzoom-drop-ask       | compact  |                     | 1/4 (1 thought)        | 1/4 (1 thought)               | 1/4 (1 thought)         |
-
-The question's own words come much closer. `haste` thought in 9 of its 96 runs,
-none of them at a mid-task case and all at two cases where the verdict is the
-same either way, and `deliberate` in 62 of its 64. Under either, every case
-gave one verdict in all its runs, and the two differ only at the four mid-task
-cases and leaf-panzoom-drop-ask. `deliberate` also asks the model to weigh the
-costs, so its words may move the verdict apart from the thinking. It compacts
-at every case but the two turn ends that stop to ask about detail the next turn
-needed. That is close to compacting at every turn end from 250k, and the [cost
-model](../docs/cost-model.md) puts the cheapest turn-end threshold between 210k
-and 280k, depending on β, when a compaction loses no detail. `haste` keeps
-where the work is mid-task, which is the distinction the labels draw. Its runs
-all came within a few minutes, so whether it holds on another day is untested.
-
-Each row of `results.jsonl` records the Claude Code version that ran it from
-the afternoon of 20 November, and its thinking tokens from 25 November. A
-question that leaves thinking to the model compares with another only in runs
-made in the same batch.
 
 ## Earlier questions
 
@@ -447,13 +500,15 @@ few days of use will give live verdicts to compare the harness against.
 
 ## Where this leaves them
 
-The question as it stands gives each case one verdict in every run. It
-compacts at every finished case, the idle one and both small breaks, and keeps
-at the four mid-task cases, the two asks whose next turn needed detail, and
-leaf-panzoom-drop-ask. Told to think it over instead, the model compacts at the
-mid-task cases and at leaf-panzoom-drop-ask. These cases can't say which of the
-two the plugin should ask. At the mid-task cases the labels say keep and the
-cost model says compact, and at leaf-panzoom-drop-ask both say compact.
+The question as it stands gives one verdict at every case but the four mid-task
+ones, where it compacts in most runs, against the labels, at a rate that moves
+with whether the model thinks. Asked without the costs, the model keeps there
+in 31 of 32 runs and gives every other case one verdict, and its verdict is
+then its answer to whether the next turns will need the detail. Told to think
+it over, it compacts at the mid-task cases and at leaf-panzoom-drop-ask. These
+cases can't say which the plugin should ask. At the mid-task cases the labels
+say keep and the cost model says compact, and at leaf-panzoom-drop-ask both say
+compact.
 
 Some labels are themselves uncertain. Each records what the session did next,
 which needn't be what it needed: at three of the four mid-task cases the next

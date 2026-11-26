@@ -220,8 +220,6 @@ Answer with nothing but one JSON object that matches this schema, filling its fi
   "additionalProperties": false
 }
 ```
-
-You have no tools here. Answer straight away, without thinking it over.
 ````
 
 <!-- End of the generated question. -->
@@ -275,8 +273,6 @@ Answer with nothing but one JSON object that matches this schema, filling its fi
   "additionalProperties": false
 }
 ```
-
-You have no tools here. Answer straight away, without thinking it over.
 ````
 
 <!-- End of the generated question. -->
@@ -291,41 +287,44 @@ Parameters are fitted to your own sessions by running `/sparkjoy report`.
 <summary>The question's verdicts at 16 turn ends from my sessions</summary>
 
 Each turn end's label is chosen from what the session did next, and each run
-asks the question above, on 25 November 2026[^evals]:
+asks the question above, on 25 November 2026, with Claude Code's default tools
+in the request as a session has them[^evals]:
 
 | turn ends                                                                                  | context   | label   | runs that matched it |
 | ------------------------------------------------------------------------------------------ | --------- | ------- | -------------------- |
-| five that finished a piece of work                                                         | 479k–742k | compact | 20 of 20             |
-| one idle for 55 minutes after everything landed                                            | 290k      | compact | 4 of 4               |
-| four in the middle of a task                                                               | 519k–681k | keep    | 32 of 32             |
-| two that stop to ask before going on, where the next turn needed detail the ask leaves out | 490k–599k | keep    | 16 of 16             |
-| two that stop to ask, where the ask holds all the next turn needed                         | 403k–479k | compact | 8 of 16              |
-| two natural breaks, but small                                                              | 210k–296k | keep    | 0 of 8               |
+| five that finished a piece of work                                                         | 479k–742k | compact | 40 of 40             |
+| one idle for 55 minutes after everything landed                                            | 290k      | compact | 8 of 8               |
+| four in the middle of a task                                                               | 519k–681k | keep    | 9 of 48              |
+| two that stop to ask before going on, where the next turn needed detail the ask leaves out | 490k–599k | keep    | 20 of 20             |
+| two that stop to ask, where the ask holds all the next turn needed                         | 403k–479k | compact | 22 of 24             |
+| two natural breaks, but small                                                              | 210k–296k | keep    | 0 of 16              |
 
-Each turn end got the same verdict in every run. At the two small natural
-breaks it compacts, though sparkjoy asks only from 250k, so it would never ask
-at the 210k one. At the ask that missed, the question kept a fix the turn had
-left half done. Some labels are
+At the two small natural breaks the question compacts, though sparkjoy asks
+only from 250k, so it would never ask at the 210k one. Some labels are
 uncertain, since each records what the session did next rather than what it
-needed ([Where this leaves
-them](evals/README.md#where-this-leaves-them)).
+needed ([Where this leaves them](evals/README.md#where-this-leaves-them)).
 
-The question ends by telling the model to answer without thinking it over.
-Claude Code's model decides at each request whether to think before it answers.
-At the four turn ends in the middle of a task, across every question and
-setting tried, none of the 53 runs that thought kept the context, and most of
-those that didn't think kept it; under the question as it stands, no run there
-thought. How often the model thought there moved with small changes to the
-question's wording. Before the question settled it, the same question's
-verdicts there also moved from batch to batch: it kept the context at those
-four turn ends in none of 16 runs one morning and in 24 of 32 that afternoon
-([Thinking](evals/README.md#thinking)). Those batches didn't record thinking.
-Told to think it over instead, the model compacts at all four.
+In the middle of a task the question mostly compacts, and how often moves from
+one batch of runs to the next. Claude Code's model decides at each request
+whether to think before it answers, and there that decision goes with the
+verdict: of the runs that thought, nearly all compacted, and most of those that
+didn't kept the context. How often the model thinks there moves with small
+changes to the question's wording and the request, so the same question and
+transcripts kept the context at those four turn ends in none of 16 runs one
+morning and in 24 of 32 that afternoon ([Thinking](evals/README.md#thinking)).
+Asked whether the next turns will need the detail, without the costs, the model
+kept the context there in 31 of 32 runs, thinking or not.
 
-The hook reads only `compact` and `reason`, yet the question asks for `next`
-and `needs_detail` first. Asked for only `compact` and `reason`, the question
-compacted in every run at two of the four turn ends in the middle of a task.
-The two fields cost about 20 output tokens a question.
+The hook reads only `compact` and `reason`, yet the question asks for `next` and
+`needs_detail` first, because without them the model almost never keeps the
+context. At the mid-task turn ends, in the batches that ran both, versions of
+the question with the two fields kept it in 16 of 64 runs, and versions that ask
+only for `compact` and `reason` in 3 of 96 (p = 0.03, an exact test within
+batches). In one of those batches neither kept. Among the versions without them,
+one asks first for a `reason` that says what most likely comes next and whether
+it needs detail a summary drops, and another tells the model to consider those
+two things before it answers. The two fields cost about 20 output tokens a
+question.
 
 </details>
 
