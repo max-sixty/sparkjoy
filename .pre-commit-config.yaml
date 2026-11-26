@@ -15,8 +15,6 @@ repos:
       - id: check-json
       - id: check-toml
       - id: check-added-large-files
-        # Each case's request, as the plugin's fork sends it.
-        exclude: ^evals/requests/
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.17.5
     hooks:

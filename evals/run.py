@@ -16,12 +16,14 @@ in `<checkout>/hooks/register.ts` renders for the case's recorded context size
 (`question.ts`), or for `--told` tokens. Where the case's session is on this
 machine, a run rebuilds the request from its transcript, as the live fork
 sends it (`build.fork_request`); elsewhere, or with `--published`, it sends the
-one published in `requests/`, without the thinking and the words the build
-took out of it. Each row records which it sent. A tool call is
-answered as the fork answers it, with the error the fork returns, and the
-request sent again. Each result is appended to `results.jsonl` (or
-`--results`); `--report` prints the table README.md shows, and for each
-question asked at several `--told` sizes, how often it compacted at each.
+one published in the evals' data repository (`sparkjoy_assets.py`), without
+the thinking and the words the build took out of it. Each row records which it
+sent. A tool call is answered as the fork answers it, with the error the fork
+returns, and the request sent again. Each result is appended to a file of
+the batch's results, which the batch publishes to that repository's
+`evals/results/` when it ends (`sparkjoy_assets.batch`). `--report` prints the table
+README.md shows from every batch's results, and for each question asked at
+several `--told` sizes, how often it compacted at each.
 
 Runs of one case go in sequence and share one cache write of its context, so
 each run after the first costs about a twentieth of it, whatever question it
@@ -53,8 +55,8 @@ HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE.parent / "model"))
 import build  # noqa: E402
 import fit  # noqa: E402
+import sparkjoy_assets  # noqa: E402
 
-RESULTS = HERE / "results.jsonl"
 # How long an idle case's session has sat untouched when it is asked: the
 # plugin's wait on a one-hour cache (IDLE_MS).
 IDLE_MINUTES = 55
@@ -265,17 +267,18 @@ def label(source: Path, told: int | None = None) -> str:
     return f"{git('rev-parse', '--abbrev-ref', 'HEAD')}@{git('rev-parse', '--short', 'HEAD')}{suffix}"
 
 
-def request_of(case: dict, published: bool) -> tuple[dict, str]:
+def request_of(case: dict, published: bool) -> tuple[dict, str] | None:
     """The case's request, and where it came from: rebuilt from the session's
     transcript where it is on this machine, as the live fork sends it, or else
-    as published, without what the build took out of it (build.py)."""
+    as published, without what the build took out of it (build.py). None
+    where there is neither."""
     if not published:
         try:
             return build.fork_request(build.entries_of(case)), "transcript"
         except LookupError:
             pass
-    with gzip.open(build.REQUESTS / f"{case['id']}.json.gz", "rt") as f:
-        return json.load(f), "published"
+    found = sparkjoy_assets.request(case["id"])
+    return (json.loads(gzip.decompress(found)), "published") if found else None
 
 
 def row_of(
@@ -328,7 +331,6 @@ def run(
     published: bool,
     repeat: int,
     jobs: int,
-    results: Path,
 ) -> None:
     labels = [label(source, size) for source in sources for size in told]
     if len(set(labels)) < len(labels):
@@ -336,13 +338,14 @@ def run(
             f"Two questions would share a label: {labels}. Give their files other names."
         )
     auth = credential()
+    # Before the cases' threads start, so that none of them clones.
+    sparkjoy_assets.fetch()
 
     def one_case(case: dict) -> list[dict]:
-        try:
-            request, origin = request_of(case, published)
-        except FileNotFoundError:
+        if (found := request_of(case, published)) is None:
             print(f"SKIP {case['id']}: no transcript or published request", flush=True)
             return []
+        request, origin = found
         if request["params"]["model"] not in fit.PRICES:
             print(
                 f"SKIP {case['id']}: fit.PRICES has no price for its model", flush=True
@@ -374,8 +377,8 @@ def run(
                     print(f"ERROR {case['id']} [{question}]: {error}", flush=True)
                     continue
                 row = row_of(case, question, request, origin, text, used)
-                with results.open("a") as f:
-                    f.write(json.dumps(row) + "\n")
+                results.write(json.dumps(row) + "\n")
+                results.flush()
                 mark = "PASS" if row["got"] == row["expected"] else "FAIL"
                 print(
                     f"{mark} {row['case']} [{row['question']}] expected {row['expected']}, got {row['got']} "
@@ -385,11 +388,21 @@ def run(
                 rows.append(row)
         return rows
 
-    with ThreadPoolExecutor(jobs) as pool:
-        rows = [row for rows in pool.map(one_case, cases) for row in rows]
-    print(
-        f"{sum(r['got'] == r['expected'] for r in rows)}/{len(rows)} passed, ${sum(r['cost'] for r in rows):.2f}"
-    )
+    try:
+        with sparkjoy_assets.batch() as results, ThreadPoolExecutor(jobs) as pool:
+            rows = [row for rows in pool.map(one_case, cases) for row in rows]
+        print(
+            f"{sum(r['got'] == r['expected'] for r in rows)}/{len(rows)} passed, ${sum(r['cost'] for r in rows):.2f}"
+        )
+    finally:
+        # The batch's results, with any an earlier batch didn't publish; a
+        # rebuilt request waits for a look first.
+        try:
+            sparkjoy_assets.publish(sparkjoy_assets.RESULTS)
+        except subprocess.CalledProcessError:
+            print(
+                f"The results weren't published, and wait in {sparkjoy_assets.UNPUBLISHED}."
+            )
 
 
 def column(row: dict) -> str:
@@ -399,10 +412,12 @@ def column(row: dict) -> str:
     )
 
 
-def report(cases: list[dict], results: Path) -> None:
+def report(cases: list[dict]) -> None:
     """The results table: per case and question, how many runs matched the
     label, and how many of them thought before answering."""
-    rows = [json.loads(line) for line in results.open()] if results.exists() else []
+    rows = [
+        json.loads(line) for path in sparkjoy_assets.results() for line in path.open()
+    ]
     questions = list(dict.fromkeys(column(r) for r in rows))
     print("| case | kind | context | expected | " + " | ".join(questions) + " |")
     print("|---|---|---|---|" + "---|" * len(questions))
@@ -487,12 +502,6 @@ def main() -> None:
     parser.add_argument(
         "--report", action="store_true", help="print the results table and exit"
     )
-    parser.add_argument(
-        "--results",
-        type=Path,
-        default=RESULTS,
-        help="the file runs append to and --report reads",
-    )
     args = parser.parse_args()
     cases = json.loads((HERE / "cases.json").read_text())
     if args.case:
@@ -501,10 +510,10 @@ def main() -> None:
             sys.exit(f"Unknown cases: {sorted(unknown)}")
         cases = [c for c in cases if c["id"] in args.case]
     if args.report:
-        return report(cases, args.results)
+        return report(cases)
     sources = [p.expanduser().resolve() for p in args.question_from or [HERE.parent]]
     told = [None if t == "recorded" else int(t) for t in args.told or ["recorded"]]
-    run(cases, sources, told, args.published, args.repeat, args.jobs, args.results)
+    run(cases, sources, told, args.published, args.repeat, args.jobs)
 
 
 if __name__ == "__main__":

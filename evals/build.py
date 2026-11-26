@@ -19,8 +19,9 @@ after it, as `$.model.fork` does. Only I can run the build, since the
 transcripts are mine; it is here to show what the requests hold and to add
 cases.
 
-The requests are published in `requests/<id>.json.gz`, so before writing one
-the build (`published`) removes:
+The requests are published, in the evals' data repository
+(`sparkjoy_assets.py`), so before writing one the build (`published`)
+removes:
 
 - each sentence that names my work outside open source, and the whole list
   item where that sentence opens one, such as a skill in Claude Code's
@@ -36,8 +37,9 @@ the build (`published`) removes:
 It then searches every string again for the terms, as plain text rather than
 words, and for Claude Code's own source, and stops on any it finds. It prints
 how many sentences it removed from each request and how many images the
-request holds: it can't read images, so each new one needs a look before it
-is published.
+request holds. It can't read images, so each request waits, named for the hash
+of its JSON, until `sparkjoy_assets.py publish` publishes it after a look at
+each new image.
 """
 
 import base64
@@ -46,14 +48,15 @@ import gzip
 import hashlib
 import json
 import re
+import shutil
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE.parent / "model"))
 import fit  # noqa: E402
+import sparkjoy_assets  # noqa: E402
 
-REQUESTS = HERE / "requests"
 TERMS = Path.home() / ".claude/sparkjoy/private-terms"
 
 # The first 12 hex digits of sha256 of each image left out: two captures that
@@ -331,11 +334,14 @@ def build(case: dict) -> Path:
     request, removed = published(fork_request(entries_of(case)))
     if found := left_over(request):
         raise SystemExit(f"{case['id']}: " + "\n".join(found))
-    REQUESTS.mkdir(exist_ok=True)
-    target = REQUESTS / f"{case['id']}.json.gz"
-    # mtime=0 so that an unchanged request writes the same bytes.
-    with gzip.GzipFile(target, "wb", compresslevel=9, mtime=0) as f:
-        f.write(json.dumps(request, ensure_ascii=False).encode())
+    body = json.dumps(request, ensure_ascii=False).encode()
+    waiting = sparkjoy_assets.UNPUBLISHED / "evals/requests" / case["id"]
+    shutil.rmtree(waiting, ignore_errors=True)
+    waiting.mkdir(parents=True)
+    target = waiting / f"{hashlib.sha256(body).hexdigest()[:12]}.json.gz"
+    # mtime=0, and no file name in the header, so that an unchanged request
+    # writes the same bytes.
+    target.write_bytes(gzip.compress(body, compresslevel=9, mtime=0))
     print(
         f"{case['id']}: {target.stat().st_size / 1e6:.1f} MB, {len(removed)} sentences"
         f" ({sum(map(len, removed))} characters) removed, {images(request)} images"
