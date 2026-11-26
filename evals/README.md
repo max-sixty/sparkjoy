@@ -122,9 +122,8 @@ ask holds all the next turn needed.
 From `run.py --report`, on requests rebuilt from the transcripts as the live
 fork sends them, on 25 and 26 November 2026. Each cell counts the runs that
 matched the label, and in brackets those in which the model thought before it
-answered. `summarized` is the question as it stood before it said the plugin
-compacts from 900k: the context's size, the requests a compaction takes to pay
-for itself and that keeping only puts it off, then what a summary drops and
+answered. `summarized` is the question as it stands: the context's size, the
+requests a compaction takes to pay for itself and that keeping only puts it off, then what a summary drops and
 which work needs it, then "Weigh the saving against what losing that detail
 would cost the next turns."
 `summarized-told-900k` is that question telling the model the context is 900k,
@@ -161,18 +160,41 @@ at tend-eval-rerun-wait, where the next turn opened a PR from the rerun's
 report and the run's earlier findings, which the runs that compact say a
 summary would carry. Both followed thinking.
 
-The question as it stands adds that the plugin compacts at the first turn end
-from 900k. Asked at seven cases on 26 November (the four mid-task ones,
-leaf-menu-build-wait, worktrunk-release-tagged and leaf-save-icon-merge-ask),
-it gave each, in all 14 runs, the verdict `summarized` gives it in most.
-
 All three compact at the two small natural breaks, against their labels,
 though sparkjoy asks only from 250k, so it would never ask at the 210k one.
 
 ### Size
 
 The question's verdict follows its answer about the detail, whatever it says
-of the context's size. In one batch on 26 November, five wordings put the size
+of the context's size. A case holds one piece of work fixed, so asking it with
+other sizes stated (`--told`) shows how the verdict moves with the size alone,
+and `--report` prints a table of compactions by stated size for each question
+asked at several. On 26 November, three wordings stated 300k, 500k, 700k and
+900k at the five mid-task turn ends (the four labelled keep, and
+leaf-menu-build-wait) and at two that finished a piece of work
+(worktrunk-release-tagged and leaf-data-attrs-merged), twice each, for $39,
+with 97% of the input read from the cache. Each cell counts the runs that
+compacted:
+
+| wording                                                                                                                                                                                                               | turn ends | 300k | 500k  | 700k  | 900k  |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---- | ----- | ----- | ----- |
+| `summarized`, the question as it stands                                                                                                                                                                               | mid-task  | 0/10 | 0/10  | 2/10  | 0/10  |
+|                                                                                                                                                                                                                       | finished  | 4/4  | 4/4   | 4/4   | 4/4   |
+| `sweep-weigh`: says how many times more each request reads than it would after a compaction, and after how many requests a compaction pays for itself; asks how many requests remain and how many a compaction wastes | mid-task  | 9/10 | 10/10 | 10/10 | 10/10 |
+|                                                                                                                                                                                                                       | finished  | 4/4  | 4/4   | 4/4   | 4/4   |
+| `sweep-estimate`: states no size or cost, so its columns are repeats, and asks the same two estimates                                                                                                                 | mid-task  | 0/10 | 0/10  | 0/10  | 0/10  |
+|                                                                                                                                                                                                                       | finished  | 4/4  | 3/4   | 2/4   | 3/4   |
+
+No wording moved a turn end's verdict with the size it stated: a wording moves
+every size at once. The estimates of the requests a compaction would waste,
+asked without the size or the costs, were steady across runs and ordered by
+the work: 1 to 2 where three changes had landed, 4 to 6 after a release, 6 to
+10 while waiting on an eval rerun to turn into a PR, and 12 to 15 in the middle
+of a design or fix. Told the costs, the model estimated more requests left in
+the session, up to four times as many, and enough for a compaction to pay for
+itself in all but one of its 56 runs.
+
+Earlier, in one batch on 26 November, five wordings put the size
 to it in different ways, at the mid-task turn ends as recorded and told the
 context was 900k, and at two real turn ends near the end of leaf-menu-design's
 session, at 853k (leaf-menu-build-wait) and 928k, where the build went on

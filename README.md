@@ -184,7 +184,7 @@ Code compacts it in the middle of a turn.
 ````
 Decide whether to compact this session now. This request comes from the sparkjoy plugin, not from the user, and a program reads your answer.
 
-Your turn just ended, with 500k tokens of context. A compaction would cut it to about 142k, and pays for itself once the session runs 13 more requests that need nothing it dropped (a turn runs a median of 9). Keeping only puts the compaction off: this plugin compacts at the first turn end from 900k, and Claude Code compacts on its own, in the middle of a turn, if the context nears its limit first.
+Your turn just ended, with 500k tokens of context. A compaction would cut it to about 142k, and pays for itself once the session runs 13 more requests that need nothing it dropped (a turn runs a median of 9). Keeping only puts the compaction off: Claude Code compacts on its own, in the middle of a turn, once the context nears its limit.
 
 A summary drops detail: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary. Nearly every long transcript is mostly finished work, so that alone is no reason to compact.
 
@@ -261,8 +261,8 @@ Parameters are fitted to your own sessions by running `/sparkjoy report`.
 
 Each turn end's label is chosen from what the session did next, and each run
 sends the request the plugin's fork would have sent there, rebuilt from the
-session's own records, on 25 and 26 November 2026, with the question above
-before it said the plugin compacts from 900k[^evals]:
+session's own records, on 25 and 26 November 2026, with the question
+above[^evals]:
 
 | turn ends                                                           | context   | label   | runs that matched it |
 | ------------------------------------------------------------------- | --------- | ------- | -------------------- |
@@ -273,8 +273,7 @@ before it said the plugin compacts from 900k[^evals]:
 | one that stops to ask, where the ask holds all the next turn needed | 479k      | compact | 4 of 4               |
 | two natural breaks, but small                                       | 210k–296k | keep    | 0 of 8               |
 
-As it stands, the question gave the same verdicts at seven of these turn ends,
-in 14 runs. At the two small natural breaks the question compacts, though sparkjoy asks
+At the two small natural breaks the question compacts, though sparkjoy asks
 only from 250k, so it would never ask at the 210k one. Some labels are
 uncertain, since each records what the session did next rather than what it
 needed ([Where this leaves them](evals/README.md#where-this-leaves-them)).
@@ -283,9 +282,10 @@ In the middle of a task, an earlier question that listed each figure behind
 the costs compacted in all 32 runs, though in most it answered that the next
 turns would need the detail. Without that list the model keeps there, and its
 verdict follows its answer about the detail whatever the question says of the
-context's size: across five wordings, none compacted in 16 runs at real turn
-ends at 853k and 928k. So from 900k sparkjoy compacts without asking
-([Size](evals/README.md#size)).
+context's size. Telling it the context held 300k, 500k, 700k or 900k moved no
+turn end's verdict under any of three wordings, and five wordings kept in all 16
+runs at real turn ends at 853k and 928k. So from 900k sparkjoy compacts without
+asking ([Size](evals/README.md#size)).
 
 The hook reads only `compact` and `reason`, yet the question asks for `next` and
 `needs_detail` first, because without them the model seldom keeps the context:

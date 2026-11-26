@@ -20,7 +20,8 @@ one published in `requests/`, without the thinking and the words the build
 took out of it. Each row records which it sent. A tool call is
 answered as the fork answers it, with the error the fork returns, and the
 request sent again. Each result is appended to `results.jsonl` (or
-`--results`); `--report` prints the table README.md shows.
+`--results`); `--report` prints the table README.md shows, and for each
+question asked at several `--told` sizes, how often it compacted at each.
 
 Runs of one case go in sequence and share one cache write of its context, so
 each run after the first costs about a twentieth of it, whatever question it
@@ -41,6 +42,7 @@ import gzip
 import http.client
 import json
 import os
+import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -424,6 +426,39 @@ def report(cases: list[dict], results: Path) -> None:
         print(
             f"\n{q}: {sum(r['got'] == expected[r['case']] for r in runs)}/{len(runs)} runs passed, ${sum(r['cost'] for r in runs):.2f}"
         )
+    by_size(cases, rows)
+
+
+def by_size(cases: list[dict], rows: list[dict]) -> None:
+    """For each question asked at several `--told` sizes, how many runs at each
+    case compacted at each size. Each case holds its work fixed, so a question
+    that weighs the context's size compacts more often the larger the size it
+    states."""
+    told: dict[str, dict[tuple[str, int], list[dict]]] = {}
+    for r in rows:
+        m = re.fullmatch(r"(.*)-told-(\d+)k(.*)", column(r))
+        if m:
+            told.setdefault(m[1] + m[3], {}).setdefault(
+                (r["case"], int(m[2])), []
+            ).append(r)
+    for question, runs in told.items():
+        sizes = sorted({size for _, size in runs})
+        if len(sizes) < 2:
+            continue
+        print(f"\n{question}, runs that compacted at each size it stated:\n")
+        print("| case | " + " | ".join(f"{s}k" for s in sizes) + " |")
+        print("|---|" + "---|" * len(sizes))
+        for case in cases:
+            cells = [runs.get((case["id"], s), []) for s in sizes]
+            if any(cells):
+                print(
+                    f"| {case['id']} | "
+                    + " | ".join(
+                        f"{sum(r['got'] == 'compact' for r in c)}/{len(c)}" if c else ""
+                        for c in cells
+                    )
+                    + " |"
+                )
 
 
 def main() -> None:
