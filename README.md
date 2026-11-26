@@ -163,7 +163,7 @@ lapses. It asks at the end of a turn because that's the most likely point where 
 
 To ask, it forks the conversation for one
 request. The fork reads the whole conversation, which is already in the prompt
-cache. The model answers in about a hundred tokens, a verdict and a one-line
+cache. The model answers in about 100 tokens, a verdict and a one-line
 reason. The fork goes from Claude Code to the session's own model, so the
 conversation goes only where the session already sends it.
 
@@ -412,7 +412,7 @@ written to the cache again, so compacting then costs \$4.66 instead of \$1.02
 ([What a request and a compaction
 cost](docs/cost-model.md#what-a-request-and-a-compaction-cost)). Compacting before
 you close costs less overall once you resume more than about one session in
-twenty, or one in twelve at sparkjoy's 250k floor.
+20, or one in 12 at sparkjoy's 250k floor.
 
 </details>
 
