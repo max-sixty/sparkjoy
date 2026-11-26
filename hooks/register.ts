@@ -614,7 +614,7 @@ function question(
   const requests = payback(tokens, figures)
   const situation = isIdle
     ? `Your turn ended ${idleMinutes} minutes ago, and nothing has happened since. The context holds ${now} tokens, and the prompt cache holding it lapses within a few minutes, so the next request will write all but ${thousands(P)} of it to the cache again, against about ${thousands(K - P)} after a compaction.`
-    : `Your turn just ended, with ${now} tokens of context. A compaction would cut it to about ${thousands(K)}, and pays for itself once the session runs ${requests} more requests that need nothing it dropped (a turn runs a median of ${Math.round(TURN_MEDIAN)}). Keeping only puts the compaction off: this plugin compacts at the first turn end from ${thousands(CEILING)}, and Claude Code compacts on its own, in the middle of a turn, if the context nears its limit first.`
+    : `Your turn just ended, with ${now} tokens of context. A compaction would cut it to about ${thousands(K)}, and pays for itself once the session runs ${requests} more requests that need nothing it dropped (a turn runs a median of ${Math.round(TURN_MEDIAN)}). Keeping only puts the compaction off: Claude Code compacts on its own, in the middle of a turn, once the context nears its limit.`
   const decide = isIdle
     ? 'Compact unless the next turn continues work that needs that detail.'
     : 'Weigh the saving against what losing that detail would cost the next turns.'
