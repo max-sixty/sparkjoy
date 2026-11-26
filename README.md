@@ -181,26 +181,11 @@ compacting and the cost of keeping the context at its current size.
 ````
 Decide whether to compact this session now. This request comes from the sparkjoy plugin, not from the user, and a program reads your answer.
 
-Your turn just ended.
+Your turn just ended, with 500k tokens of context. A compaction would cut it to about 142k. At this size it costs about as much as 13 requests, so it pays for itself once the session runs 13 more requests that need nothing it dropped (a turn runs a median of 9), and saves more the longer the session goes on.
 
-Nearly every long transcript is mostly finished work, so that alone is no reason to compact. Base the decision on whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
+A summary drops detail: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary. Nearly every long transcript is mostly finished work, so that alone is no reason to compact.
 
-What a compaction costs:
-- It takes about a minute, and the request that writes its summary outputs about 6k tokens, thinking included.
-- Afterwards the context holds about 142k tokens, counting the files the next requests read again. Those requests make a cache write of all of it but the 30k of system prompt and tools, which stay cached.
-- A cache write costs as much as 40 cached reads, and an output token as much as 100.
-- At 500k a compaction pays for itself after about 13 more requests that need nothing it dropped.
-
-What keeping costs, more the larger the context:
-- Every later request reads all 500k tokens, against about 142k after a compaction.
-- Keeping only puts the compaction off to a later turn end.
-- A turn runs a median of 9 requests and a mean of 38, so keeping 500k through one more turn costs as much as about 0.7 compactions for a median turn and 3 for a mean one.
-
-What lost detail costs:
-- It's very noisy and hard to judge, but as some indication, past sessions had about 6 more wasted requests than usual after a compaction: failed tool calls, repeated lookups and corrections.
-- That count misses detail lost without such a failure, such as a design's rejected options or what the user likes.
-
-Weigh what keeping costs against what losing the detail would cost the next turns. The larger the context, the more detail a compaction can drop and still pay.
+Weigh the saving against what losing that detail would cost the next turns.
 
 The user added these instructions for this decision:
 $CUSTOM_INSTRUCTIONS
@@ -234,26 +219,11 @@ Answer with nothing but one JSON object that matches this schema, filling its fi
 ````
 Decide whether to compact this session now, before its prompt cache lapses. This request comes from the sparkjoy plugin, not from the user, and a program reads your answer.
 
-Your turn ended 55 minutes ago, and nothing has happened since.
+Your turn ended 55 minutes ago, and nothing has happened since. The context holds 500k tokens, and the prompt cache holding it lapses within a few minutes, so the next request will write all but 30k of it to the cache again, against about 112k after a compaction.
 
-Nearly every long transcript is mostly finished work, so that alone is no reason to compact. Base the decision on whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
+A summary drops detail: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary. Nearly every long transcript is mostly finished work, so that alone is no reason to compact.
 
-What a compaction costs:
-- It takes about a minute, and the request that writes its summary outputs about 6k tokens, thinking included.
-- Afterwards the context holds about 142k tokens, counting the files the next requests read again. Those requests make a cache write of all of it but the 30k of system prompt and tools, which stay cached.
-- A cache write costs as much as 40 cached reads, and an output token as much as 100.
-
-What keeping costs now:
-- The prompt cache holding the conversation lapses within a few minutes.
-- The first request after that makes a cache write of all but 30k of its 500k tokens, against about 112k after a compaction.
-
-So compact unless the next turn continues work that needs the transcript's detail.
-
-What lost detail costs:
-- It's very noisy and hard to judge, but as some indication, past sessions had about 6 more wasted requests than usual after a compaction: failed tool calls, repeated lookups and corrections.
-- That count misses detail lost without such a failure, such as a design's rejected options or what the user likes.
-
-Weigh what keeping costs against what losing the detail would cost the next turns. The larger the context, the more detail a compaction can drop and still pay.
+Compact unless the next turn continues work that needs that detail.
 
 The user added these instructions for this decision:
 $CUSTOM_INSTRUCTIONS

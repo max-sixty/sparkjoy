@@ -277,7 +277,7 @@ def test_a_session_below_the_floor_had_nothing_to_ask(tmp_path):
     ]
 
 
-def test_saves_the_figures_the_question_states(tmp_path):
+def test_saves_the_figures_the_question_uses(tmp_path):
     figures = tmp_path / "data" / "figures.json"  # in a folder the report makes
     summary, page = report(tmp_path, session_with_compactions(), "--figures", figures)
     # K is the median first request after the three compactions, 240k, 225k and 120k, as no turn is long
@@ -293,7 +293,6 @@ def test_saves_the_figures_the_question_states(tmp_path):
         "P": 30_000,
         "SUMMARY": 1_500,
         "TURN_MEDIAN": 1,
-        "TURN_MEAN": 1,
         "LAPSE": 0.5,
         "WRITE": 40,
         "OUTPUT": 100,
@@ -331,7 +330,7 @@ def test_saves_no_figures_without_compactions(tmp_path):
         summary[-1]
         == "sparkjoy keeps the floors and figures it has: the window holds no compactions to fit them to"
     )
-    assert "its question states these figures" not in page
+    assert "its question uses these figures" not in page
 
 
 def test_a_figures_file_it_cannot_save_leaves_the_page(tmp_path):
@@ -345,4 +344,4 @@ def test_a_figures_file_it_cannot_save_leaves_the_page(tmp_path):
     assert summary[-1].startswith(
         "sparkjoy keeps the floors and figures it has: saving them failed: "
     )
-    assert "its question states these figures" not in page and "Fix the parser" in page
+    assert "its question uses these figures" not in page and "Fix the parser" in page
