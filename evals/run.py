@@ -6,30 +6,25 @@
 """Asks a checkout's question at each case's turn end, as the plugin's fork
 asks it, and scores the verdicts.
 
-    uv run --script evals/run.py [--question-from CHECKOUT ...] [--case ID ...] [--repeat N]
+    uv run --script evals/run.py [--question-from CHECKOUT ...] [--case ID ...] [--repeat N] [--told TOKENS] [--published]
     uv run --script evals/run.py --report
 
-Claude Code records each request a session sends in the session's transcript
-(the `api-request`, `api-request-shape` and `api-request-blob` lines). A
-case's turn end is the line of its reply in one of my sessions (`cases.json`),
-and a run rebuilds the request that reply answered: its parameters, system
-prompt and tools as recorded, and its messages, each checked against the hash
-the record gives it. `$.model.fork` sends that request again with the turn's
-reply and then its prompt after it, so a run sends the same straight to the
-API, with the question `question()` in `<checkout>/hooks/register.ts` renders
-for the case's recorded context size (`question.ts`). A tool call is answered
-as the fork answers it, with the error the fork returns, and the request sent
-again. Each result is appended to `results.jsonl` (or `--results`);
-`--report` prints the table README.md shows.
-
-Only I can run it, since it reads my transcripts from Claude Code's
-`projects/` directory, as `model/fit.py` finds it. A case whose session
-predates the request records (Claude Code before 2.1.304), or whose model
-`fit.PRICES` doesn't price, is skipped.
+A case's request is the one the turn's reply answered, with the reply after
+it. `$.model.fork` sends that request again with its prompt after the reply,
+so a run sends the same straight to the API, with the question `question()`
+in `<checkout>/hooks/register.ts` renders for the case's recorded context size
+(`question.ts`), or for `--told` tokens. Where the case's session is on this
+machine, a run rebuilds the request from its transcript, as the live fork
+sends it (`build.fork_request`); elsewhere, or with `--published`, it sends the
+one published in `requests/`, without the thinking and the words the build
+took out of it. Each row records which it sent. A tool call is
+answered as the fork answers it, with the error the fork returns, and the
+request sent again. Each result is appended to `results.jsonl` (or
+`--results`); `--report` prints the table README.md shows.
 
 Runs of one case go in sequence and share one cache write of its context, so
-each run after the first costs about a twentieth of it. Cases run `--jobs` at a
-time.
+each run after the first costs about a twentieth of it, whatever question it
+asks. Cases run `--jobs` at a time.
 
 `--question-from` takes a checkout or a `register.ts` file, so a variant of the
 question can be tried from a scratch copy before it is committed.
@@ -42,6 +37,7 @@ token): the macOS keychain item `Claude Code-credentials`, or
 
 import argparse
 import getpass
+import gzip
 import http.client
 import json
 import os
@@ -53,6 +49,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE.parent / "model"))
+import build  # noqa: E402
 import fit  # noqa: E402
 
 RESULTS = HERE / "results.jsonl"
@@ -63,7 +60,7 @@ IDLE_MINUTES = 55
 DENIED = "A model fork cannot use tools"
 # The requests a run may make, the first and one after each denied tool call,
 # before it gives up.
-REQUESTS = 5
+MAX_REQUESTS = 5
 
 
 def credential() -> dict[str, str]:
@@ -102,75 +99,12 @@ def credential() -> dict[str, str]:
     return {"authorization": f"Bearer {token}"}
 
 
-def uncached(value):
-    """`value` without the cache breakpoints the main thread placed."""
-    if isinstance(value, dict):
-        return {k: uncached(v) for k, v in value.items() if k != "cache_control"}
-    if isinstance(value, list):
-        return [uncached(v) for v in value]
-    return value
-
-
-def entries_of(case: dict) -> list[dict]:
-    """The case's session, up to its turn's reply."""
-    session, end = case["source"]["session"], case["source"]["line"]
-    path = next(fit.PROJECTS.glob(f"*/{session}.jsonl"))
-    entries = []
-    with path.open() as f:
-        for n, raw in enumerate(f):
-            if n > end:
-                break
-            entries.append(json.loads(raw))
-    return entries
-
-
-def fork_request(entries: list[dict]) -> tuple[dict, dict, list[dict]]:
-    """The recorded request the turn's reply answered, its shape (system prompt
-    and tools), and its messages as `fit.request_messages` rebuilds them, each
-    checked against its hash, with the reply after them."""
-    shapes = {
-        e["shapeHash"]: e["shape"]
-        for e in entries
-        if e.get("type") == "api-request-shape"
-    }
-    requests, messages = fit.request_messages(entries)
-    reply = entries[-1]
-    if "requestRef" not in reply:
-        raise LookupError("its session has no request records")
-    request = requests[reply["requestRef"]]
-    if request["params"]["model"] not in fit.PRICES:
-        raise LookupError(f"fit.PRICES has no price for {request['params']['model']}")
-    r = request
-    while r.get("base"):
-        if r["base"] not in requests:
-            raise LookupError(f"the record of request {r['base']} is missing")
-        r = requests[r["base"]]
-    rebuilt = messages(request["id"])
-    if None in rebuilt:
-        raise LookupError(
-            f"message {rebuilt.index(None)} of the recorded request is in no blob or line"
-        )
-    blocks = [
-        b
-        for e in entries
-        if e.get("type") == "assistant"
-        and e["message"].get("id") == reply["message"]["id"]
-        for b in e["message"]["content"]
-    ]
-    return (
-        request,
-        shapes[request["shapeHash"]],
-        [uncached(m) for m in rebuilt]
-        + [{"role": "assistant", "content": uncached(blocks)}],
-    )
-
-
-def body_of(request: dict, shape: dict, messages: list[dict], question: str) -> dict:
+def body_of(request: dict, question: str) -> dict:
     """The fork's request: the recorded one, the reply, then the question, with
     the cache breakpoints on the system prompt and the reply."""
-    system = uncached(shape["system"])
-    system[-1] |= {"cache_control": {"type": "ephemeral"}}
-    reply = messages[-1]
+    system = [*request["system"]]
+    system[-1] = system[-1] | {"cache_control": {"type": "ephemeral"}}
+    *messages, reply = request["messages"]
     reply = reply | {
         "content": [
             *reply["content"][:-1],
@@ -180,8 +114,8 @@ def body_of(request: dict, shape: dict, messages: list[dict], question: str) -> 
     params = {k: v for k, v in request["params"].items() if k != "betas"}
     return params | {
         "system": system,
-        "tools": uncached(shape["tools"]),
-        "messages": [*messages[:-1], reply, {"role": "user", "content": question}],
+        "tools": request["tools"],
+        "messages": [*messages, reply, {"role": "user", "content": question}],
         "stream": True,
     }
 
@@ -233,8 +167,8 @@ def ask(body: dict, headers: dict) -> tuple[str, dict]:
     ends without a tool call. `context` is the first request's input."""
     used = {"requests": 0, "thinking": 0}
     while True:
-        if used["requests"] == REQUESTS:
-            raise RuntimeError(f"still calling tools after {REQUESTS} requests")
+        if used["requests"] == MAX_REQUESTS:
+            raise RuntimeError(f"still calling tools after {MAX_REQUESTS} requests")
         blocks, stop, usage = stream(body, headers)
         used["requests"] += 1
         used.setdefault(
@@ -285,12 +219,12 @@ def register(source: Path) -> Path:
     return source if source.is_file() else source / "hooks/register.ts"
 
 
-def render(source: Path, reply: str, case: dict) -> str:
+def render(source: Path, reply: str, case: dict, told: int | None) -> str:
     args = [
         "bun",
         str(HERE / "question.ts"),
         str(register(source)),
-        str(case["tokens"]),
+        str(told or case["tokens"]),
     ]
     if case["kind"] == "idle":
         args += ["--idle", str(IDLE_MINUTES)]
@@ -313,20 +247,38 @@ def parse(text: str) -> dict | None:
     return value if ok else None
 
 
-def label(source: Path) -> str:
-    """The checkout's branch and commit, e.g. `main@02beed1`, or a file's name."""
+def label(source: Path, told: int | None = None) -> str:
+    """The checkout's branch and commit, e.g. `main@02beed1`, or a file's name,
+    with the size the question states where it isn't the case's own, as in
+    `main@02beed1-told-900k`."""
+    suffix = f"-told-{told // 1000}k" if told else ""
     if source.is_file():
-        return source.stem
+        return source.stem + suffix
 
     def git(*args):
         return subprocess.run(
             ["git", "-C", str(source), *args], capture_output=True, text=True
         ).stdout.strip()
 
-    return f"{git('rev-parse', '--abbrev-ref', 'HEAD')}@{git('rev-parse', '--short', 'HEAD')}"
+    return f"{git('rev-parse', '--abbrev-ref', 'HEAD')}@{git('rev-parse', '--short', 'HEAD')}{suffix}"
 
 
-def row_of(case: dict, source: Path, request: dict, text: str, used: dict) -> dict:
+def request_of(case: dict, published: bool) -> tuple[dict, str]:
+    """The case's request, and where it came from: rebuilt from the session's
+    transcript where it is on this machine, as the live fork sends it, or else
+    as published, without what the build took out of it (build.py)."""
+    if not published:
+        try:
+            return build.fork_request(build.entries_of(case)), "transcript"
+        except LookupError:
+            pass
+    with gzip.open(build.REQUESTS / f"{case['id']}.json.gz", "rt") as f:
+        return json.load(f), "published"
+
+
+def row_of(
+    case: dict, question: str, request: dict, origin: str, text: str, used: dict
+) -> dict:
     verdict = parse(text)
     got = None if verdict is None else ("compact" if verdict["compact"] else "keep")
     read, write = used["cache_read_input_tokens"], used["cache_creation_input_tokens"]
@@ -334,7 +286,7 @@ def row_of(case: dict, source: Path, request: dict, text: str, used: dict) -> di
     i, o, w5, _, r = fit.PRICES[request["params"]["model"]]
     row = {
         "case": case["id"],
-        "question": label(source),
+        "question": question,
         "at": datetime.now(UTC).isoformat(timespec="seconds"),
         "expected": case["expected"],
         "got": got,
@@ -358,24 +310,41 @@ def row_of(case: dict, source: Path, request: dict, text: str, used: dict) -> di
         ),
         # The Claude Code release that recorded the request.
         "client": request["version"],
+        "request": origin,
     }
-    # Whether the answer said the next turns need the transcript's detail, for
-    # a question that asks.
-    if verdict is not None and "needs_detail" in verdict:
-        row["needs_detail"] = verdict["needs_detail"]
+    # The answer's other fields, such as whether the next turns need the
+    # transcript's detail, for a question that asks for them.
+    if verdict is not None:
+        row |= {k: v for k, v in verdict.items() if k not in ("compact", "reason")}
     return row
 
 
 def run(
-    cases: list[dict], sources: list[Path], repeat: int, jobs: int, results: Path
+    cases: list[dict],
+    sources: list[Path],
+    told: list[int | None],
+    published: bool,
+    repeat: int,
+    jobs: int,
+    results: Path,
 ) -> None:
+    labels = [label(source, size) for source in sources for size in told]
+    if len(set(labels)) < len(labels):
+        sys.exit(
+            f"Two questions would share a label: {labels}. Give their files other names."
+        )
     auth = credential()
 
     def one_case(case: dict) -> list[dict]:
         try:
-            request, shape, messages = fork_request(entries_of(case))
-        except LookupError as error:
-            print(f"SKIP {case['id']}: {error}", flush=True)
+            request, origin = request_of(case, published)
+        except FileNotFoundError:
+            print(f"SKIP {case['id']}: no transcript or published request", flush=True)
+            return []
+        if request["params"]["model"] not in fit.PRICES:
+            print(
+                f"SKIP {case['id']}: fit.PRICES has no price for its model", flush=True
+            )
             return []
         headers = auth | {
             "anthropic-version": "2023-06-01",
@@ -386,22 +355,23 @@ def run(
             "content-type": "application/json",
         }
         reply = "\n\n".join(
-            b["text"] for b in messages[-1]["content"] if b["type"] == "text"
+            b["text"] for b in request["messages"][-1]["content"] if b["type"] == "text"
         )
         bodies = {
-            source: body_of(request, shape, messages, render(source, reply, case))
+            label(source, size): body_of(request, render(source, reply, case, size))
             for source in sources
+            for size in told
         }
         rows = []
         # The questions take turns, so drift over a batch falls on each alike.
         for _ in range(repeat):
-            for source, body in bodies.items():
+            for question, body in bodies.items():
                 try:
                     text, used = ask(body, headers)
                 except (RuntimeError, OSError) as error:
-                    print(f"ERROR {case['id']} [{label(source)}]: {error}", flush=True)
+                    print(f"ERROR {case['id']} [{question}]: {error}", flush=True)
                     continue
-                row = row_of(case, source, request, text, used)
+                row = row_of(case, question, request, origin, text, used)
                 with results.open("a") as f:
                     f.write(json.dumps(row) + "\n")
                 mark = "PASS" if row["got"] == row["expected"] else "FAIL"
@@ -420,18 +390,25 @@ def run(
     )
 
 
+def column(row: dict) -> str:
+    """The question a row asked, marked where it sent a published request."""
+    return row["question"] + (
+        " (published)" if row.get("request") == "published" else ""
+    )
+
+
 def report(cases: list[dict], results: Path) -> None:
     """The results table: per case and question, how many runs matched the
     label, and how many of them thought before answering."""
     rows = [json.loads(line) for line in results.open()] if results.exists() else []
-    questions = list(dict.fromkeys(r["question"] for r in rows))
+    questions = list(dict.fromkeys(column(r) for r in rows))
     print("| case | kind | context | expected | " + " | ".join(questions) + " |")
     print("|---|---|---|---|" + "---|" * len(questions))
     for case in cases:
         mine = [r for r in rows if r["case"] == case["id"]]
         cells = []
         for q in questions:
-            runs = [r for r in mine if r["question"] == q]
+            runs = [r for r in mine if column(r) == q]
             passed = sum(r["got"] == case["expected"] for r in runs)
             thought = sum(r["thinking"] > 0 for r in runs)
             cells.append(f"{passed}/{len(runs)} ({thought} thought)" if runs else "")
@@ -440,10 +417,12 @@ def report(cases: list[dict], results: Path) -> None:
             + " | ".join(cells)
             + " |"
         )
+    # Scored against the labels as they stand, at the cases listed.
+    expected = {case["id"]: case["expected"] for case in cases}
     for q in questions:
-        runs = [r for r in rows if r["question"] == q]
+        runs = [r for r in rows if column(r) == q and r["case"] in expected]
         print(
-            f"\n{q}: {sum(r['got'] == r['expected'] for r in runs)}/{len(runs)} runs passed, ${sum(r['cost'] for r in runs):.2f}"
+            f"\n{q}: {sum(r['got'] == expected[r['case']] for r in runs)}/{len(runs)} runs passed, ${sum(r['cost'] for r in runs):.2f}"
         )
 
 
@@ -458,6 +437,16 @@ def main() -> None:
     parser.add_argument("--case", action="append", help="case id to run (default: all)")
     parser.add_argument(
         "--repeat", type=int, default=1, help="runs per case and question"
+    )
+    parser.add_argument(
+        "--told",
+        action="append",
+        help="context size the question states, in tokens, or `recorded` for the case's own (default: recorded)",
+    )
+    parser.add_argument(
+        "--published",
+        action="store_true",
+        help="send the published requests even where the transcripts are on this machine",
     )
     parser.add_argument("--jobs", type=int, default=3, help="cases run at once")
     parser.add_argument(
@@ -479,7 +468,8 @@ def main() -> None:
     if args.report:
         return report(cases, args.results)
     sources = [p.expanduser().resolve() for p in args.question_from or [HERE.parent]]
-    run(cases, sources, args.repeat, args.jobs, args.results)
+    told = [None if t == "recorded" else int(t) for t in args.told or ["recorded"]]
+    run(cases, sources, told, args.published, args.repeat, args.jobs, args.results)
 
 
 if __name__ == "__main__":
