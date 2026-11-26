@@ -575,8 +575,21 @@ function hash(text: string) {
 // made no measurable difference to the verdicts. The answer gives what most
 // likely comes next and whether that needs the transcript's detail before
 // `compact`, though the hook reads only `compact` and `reason`. Without those
-// two fields the model almost never keeps the context mid-task, even when asked
-// for `reason` first or told to consider what comes next (README.md, "Evals").
+// two fields the model keeps the context mid-task far less often: asked for
+// only `compact` and `reason`, it compacted in every run at two of the four
+// mid-task eval cases (README.md, "Evals").
+//
+// The question ends by telling the model to answer without thinking it over.
+// The fork thinks as hard as the session does, and at that effort the model
+// decides for each request whether to think first. In the evals, where the
+// work is mid-task, no run that thought kept the context, and most runs that
+// didn't think kept it. How often the model thought there moved with small
+// changes to the question's wording and between batches of runs, and the
+// verdict moved with it. Told to answer straight away, it rarely thinks, and
+// each case gets one verdict in every run (evals/README.md, "Thinking"). A low
+// `effort` doesn't do the same: at low effort the model still thought in 9 of
+// 20 eval runs, and on a model that takes effort only for a whole request, a
+// fork at another level writes the whole conversation to the cache again.
 // TODO: try a shorter question. This one gives the model every figure behind
 // the costs. Code could do that arithmetic beforehand and state only its
 // result, such as how many compactions keeping the context through the next
@@ -648,7 +661,9 @@ Answer with nothing but one JSON object that matches this schema, filling its fi
   "required": ["next", "needs_detail", "compact", "reason"],
   "additionalProperties": false
 }
-\`\`\``
+\`\`\`
+
+You have no tools here. Answer straight away, without thinking it over.`
 }
 
 // How many later requests a compaction at `tokens` takes to pay for itself:
