@@ -16,8 +16,8 @@
 // The judge is the session's model over the whole transcript rather than a
 // small model over the last reply: which parts the work ahead still needs
 // depends on the work, and the fork reads it from cache. The question gives
-// the judge the costs and the saving, sized for the context it holds, to weigh
-// rather than a rule, and never names the floor. Its figures are the user's own
+// the judge the saving, summed for the context it holds, to weigh rather than
+// a rule, and never names the floor. Its figures are the user's own
 // once `/sparkjoy report` has fitted them. The mod runs only where a person is
 // at the prompt: a `-p` run or an SDK host keeps the engine's own compaction, so
 // no script pays for a judge or finds its conversation changed.
@@ -551,10 +551,11 @@ function hash(text: string) {
 }
 
 // The question gives the context's size and what a compaction would save,
-// summed into one figure, the requests it takes to pay for itself; then what
-// a summary drops, and which work needs that; then asks the model to weigh the
-// two. Asked of an idle session, it says the prompt cache is about to lapse
-// instead, so keeping costs the cache write that follows. README.md shows both
+// summed into one figure, the requests it takes to pay for itself, and says
+// keeping only puts the compaction off; then what a summary drops, and which
+// work needs that; then asks the model to weigh the two. Asked of an idle
+// session, it says the prompt cache is about to lapse instead, so keeping
+// costs the cache write that follows. README.md shows both
 // versions with the figures in `AUTHOR`, for a 500k context, and
 // `$CUSTOM_INSTRUCTIONS` where the user's `instructions` add a paragraph of
 // their own. They change nothing else, so the question keeps its figures and
@@ -586,7 +587,7 @@ function question(
   const requests = payback(tokens, figures)
   const situation = isIdle
     ? `Your turn ended ${idleMinutes} minutes ago, and nothing has happened since. The context holds ${now} tokens, and the prompt cache holding it lapses within a few minutes, so the next request will write all but ${thousands(P)} of it to the cache again, against about ${thousands(K - P)} after a compaction.`
-    : `Your turn just ended, with ${now} tokens of context. A compaction would cut it to about ${thousands(K)}. At this size it costs about as much as ${requests} requests, so it pays for itself once the session runs ${requests} more requests that need nothing it dropped (a turn runs a median of ${Math.round(TURN_MEDIAN)}), and saves more the longer the session goes on.`
+    : `Your turn just ended, with ${now} tokens of context. A compaction would cut it to about ${thousands(K)}, and pays for itself once the session runs ${requests} more requests that need nothing it dropped (a turn runs a median of ${Math.round(TURN_MEDIAN)}). Keeping only puts the compaction off: Claude Code compacts on its own, in the middle of a turn, once the context nears its limit.`
   const decide = isIdle
     ? 'Compact unless the next turn continues work that needs that detail.'
     : 'Weigh the saving against what losing that detail would cost the next turns.'

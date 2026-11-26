@@ -1,6 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.12"
+# dependencies = ["numpy>=2.1"]
 # ///
 """Asks a checkout's question at each case's turn end, as the plugin's fork
 asks it, and scores the verdicts.
@@ -21,9 +22,10 @@ as the fork answers it, with the error the fork returns, and the request sent
 again. Each result is appended to `results.jsonl` (or `--results`);
 `--report` prints the table README.md shows.
 
-Only I can run it, since it reads my transcripts under `~/.claude/projects/`.
-A case whose session predates the request records (Claude Code before 2.1.304)
-is skipped.
+Only I can run it, since it reads my transcripts from Claude Code's
+`projects/` directory, as `model/fit.py` finds it. A case whose session
+predates the request records (Claude Code before 2.1.304), or whose model
+`fit.PRICES` doesn't price, is skipped.
 
 Runs of one case go in sequence and share one cache write of its context, so
 each run after the first costs about a twentieth of it. Cases run `--jobs` at a
@@ -51,16 +53,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 HERE = Path(__file__).parent
+sys.path.insert(0, str(HERE.parent / "model"))
+import fit  # noqa: E402
+
 RESULTS = HERE / "results.jsonl"
-PROJECTS = Path.home() / ".claude/projects"
 # How long an idle case's session has sat untouched when it is asked: the
 # plugin's wait on a one-hour cache (IDLE_MS).
 IDLE_MINUTES = 55
 # What the fork answers a tool call with.
 DENIED = "A model fork cannot use tools"
-# Dollars per million tokens on Opus 5.5, the model every case ran on: input,
-# output, cache read and five-minute cache write.
-PRICES = {"claude-opus-5-5": (4.0, 20.0, 0.2, 5.0)}
+# The requests a run may make, the first and one after each denied tool call,
+# before it gives up.
+REQUESTS = 5
 
 
 def credential() -> dict[str, str]:
@@ -119,7 +123,7 @@ def uncached(value):
 def entries_of(case: dict) -> list[dict]:
     """The case's session, up to its turn's reply."""
     session, end = case["source"]["session"], case["source"]["line"]
-    path = next(PROJECTS.glob(f"*/{session}.jsonl"))
+    path = next(fit.PROJECTS.glob(f"*/{session}.jsonl"))
     entries = []
     with path.open() as f:
         for n, raw in enumerate(f):
@@ -149,10 +153,16 @@ def fork_request(entries: list[dict]) -> tuple[dict, dict, list[dict]]:
     if "requestRef" not in reply:
         raise LookupError("its session has no request records")
     request = requests[reply["requestRef"]]
-
-    def hashes(r: dict) -> list[str]:
-        base = requests[r["base"]] if r.get("base") else None
-        return (hashes(base)[: r["keep"]] if base else []) + r["tail"]
+    if request["params"]["model"] not in fit.PRICES:
+        raise LookupError(f"fit.PRICES has no price for {request['params']['model']}")
+    # The request's message hashes: its base's first `keep`, then its tail,
+    # down a chain of bases hundreds of requests long.
+    chain = [request]
+    while chain[-1].get("base"):
+        chain.append(requests[chain[-1]["base"]])
+    hashes: list[str] = []
+    for r in reversed(chain):
+        hashes = hashes[: r.get("keep", 0)] + r["tail"]
 
     lines: dict[str, dict] = {}
     by_id: dict[str, list] = {}
@@ -178,7 +188,7 @@ def fork_request(entries: list[dict]) -> tuple[dict, dict, list[dict]]:
     for content in by_id.values():
         add({"role": "assistant", "content": content})
     messages = []
-    for i, h in enumerate(hashes(request)):
+    for i, h in enumerate(hashes):
         message = blobs.get(h) or lines.get(h)
         if message is None:
             raise LookupError(
@@ -232,13 +242,15 @@ def stream(body: dict, headers: dict) -> tuple[list[dict], str | None, dict]:
             blocks.append(dict(event["content_block"]))
         elif kind == "content_block_delta":
             block, delta = blocks[event["index"]], event["delta"]
-            for field in ("text", "thinking", "signature"):
-                if delta["type"] == f"{field}_delta":
-                    block[field] = block.get(field, "") + delta[field]
-            if delta["type"] == "input_json_delta":
+            field = delta["type"].removesuffix("_delta")
+            if field in ("text", "thinking", "signature"):
+                block[field] = block.get(field, "") + delta[field]
+            elif field == "input_json":
                 inputs[event["index"]] = (
                     inputs.get(event["index"], "") + delta["partial_json"]
                 )
+            else:
+                raise RuntimeError(f"a delta this runner can't read: {delta['type']}")
         elif kind == "content_block_stop" and event["index"] in inputs:
             blocks[event["index"]]["input"] = json.loads(
                 inputs.pop(event["index"]) or "{}"
@@ -254,11 +266,24 @@ def stream(body: dict, headers: dict) -> tuple[list[dict], str | None, dict]:
 
 def ask(body: dict, headers: dict) -> tuple[str, dict]:
     """The fork's answer and what its requests used, summed: requests until one
-    ends without a tool call."""
+    ends without a tool call. `context` is the first request's input."""
     used = {"requests": 0, "thinking": 0}
     while True:
+        if used["requests"] == REQUESTS:
+            raise RuntimeError(f"still calling tools after {REQUESTS} requests")
         blocks, stop, usage = stream(body, headers)
         used["requests"] += 1
+        used.setdefault(
+            "context",
+            sum(
+                usage.get(k) or 0
+                for k in (
+                    "input_tokens",
+                    "cache_read_input_tokens",
+                    "cache_creation_input_tokens",
+                )
+            ),
+        )
         for k in (
             "input_tokens",
             "cache_read_input_tokens",
@@ -341,7 +366,8 @@ def row_of(case: dict, source: Path, request: dict, text: str, used: dict) -> di
     verdict = parse(text)
     got = None if verdict is None else ("compact" if verdict["compact"] else "keep")
     read, write = used["cache_read_input_tokens"], used["cache_creation_input_tokens"]
-    prices = PRICES[request["params"]["model"]]
+    # A run's cache writes last five minutes.
+    i, o, w5, _, r = fit.PRICES[request["params"]["model"]]
     row = {
         "case": case["id"],
         "question": label(source),
@@ -349,7 +375,7 @@ def row_of(case: dict, source: Path, request: dict, text: str, used: dict) -> di
         "expected": case["expected"],
         "got": got,
         "reason": verdict["reason"] if verdict else text[:300],
-        "context": used["input_tokens"] + read + write,
+        "context": used["context"],
         "cache_read": read,
         "output": used["output_tokens"],
         # Thinking tokens among the output; zero where the model answered
@@ -357,13 +383,11 @@ def row_of(case: dict, source: Path, request: dict, text: str, used: dict) -> di
         "thinking": used["thinking"],
         "requests": used["requests"],
         "cost": round(
-            sum(
-                n * p
-                for n, p in zip(
-                    (used["input_tokens"], used["output_tokens"], read, write),
-                    prices,
-                    strict=False,
-                )
+            (
+                used["input_tokens"] * i
+                + used["output_tokens"] * o
+                + read * r
+                + write * w5
             )
             / 1e6,
             4,

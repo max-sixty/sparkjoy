@@ -233,8 +233,8 @@ const FITTED = JSON.stringify({
 
 // What the question says at 500k with the author's figures.
 const AUTHORS = [
-  'with 500k tokens of context. A compaction would cut it to about 142k.',
-  'it costs about as much as 13 requests, so it pays for itself once the session runs 13 more requests',
+  'with 500k tokens of context. A compaction would cut it to about 142k,',
+  'and pays for itself once the session runs 13 more requests that need nothing it dropped',
   'a turn runs a median of 9)',
 ]
 
@@ -261,9 +261,9 @@ test('the question sizes the saving for the context it asks about', async ($, on
   // (500k read + 100 × 5.6k output + 39 × (142k − 30k) cache write) over the
   // 1.22 × (500k − 142k) each later request saves, rounded up.
   expect(forks[0]).toContain('with 500k tokens of context')
-  expect(forks[0]).toContain('it costs about as much as 13 requests')
+  expect(forks[0]).toContain('pays for itself once the session runs 13 more requests')
   expect(forks[1]).toContain('with 250k tokens of context')
-  expect(forks[1]).toContain('it costs about as much as 40 requests')
+  expect(forks[1]).toContain('pays for itself once the session runs 40 more requests')
 })
 
 test('the question states the figures the report fitted to the user’s sessions', async ($, on) => {
@@ -272,10 +272,10 @@ test('the question states the figures the report fitted to the user’s sessions
 
   await turn($, 't1')
 
-  expect(forks[0]).toContain('A compaction would cut it to about 120k.')
+  expect(forks[0]).toContain('A compaction would cut it to about 120k,')
   // (500k read + 100 × 8k output + 24 × (120k − 20k) cache write) over the
   // 1.24 × (500k − 120k) each later request saves, rounded up.
-  expect(forks[0]).toContain('it costs about as much as 8 requests')
+  expect(forks[0]).toContain('pays for itself once the session runs 8 more requests')
   expect(forks[0]).toContain('a turn runs a median of 12)')
 })
 
@@ -304,7 +304,7 @@ test('the figures are read from $CLAUDE_CONFIG_DIR where it is set', async ($, o
 
   await turn($, 't1')
 
-  expect(forks[0]).toContain('it costs about as much as 8 requests')
+  expect(forks[0]).toContain('pays for itself once the session runs 8 more requests')
 })
 
 test('the floors the report fitted decide where sparkjoy asks', async ($, on) => {
@@ -338,7 +338,7 @@ test('a report saved mid-session counts from the next question', async ($, on) =
   await turn($, 't2')
 
   for (const text of AUTHORS) expect(forks[0]).toContain(text)
-  expect(forks[1]).toContain('it costs about as much as 8 requests')
+  expect(forks[1]).toContain('pays for itself once the session runs 8 more requests')
 })
 
 test('each figure the file lacks, or holds where the sums can’t use it, stays the author’s', async ($, on) => {
@@ -434,7 +434,7 @@ test(
 
     await turn($, 't1')
 
-    expect(forks[0]).toContain('A compaction would cut it to about 300k.')
+    expect(forks[0]).toContain('A compaction would cut it to about 300k,')
   },
 )
 
