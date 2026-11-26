@@ -80,7 +80,7 @@ To see its verdicts without compacting anything, run
 - **`/sparkjoy report`** opens a page on your sessions of the last 14 days,
   with every verdict and what the compactions saved. It fits the [cost
   model](#cost-model) to those sessions, and sparkjoy uses the fit from then on.
-  It reads your transcripts on your machine and sends nothing. It needs
+  It runs on your machine and doesn't send your transcripts anywhere. It needs
   [uv](https://docs.astral.sh/uv/).
 
 <details>
@@ -164,8 +164,8 @@ lapses. It asks at the end of a turn because that's the most likely point where 
 To ask, it forks the conversation for one
 request. The fork reads the whole conversation, which is already in the prompt
 cache. The model answers in about 100 tokens, a verdict and a one-line
-reason. The fork goes from Claude Code to the session's own model, so the
-conversation goes only where the session already sends it.
+reason. Claude Code sends the fork to the session's own model, so the
+conversation isn't sent to any other model or service.
 
 The question asks whether the next turns are likely to need the details which a summary would drop (such
 as failed attempts or a design still taking shape), and lists the cost of
@@ -366,8 +366,8 @@ like this:
   are fitted to, and only in interactive ones, not in `-p` runs or SDK hosts.
 - Its default floors, 250k at a turn end and 175k in an idle session, are
   fitted to my sessions ([Floors](docs/cost-model.md#floors)). My sessions hold
-  about 139k after a compaction, much of it my own instructions and skills, and
-  sessions that hold less would do better with lower floors. `/sparkjoy report`
+  about 139k after a compaction, much of it my own instructions and skills, and if
+  your sessions hold less after a compaction, lower floors would cost them less. `/sparkjoy report`
   fits the floors to your own sessions, and you can set them yourself
   ([Settings](#settings)).
 - The report fits every figure the question states except the count of wasted
@@ -377,9 +377,9 @@ like this:
   also compacts an idle context of 200k or more itself, before sparkjoy would
   ask.
 - I run sparkjoy without `/autocompact`. If you set it, keep it above sparkjoy's
-  turn-end floor: at or below the floor, Claude Code compacts mid-turn before
-  the context reaches the floor at any turn end, so sparkjoy never asks at a
-  turn end.
+  turn-end floor. With `/autocompact` at or below the floor, Claude Code compacts
+  in the middle of a turn whenever the context reaches that setting, so the
+  context is below the floor at every turn end and sparkjoy never asks there.
 
 ## FAQ
 
@@ -402,17 +402,17 @@ that missed the cache.
 <details>
 <summary>sparkjoy compacts once my work is finished, just before I close the session. Isn't that a waste?</summary>
 
-It is, but a small one. sparkjoy compacts only while the cache holds the context,
-so at 500k the compaction request costs \$0.20: \$0.10 to read the context from the
-cache and \$0.10 for the summary. The other \$0.82 of the compaction's \$1.02 is
-the cache write of the next request, and a session you close never sends one.
+It is, but a small one. Most of a compaction's cost is the cache write of the
+request after it: at 500k, \$0.82 of the \$1.02 ([What a request and a compaction
+cost](docs/cost-model.md#what-a-request-and-a-compaction-cost)). So if you close the
+session right after a compaction, the compaction costs only \$0.20: \$0.10 to read
+the context from the cache, and \$0.10 to write the summary. The read is cheap
+because sparkjoy compacts only while the cache holds the context.
 
-If you resume the session after its cache has expired, the context has to be
-written to the cache again, so compacting then costs \$4.66 instead of \$1.02
-([What a request and a compaction
-cost](docs/cost-model.md#what-a-request-and-a-compaction-cost)). Compacting before
-you close costs less overall once you resume more than about one session in
-20, or one in 12 at sparkjoy's 250k floor.
+If you continue the session after its cache has expired, its first request writes
+the whole context to the cache again. At 500k that costs \$3.73, \$2.89 more than
+the first request after a compaction. So the compaction reduces costs if you
+continue even one session in 14.
 
 </details>
 
@@ -783,7 +783,7 @@ the middle of a turn, smaller at a turn end in the middle of a task, and close
 to 0 once a piece of work is finished. Here each compaction in the middle of a
 turn wastes ΔD more requests than one at a turn end.
 
-β and D put a compaction's cost on different requests. Through β, every request
+β and D describe costs that fall on different requests. Through β, every request
 until the next compaction gets less done, and the more a compaction shrinks the
 context, the less each gets done. The D wasted requests come right after a
 compaction, whatever the context. So D can differ between two moments in one
@@ -873,8 +873,8 @@ otherwise. At each turn end the classifier names the next turn's kind, and the
 session compacts if its context has passed that kind's threshold. Each row that
 compacts where the judgment says uses the pair of thresholds that costs least
 for that row. An idle session compacts from 175k, or from the higher threshold
-when the classifier expects β = 1.25 work next. No compaction loses detail the
-work needs.
+when the classifier expects β = 1.25 work next. The replay assumes that no
+compaction loses detail the work needs.
 
 | against Claude Code's default                                                     | thresholds for β = 0.25 and β = 1.25 work | without Claude Code's idle compaction | with it |
 | --------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------- | ------- |
@@ -916,9 +916,9 @@ mid-turn and each waste D.
 At D = 12, a compaction wastes 6 requests on average, as many as my sessions'
 compactions did ([Parameter values](docs/cost-model.md#parameter-values)). A perfect classifier's
 compactions lose none of that detail. So the more a compaction loses, the more a
-classifier saves over the single threshold, since at each turn end it judges
-right the session avoids all D wasted requests, while the session pays for a
-question at every turn end it asks at.
+classifier saves over the single threshold, since the session avoids all D
+wasted requests at each turn end the classifier judges right, and pays for a
+question at every turn end where it asks.
 
 Unlike this classifier, sparkjoy's question also states what keeping the context
 costs, so the session's model can compact at a turn end in the middle of a task
@@ -967,8 +967,8 @@ asks at each of them, and its answer decides where to compact.
 
 Compacting idle sessions gets much of the saving of a lower turn-end threshold:
 with idle sessions from 150k, every turn-end floor from 250k to 450k comes
-within a point of the most efficient pair. Each pair of floors pays for a
-question at every turn end and idle session past it.
+within a point of the most efficient pair. Each saving counts the cost of a
+question at every turn end and idle session past the floors.
 
 A floor is where sparkjoy starts asking, and its question decides at which turn
 ends above the floor to compact. So sparkjoy puts its floors at the most
