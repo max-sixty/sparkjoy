@@ -33,9 +33,9 @@ question it asks, reads the context from the cache for about $0.12.
 The plugin asks through `$.model.fork`, which sends the main thread's last
 request again (its parameters, system prompt, tools and messages), then the
 turn's reply, then the question as one user message. The fork thinks as the
-session does, at `xhigh` effort on Opus 5.5, and answers any tool call with the
-error "A model fork cannot use tools", after which the model answers in a
-further request.
+session does, at its effort (`xhigh` in eight of the cases' sessions, `high` in
+five), and answers any tool call with the error "A model fork cannot use
+tools", after which the model answers in a further request.
 
 Claude Code records each request a session sends in its transcript:
 `api-request` lines hold the parameters and the hashes of the messages,
@@ -53,9 +53,12 @@ it.
 I checked the rebuilt request against a fork's captured live, on 25 November
 2026 with Claude Code 2.1.332: a session with a mod that forks once at its first
 turn end, its requests recorded as the SDK serialized them. The rebuilt request
-matched the live fork's in its parameters, system prompt, tools and every
-message. Sent to the API, it read from the prompt cache the same 66,496 tokens
-the live fork had, so the API found the same bytes up to the question.
+matched the live fork's model, token limit, thinking, effort, system prompt,
+tools and messages; one system-role message came as a list of one text block
+where the fork sent a string. It leaves out the billing header, `metadata`,
+`safeguards`, `data_flow` and the fork's cache breakpoints. Sent to the API, it
+was billed the same 891 input tokens as the live fork and read from the prompt
+cache the same 66,496, so none of what it leaves out reaches the model.
 
 Until this change the runner instead resumed a sanitized copy of each
 transcript with `claude -p --resume`. That request differed from the fork's:
@@ -100,93 +103,86 @@ ask holds all the next turn needed.
 
 ## Results
 
-From `run.py --report` on 25 November 2026. Each cell counts the runs
-that matched the label, and in brackets those in which the model thought before
-it answered. `main@2e1755e` is the question published until this change, which
-states each figure behind the costs and lists what a compaction, keeping the
-context and lost detail each cost. `summarized` is the question as it stands:
-the context's size and the requests a compaction takes to pay for itself, what
-a summary drops and which work needs it, then "Weigh the saving against what
-losing that detail would cost the next turns." `summarized-no-fields` asks
-only for `compact` and `reason`. The three ran in one batch, four runs of each
-case each, taking turns.
+From `run.py --report` on 25 November 2026. Each cell counts the runs that
+matched the label, and in brackets those in which the model thought before it
+answered. `summarized` is the question as it stands: the context's size, the
+requests a compaction takes to pay for itself and that keeping only puts it
+off, then what a summary drops and which work needs it, then "Weigh the saving
+against what losing that detail would cost the next turns."
+`summarized-told-900k` is that question telling the model the context is 900k,
+where a compaction pays for itself after 7 requests. `detail-only` drops the
+costs and asks only whether the next turns will need detail a summary drops.
+The three ran in one batch, four runs of each case each, taking turns.
+`main@2e1755e` is the question published until this change, which states each
+figure behind the costs and lists what a compaction, keeping the context and
+lost detail each cost; it ran in an earlier batch the same evening.
 
-| case                        | context | expected | main@2e1755e    | summarized      | summarized-no-fields |
-| --------------------------- | ------- | -------- | --------------- | --------------- | -------------------- |
-| leaf-scaling-closeout       | 742k    | compact  | 4/4 (0 thought) | 4/4 (0 thought) | 4/4 (0 thought)      |
-| leaf-hover-closeout         | 736k    | compact  | 4/4 (0 thought) | 4/4 (0 thought) | 4/4 (0 thought)      |
-| leaf-followups-merged       | 643k    | compact  | 4/4 (0 thought) | 4/4 (0 thought) | 4/4 (0 thought)      |
-| leaf-scroll-fix-merged      | 608k    | compact  | 4/4 (0 thought) | 4/4 (0 thought) | 4/4 (0 thought)      |
-| worktrunk-release-tagged    | 479k    | compact  | 4/4 (0 thought) | 4/4 (0 thought) | 4/4 (4 thought)      |
-| leaf-send-hover-fix         | 570k    | keep     | 0/4 (0 thought) | 4/4 (0 thought) | 1/4 (3 thought)      |
-| leaf-menu-design            | 551k    | keep     | 0/4 (0 thought) | 4/4 (0 thought) | 1/4 (3 thought)      |
-| tend-eval-rerun-wait        | 519k    | keep     | 0/4 (0 thought) | 2/4 (2 thought) | 0/4 (4 thought)      |
-| leaf-ring-test-rewrite-wait | 681k    | keep     | 0/4 (0 thought) | 3/4 (1 thought) | 1/4 (3 thought)      |
-| leaf-save-icon-merge-ask    | 479k    | compact  | 4/4 (0 thought) | 4/4 (0 thought) | 4/4 (2 thought)      |
-| worktrunk-repairs-merged    | 210k    | keep     | 0/4 (0 thought) | 0/4 (0 thought) | 0/4 (0 thought)      |
-| leaf-data-attrs-merged      | 296k    | keep     | 0/4 (0 thought) | 0/4 (0 thought) | 0/4 (0 thought)      |
-| leaf-ui-fixes-idle (idle)   | 290k    | compact  | 4/4 (0 thought) | 4/4 (0 thought) | 4/4 (0 thought)      |
+| case                        | context | expected | summarized      | summarized-told-900k | detail-only     | main@2e1755e    |
+| --------------------------- | ------- | -------- | --------------- | -------------------- | --------------- | --------------- |
+| leaf-scaling-closeout       | 742k    | compact  | 4/4 (0 thought) | 4/4 (0 thought)      | 4/4 (0 thought) | 4/4 (0 thought) |
+| leaf-hover-closeout         | 736k    | compact  | 4/4 (0 thought) | 4/4 (0 thought)      | 4/4 (0 thought) | 4/4 (0 thought) |
+| leaf-followups-merged       | 643k    | compact  | 4/4 (0 thought) | 4/4 (0 thought)      | 4/4 (0 thought) | 4/4 (0 thought) |
+| leaf-scroll-fix-merged      | 608k    | compact  | 4/4 (0 thought) | 4/4 (0 thought)      | 4/4 (0 thought) | 4/4 (0 thought) |
+| worktrunk-release-tagged    | 479k    | compact  | 4/4 (0 thought) | 4/4 (0 thought)      | 4/4 (0 thought) | 4/4 (0 thought) |
+| leaf-send-hover-fix         | 570k    | keep     | 4/4 (0 thought) | 3/4 (0 thought)      | 4/4 (0 thought) | 0/4 (0 thought) |
+| leaf-menu-design            | 551k    | keep     | 4/4 (0 thought) | 4/4 (0 thought)      | 4/4 (0 thought) | 0/4 (0 thought) |
+| tend-eval-rerun-wait        | 519k    | keep     | 2/4 (3 thought) | 4/4 (0 thought)      | 4/4 (2 thought) | 0/4 (0 thought) |
+| leaf-ring-test-rewrite-wait | 681k    | keep     | 4/4 (0 thought) | 4/4 (0 thought)      | 4/4 (0 thought) | 0/4 (0 thought) |
+| leaf-save-icon-merge-ask    | 479k    | compact  | 4/4 (0 thought) | 4/4 (0 thought)      | 4/4 (0 thought) | 4/4 (0 thought) |
+| worktrunk-repairs-merged    | 210k    | keep     | 0/4 (0 thought) | 0/4 (0 thought)      | 0/4 (0 thought) | 0/4 (0 thought) |
+| leaf-data-attrs-merged      | 296k    | keep     | 0/4 (0 thought) | 0/4 (0 thought)      | 0/4 (0 thought) | 0/4 (0 thought) |
+| leaf-ui-fixes-idle (idle)   | 290k    | compact  | 4/4 (0 thought) | 4/4 (0 thought)      | 4/4 (0 thought) | 4/4 (0 thought) |
 
 The published question compacted at the four mid-task turn ends in all 16
-runs, and in all 16 of an earlier batch the same day, without thinking. In 12
-of the 16 it answered that the next turns would need the detail, then
-compacted anyway: weighed against the itemized costs, the detail lost. The
-summarized question kept there in 13 of 16, and in 12 of 16 in the earlier
-batch, so 25 of 32 against none of 32. At every other case the two gave the
-same verdict in every run. Its misses are at tend-eval-rerun-wait, where the
-next turn opened a PR from the rerun's report and the run's earlier findings,
-which the runs that compact say a summary would carry, and once at
-leaf-ring-test-rewrite-wait. Across both batches it compacted in all 7 mid-task
-runs that thought first, and kept in all 25 that didn't.
+runs, and in all 16 of a batch before it, without thinking. In 12 of the 16 it
+answered that the next turns would need the detail, then compacted anyway. The
+summarized question kept there in 14 of 16 runs, and gave every other case the
+same verdicts. Its two misses are at tend-eval-rerun-wait, where the next turn
+opened a PR from the rerun's report and the run's earlier findings, which the
+runs that compact say a summary would carry. Both followed thinking: across
+the summarized question's wordings below, of the 16 runs at the mid-task cases
+that thought first 13 compacted, and of the 80 that didn't 78 kept.
 
-Both compact at the two small natural breaks, against their labels, though
-sparkjoy asks only from 250k, so it would never ask at the 210k one.
+The costs the summarized question states hardly move its verdict. In all 52
+runs its verdict was the opposite of its answer to whether the next turns
+will need the detail, as in all 52 of `detail-only`'s, and told the context was
+900k it kept at the mid-task cases in 15 of 16 runs. So in the middle of a task
+it keeps at any size, and a long task then runs on until Claude Code compacts on
+its own, in the middle of a turn. leaf-menu-design's session did that: it ran
+10 more turns and 273 requests after this turn end, until Claude Code
+compacted it at 968k.
 
-### Other closings
+All three compact at the two small natural breaks, against their labels,
+though sparkjoy asks only from 250k, so it would never ask at the 210k one.
 
-In the earlier batch, beside `main@2e1755e-first` and `summarized-first`, two
-other versions ran four times at each case. `summarized-keep-rule` closes
-instead with "Keep the context if the next turns will need that detail, and
-compact if they won't." `detail-only` drops the costs and asks only whether
-the next turns will need detail a summary drops. At the mid-task cases:
+### Earlier wordings
 
-| case                        | main@2e1755e-first | summarized-first | summarized-keep-rule | detail-only     |
-| --------------------------- | ------------------ | ---------------- | -------------------- | --------------- |
-| leaf-send-hover-fix         | 0/4 (0 thought)    | 4/4 (0 thought)  | 4/4 (0 thought)      | 4/4 (0 thought) |
-| leaf-menu-design            | 0/4 (0 thought)    | 4/4 (0 thought)  | 4/4 (0 thought)      | 4/4 (0 thought) |
-| tend-eval-rerun-wait        | 0/4 (0 thought)    | 0/4 (4 thought)  | 2/4 (4 thought)      | 4/4 (0 thought) |
-| leaf-ring-test-rewrite-wait | 0/4 (0 thought)    | 4/4 (0 thought)  | 4/4 (0 thought)      | 4/4 (0 thought) |
+An earlier wording of the summarized question said a compaction "costs about
+as much as N requests", where N is its cost over what each later request saves,
+and that it "saves more the longer the session goes on", in place of the
+sentence that keeping only puts it off. At the mid-task cases:
 
-At every other case all four gave the same verdicts, but for one run of
-`detail-only` that kept at leaf-save-icon-merge-ask. In all 156 runs of the
-last three, the verdict was the opposite of the answer to whether the next
-turns need the detail, as it was in all but one of `summarized`'s 52 in the
-later batch. So the costs reach the verdict mainly through that answer, at
-tend-eval-rerun-wait.
+| version                                              | as recorded            | told 300k | told 900k |
+| ---------------------------------------------------- | ---------------------- | --------- | --------- |
+| that wording                                         | 12/16, and 13/16 later | 16/16     | 11/16     |
+| that wording, closed with a rule (below)             | 14/16                  | 16/16     | 12/16     |
+| that wording, asking only for `compact` and `reason` | 3/16                   | —         | —         |
+| `detail-only`, in the first batch                    | 16/16                  | —         | —         |
 
-### Context size
-
-The same two summarized versions, telling the model a context of 300k or 900k
-at the mid-task cases in place of the recorded 519k–681k, where a compaction
-pays for itself after 28 or 7 requests:
-
-| told                   | summarized | summarized-keep-rule |
-| ---------------------- | ---------- | -------------------- |
-| 300k                   | 16/16      | 16/16                |
-| as recorded, 519k–681k | 12/16      | 14/16                |
-| 900k                   | 11/16      | 12/16                |
-
-So the stated size moves the verdict at the margin, through
-tend-eval-rerun-wait and one run each at two other cases, and the clear
-mid-task cases keep at any size.
+The rule was "Keep the context if the next turns will need that detail, and
+compact if they won't." Every version gave the same verdicts as `summarized`
+at the other cases, but for one run of `detail-only` that kept at
+leaf-save-icon-merge-ask. The first batch and the runs told another size ran
+from the prototype of `run.py`, whose requests read the same cache entries
+`run.py`'s did, so they sent the same bytes through the turn's reply.
 
 ### Fields the hook doesn't read
 
 The hook reads only `compact` and `reason`, yet the question asks for `next`
-and `needs_detail` first. Without them, `summarized-no-fields` kept at the
-mid-task cases in 3 of 16 runs against 13 of 16 (Fisher's exact test,
-p = 0.001), and thought before answering in 13 of those 16, where the question
-with the fields thought in 3.
+and `needs_detail` first. Without them, the earlier wording kept at the
+mid-task cases in 3 of 16 runs against 13 of 16 with them in the same batch
+(Fisher's exact test, p = 0.001), and thought before answering in 13 of those
+16, where the version with the fields thought in 3.
 
 ## Against the live plugin
 
@@ -200,17 +196,21 @@ live verdicts to compare against, and to grade by what each session did next.
 
 The summarized question keeps in the middle of a task in most runs and gives
 one verdict in every run at the other cases, where the published question
-compacted at every turn end. It matches the label in most runs at 10 of the
-13 cases; at the other three, the two small natural breaks and
-tend-eval-rerun-wait, it compacts.
+compacted at every turn end. It matches the label in most runs at 10 of the 13
+cases and in half the runs at tend-eval-rerun-wait, and it compacts at the two
+small natural breaks.
+
+What it leaves open is whether the size of the context should ever outweigh
+the detail. Its verdict follows its answer about the detail, so it keeps a
+large context through a long task until Claude Code compacts it mid-turn, while
+the [cost model](../docs/cost-model.md) finds compacting at any turn end from
+about 250k cheapest when a compaction loses nothing. The mid-task keep labels
+encode a rule, that work in progress keeps, rather than a measured cost. What a
+compaction loses is very noisy and hard to judge, but as some indication, my
+sessions had about 6 more wasted requests than usual after one.
 
 Some labels are themselves uncertain. Each records what the session did next,
 which needn't be what it needed: at three of the four mid-task cases the next
-work rested on files, a branch or a result that arrives anyway. The mid-task
-keep labels encode a rule, that work in progress keeps, rather than a measured
-cost, while the [cost model](../docs/cost-model.md) finds compacting at any
-turn end from about 250k cheapest when a compaction loses nothing. What a
-compaction loses is very noisy and hard to judge, but as some indication, my
-sessions had about 6 more wasted requests than usual after one. Live verdicts
+work rested on files, a branch or a result that arrives anyway. Live verdicts
 graded by what followed each one can settle it, since they would measure the
 detail lost at each kind of turn end.
