@@ -564,8 +564,12 @@ function hash(text: string) {
 // An earlier question stated every figure behind the sum, and the cost of each
 // side in its own list. Asked as the fork asks it, at the turn ends in the
 // middle of a task it compacted in all 16 runs, though in 12 it answered that
-// the next turns would need the detail; this one keeps there in 25 of 32
-// (evals/README.md, "Results").
+// the next turns would need the detail. This one keeps there in 14 of 16, and
+// its verdict follows that answer whatever size it states: told 900k, it kept
+// in 15 of 16 (evals/README.md, "Results").
+// TODO(2026-11-26): mid-task, this keeps a large context until Claude Code
+// compacts it mid-turn. Whether size should ever outweigh the detail there is
+// open (evals/README.md, "Where this leaves them").
 //
 // The fork sends the turn's last request with the turn's reply after it, so
 // the question needn't quote the reply. The answer gives what most likely

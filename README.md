@@ -181,7 +181,7 @@ compaction takes to pay for itself at the context's current size.
 ````
 Decide whether to compact this session now. This request comes from the sparkjoy plugin, not from the user, and a program reads your answer.
 
-Your turn just ended, with 500k tokens of context. A compaction would cut it to about 142k. At this size it costs about as much as 13 requests, so it pays for itself once the session runs 13 more requests that need nothing it dropped (a turn runs a median of 9), and saves more the longer the session goes on.
+Your turn just ended, with 500k tokens of context. A compaction would cut it to about 142k, and pays for itself once the session runs 13 more requests that need nothing it dropped (a turn runs a median of 9). Keeping only puts the compaction off: Claude Code compacts on its own, in the middle of a turn, once the context nears its limit.
 
 A summary drops detail: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary. Nearly every long transcript is mostly finished work, so that alone is no reason to compact.
 
@@ -264,7 +264,7 @@ session's own records, with the question above, on 25 November 2026[^evals]:
 | ------------------------------------------------------------------- | --------- | ------- | -------------------- |
 | five that finished a piece of work                                  | 479k–742k | compact | 20 of 20             |
 | one idle for 55 minutes after everything landed                     | 290k      | compact | 4 of 4               |
-| four in the middle of a task                                        | 519k–681k | keep    | 13 of 16             |
+| four in the middle of a task                                        | 519k–681k | keep    | 14 of 16             |
 | one that stops to ask, where the ask holds all the next turn needed | 479k      | compact | 4 of 4               |
 | two natural breaks, but small                                       | 210k–296k | keep    | 0 of 8               |
 
@@ -273,17 +273,19 @@ only from 250k, so it would never ask at the 210k one. Some labels are
 uncertain, since each records what the session did next rather than what it
 needed ([Where this leaves them](evals/README.md#where-this-leaves-them)).
 
-In the middle of a task, an earlier question that stated each figure behind
+In the middle of a task, an earlier question that listed each figure behind
 the costs compacted in all 32 runs, though in most it answered that the next
-turns would need the detail. With the costs summed into the one figure above,
-the model kept the context there in 25 of 32 runs
+turns would need the detail. Without that list the model keeps there, and its
+verdict follows its answer about the detail whatever the costs say: told the
+context was 900k, it kept in 15 of 16 runs, so a long task keeps its context
+until Claude Code compacts it in the middle of a turn
 ([Results](evals/README.md#results)).
 
 The hook reads only `compact` and `reason`, yet the question asks for `next` and
 `needs_detail` first, because without them the model seldom keeps the context:
-at the mid-task turn ends it kept in 13 of 16 runs with the two fields and in 3
-of 16 without them (p = 0.001). The two fields cost about 20 output tokens a
-question.
+at the mid-task turn ends an earlier wording kept in 13 of 16 runs with the two
+fields and in 3 of 16 without them (p = 0.001). The two fields cost about 20
+output tokens a question.
 
 </details>
 
