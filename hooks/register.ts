@@ -53,7 +53,7 @@ import { checkForUpdate } from './update'
 // the copy already making it.
 const COMPACTING = { plugin: 'sparkjoy', key: 'compacting' } as const
 
-// The floors sparkjoy asks from and the figures the question states, as my
+// The floors sparkjoy asks from and the figures the question's sums use, as my
 // sessions of 7-15 Nov 2026 measured them (docs/cost-model.md); FLOOR's
 // comment gives what my sessions of 18-22 Nov 2026 say of the floors.
 // `/sparkjoy report` fits the same figures to the user's own sessions and
@@ -126,22 +126,11 @@ const AUTHOR = {
   // The share of requests that find the prompt cache lapsed and make a cache
   // write of the whole context but P (ℓ), mostly after a gap of over an hour.
   LAPSE: 0.0056,
-  // Requests in a turn: the median, and the mean, which a few long turns
-  // raise.
+  // The median requests in a turn.
   TURN_MEDIAN: 9,
-  TURN_MEAN: 38,
 }
 
 type Figures = typeof AUTHOR
-
-// The wasted requests (failed tool calls, repeated lookups, corrections)
-// beyond the usual after a compaction the user or Claude Code made, which
-// model/calibrate.py measured over 60 days of my sessions. After sparkjoy's,
-// which came where a piece of work ended, there were fewer wasted requests
-// than usual. The report doesn't fit it to the user's sessions: over the
-// report's two weeks, resampling the sessions moves it by more than its own
-// size.
-const WASTED = 6
 
 // The file `/sparkjoy report` saves the user's figures to, under Claude Code's
 // configuration directory, as model/report.py names it. Its home would be the
@@ -561,79 +550,56 @@ function hash(text: string) {
   return (h >>> 0).toString(36)
 }
 
-// The question opens with its goal, then lists what a compaction, keeping the
-// context and lost detail each cost. Asked of an idle session, it says the
-// prompt cache is about to lapse, so keeping costs the cache write that
-// follows. README.md shows both versions with the figures in `AUTHOR`, for a
-// 500k context, and `$CUSTOM_INSTRUCTIONS` where the user's `instructions` add
-// a paragraph of their own. They change nothing else, so the question keeps
-// its figures and the format the hook parses whatever they say.
+// The question gives the context's size and what a compaction would save,
+// summed into one figure, the requests it takes to pay for itself; then what
+// a summary drops, and which work needs that; then asks the model to weigh the
+// two. Asked of an idle session, it says the prompt cache is about to lapse
+// instead, so keeping costs the cache write that follows. README.md shows both
+// versions with the figures in `AUTHOR`, for a 500k context, and
+// `$CUSTOM_INSTRUCTIONS` where the user's `instructions` add a paragraph of
+// their own. They change nothing else, so the question keeps its figures and
+// the format the hook parses whatever they say.
 //
-// The fork replays the turn's last request, which ends before the reply the
-// turn closed with, and the question doesn't quote the reply: the tool calls
-// and results before it show where the work stands, and in the evals quoting it
-// made no measurable difference to the verdicts. The answer gives what most
-// likely comes next and whether that needs the transcript's detail before
-// `compact`, though the hook reads only `compact` and `reason`. Without those
-// two fields the model almost never keeps the context mid-task, even when asked
-// for `reason` first or told to consider what comes next (README.md, "Evals").
-// TODO(2026-11-25): ask only whether the next turns need the transcript's
-// detail, without the costs, and compact when they don't. Where the work is
-// mid-task this question's verdict moves from run to run with whether the
-// model thinks first, and it mostly compacts. Asked without the costs, the
-// model gave each eval case one verdict in all but one of 128 runs, thinking
-// or not (evals/README.md, "Thinking").
+// An earlier question stated every figure behind the sum, and the cost of each
+// side in its own list. Asked as the fork asks it, it compacted at every turn
+// end in the middle of a task, though in a quarter of its answers it said the
+// next turns would need the detail; this one keeps there in most runs
+// (evals/README.md, "Results").
+//
+// The fork sends the turn's last request with the turn's reply after it, so
+// the question needn't quote the reply. The answer gives what most likely
+// comes next and whether that needs the transcript's detail before `compact`,
+// though the hook reads only `compact` and `reason` (evals/README.md, "Fields
+// the hook doesn't read").
 function question(
   tokens: number,
   idleMinutes?: number,
   figures: Figures = AUTHOR,
   instructions = '',
 ) {
-  const { WRITE, OUTPUT, SUMMARY, K, P, TURN_MEDIAN, TURN_MEAN } = figures
+  const { K, P, TURN_MEDIAN } = figures
   const now = thousands(tokens)
   const isIdle = idleMinutes !== undefined
   const goal = isIdle
     ? 'Decide whether to compact this session now, before its prompt cache lapses.'
     : 'Decide whether to compact this session now.'
-  const opening = isIdle
-    ? `Your turn ended ${idleMinutes} minutes ago, and nothing has happened since.`
-    : 'Your turn just ended.'
-  // Idle, the cache is about to go whatever the answer, so a compaction needs
-  // no payback sum, and keeping costs the one cache write the lapse brings.
-  const sum = isIdle
-    ? ''
-    : `\n- At ${now} a compaction pays for itself after about ${payback(tokens, figures)} more requests that need nothing it dropped.`
-  const keeping = isIdle
-    ? `What keeping costs now:
-- The prompt cache holding the conversation lapses within a few minutes.
-- The first request after that makes a cache write of all but ${thousands(P)} of its ${now} tokens, against about ${thousands(K - P)} after a compaction.
-
-So compact unless the next turn continues work that needs the transcript's detail.`
-    : `What keeping costs, more the larger the context:
-- Every later request reads all ${now} tokens, against about ${thousands(K)} after a compaction.
-- Keeping only puts the compaction off to a later turn end.
-- A turn runs a median of ${Math.round(TURN_MEDIAN)} requests and a mean of ${Math.round(TURN_MEAN)}, so keeping ${now} through one more turn costs as much as about ${turnCost(tokens, TURN_MEDIAN, figures)} compactions for a median turn and ${turnCost(tokens, TURN_MEAN, figures)} for a mean one.`
+  const requests = payback(tokens, figures)
+  const situation = isIdle
+    ? `Your turn ended ${idleMinutes} minutes ago, and nothing has happened since. The context holds ${now} tokens, and the prompt cache holding it lapses within a few minutes, so the next request will write all but ${thousands(P)} of it to the cache again, against about ${thousands(K - P)} after a compaction.`
+    : `Your turn just ended, with ${now} tokens of context. A compaction would cut it to about ${thousands(K)}. At this size it costs about as much as ${requests} requests, so it pays for itself once the session runs ${requests} more requests that need nothing it dropped (a turn runs a median of ${Math.round(TURN_MEDIAN)}), and saves more the longer the session goes on.`
+  const decide = isIdle
+    ? 'Compact unless the next turn continues work that needs that detail.'
+    : 'Weigh the saving against what losing that detail would cost the next turns.'
   const added = instructions
     ? `\n\nThe user added these instructions for this decision:\n${instructions}`
     : ''
   return `${goal} This request comes from the sparkjoy plugin, not from the user, and a program reads your answer.
 
-${opening}
+${situation}
 
-Nearly every long transcript is mostly finished work, so that alone is no reason to compact. Base the decision on whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
+A summary drops detail: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary. Nearly every long transcript is mostly finished work, so that alone is no reason to compact.
 
-What a compaction costs:
-- It takes about a minute, and the request that writes its summary outputs about ${thousands(SUMMARY)} tokens, thinking included.
-- Afterwards the context holds about ${thousands(K)} tokens, counting the files the next requests read again. Those requests make a cache write of all of it but the ${thousands(P)} of system prompt and tools, which stay cached.
-- A cache write costs as much as ${WRITE} cached reads, and an output token as much as ${OUTPUT}.${sum}
-
-${keeping}
-
-What lost detail costs:
-- It's very noisy and hard to judge, but as some indication, past sessions had about ${WASTED} more wasted requests than usual after a compaction: failed tool calls, repeated lookups and corrections.
-- That count misses detail lost without such a failure, such as a design's rejected options or what the user likes.
-
-Weigh what keeping costs against what losing the detail would cost the next turns. The larger the context, the more detail a compaction can drop and still pay.${added}
+${decide}${added}
 
 Answer with nothing but one JSON object that matches this schema, filling its fields in the order listed:
 
@@ -656,13 +622,6 @@ Answer with nothing but one JSON object that matches this schema, filling its fi
 // its cost over what each later request saves.
 function payback(tokens: number, figures: Figures) {
   return Math.ceil(compaction(tokens, figures) / saving(tokens, figures))
-}
-
-// What keeping `tokens` through a turn of `requests` costs, in compactions:
-// what its requests cost beyond what they would after one.
-function turnCost(tokens: number, requests: number, figures: Figures) {
-  const n = (requests * saving(tokens, figures)) / compaction(tokens, figures)
-  return n < 1.5 ? n.toFixed(1) : `${Math.round(n)}`
 }
 
 // What a compaction at `tokens` costs, in cached reads, F(x) = x + F0: the
@@ -750,7 +709,6 @@ async function fitted($: EngineInterface, settings: Settings) {
   take('P', v => v >= 0 && v < figures.K)
   take('LAPSE', v => v >= 0 && v <= 1)
   take('TURN_MEDIAN', v => v >= 1)
-  take('TURN_MEAN', v => v >= 1)
   return { figures, from }
 }
 
