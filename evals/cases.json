@@ -90,26 +90,6 @@
     "source": { "session": "2f52b443-3923-40a5-a8b8-66d9e257653a", "line": 19740 }
   },
   {
-    "id": "tend-sandbox-bind-ask",
-    "kind": "turn",
-    "expected": "keep",
-    "tokens": 599000,
-    "repo": "tend",
-    "reason": "Stops partway through a sandbox design to ask for a go-ahead on its next piece; what to build turns on the obstacles and security argument worked out above.",
-    "evidence": "Ten minutes later the user pushed back and asked for a doc of the goals and obstacles to brief a Fable subagent; the session wrote it without reading a file, from detail the reply only names, such as what SRT, overlayfs and the runner's 0750 home each refuse, the branch's commits and the security model.",
-    "source": { "session": "7b1c6633-859c-4b90-ab4a-3de35d4a9d36", "line": 1615 }
-  },
-  {
-    "id": "leaf-escape-stack-ask",
-    "kind": "turn",
-    "expected": "keep",
-    "tokens": 490000,
-    "repo": "leaf",
-    "reason": "Asks two design decisions (#10, #11) before starting an experiment branch; they rest on the proposal's numbered rules and a review that came back just before.",
-    "evidence": "Ten minutes later the user asked what rules 2 and 5 were; the session answered from the context alone, with no tool calls, and two more turns refined the same design before the user compacted.",
-    "source": { "session": "2b13d109-25e5-44c4-907c-c673db17c9bd", "line": 7558 }
-  },
-  {
     "id": "leaf-save-icon-merge-ask",
     "kind": "turn",
     "expected": "compact",
@@ -118,16 +98,6 @@
     "reason": "The branch is merged with main and pushed; the turn asks only whether to open and merge its PR, which works from git and GitHub.",
     "evidence": "The user replied /merge-pr 25 seconds later; the session opened the PR, waited on CI and merged it, and the user ended the session.",
     "source": { "session": "6d27b048-06ad-4d8d-88c2-7c7e7417ded7", "line": 3502 }
-  },
-  {
-    "id": "leaf-panzoom-drop-ask",
-    "kind": "turn",
-    "expected": "compact",
-    "tokens": 403000,
-    "repo": "leaf",
-    "reason": "Asks whether to drop a local library swap (a reset) or fix its six listed defects; the whole ask is in the reply, which a summary keeps.",
-    "evidence": "The user next asked what Leaf still does above PhotoSwipe, which the session answered after reading main's code; with the reset still pending the user then compacted and said 'do #3, /gpk', and the session reset the branch, made the smaller cut and merged it from a 140k context.",
-    "source": { "session": "3979b3bd-5cf4-4250-a89b-bf8079366269", "line": 1749 }
   },
   {
     "id": "worktrunk-repairs-merged",

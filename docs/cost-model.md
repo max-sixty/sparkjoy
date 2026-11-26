@@ -570,8 +570,8 @@ Prices for the one-hour cache. Every other section's figures are for Opus 5.5.
 `/sparkjoy report` fits the model to your sessions of the last 14 days, and its
 Thresholds section gives the pair of floors that minimizes their cost. From then
 on, sparkjoy asks once the context reaches those floors, unless you set floors
-of your own, and its question states the parameters the report measured in
-place of mine. The fit needs some compactions in those sessions, to measure K
+of your own, and its question's sums use the parameters the report measured
+in place of mine. The fit needs some compactions in those sessions, to measure K
 and N.
 
 ## Questions about the model
