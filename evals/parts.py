@@ -189,11 +189,6 @@ def blocks_of(message: dict) -> list[dict]:
     return content if isinstance(content, list) else [{"type": "text", "text": content}]
 
 
-# The next work's record of a compaction at the turn end itself, which
-# `share.LABEL`'s "needed" reads: the work after it ran without the context.
-AT_TURN_END = (
-    "COMPACTED here, at the turn end: the work below ran without the context above"
-)
 # Where `shortened` cuts a value, between its head and tail.
 CUT = " […] "
 
@@ -210,16 +205,9 @@ def next_work(entries: Iterable[dict]) -> list[dict]:
     for e in entries:
         t = e.get("timestamp", "")[:16]
         if e.get("type") == "system" and e.get("subtype") == "compact_boundary":
+            records.append({"t": t, "kind": "compaction"})
             if began:
-                records.append(
-                    {
-                        "t": t,
-                        "who": "compaction",
-                        "text": "COMPACTED, and the session went on",
-                    }
-                )
                 break
-            records.append({"t": t, "who": "compaction", "text": AT_TURN_END})
             continue
         if e.get("isSidechain") or e.get("isCompactSummary"):
             continue
@@ -227,9 +215,9 @@ def next_work(entries: Iterable[dict]) -> list[dict]:
             for b in blocks_of(e["message"]):
                 text = b.get("text") or ""
                 if b.get("type") == "text" and text and not text.startswith("<"):
-                    records.append({"t": t, "who": "user", "text": text})
+                    records.append({"t": t, "kind": "user", "text": text})
                 elif b.get("type") == "tool_result":
-                    record = {"t": t, "who": "result"}
+                    record = {"t": t, "kind": "result"}
                     if tool := tools.get(b.get("tool_use_id")):
                         record["tool"] = tool
                     if b.get("is_error"):
@@ -239,13 +227,13 @@ def next_work(entries: Iterable[dict]) -> list[dict]:
             began = True
             for b in e["message"].get("content") or []:
                 if b.get("type") == "text" and b.get("text"):
-                    records.append({"t": t, "who": "assistant", "text": b["text"]})
+                    records.append({"t": t, "kind": "assistant", "text": b["text"]})
                 elif b.get("type") == "tool_use":
                     tools[b.get("id")] = b["name"]
                     records.append(
                         {
                             "t": t,
-                            "who": "call",
+                            "kind": "call",
                             "tool": b["name"],
                             "input": b.get("input") or {},
                         }

@@ -124,7 +124,7 @@ Judge each part by the work that followed:
 - "helpful": it would have helped the next work, such as by saving a lookup or giving background to a decision, but the work could have done without it.
 - Every other part is not needed.
 
-What the session did next is below, one JSON object per line, in order. "t" is when it happened, and "who" what it was: "user" for what the user typed, "assistant" for the model's text, "call" for a tool call, with its "tool" and "input", "result" for what that call returned, marked "error" where it failed, and "compaction" where the context was compacted: the work after it ran without the context above. A long value may be cut in the middle, at " […] ".
+What the session did next is below, one JSON object per line, in order, up to its next compaction. Each has "t", when it happened, and "kind": "user" for what the user typed; "assistant" for what the assistant wrote; "call" for a tool call, with its "tool" and "input"; "result" for what a call returned, with its "tool", and "error": true where it failed; and "compaction" where the context was compacted. A compaction at the start, at this turn end, means the work after it ran without the context above. A long value may be cut in the middle, at " […] ".
 
 {next}
 
@@ -322,7 +322,7 @@ def run_cases(names: list[str], repeat: int, jobs: int) -> None:
             and r["case"] == case
             and r["request"] == digest
             and r.get("shown") == shown
-            and r["needed"] is not None
+            and bool(r["needed"])
             for r in earlier
         )
 
@@ -381,7 +381,7 @@ def run_cases(names: list[str], repeat: int, jobs: int) -> None:
                 print(f"NO LABELS {name}: {error}", flush=True)
             else:
                 shown = hashlib.sha256(asked.encode()).hexdigest()[:12]
-                if labelled(name, digest, shown) < RUNS:
+                if (have := labelled(name, digest, shown)) < RUNS:
                     label(
                         base | {"shown": shown},
                         request,
@@ -390,6 +390,7 @@ def run_cases(names: list[str], repeat: int, jobs: int) -> None:
                         cut,
                         asked,
                         then,
+                        RUNS - have,
                         write,
                     )
         for _ in range(repeat):
@@ -436,10 +437,12 @@ def run_cases(names: list[str], repeat: int, jobs: int) -> None:
         sparkjoy_assets.publish(sparkjoy_assets.RESULTS)
 
 
-def label(base, request, headers, x, cut, asked, then, write) -> None:
+def label(base, request, headers, x, cut, asked, then, n, write) -> None:
     """Label the request's parts `cut` by what the session did next (`then`),
-    asking `asked` `RUNS` times, and keep what each part holds and the
-    labeller's reasons in `LOCAL`."""
+    asking `asked` `n` times, and keep what each part holds and the
+    labeller's reasons in `LOCAL`, beside those of its earlier runs of the
+    same question. An answer that marks no part needed is unreadable, since
+    the work after any turn end uses the system prompt and tools."""
     model = request["params"]["model"]
     write(
         base
@@ -451,8 +454,14 @@ def label(base, request, headers, x, cut, asked, then, write) -> None:
         }
     )
     body = run.body_of(request, asked) | {"max_tokens": LABEL_OUTPUT}
-    runs = []
-    for _ in range(RUNS):
+    path = LOCAL / f"{base['case']}-{base['request']}.json"
+    earlier = json.loads(path.read_text()) if path.exists() else {}
+    runs = [
+        r
+        for r in earlier.get("runs", [])
+        if earlier.get("shown") == base["shown"] and r["needed"] and r["text"] is None
+    ]
+    for _ in range(n):
         try:
             text, used = run.ask(body, headers)
         except (RuntimeError, OSError) as error:
@@ -460,7 +469,7 @@ def label(base, request, headers, x, cut, asked, then, write) -> None:
             continue
         got = answer(text) or {}
         needed, helpful = ids(got.get("needed")), ids(got.get("helpful"))
-        ok = needed is not None and helpful is not None
+        ok = bool(needed) and helpful is not None
         runs.append(
             {
                 "needed": needed,
@@ -491,7 +500,7 @@ def label(base, request, headers, x, cut, asked, then, write) -> None:
         else:
             print(f"{base['case']} labels unreadable: {text[:200]!r}", flush=True)
     LOCAL.mkdir(parents=True, exist_ok=True)
-    (LOCAL / f"{base['case']}-{base['request']}.json").write_text(
+    path.write_text(
         json.dumps(
             {**base, "context": x, "parts": cut, "next": then, "runs": runs}, indent=1
         )
@@ -547,7 +556,7 @@ def latest(
         and r["kind"] == "label"
         and r["request"] == digest
         and r.get("shown") == cut[0]["shown"]
-        and r["needed"] is not None
+        and r["needed"]
     ]
 
 

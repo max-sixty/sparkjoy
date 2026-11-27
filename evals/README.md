@@ -309,7 +309,7 @@ loses nothing. What a compaction loses is very noisy and hard to judge, but as
 some indication, my sessions had about 6 more wasted requests than usual after
 one. The share eval below labels it part by part: of what a compaction would
 have dropped, the next work needed or was helped by 5% to 22% of the context,
-a median 12% at the turn ends labelled keep and 11% at those labelled
+a median 13% at the turn ends labelled keep and 12% at those labelled
 compact. So the keep labels rest on that loss costing more than reading it back,
 which neither eval prices.
 
@@ -354,10 +354,14 @@ one block, such as each instruction file, or each skill and listing it
 writes back after a compaction. Each kind of part takes the tokens the API
 counts for it, and its parts share them by characters. The same model,
 after the same request, is shown what the session did up to its next
-compaction (what the user typed, the model's text, its calls and what each
-returned), as much of it as the window holds beside the request, with each
-entry past a common length cut to its head and tail, and marks each part
-needed, helpful or neither, in two runs. Where the session compacted at the
+compaction as JSON Lines, one record for each thing the user typed, text the
+model wrote, tool call with its input, result and compaction, as much of it
+as the window holds beside the request: each record past a common length is
+cut to it, its longest values first, each keeping its head and tail, so
+every record stays whole JSON. It then marks each part
+needed, helpful or neither, in two runs; an answer that marks no part needed
+counts as unreadable, since the work after any turn end uses the system
+prompt and tools, and is asked again. Where the session compacted at the
 turn end itself, as at six of the 13, the work after it ran without the
 context, so a part it then read, searched for or ran again counts as
 needed: fetching it again is what losing it cost. Told only that the
@@ -388,7 +392,7 @@ reply holding it count. Their ranges come from those labels, five points
 wider each way.
 
 A labelled case's first label run costs its context's cache write and the
-next work, $1.20 to $4.70, and its second $0.30 to $1.70; two shares cost
+next work, $1.20 to $4.80, and its second $0.30 to $1.70; two shares cost
 about $1 more. The results, from 27 November 2026, are percentages of the
 context, each the range of two runs. "Before
 the line" is the question without its sentence about leaning toward counting
@@ -397,42 +401,42 @@ transcript, as are the labels:
 
 | case                        | context | the model's share | before the line | lost: needed | lost: needed or helpful | all: needed | all: needed or helpful |
 | --------------------------- | ------- | ----------------- | --------------- | ------------ | ----------------------- | ----------- | ---------------------- |
-| leaf-scaling-closeout       | 739k    | 25–30%            | 12%             | 2–3%         | 5%                      | 9–11%       | 16–17%                 |
+| leaf-scaling-closeout       | 739k    | 25–30%            | 12%             | 1–4%         | 4–5%                    | 8–12%       | 14–17%                 |
 | leaf-hover-closeout         | 735k    | 12–15%            | 8–10%           | 4%           | 6–7%                    | 12–14%      | 19%                    |
-| leaf-followups-merged       | 641k    | 15%               | 8%              | 2–5%         | 10–12%                  | 12–14%      | 22–28%                 |
-| leaf-scroll-fix-merged      | 604k    | 35%               | 12%             | 14–16%       | 21%                     | 30%         | 38%                    |
-| worktrunk-release-tagged    | 479k    | 30%               | 12%             | 4–6%         | 12–22%                  | 14–17%      | 24–34%                 |
-| leaf-menu-build-wait        | 853k    | 35%               | 20%             | 2–18%        | 16–28%                  | 9–24%       | 24–36%                 |
-| leaf-save-icon-merge-ask    | 479k    | 25%               | 10–12%          | 1–3%         | 4–7%                    | 14–15%      | 20–29%                 |
-| leaf-ring-test-rewrite-wait | 681k    | 35%               | 25%             | 5–13%        | 17–25%                  | 14–22%      | 31–41%                 |
-| leaf-send-hover-fix         | 569k    | 30%               | 15%             | 3%           | 6%                      | 9%          | 16–22%                 |
-| leaf-menu-design            | 550k    | 45–55%            | 20–25%          | 6%           | 17–22%                  | 17–20%      | 33–38%                 |
-| tend-eval-rerun-wait        | 519k    | 35%               | 20%             | 2–3%         | 7%                      | 12%         | 17–18%                 |
-| leaf-data-attrs-merged      | 294k    | 20%               | 8%              | 0–4%         | 10–11%                  | 18–29%      | 41–42%                 |
-| worktrunk-repairs-merged    | 210k    | 20%               | 10%             | 8–10%        | 13%                     | 35–37%      | 45–47%                 |
+| leaf-followups-merged       | 641k    | 15%               | 8%              | 5–6%         | 11–13%                  | 15%         | 27–29%                 |
+| leaf-scroll-fix-merged      | 604k    | 35%               | 12%             | 12–15%       | 20–23%                  | 23–26%      | 36–39%                 |
+| worktrunk-release-tagged    | 479k    | 30%               | 12%             | 6–8%         | 14–18%                  | 17–19%      | 31–35%                 |
+| leaf-menu-build-wait        | 853k    | 35%               | 20%             | 4–14%        | 11–26%                  | 11–21%      | 18–33%                 |
+| leaf-save-icon-merge-ask    | 479k    | 25%               | 10–12%          | 1–3%         | 4–6%                    | 14–15%      | 18–24%                 |
+| leaf-ring-test-rewrite-wait | 681k    | 35%               | 25%             | 6–11%        | 14–15%                  | 14–21%      | 26%                    |
+| leaf-send-hover-fix         | 569k    | 30%               | 15%             | 3%           | 5–6%                    | 10–12%      | 17–19%                 |
+| leaf-menu-design            | 550k    | 45–55%            | 20–25%          | 7–8%         | 19–24%                  | 22%         | 36–39%                 |
+| tend-eval-rerun-wait        | 519k    | 35%               | 20%             | 4–5%         | 7–10%                   | 14–15%      | 20–23%                 |
+| leaf-data-attrs-merged      | 294k    | 20%               | 8%              | 4–8%         | 12%                     | 26–27%      | 42–43%                 |
+| worktrunk-repairs-merged    | 210k    | 20%               | 10%             | 8%           | 14–15%                  | 35–37%      | 52%                    |
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/share-parts-dark/8eed540f2f38.svg">
-  <img alt="Each of the 13 labelled turn ends' requests as a bar of its parts in order, from 210k to 853k tokens, shaded by whether the next work needed each part and hatched where a compaction puts it back. Every bar opens with hatched, needed blocks, the system prompt, tools, instruction files and skills, and most of the rest is not needed. Beside each bar, the model's share, the share a compaction drops that the work needed or was helped by, and the same of all the context, from 28%, 5% and 17% at leaf-scaling-closeout to 20%, 13% and 46% at worktrunk-repairs-merged." src="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/share-parts-light/67af795964cc.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/share-parts-dark/b67799884b7b.svg">
+  <img alt="Each of the 13 labelled turn ends' requests as a bar of its parts in order, from 210k to 853k tokens, shaded by whether the next work needed each part and hatched where a compaction puts it back. Every bar opens with hatched, needed blocks, the system prompt, tools, instruction files and skills, and most of the rest is not needed. Beside each bar, the model's share, the share a compaction drops that the work needed or was helped by, and the same of all the context, from 28%, 5% and 15% at leaf-scaling-closeout to 20%, 15% and 52% at worktrunk-repairs-merged." src="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/share-parts-light/fe962ab431b6.svg">
 </picture>
 
 With the line, the model's share is above what a compaction drops that the
-work needed or was helped by at all 13 turn ends, by 4 to 30 points, and
+work needed or was helped by at all 13 turn ends, by 3 to 29 points, and
 furthest above at the mid-task ones where the work went on with what it had
-just done (leaf-send-hover-fix 30% against 6%, tend-eval-rerun-wait 35%
-against 7%). The line raised the share at every case, by 4 to 28 points.
+just done (leaf-send-hover-fix 30% against 5%, tend-eval-rerun-wait 35%
+against 8%). The line raised the share at every case, by 4 to 28 points.
 Before it, the share was within 5 points of what a compaction drops that the
-work needed or was helped by at 7 of the 13, under it at 6 and over at 7,
-and at most 13 points off, at tend-eval-rerun-wait. Against all the context,
+work needed or was helped by at 7 of the 13, under it at 5 and over at 8,
+and at most 12 points off, at tend-eval-rerun-wait. Against all the context,
 as the question asks, the share with the line is within 10 points at 6 of
-the 13, 11 to 17 points over at leaf-scaling-closeout, leaf-send-hover-fix,
-leaf-menu-design and tend-eval-rerun-wait, 10 under at leaf-followups-merged,
-and 22 and 26 points under at the two small natural breaks, where what comes
+the 13, 12 to 13 points over at leaf-scaling-closeout, leaf-send-hover-fix,
+leaf-menu-design and tend-eval-rerun-wait, 13 under at leaf-followups-merged,
+and 23 and 32 points under at the two small natural breaks, where what comes
 back after a compaction, which the work needed, is a third of the context.
 
 The hindsight figures barely tell the labels apart: what a compaction drops
-that the work needed or was helped by is a median 12% at the turn ends
-labelled keep and 11% at those labelled compact.
+that the work needed or was helped by is a median 13% at the turn ends
+labelled keep and 12% at those labelled compact.
 
 The mean over the 13, with each kind's share needed, and needed or helpful,
 of its own size:
@@ -440,19 +444,19 @@ of its own size:
 | kind                                   | a compaction | size  | needed | needed or helpful |
 | -------------------------------------- | ------------ | ----- | ------ | ----------------- |
 | System prompt and tools                | puts it back | 6.9%  | 95%    | 95%               |
-| Instruction files                      | puts it back | 5.2%  | 65%    | 83%               |
-| Skill bodies                           | puts it back | 4.4%  | 18%    | 53%               |
-| Claude Code's listings and environment | puts it back | 5.1%  | 24%    | 50%               |
-| Earlier copies of what comes back      | drops it     | 1.3%  | 6%     | 42%               |
-| Skill text past what comes back        | drops it     | 0.2%  | 0%     | 25%               |
-| What an earlier compaction carried     | drops it     | 1.3%  | 39%    | 60%               |
-| File reads                             | drops it     | 15.0% | 11%    | 33%               |
-| Other tool output                      | drops it     | 13.5% | 3%     | 14%               |
-| The model's tool calls                 | drops it     | 19.5% | 8%     | 12%               |
-| The model's text                       | drops it     | 1.3%  | 40%    | 63%               |
-| The model's thinking                   | drops it     | 13.7% | 1%     | 1%                |
-| The user's messages                    | drops it     | 1.0%  | 16%    | 24%               |
-| Claude Code's reminders and notices    | drops it     | 11.6% | 7%     | 13%               |
+| Instruction files                      | puts it back | 5.2%  | 65%    | 87%               |
+| Skill bodies                           | puts it back | 4.4%  | 19%    | 61%               |
+| Claude Code's listings and environment | puts it back | 5.1%  | 22%    | 48%               |
+| Earlier copies of what comes back      | drops it     | 1.3%  | 19%    | 35%               |
+| Skill text past what comes back        | drops it     | 0.2%  | 20%    | 20%               |
+| What an earlier compaction carried     | drops it     | 1.3%  | 29%    | 56%               |
+| File reads                             | drops it     | 15.0% | 13%    | 30%               |
+| Other tool output                      | drops it     | 13.5% | 5%     | 15%               |
+| The model's tool calls                 | drops it     | 19.5% | 9%     | 12%               |
+| The model's text                       | drops it     | 1.3%  | 37%    | 57%               |
+| The model's thinking                   | drops it     | 13.7% | 0%     | 0%                |
+| The user's messages                    | drops it     | 1.0%  | 15%    | 21%               |
+| Claude Code's reminders and notices    | drops it     | 11.6% | 7%     | 14%               |
 
 At the made-up turn ends the model's share reads as a share of the
 conversation: it leaves out the system prompt and tools, which "this
@@ -468,15 +472,19 @@ log-fixed fall in the range on what's lost:
 
 The labeller is the model under test, told what came next, and what it marks
 is what the next work used, which needn't be all it needed. Its two runs at
-a case differ by up to 16 points in what a compaction drops that the work
-needed, and 13 counting what helped, both at leaf-menu-build-wait, 7 and 8
-at leaf-ring-test-rewrite-wait, 10 counting what helped at
-worktrunk-release-tagged, and elsewhere by at most 3 and 5. At the largest
-contexts the request and its listing of parts leave little of the window:
-leaf-hover-closeout, with
-3,646 parts, sees 9% of its next work by characters, and
-leaf-menu-build-wait 45%, where the other eleven see 61% to all of it. It
+a case differ by up to 10 points in what a compaction drops that the work
+needed, and 15 counting what helped, both at leaf-menu-build-wait, 5 in what
+was needed at leaf-ring-test-rewrite-wait and leaf-data-attrs-merged, and
+elsewhere by at most 3 and 4. At the largest contexts the request and its
+listing of parts leave little of the window: by characters of the records'
+values, leaf-menu-build-wait sees 34% of its next work, leaf-followups-merged
+48%, leaf-scaling-closeout 52%, leaf-ring-test-rewrite-wait 60% and
+leaf-scroll-fix-merged 70%, where the other seven see all of it. At
+leaf-hover-closeout, with 3,646 parts, its 650 records with every value cut
+take 33,000 tokens, more than the 27,000 the window leaves, so it keeps the
+labels it was given from the log of plain lines this replaced, which showed it
+9% of its next work. It
 can't judge the model's thinking, a seventh of each context, since
 transcripts keep only its signature, so it marks almost none of it. And it marks whichever copy of an instruction file it meets first: at
 leaf-send-hover-fix, the earliest copy of CLAUDE.md in both runs and the
-latest in one.
+latest in neither.

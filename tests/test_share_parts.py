@@ -310,36 +310,32 @@ def test_the_next_work_is_one_record_per_message_call_and_result():
         user("2026-11-04T19:01:00Z", "after"),
     ]
     assert parts.next_work(iter(entries)) == [
-        {"t": "2026-11-04T17:17", "who": "compaction", "text": parts.AT_TURN_END},
-        {"t": "2026-11-04T18:16", "who": "user", "text": "check the leaf"},
-        {"t": "2026-11-04T18:16", "who": "assistant", "text": "Reading it."},
+        {"t": "2026-11-04T17:17", "kind": "compaction"},
+        {"t": "2026-11-04T18:16", "kind": "user", "text": "check the leaf"},
+        {"t": "2026-11-04T18:16", "kind": "assistant", "text": "Reading it."},
         {
             "t": "2026-11-04T18:16",
-            "who": "call",
+            "kind": "call",
             "tool": "Read",
             "input": {"file_path": "/w/SKILL.md"},
         },
         {
             "t": "2026-11-04T18:17",
-            "who": "result",
+            "kind": "result",
             "tool": "Read",
             "error": True,
             "text": "no such file",
         },
-        {
-            "t": "2026-11-04T19:00",
-            "who": "compaction",
-            "text": "COMPACTED, and the session went on",
-        },
+        {"t": "2026-11-04T19:00", "kind": "compaction"},
     ]
 
 
 def test_shortening_cuts_long_values_and_keeps_every_record_whole_json():
     records = [
-        {"t": "2026-11-04T18:16", "who": "user", "text": "short"},
+        {"t": "2026-11-04T18:16", "kind": "user", "text": "short"},
         {
             "t": "2026-11-04T18:16",
-            "who": "call",
+            "kind": "call",
             "tool": "Edit",
             "input": {
                 "file_path": "/w/a.css",
@@ -350,7 +346,7 @@ def test_shortening_cuts_long_values_and_keeps_every_record_whole_json():
         },
         {
             "t": "2026-11-04T18:17",
-            "who": "result",
+            "kind": "result",
             "tool": "Edit",
             "text": "head\n" + "r" * 2000 + "\ntail",
         },
