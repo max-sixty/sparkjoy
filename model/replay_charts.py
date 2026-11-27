@@ -192,7 +192,7 @@ def draw(out, S, runs, session):
     i, one = next((i, s) for i, s in enumerate(S) if s.path.name.startswith(session))
     (one_with, one_without, _), *trace = ran[i]
     traces = dict(zip(("with", "without"), trace, strict=True))
-    asked = [v for v in one.verdicts if v.kind in ("compacted", "kept")]
+    asked = [v for v in one.verdicts if v.kind in ("compacted", "kept") and v.asked]
     checks = [
         (int(np.searchsorted(one.t, v.t)) - 1, v.kind == "compacted") for v in asked
     ]
@@ -224,7 +224,9 @@ def draw(out, S, runs, session):
             )
             * c.read
         )
-    every = [v for s in S for v in s.verdicts if v.kind in ("compacted", "kept")]
+    every = [
+        v for s in S for v in s.verdicts if v.kind in ("compacted", "kept") and v.asked
+    ]
     return {
         # The requests' logged tokens at fit.MODEL's prices; docs.py's `as_ran` holds what the replay
         # prices, the savings chart's bars included.

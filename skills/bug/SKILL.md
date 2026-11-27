@@ -26,8 +26,9 @@ Fill in its two sections in italics:
 
 - **What happened**: what the user says went wrong and expected, in their
   words, and the line it concerns. If they gave no account, describe the latest
-  line that sparkjoy followed with one suggesting `/sparkjoy bug`, and ask
-  whether that's the one.
+  line of sparkjoy's that `/sparkjoy bug` concerns, and ask whether that's the
+  one: the line before one saying "That looks like a bug", or an idle
+  session's line saying its question missed the prompt cache.
 - **Settings**: the quoted settings, whole.
 
 Then show the user the draft's path, the title you'd give the issue, the

@@ -90,8 +90,11 @@ def transcript(tmp_path, entries, session="session"):
     return tmp_path / "projects"
 
 
-def report(tmp_path, entries, *args):
+def report(tmp_path, entries, *args, others=()):
+    """The report's summary and page on the session of `entries` and the sessions of `others`."""
     projects = transcript(tmp_path, entries)
+    for n, other in enumerate(others):
+        transcript(tmp_path, other, f"other-{n}")
     run = subprocess.run(
         [
             "uv",
@@ -140,13 +143,9 @@ def session_with_compactions():
         prompt("12:30:00Z", "back again"),  # after two and a half hours, at 240k
         request("12:30:10Z", 30_000, 230_000),
         line(
-            "13:25:19Z",
-            "sparkjoy: Missed the prompt cache at 260k tokens, idle 55 minutes: read 30k of 262k "
-            "from it. Signing in to another account while idle drops the cache.",
-        ),
-        line(
             "13:25:20Z",
-            "sparkjoy: Compacting at 260k tokens, idle 55 minutes: the lexer is done",
+            "sparkjoy: Compacting at 260k tokens, idle 55 minutes, after missing the prompt cache "
+            "(read 30k of 262k; /sparkjoy report lists the misses): the lexer is done",
         ),
         boundary("13:26:00Z"),
         compact_summary("13:26:00Z"),
@@ -154,16 +153,14 @@ def session_with_compactions():
         request("15:00:10Z", 30_000, 195_000),
         line("15:00:20Z", "sparkjoy: Failed: Error: the fork failed"),
         line(
-            "15:00:39Z",
-            "sparkjoy: Missed the prompt cache at 226k tokens: read 30k of 227k from it",
-        ),
+            "15:00:40Z",
+            "sparkjoy: Compacting at 226k tokens, after missing the prompt cache the turn had just "
+            "written to (read 30k of 227k): all done",
+        ),  # a compaction that never ran
         line(
-            "15:00:39Z",
+            "15:00:40Z",
             "sparkjoy: That looks like a bug: /sparkjoy bug drafts a report of it.",
         ),
-        line(
-            "15:00:40Z", "sparkjoy: Compacting at 226k tokens: all done"
-        ),  # a compaction that never ran
         # A verdict to compact in the mode `classify`, just before the user's own compaction.
         line("15:29:50Z", "sparkjoy: Would compact at 226k tokens: the lexer is done"),
         prompt("15:30:00Z", "<command-name>/compact</command-name>"),
@@ -180,7 +177,8 @@ def test_counts_verdicts_and_returns(tmp_path):
     assert summary == [
         "Cost $5.31 more, 90% more than these sessions would have cost without sparkjoy's compactions.",
         "7 verdicts in 1 of 1 sessions: 3 compacted, 1 would compact, 1 kept, 0 unreadable, "
-        "1 no verdict, 0 dropped, 1 failed; 2 missed the prompt cache",
+        "1 no verdict, 0 dropped, 1 failed; 2 missed the prompt cache, 0 while another session lost "
+        "its cache too",
         "Replayed at the list prices of each session's model, with Claude Code compacting on its own "
         "when the window fills and, in a session you had open, an idle context from 200k, these "
         "sessions cost $11 with "
@@ -197,14 +195,47 @@ def test_counts_verdicts_and_returns(tmp_path):
     assert '<span class="mark would-compact"' in page
     assert "Fix the parser" in page
     assert "hooks.json" not in page
-    assert (
-        "2 missed the prompt cache" in page
-        and "missed the cache (read 30k of 227k)" in page
-        and "missed the cache (read 30k of 262k)" in page
-    )
+    assert "2 missed the prompt cache" in page and "turn end, missed the cache" in page
+    assert "<td>30k of 227k</td>" in page and "<td>30k of 262k</td>" in page
     # The lockup, its dots in the accent, and the icon as the favicon.
     assert '<svg class="logo"' in page and page.count('class="accent"') == 3
     assert '<link rel="icon"' in page
+
+
+def test_counts_the_other_sessions_that_lost_their_cache_beside_each_miss(tmp_path):
+    """The same session beside two others that sent requests while it sat idle before its question
+    missed the cache: one wrote its whole context to the cache again within the cache's hour, as
+    after a sign-in to another account, and one read its context from the cache."""
+    summary, page = report(
+        tmp_path,
+        session_with_compactions(),
+        others=[
+            [
+                prompt("12:40:00Z", "start"),
+                request("12:40:10Z", 0, 120_000),
+                prompt("13:00:00Z", "go on"),
+                request("13:00:10Z", 30_000, 100_000),
+            ],
+            [
+                prompt("12:45:00Z", "start"),
+                request("12:45:10Z", 0, 120_000),
+                prompt("13:05:00Z", "go on"),
+                request("13:05:10Z", 120_000, 1_000),
+            ],
+        ],
+    )
+    assert summary[1].endswith(
+        "2 missed the prompt cache, 1 while another session lost its cache too"
+    )
+    # The idle miss saw both other sessions, and one lose its cache; the miss at a turn end, none.
+    assert (
+        "<td>idle 55 min</td><td>30k of 262k</td><td class=num>2</td><td class=num>1</td>"
+        in page
+    )
+    assert (
+        "<td>turn end</td><td>30k of 227k</td><td class=num>0</td><td class=num>0</td>"
+        in page
+    )
 
 
 def test_a_compaction_after_the_last_request_ends_its_session_and_costs_its_summary(
@@ -233,6 +264,26 @@ def test_a_compaction_after_the_last_request_ends_its_session_and_costs_its_summ
         "end. Of the other 2, the next request came once before the prompt cache lapsed, and once "
         "after it lapsed." in summary
     )
+
+
+def test_a_verdict_reached_without_asking_costs_no_check(tmp_path):
+    """The same session with a verdict from past the ceiling, where sparkjoy compacts without
+    asking: the verdict counts, and the checks cost what they did."""
+    summary, _ = report(
+        tmp_path,
+        [
+            *session_with_compactions(),
+            line(
+                "17:00:20Z",
+                "sparkjoy: Would compact at 920k tokens, without asking: past 900k, where even work "
+                "that needs the detail compacts",
+            ),
+        ],
+    )
+    assert summary[1].startswith(
+        "8 verdicts in 1 of 1 sessions: 3 compacted, 2 would compact"
+    )
+    assert "$3.70 of it for its checks" in summary[2]
 
 
 def test_a_first_run_leads_with_what_the_fitted_floors_would_have_saved(tmp_path):

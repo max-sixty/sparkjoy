@@ -43,6 +43,7 @@
 import type {
   CommandRunResult,
   EngineInterface,
+  ModelUsage,
   PluginOptions,
   Register,
   SessionMessage,
@@ -230,6 +231,17 @@ const PAST_CEILING: Verdict = {
   reason: `past ${thousands(CEILING)}, where even work that needs the detail compacts`,
 }
 
+// Acts on PAST_CEILING, with a line that says no question was asked, so
+// model/fit.py prices none for it.
+function pastCeiling(
+  $: EngineInterface,
+  settings: Settings,
+  say: (text: string) => void,
+  at: string,
+) {
+  return act($, settings, say, at, PAST_CEILING, outcome(say, at, ', without asking'))
+}
+
 // How long a session sits idle before it is asked, by the lifetime of the
 // prompt cache its last turn wrote to: inside that lifetime, so the question
 // reads the context from the cache, and its read keeps the cache alive for the
@@ -240,8 +252,8 @@ const PAST_CEILING: Verdict = {
 //
 // The cache belongs to the account's organization, so once Claude Code signs
 // in to another account the question finds it gone and pays to write the
-// context to it again, as the user's next request would have. All 3 of my
-// idle questions that missed it (21-22 Nov 2026) followed such a switch.
+// context to it again, as the user's next request would have. All 15 of my
+// idle questions that missed it (21-27 Nov 2026) followed such a switch.
 // Otherwise the API keeps it for the hour: of my requests 5 to 60 minutes
 // after one they extended unchanged, on the same account, 11 of 2,392 found
 // it gone (1-22 Nov 2026).
@@ -254,9 +266,11 @@ const IDLE_MS = { '1h': 55 * 60_000, '5m': 4 * 60_000 }
 // no test reaches this.
 const LATE_MS = 60_000
 
-// The share of the fork's input not read from the prompt cache past which the
-// question missed it: a hit leaves only the question uncached and a miss most
-// of the context, so any share between separates them.
+// The share of the turn's last request that the question didn't read from the
+// prompt cache, past which it missed the cache. The fork sends that request
+// again, which the request itself left cached, so a hit reads all of it and a
+// miss only the system prompt and tools, and any share between separates them.
+// The turn's reply and the question come after it, and are never cached.
 const MISSED = 0.1
 
 // What the line after one reporting a bug, in sparkjoy or in the Claude Code
@@ -369,18 +383,15 @@ async function afterTurn(
     if (tokens < figures.FLOOR) return
     const at = `${thousands(tokens)} tokens`
     if (tokens >= CEILING) {
-      if (isCurrent()) await act($, settings, say, at, PAST_CEILING)
+      if (isCurrent()) await pastCeiling($, settings, say, at)
       return
     }
     const prompt = question(tokens, undefined, figures, settings.instructions)
     // A turn that wrote to the cache left it seconds old, so a question that
     // misses it had a prompt that differed from the turn's, which is a bug. A
     // turn that wrote nothing left nothing to read.
-    const sayMiss =
-      (usage?.cache_creation_input_tokens ?? 0) > 0
-        ? (line: string) => sayBug(say, line)
-        : say
-    await judge($, settings, say, async () => isCurrent(), at, prompt, sayMiss)
+    const miss = (usage?.cache_creation_input_tokens ?? 0) > 0 ? 'bug' : 'plain'
+    await judge($, settings, say, async () => isCurrent(), at, tokens, prompt, miss)
   } catch (error) {
     sayBug(say, `Failed: ${error}`)
   }
@@ -405,79 +416,118 @@ async function idle(
   try {
     if ((await $.clock.now()) > due + LATE_MS || !(await isUntouched())) return
     const at = `${thousands(tokens)} tokens, idle ${minutes} minutes`
-    if (tokens >= CEILING) return await act($, settings, say, at, PAST_CEILING)
+    if (tokens >= CEILING) return await pastCeiling($, settings, say, at)
     const prompt = question(
       tokens,
       minutes,
       (await fitted($, settings)).figures,
       settings.instructions,
     )
-    // Claude Code may have signed in to another account meanwhile (IDLE_MS),
-    // or, as the wait runs from the turn's end, a last request that ran long
-    // may have used up the five-minute cache's margin.
-    await judge($, settings, say, isUntouched, at, prompt, line =>
-      say(`${line}. Signing in to another account while idle drops the cache.`),
-    )
+    await judge($, settings, say, isUntouched, at, tokens, prompt, 'idle')
   } catch (error) {
     sayBug(say, `Failed: ${error}`)
   }
 }
 
 // Asks the session's model whether to compact, and compacts if it says to and
-// the mod is on, saying too, with `sayMiss`, when the question missed the
-// prompt cache. The verdict stands only while `stands` holds once the model
-// has answered; `at` names the moment in each line.
+// the mod is on. The verdict stands only while `stands` holds once the model
+// has answered; `at` names the moment, and `tokens` the context then. `miss`
+// says what the question's line makes of a miss of the prompt cache.
 async function judge(
   $: EngineInterface,
   settings: Settings,
   say: (text: string) => void,
   stands: () => Promise<boolean>,
   at: string,
+  tokens: number,
   prompt: string,
-  sayMiss: (text: string) => void,
+  miss: Miss,
 ) {
   const answer = await $.model.fork({ prompt })
-  // A line of its own, so the verdict's line, which model/fit.py parses, keeps
-  // its reason clean. A fork that made no request reports no usage.
-  if ('usage' in answer) {
-    const { usage } = answer
-    const read = usage.cache_read_input_tokens
-    const input = usage.input_tokens + read + usage.cache_creation_input_tokens
-    if (input - read > MISSED * input)
-      sayMiss(
-        `Missed the prompt cache at ${at}: read ${thousands(read)} of ${thousands(input)} from it`,
-      )
-  }
-  if (!(await stands()))
-    return say(`Dropped the verdict at ${at}: the conversation moved on`)
+  // A fork that made no request reports no usage.
+  const missed = 'usage' in answer ? missing(answer.usage, tokens, miss) : ''
+  const line = outcome(say, at, missed, missed !== '' && miss === 'bug')
+  if (!(await stands())) return line('Dropped the verdict', 'the conversation moved on')
   const verdict = answer.isAnswered ? parse(answer.text) : undefined
   if (verdict) {
-    await act($, settings, say, at, verdict)
+    await act($, settings, say, at, verdict, line)
   } else if (answer.isAnswered) {
-    sayBug(say, `Unreadable verdict at ${at}: ${answer.text}`)
+    line('Unreadable verdict', answer.text, true)
   } else {
-    say(`No verdict at ${at}: ${answer.reason}`)
+    line('No verdict', answer.reason)
   }
 }
 
-// Acts on a verdict: compacts if it says to and the mod is on, and says so.
+// What a question's line makes of a miss of the prompt cache. After a turn
+// that had just written to the cache (`bug`), the miss is a bug, and the line
+// says so. In an idle session (`idle`) it needn't be: Claude Code may have
+// signed in to another account meanwhile (IDLE_MS), or, as the wait runs from
+// the turn's end, a last request that ran long may have used up the cache's
+// margin. The mod can't tell which, since `$.session.identity` answers only a
+// mod that managed settings enable. So the line points to `/sparkjoy report`,
+// whose table of misses shows whether other sessions lost their cache at the
+// same time, as a switch makes them do, and the README's FAQ lists the causes.
+// The mod acts on an idle question's verdict even when the question missed.
+// The miss wrote the context to the cache again, so waiting another lifetime
+// and asking again would keep the context for a user who returns within it.
+// That would be a second path for a case that should stay rare, and the report
+// and `/sparkjoy bug` are there to make it rarer. After a turn that wrote
+// nothing (`plain`), there was nothing to read.
+type Miss = 'bug' | 'idle' | 'plain'
+
+// The clause a question's line carries when the question missed the prompt
+// cache (MISSED) at a context of `tokens`, or "" when it didn't. A fork whose
+// request the API refused, as at a rate limit, reports no input, and read
+// nothing it could have missed.
+function missing(usage: ModelUsage, tokens: number, miss: Miss) {
+  const read = usage.cache_read_input_tokens
+  const input = usage.input_tokens + read + usage.cache_creation_input_tokens
+  if (input === 0 || read >= (1 - MISSED) * tokens) return ''
+  const cache =
+    miss === 'bug'
+      ? 'the prompt cache the turn had just written to'
+      : 'the prompt cache'
+  const route = miss === 'idle' ? '; /sparkjoy report lists the misses' : ''
+  return `, after missing ${cache} (read ${thousands(read)} of ${thousands(input)}${route})`
+}
+
+// Says what came of a question at `at`, in one line: its kind, then any
+// `clause` on how it was asked, and after a colon the reason, which is the
+// model's alone, as model/fit.py's VERDICT parses it. When the line reports a bug, or the
+// question's miss is one, the line saying how to report it follows.
+function outcome(
+  say: (text: string) => void,
+  at: string,
+  clause = '',
+  isMissBug = false,
+) {
+  return (kind: string, reason: string, isBug = false) => {
+    const text = `${kind} at ${at}${clause}: ${reason}`
+    if (isBug || isMissBug) sayBug(say, text)
+    else say(text)
+  }
+}
+
+// Acts on a verdict: compacts if it says to and the mod is on, and says so
+// with `line`.
 async function act(
   $: EngineInterface,
   { mode }: Settings,
   say: (text: string) => void,
   at: string,
   verdict: Verdict,
+  line: ReturnType<typeof outcome>,
 ) {
   if (verdict.compact && mode === 'classify') {
-    say(`Would compact at ${at}: ${verdict.reason}`)
+    line('Would compact', verdict.reason)
   } else if (verdict.compact) {
     // `$.session.compact` draws no `/compact` row, so neither the user nor
     // the model reads the compaction as one the user typed. A hook's veto
     // draws its own line.
-    say(`Compacting at ${at}: ${verdict.reason}`)
+    line('Compacting', verdict.reason)
     await compact($, say, at)
   } else {
-    say(`Kept at ${at}: ${verdict.reason}`)
+    line('Kept', verdict.reason)
   }
 }
 
