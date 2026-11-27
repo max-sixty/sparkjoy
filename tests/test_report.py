@@ -557,3 +557,48 @@ def test_reads_verdicts_and_compactions_from_sparkjoys_log_where_a_session_has_o
     assert "1 missed the prompt cache" in summary[1]
     assert "<td>30k of 230k</td>" in page
     assert "2 had been compacted in between (2 by sparkjoy)" in " ".join(summary)
+
+
+def test_a_verdict_whose_record_was_never_written_keeps_its_line(tmp_path):
+    """A session whose log records the first and last of three verdicts to keep: the middle one's
+    record was lost, as when its process exited with the write still queued. All three count, the
+    recorded ones as their records give them."""
+    log(
+        tmp_path,
+        [
+            logged(
+                "10:00:59",
+                event="verdict",
+                kind="Kept",
+                reason="as recorded first",
+                tokens=301_000,
+            ),
+            logged(
+                "12:00:59",
+                event="verdict",
+                kind="Kept",
+                reason="as recorded last",
+                tokens=301_000,
+            ),
+        ],
+    )
+    summary, page = report(
+        tmp_path,
+        [
+            prompt("10:00:00Z", "fix the parser"),
+            request("10:00:10Z", 290_000, 10_000),
+            line("10:00:59Z", "sparkjoy: Kept at 300k tokens: as the line said first"),
+            prompt("11:00:00Z", "go on"),
+            request("11:00:10Z", 290_000, 10_000),
+            line("11:00:59Z", "sparkjoy: Kept at 300k tokens: the fix is half done"),
+            prompt("12:00:00Z", "and on"),
+            request("12:00:10Z", 290_000, 10_000),
+            line("12:00:59Z", "sparkjoy: Kept at 300k tokens: as the line said last"),
+        ],
+    )
+    assert summary[1].startswith(
+        "3 verdicts in 1 of 1 sessions: 0 compacted, 0 would compact, 3 kept"
+    )
+    assert "the fix is half done" in page
+    assert "as recorded first" in page and "as recorded last" in page
+    assert "as the line said" not in page

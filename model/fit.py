@@ -106,7 +106,8 @@ KINDS = {
 # sparkjoy's log under the configuration directory (LOG in hooks/register.ts): a JSON line for each
 # verdict, its `kind` the line's word for it, and for each compaction it starts and ends, in a file
 # a session and a day. Where a session has one, it is what `transcript` reads sparkjoy's verdicts
-# and compactions from; the lines and marks above stand for it in sessions from before it.
+# and compactions from; the lines and marks above stand for it in sessions from before it, and a
+# line for a verdict whose record was never written.
 LOG = Path("sparkjoy") / "log"
 
 # Where a session's name comes from, in order of preference: one the user gave it, then
@@ -547,12 +548,14 @@ def transcript(path, since=None, until=None):
     )
     records = logged(path, lo, hi)
     if records:
-        # The log's verdicts stand for the lines over the time it covers, a second either side
-        # for the line written just before its record.
-        first, last = epoch(records[0]["t"]) - 1, epoch(records[-1]["t"]) + 1
-        verdicts = [v for v in verdicts if not first <= v.t <= last] + [
-            logged_verdict(r) for r in records if r["event"] == "verdict"
-        ]
+        # A verdict's record stands for its line, timed within a second of it. A line whose record
+        # was never written, as when the process exited with the write still queued, still counts.
+        recorded = [logged_verdict(r) for r in records if r["event"] == "verdict"]
+        verdicts = [
+            v
+            for v in verdicts
+            if not any(r.kind == v.kind and abs(r.t - v.t) <= 1 for r in recorded)
+        ] + recorded
         verdicts.sort(key=lambda v: v.t)
     comps = [
         (t, took, origin(t - took, t, trigger, marks, spans(records)), before)
