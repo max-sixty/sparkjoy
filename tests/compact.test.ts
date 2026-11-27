@@ -575,6 +575,15 @@ test('a fork with no answer says so', async ($, on) => {
   expect(logs).toEqual(['No verdict at 500k tokens: empty-reply'])
 })
 
+test('a fork whose request was refused, and so read nothing, says nothing of the cache', async ($, on) => {
+  const { begin, logs, turn } = engine(on, { verdict: null, forkUsage: USAGE })
+  await begin($)
+
+  await turn($, 't1')
+
+  expect(logs).toEqual(['No verdict at 500k tokens: empty-reply'])
+})
+
 // What the question at 500k read and wrote: on a hit, all but the question
 // itself from the cache; on a miss, only the system prompt and tools, which
 // sit in a cache shared across sessions, writing the rest again.

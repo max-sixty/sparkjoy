@@ -470,11 +470,13 @@ async function judge(
 type Miss = 'bug' | 'idle' | 'plain'
 
 // The clause a question's line carries when the question missed the prompt
-// cache (MISSED) at a context of `tokens`, or "" when it didn't.
+// cache (MISSED) at a context of `tokens`, or "" when it didn't. A fork whose
+// request the API refused, as at a rate limit, reports no input, and read
+// nothing it could have missed.
 function missing(usage: ModelUsage, tokens: number, miss: Miss) {
   const read = usage.cache_read_input_tokens
-  if (read >= (1 - MISSED) * tokens) return ''
   const input = usage.input_tokens + read + usage.cache_creation_input_tokens
+  if (input === 0 || read >= (1 - MISSED) * tokens) return ''
   const cache =
     miss === 'bug'
       ? 'the prompt cache the turn had just written to'

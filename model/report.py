@@ -58,8 +58,8 @@ MEANING = {
     "failed": "An error stopped the check.",
 }
 MISSED = (
-    "Its question read less than nine tenths of the context from the prompt cache, so the rest cost a cache "
-    "write. sparkjoy logs these from 27 November 2026 on."
+    "Its question read less than nine tenths of the context from the prompt cache, and the savings price the "
+    "rest as a cache write. sparkjoy logs these from 27 November 2026 on."
 )
 
 
@@ -301,6 +301,8 @@ def mark(kind):
 
 def at(v):
     where = "" if v.tokens is None else f"idle {v.idle} min" if v.idle else "turn end"
+    if not v.asked:
+        where += ", without asking"
     if v.missed:
         where += (
             f", missed the cache (read {tokens(v.missed[0])} of {tokens(v.missed[1])})"

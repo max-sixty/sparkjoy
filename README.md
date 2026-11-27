@@ -369,9 +369,10 @@ to less than 1% of what the sessions cost.
 <details>
 <summary>Why does a verdict say sparkjoy missed the prompt cache?</summary>
 
-The question behind it found the session's context gone from the cache, and
-wrote it there again. In `read 31k of 162k`, the 31k is about the size of the
-system prompt and tools, which Claude Code caches across sessions.
+The question behind it read less than nine tenths of the session's context
+from the cache, and wrote the rest there again. In `read 31k of 162k`, the 31k
+is about the size of the system prompt and tools, which Claude Code caches
+across sessions.
 
 When the turn before the question has just written to the cache, a miss is a
 bug. The line then says `after missing the prompt cache the turn had just
@@ -382,10 +383,10 @@ gone already:
 
 - The cache belongs to the account's organization, so signing in to another
   account while the session sits idle drops it.
-- sparkjoy's wait runs from the turn's end, and the cache's lifetime from when
-  the turn's last request was sent. A last request that ran for over a minute on
-  the 5-minute cache, or over 4 minutes on the one-hour cache, leaves the cache
-  expired when the question comes.
+- sparkjoy waits 4 minutes on the 5-minute cache and 55 on the one-hour cache,
+  counting from the turn's end, while the cache's lifetime counts from when the
+  turn's last request was sent. So a last request that ran for minutes can leave
+  the cache expired when the question comes.
 
 Claude Code doesn't tell the plugins you install which account a session runs
 under, so the line can't say which happened, and ends
