@@ -252,8 +252,8 @@ function pastCeiling(
 //
 // The cache belongs to the account's organization, so once Claude Code signs
 // in to another account the question finds it gone and pays to write the
-// context to it again, as the user's next request would have. All 3 of my
-// idle questions that missed it (21-22 Nov 2026) followed such a switch.
+// context to it again, as the user's next request would have. All 15 of my
+// idle questions that missed it (21-27 Nov 2026) followed such a switch.
 // Otherwise the API keeps it for the hour: of my requests 5 to 60 minutes
 // after one they extended unchanged, on the same account, 11 of 2,392 found
 // it gone (1-22 Nov 2026).
@@ -464,9 +464,10 @@ async function judge(
 // signed in to another account meanwhile (IDLE_MS), or, as the wait runs from
 // the turn's end, a last request that ran long may have used up the cache's
 // margin. The mod can't tell which, since `$.session.identity` answers only a
-// mod that managed settings enable, so the line leaves the account to the
-// user, and the README's FAQ lists the causes. After a turn that wrote nothing
-// (`plain`), there was nothing to read.
+// mod that managed settings enable. So the line points to `/sparkjoy report`,
+// whose table of misses shows whether other sessions lost their cache at the
+// same time, as a switch makes them do, and the README's FAQ lists the causes.
+// After a turn that wrote nothing (`plain`), there was nothing to read.
 type Miss = 'bug' | 'idle' | 'plain'
 
 // The clause a question's line carries when the question missed the prompt
@@ -481,7 +482,7 @@ function missing(usage: ModelUsage, tokens: number, miss: Miss) {
     miss === 'bug'
       ? 'the prompt cache the turn had just written to'
       : 'the prompt cache'
-  const route = miss === 'idle' ? "; /sparkjoy bug if you didn't switch accounts" : ''
+  const route = miss === 'idle' ? '; /sparkjoy report lists the misses' : ''
   return `, after missing ${cache} (read ${thousands(read)} of ${thousands(input)}${route})`
 }
 

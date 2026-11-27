@@ -720,7 +720,7 @@ test('an idle question that missed the prompt cache says so in its verdict’s l
   await clock.settle()
 
   expect(logs).toEqual([
-    "Compacting at 200k tokens, idle 55 minutes, after missing the prompt cache (read 30k of 202k; /sparkjoy bug if you didn't switch accounts): the PR merged",
+    'Compacting at 200k tokens, idle 55 minutes, after missing the prompt cache (read 30k of 202k; /sparkjoy report lists the misses): the PR merged',
   ])
 })
 

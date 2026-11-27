@@ -42,6 +42,11 @@ have saved; or why it had nothing to do. The page then shows:
   whether its question missed the prompt cache, and the model's reason. The
   checks' cost in the savings prices each miss's unread input as a cache write. Under its old name, compact-when-done, it logged
   only the checks that compacted.
+- **Cache misses**: each question that missed the prompt cache, with how much
+  of the context it read from it, and how many of the other sessions active
+  since its session's last request lost their own cache meanwhile, as signing
+  in to another account makes them do. Idle misses that keep coming without a
+  cause the user knows of are worth `/sparkjoy bug`.
 - **Thresholds**: the pair of floors, at turn ends and in idle sessions, that
   costs least for these sessions, beside sparkjoy's defaults of 250k and 175k
   and never compacting, with what each costs and what each saves per unit of

@@ -105,6 +105,31 @@ def follows(S):
     return out
 
 
+def misses(found, verdicts):
+    """The verdicts whose question missed the prompt cache, in the order of `verdicts`. Beside each
+    are two counts over the other sessions in `found`, between the session's last request before
+    the verdict and the verdict: the sessions that sent a request, and those of them that wrote
+    their whole context to the cache again before its lifetime ran out, as each session that
+    follows a sign-in to another account does. Both are None where the window holds no request of
+    the session before the verdict."""
+    missed = [(s, v) for s, v in verdicts if v.missed]
+    if not missed:
+        return []
+    t = np.concatenate([s.t for s in found])
+    who = np.concatenate([np.full(len(s.t), i) for i, s in enumerate(found)])
+    lost = np.concatenate([s.rewrote & (s.gap < s.ttl) for s in found])
+    index = {id(s): i for i, s in enumerate(found)}
+    rows = []
+    for s, v in missed:
+        j = np.searchsorted(s.t, v.t, side="right") - 1
+        if j < 0:
+            rows.append((s, v, None, None))
+            continue
+        span = (t > s.t[j]) & (t <= v.t) & (who != index[id(s)])
+        rows.append((s, v, len(set(who[span])), len(set(who[span & lost]))))
+    return rows
+
+
 def cramped(s):
     """Claude Code compacted the session on its own before its context reached SMALL, as it does in
     a 200k context window, and sparkjoy gave no verdict in it. sparkjoy acts only in a 1M window
@@ -301,14 +326,17 @@ def mark(kind):
     return f'<span class="mark {kind.replace(" ", "-")}" aria-hidden="true"></span>'
 
 
+def moment(v):
+    """What prompted the verdict: an idle session or a turn end."""
+    return "" if v.tokens is None else f"idle {v.idle} min" if v.idle else "turn end"
+
+
 def at(v):
-    where = "" if v.tokens is None else f"idle {v.idle} min" if v.idle else "turn end"
+    where = moment(v)
     if not v.asked:
         where += ", without asking"
     if v.missed:
-        where += (
-            f", missed the cache (read {tokens(v.missed[0])} of {tokens(v.missed[1])})"
-        )
+        where += ", missed the cache"
     return where
 
 
@@ -571,7 +599,18 @@ def summary(found, S, verdicts, saving, unpriced, rows, fitted, saved, projects)
 
 
 def page(
-    found, S, since, until, verdicts, sessions, opening, rows, fitted, unfit, saved
+    found,
+    S,
+    since,
+    until,
+    verdicts,
+    missed,
+    sessions,
+    opening,
+    rows,
+    fitted,
+    unfit,
+    saved,
 ):
     zone = datetime.now().astimezone().strftime("%Z")
     head = (
@@ -589,12 +628,11 @@ def page(
         )
         tiles = "".join(tile(counts[k], k, MEANING[k]) for k in KINDS if counts[k])
         old = sum(v.plugin == "compact-when-done" for _, v in verdicts)
-        missed = sum(1 for _, v in verdicts if v.missed)
         parts.append(
             f'<div class="tiles">{tile(len(verdicts), "verdicts")}{tiles}</div><p class=note>'
             f"In {len({id(s) for s, _ in verdicts}):,} of {len(found):,} sessions · "
             f"{len(verdicts) - idle - counts['failed']:,} at turn ends, {idle:,} in idle sessions · "
-            f'<span title="{MISSED}">{missed:,} missed the prompt cache</span></p>'
+            f'<span title="{MISSED}">{len(missed):,} missed the prompt cache</span></p>'
         )
         if old:
             parts.append(
@@ -605,6 +643,7 @@ def page(
     parts.extend(f"<p>{bold(p)}</p>" for p in rest)
     sections = (
         ["Sessions", "Verdicts"] * bool(verdicts)
+        + ["Cache misses"] * bool(missed)
         + ["Thresholds"] * bool(S)
         + ["Fitted figures"] * bool(saved)
         + ["Idle returns"] * bool(rows)
@@ -682,6 +721,48 @@ def page(
                 ],
                 numeric=(2,),
                 wrap=(5,),
+            )
+        )
+
+    if missed:
+        parts.append(h2("Cache misses"))
+        parts.append(
+            "<p>Each question of sparkjoy's that read less than nine tenths of the context from the "
+            "prompt cache. A question that finds the context gone usually still reads the system "
+            "prompt and tools from it, about 30k. After a turn that had just written to the cache, a miss is a bug, and "
+            "sparkjoy's next line in that session suggests <code>/sparkjoy bug</code>. An idle "
+            "session's cache can be gone already: signing in to another account drops it in every "
+            "session that follows the sign-in. So beside each miss are the other sessions that sent "
+            "a request between its session's last request and the question, and how many of those "
+            "wrote their whole context to the cache again before its lifetime was up. Where any did, "
+            "the miss likely had a cause outside its session, such as a sign-in. Where none did, the "
+            "count can't rule one out, since a session that sent its requests before the sign-in "
+            "shows no loss. If idle misses keep coming that you can't account for, run "
+            "<code>/sparkjoy bug</code> in the session of one of them.</p>"
+        )
+        parts.append(
+            more(len(missed), "misses, newest first")
+            + table(
+                [
+                    "When",
+                    "Session",
+                    "At",
+                    "Read",
+                    "Other sessions active",
+                    "Of those, lost their cache",
+                ],
+                [
+                    (
+                        when(v.t),
+                        name(s, 40),
+                        moment(v),
+                        f"{tokens(v.missed[0])} of {tokens(v.missed[1])}",
+                        "" if active is None else f"{active:,}",
+                        "" if lost is None else f"{lost:,}",
+                    )
+                    for s, v, active, lost in missed
+                ],
+                numeric=(4, 5),
             )
         )
 
@@ -872,6 +953,7 @@ def main():
         model_name(s.model) for s in S if s.sparkjoy.any() and s.model not in fit.PRICES
     )
     rows = returns(S)
+    missed = misses(found, verdicts)
     opening = summary(
         found, S, verdicts, saving, unpriced, rows, fitted, saved, a.projects
     )
@@ -886,6 +968,7 @@ def main():
                 since,
                 until,
                 verdicts,
+                missed,
                 sessions,
                 opening,
                 rows,
@@ -904,7 +987,12 @@ def main():
             f"{len(verdicts)} {'verdict' if len(verdicts) == 1 else 'verdicts'} in "
             f"{len({id(s) for s, _ in verdicts})} of {len(found)} sessions: "
             + ", ".join(f"{counts[k]} {k}" for k in KINDS)
-            + f"; {sum(1 for _, v in verdicts if v.missed)} missed the prompt cache"
+            + f"; {len(missed)} missed the prompt cache"
+            + (
+                f", {sum(1 for *_, lost in missed if lost)} while another session lost its cache too"
+                if missed
+                else ""
+            )
         )
     for paragraph in rest:
         print(paragraph)
