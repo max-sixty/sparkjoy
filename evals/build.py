@@ -330,7 +330,23 @@ def images(value) -> int:
 
 
 def build(case: dict) -> Path:
-    return write(case["id"], fork_request(entries_of(case)))
+    entries = entries_of(case)
+    # The question states the context's size as the plugin does: what the
+    # reply's request held, not counting the reply.
+    usage = entries[-1]["message"]["usage"]
+    size = sum(
+        usage.get(k) or 0
+        for k in (
+            "input_tokens",
+            "cache_read_input_tokens",
+            "cache_creation_input_tokens",
+        )
+    )
+    if case["tokens"] != size:
+        raise SystemExit(
+            f"{case['id']}: cases.json says {case['tokens']} tokens, but the reply's request held {size}"
+        )
+    return write(case["id"], fork_request(entries))
 
 
 def write(case: str, request: dict) -> Path:

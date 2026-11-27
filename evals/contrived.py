@@ -3,14 +3,23 @@ needs is known by construction. Each keeps a real case's system prompt, tools
 and settings (`BASE`'s) and replaces its messages:
 
 - skills-start: the user asks for a Leaf page; the model loads the Leaf skill
-  and four of its references, and says it will now draft the page. Nearly all
-  of the context should count.
+  and four of its references, and says it will now draft the page. All of
+  the context counts.
 - skills-done: the same, then the page is built and the user signs off to
-  work on their tax return. The skills should no longer count.
+  work on their tax return. Only the system prompt, the tools and the last
+  exchange count.
 - log-fixed: the user asks why CI failed; the model reads a 150k-character
   test log, finds the one failure, reads and fixes the short module it
   points to, and says it will push and watch CI. The log is spent; the module and the fix
   are what the work needs.
+
+`labels` marks each case's parts as its construction says, and `should`
+turns them into the ranges its share should fall in, from the parts' tokens
+as `share.py` counts them: on what a compaction drops that the work needs
+(the skill and the system prompt and tools come back after one, so at
+skills-start that is the references and the exchange), and on all the
+context, as the question asks (where the system prompt and tools always
+count, about half of skills-done's).
 
 `share.py --build` makes each request, reading the Leaf skill from the
 installed plugin, and leaves it to publish, so every run sends the same one.
@@ -27,22 +36,65 @@ READS = [
     "references/authoring-revisions.md",
 ]
 
-# What each turn end is, and the share of its context, as a percentage, that
-# the work ahead should be found to need.
 CASES = {
     "skills-start": {
         "what": "Just loaded the Leaf skill and four of its references; about to draft the page",
-        "should": (70, 100),
     },
     "skills-done": {
         "what": "The same, then the page built and the user off to their tax return",
-        "should": (0, 20),
     },
     "log-fixed": {
         "what": "A CI log read and its one failure fixed; next, push and watch CI",
-        "should": (0, 10),
     },
 }
+# How far a share may sit from what the construction gives, in points.
+SLACK = 5
+
+
+def labels(case: str, cut: list[dict]) -> dict:
+    """What the work ahead needs and is helped by at each made-up turn end,
+    as `share.py`'s labeller would mark it, by part id (`parts.parts_of`):
+
+    - skills-start: everything, since the page is drafted from the skill and
+      its references, as the user asked;
+    - skills-done: the system prompt, the tools and the last exchange, about
+      the tax return, which needs none of the page's work;
+    - log-fixed: the system prompt, the tools, the module as read, its fix,
+      and the reply that holds the fixed module, which pushing and watching CI
+      need; the rest of the exchange helps, and the log is spent."""
+    ids = [p["id"] for p in cut]
+    always = [p["id"] for p in cut if p["kind"] in ("system prompt", "tools")]
+    if case == "skills-start":
+        return {"needed": ids, "helpful": []}
+    if case == "skills-done":
+        return {"needed": [*always, *ids[-2:]], "helpful": []}
+    fix = [
+        p["id"]
+        for p in cut
+        if p["desc"]
+        in ("result of Read: src/export/dates.py", "Edit: src/export/dates.py")
+    ]
+    log = [p["id"] for p in cut if p["desc"].startswith("result of Bash: gh run view")]
+    needed = [*always, *fix, ids[-1]]
+    return {
+        "needed": needed,
+        "helpful": [i for i in ids if i not in needed and i not in log],
+    }
+
+
+def should(got: dict) -> tuple[tuple[int, int], tuple[int, int]]:
+    """The range a made-up case's share should fall in, from `parts.scored`
+    of its construction's labels: on what a compaction drops that the work
+    needs, from needed to needed or helpful, and on all the context, as the
+    question asks, each `SLACK` points wider."""
+
+    def band(lo: float, hi: float) -> tuple[int, int]:
+        return max(0, round(lo) - SLACK), min(100, round(hi) + SLACK)
+
+    return (
+        band(got["lost_needed"][0], got["lost_helpful"][0]),
+        band(got["needed"][0], got["helpful"][0]),
+    )
 
 
 def skill_dir() -> Path:

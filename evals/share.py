@@ -10,36 +10,42 @@ helpful for the work ahead, and checks the answer against what that work used.
     uv run --script evals/share.py --build     # the made-up cases' requests, to publish
     uv run --script evals/share.py --report    # the tables, and the chart to publish
 
-Whether compacting pays turns on that share: what the work ahead uses has to
-be read back after a compaction, and each token read back is written to the
-cache again. A run asks for it with `SHARE`, after the case's request as the
-fork sends it (`run.body_of`), alone, since the plugin's question asks for no
-share yet.
+Whether compacting pays turns on that share: what the work ahead uses of what
+a compaction drops has to be read back after it, and each token read back is
+written to the cache again. A run asks for it with `SHARE`, after the case's
+request as the fork sends it (`run.body_of`), alone, since the plugin's
+question asks for no share yet, stating the size the plugin states.
 
 Two kinds of case check the answer:
 
 - the turn ends in `cases.json`, but for the idle one, since the question
-  says the turn just ended. `parts.py` cuts the request into its parts, and
-  the same model, shown what the session did next (`next_work`), labels each
-  part needed, helpful or neither (`LABEL`), in `RUNS` runs. Only I can
-  label a case, since labelling reads my transcripts. Each label names the
-  request and a hash of the question it was asked (`shown`), which holds
-  the next work and the parts, and a case labelled on both is not labelled
-  again;
+  says the turn just ended. `parts.py` cuts the request into its parts, each
+  with its tokens as the API counts them (`counted`), and the same model,
+  shown what the session did next up to its next compaction (`next_work`),
+  labels each part needed, helpful or neither (`LABEL`), in `RUNS` runs.
+  Only I can label a case, since labelling reads my transcripts. Each label
+  names the request and a hash of the question it was asked (`shown`), which
+  holds the next work and the parts, and a case labelled on both is not
+  labelled again;
 - the turn ends `contrived.py` makes up, whose share is known by
   construction, from a turn end just after loading the skills the next step
   needs to one after the work moved on to something else.
 
-Every run sends the published request (`sparkjoy_assets.py`), so the labels
-name the parts of the request anyone can fetch. Each run's row goes to a
-batch of its own, published to `evals/share/` in sparkjoy-assets when the
-batch ends: the parts as kind and tokens, the labels' part ids, and the
-share's answer. What the session did next, and what each part holds, stay
-in `.tmp/share/`, where a labelled case's file shows them beside the labels
-and the labeller's reasons. `--report` prints, for each case, the model's
-share in each run, the shares the labels give, and the same of what a
-compaction drops, and draws the request of each labelled case, its parts
-coloured by their labels, light and dark, left waiting to publish.
+A turn end's run sends its request rebuilt from the transcript where that is
+on this machine, as the live fork sends it, thinking and all, and otherwise
+the published one (`run.request_of`); each row says which (`source`), and
+names the published request, which the made-up cases always send. Each
+run's row goes to a batch of its own, published to `evals/share/` in
+sparkjoy-assets when the batch ends: the parts as kind and tokens, the
+labels' part ids, and the share's answer. What the session did next, and
+what each part holds, stay in `.tmp/share/`, where a labelled case's file
+shows them beside the labels and the labeller's reasons. `--report` prints,
+for each case, the model's share in each run beside what the labels give:
+first what a compaction drops that the work needed, and needed or was
+helped by, as a share of the whole context, which is what the share is
+weighed against, then the same of all of it, as the question asks. It draws
+the request of each labelled case, its parts coloured by their labels,
+light and dark, left waiting to publish.
 """
 
 import argparse
@@ -66,16 +72,19 @@ import sparkjoy_assets  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 
 RUNS = 2  # label runs per case
-NEXT_REQUESTS = 80  # requests of the session's next work the labeller is shown
+# Requests of the session's next work the labeller is shown at most, up to
+# its next compaction.
+NEXT_REQUESTS = 300
 DIRECTORY = "evals/share"
 LOCAL = ROOT / ".tmp/share"
 
 # TODO: the share should leave out what comes back after a compaction anyway,
-# the system prompt, tools and instruction files. The cost model's K, the
-# context after a compaction, already prices them, so counting them in the
-# share charges them twice and leans the verdict toward keeping. The wording
-# leaves that out for simplicity while the question is being pushed to keep
-# more.
+# the system prompt, tools and instruction files, and what the first requests
+# after one read back on average (E). The cost model's K, the context after a
+# compaction, already prices both, so counting them in the share charges them
+# twice and leans the verdict toward keeping. The wording leaves that out for
+# simplicity while the question is being pushed to keep more, and `--report`
+# weighs the share against what a compaction drops that the work needed.
 SHARE = """Estimate how much of this session's context might possibly be helpful for the work ahead, for deciding whether to compact it now. This request comes from the sparkjoy plugin, not from the user, and a program reads your answer.
 
 Your turn just ended, with {size} tokens of context. Compacting replaces the transcript with a summary of about 5k tokens. Weigh:
@@ -137,10 +146,12 @@ def listing(request_parts: list[dict]) -> str:
 
 
 def next_work(case: dict) -> list[str]:
-    """What the session did over its `NEXT_REQUESTS` requests after the turn
-    end: what the user typed, and the model's text and calls. It runs on
-    through a compaction, since what the work reads back after one is what
-    the compaction cost it."""
+    """What the session did after the turn end, up to its next compaction,
+    where the context starts again whatever this turn end decided, and at
+    most `NEXT_REQUESTS` requests: what the user typed, and the model's text
+    and calls. A compaction at the turn end itself, as when sparkjoy
+    compacted there, doesn't end it, since the work after it is what the
+    context would have served."""
     path = next(fit.PROJECTS.glob(f"*/{case['source']['session']}.jsonl"), None)
     if path is None:
         raise LookupError(f"no transcript of session {case['source']['session']}")
@@ -151,7 +162,11 @@ def next_work(case: dict) -> list[str]:
                 continue
             e = json.loads(raw)
             if e.get("type") == "system" and e.get("subtype") == "compact_boundary":
-                lines.append(f"[{e.get('timestamp', '')[:16]}] COMPACTED")
+                ts = e.get("timestamp", "")[:16]
+                if seen:
+                    lines.append(f"[{ts}] COMPACTED, and the session went on")
+                    break
+                lines.append(f"[{ts}] COMPACTED")
                 continue
             if e.get("isSidechain") or e.get("isCompactSummary"):
                 continue
@@ -184,21 +199,14 @@ def next_work(case: dict) -> list[str]:
 def count(request: dict, headers: dict) -> int:
     """The tokens of `request`'s context, by the API's count."""
     body = run.body_of(request, ".")
-    body = {
-        k: body[k]
-        for k in ("model", "system", "tools", "messages", "thinking")
-        if k in body
-    }
-    conn = http.client.HTTPSConnection("api.anthropic.com", timeout=300)
-    conn.request(
-        "POST", "/v1/messages/count_tokens", json.dumps(body).encode(), headers
+    return plain(
+        {
+            k: body[k]
+            for k in ("model", "system", "tools", "messages", "thinking")
+            if k in body
+        },
+        headers,
     )
-    response = conn.getresponse()
-    data = response.read()
-    conn.close()
-    if response.status != 200:
-        raise RuntimeError(f"count {response.status}: {data[:300]!r}")
-    return json.loads(data)["input_tokens"]
 
 
 def sizes(request: dict, headers: dict) -> tuple[int, int, int]:
@@ -213,6 +221,61 @@ def sizes(request: dict, headers: dict) -> tuple[int, int, int]:
     with_system = count(request | {"messages": stub, "tools": []}, headers)
     bare = count(request | {"messages": stub, "tools": [], "system": blank}, headers)
     return total, with_system - bare, with_tools - with_system
+
+
+def counted(request: dict, headers: dict) -> tuple[int, list[dict]]:
+    """The request's tokens, and its parts (`parts.parts_of`) each with its
+    `tokens`: each kind's as the API counts the request without it, shared
+    among its parts by characters, and each image's on its own."""
+    cut = parts.parts_of(request)
+    x, system, tools = sizes(request, headers)
+    kinds = sorted({p["kind"] for p in cut} - {"system prompt", "tools", "thinking"})
+    # A thinking block counts only in the conversation it was written in, so
+    # changing anything before it drops it from the count: each kind is
+    # counted from the request without its thinking.
+    thought = [p["id"] for p in cut if p["kind"] == "thinking"]
+    unthought = count(parts.blank(request, cut, thought), headers)
+
+    def without(kind: str) -> int:
+        ids = [p["id"] for p in cut if p["kind"] == kind]
+        return unthought - count(parts.blank(request, cut, thought + ids), headers)
+
+    stub = {
+        "model": request["params"]["model"],
+        "messages": [{"role": "user", "content": "."}],
+    }
+
+    def alone(image: dict) -> int:
+        body = stub | {
+            "messages": [
+                {"role": "user", "content": [image, {"type": "text", "text": "."}]}
+            ]
+        }
+        return plain(body, headers) - plain(stub, headers)
+
+    with ThreadPoolExecutor(4) as pool:
+        counts = dict(zip(kinds, pool.map(without, kinds), strict=True))
+        held = [(p["id"], image) for p in cut for image in parts.images_of(request, p)]
+        tokens = list(pool.map(alone, [image for _, image in held]))
+    images = {}
+    for (i, _), n in zip(held, tokens, strict=True):
+        images[i] = images.get(i, 0) + n
+    counts |= {"system prompt": system, "tools": tools, "thinking": x - unthought}
+    return x, parts.sized(cut, counts, images, x)
+
+
+def plain(body: dict, headers: dict) -> int:
+    """`count` of a body given as is."""
+    conn = http.client.HTTPSConnection("api.anthropic.com", timeout=300)
+    conn.request(
+        "POST", "/v1/messages/count_tokens", json.dumps(body).encode(), headers
+    )
+    response = conn.getresponse()
+    data = response.read()
+    conn.close()
+    if response.status != 200:
+        raise RuntimeError(f"count {response.status}: {data[:300]!r}")
+    return json.loads(data)["input_tokens"]
 
 
 def answer(text: str) -> dict | None:
@@ -271,25 +334,53 @@ def run_cases(names: list[str], repeat: int, jobs: int) -> None:
 
     def one(name: str) -> None:
         digest = pointers().get(name)
-        found = run.request_of({"id": name}, True)
+        case = cases.get(name)
+        found = run.request_of(case or {"id": name}, case is None)
         if found is None or digest is None:
             print(f"SKIP {name}: no published request", flush=True)
             return
-        request, _ = found
+        request, source = found
         model = request["params"]["model"]
         if model not in fit.PRICES:
             print(f"SKIP {name}: fit.PRICES has no price for {model}", flush=True)
             return
         headers = run.headers_of(request, auth)
-        x, system, tools = sizes(request, headers)
-        base = {"case": name, "request": digest}
-        if case := cases.get(name):
+        x, cut = counted(request, headers)
+        # The size the plugin states: the context the reply answered, which
+        # a made-up case doesn't record.
+        stated = case["tokens"] if case else x
+        base = {"case": name, "request": digest, "source": source}
+        if name in contrived.CASES:
+            # A made-up case is labelled by its construction.
+            shown = hashlib.sha256(listing(cut).encode()).hexdigest()[:12]
+            if not labelled(name, digest, shown):
+                at = datetime.now(UTC).isoformat(timespec="seconds")
+                write(
+                    base
+                    | {
+                        "kind": "parts",
+                        "shown": shown,
+                        "at": at,
+                        "context": x,
+                        "parts": [[p["kind"], p["tokens"]] for p in cut],
+                    }
+                )
+                write(
+                    base
+                    | {
+                        "kind": "label",
+                        "shown": shown,
+                        "at": at,
+                        "by": "construction",
+                        **contrived.labels(name, cut),
+                    }
+                )
+        if case:
             try:
                 then = next_work(case)
             except LookupError as error:
                 print(f"NO LABELS {name}: {error}", flush=True)
             else:
-                cut = parts.sized(parts.parts_of(request), system, tools, x)
                 asked = LABEL.format(next="\n".join(then), parts=listing(cut))
                 shown = hashlib.sha256(asked.encode()).hexdigest()[:12]
                 if labelled(name, digest, shown) < RUNS:
@@ -305,7 +396,9 @@ def run_cases(names: list[str], repeat: int, jobs: int) -> None:
                     )
         for _ in range(repeat):
             try:
-                text, used = run.ask(run.body_of(request, share_question(x)), headers)
+                text, used = run.ask(
+                    run.body_of(request, share_question(stated)), headers
+                )
             except (RuntimeError, OSError) as error:
                 print(f"ERROR {name} [share]: {error}", flush=True)
                 continue
@@ -320,6 +413,7 @@ def run_cases(names: list[str], repeat: int, jobs: int) -> None:
                     "question": question,
                     "at": datetime.now(UTC).isoformat(timespec="seconds"),
                     "context": x,
+                    "stated": stated,
                     "helpful": helpful,
                     "next": got.get("next") if helpful is not None else text[:300],
                     "cache_read": used["cache_read_input_tokens"],
@@ -424,6 +518,41 @@ def span(values: list[float]) -> str:
     return f"{lo}%" if lo == hi else f"{lo}–{hi}%"
 
 
+def said(shares: list[dict], question: str) -> list[int]:
+    """The shares a case's rows give in answer to `question`: those asked of
+    the request rebuilt from the transcript where there are any, since that
+    is what the live fork sends, and otherwise those of the published one."""
+    asked = [r for r in shares if r["question"] == question]
+    rebuilt = [r for r in asked if r.get("source") == "transcript"]
+    return [r["helpful"] for r in rebuilt or asked]
+
+
+def latest(
+    every: list[dict], name: str, digest: str | None
+) -> tuple[dict | None, list[dict]]:
+    """A case's latest labelling: its parts row, and the label rows made with
+    the same question."""
+    cut = [
+        r
+        for r in every
+        if r["case"] == name
+        and r["kind"] == "parts"
+        and r["request"] == digest
+        and r.get("shown")
+    ][-1:]
+    if not cut:
+        return None, []
+    return cut[0], [
+        r
+        for r in every
+        if r["case"] == name
+        and r["kind"] == "label"
+        and r["request"] == digest
+        and r.get("shown") == cut[0]["shown"]
+        and r["needed"] is not None
+    ]
+
+
 def report() -> None:
     every = rows()
     digests = pointers()
@@ -431,101 +560,94 @@ def report() -> None:
         c for c in json.loads((HERE / "cases.json").read_text()) if c["kind"] == "turn"
     ]
 
-    def mine(name, kind):
+    def shares_of(name):
         return [
             r
             for r in every
             if r["case"] == name
-            and r["kind"] == kind
+            and r["kind"] == "share"
             and r["request"] == digests.get(name)
+            and r["helpful"] is not None
         ]
 
     questions = list(
         dict.fromkeys(r["question"] for r in every if r["kind"] == "share")
     )
     print(
+        "The model's share beside what the labels give: first what a compaction drops that the work needed,"
+        " and needed or was helped by, as a share of the whole context, which the share is weighed against;"
+        " then the same of all the context, as the question asks. Each question's share is of the request rebuilt"
+        " from the transcript where the case has one, as the live fork sends it.\n"
+    )
+    print(
         "| case | context | "
         + " | ".join(f"model's share ({q})" for q in questions)
-        + " | needed | needed or helpful | of what a compaction drops: needed | needed or helpful |"
+        + " | lost: needed | lost: needed or helpful | all: needed | all: needed or helpful | dropped |"
     )
-    print("|---|---|" + "---|" * len(questions) + "---|---|---|---|")
+    print("|---|---|" + "---|" * len(questions) + "---|---|---|---|---|")
     drawn, kinds = [], []
     for case in cases:
         name = case["id"]
-        shares = mine(name, "share")
-        # The latest labelling: its parts, and the labels made with the same
-        # question.
-        cut = [r for r in mine(name, "parts") if r.get("shown")][-1:]
-        runs = [
-            r
-            for r in mine(name, "label")
-            if cut and r.get("shown") == cut[0]["shown"] and r["needed"] is not None
-        ]
-        context = (cut or shares or [None])[0]
-        cells = [
-            span(
-                [
-                    r["helpful"]
-                    for r in shares
-                    if r["question"] == q and r["helpful"] is not None
-                ]
-            )
-            for q in questions
-        ]
-        scores = ["", "", "", ""]
+        shares = shares_of(name)
+        cut, runs = latest(every, name, digests.get(name))
+        cells = [span(said(shares, q)) for q in questions]
+        scores = [""] * 5
         if cut and runs:
-            got = parts.scored(cut[0]["parts"], runs)
+            got = parts.scored(cut["parts"], runs)
             scores = [
+                span(got["lost_needed"]),
+                span(got["lost_helpful"]),
                 span(got["needed"]),
                 span(got["helpful"]),
-                f"{got['dropped_needed']:.0f}%",
-                f"{got['dropped_helpful']:.0f}%",
+                f"{got['dropped']:.0f}%",
             ]
             # The chart shows the share the latest question gave.
-            model = [
-                r["helpful"]
-                for r in shares
-                if r["question"] == questions[-1] and r["helpful"] is not None
-            ]
-            drawn.append((name, cut[0]["parts"], got, model))
+            model = said(shares, questions[-1])
+            drawn.append((name, cut["parts"], got, model))
             kinds.append(got["kinds"])
-        size = (
-            f"{context['context'] // 1000}k"
-            if context
-            else f"{case['tokens'] // 1000}k"
-        )
+        size = f"{case['tokens'] // 1000}k"
         print(f"| {name} | {size} | " + " | ".join(cells + scores) + " |")
     if kinds:
         print(
             f"\nBy kind, the mean over the {len(kinds)} labelled cases, as percentages of the context:\n"
         )
-        print("| kind | size | needed | needed or helpful |")
-        print("|---|---|---|---|")
+        print("| kind | a compaction | size | needed | needed or helpful |")
+        print("|---|---|---|---|---|")
         for g in parts.ORDER:
             size, need, helps = (
                 sum(k[g][f] for k in kinds) / len(kinds)
                 for f in ("size", "needed", "helpful")
             )
-            print(f"| {g} | {size:.1f}% | {need:.1f}% | {helps:.1f}% |")
+            if size:
+                keeps = "puts it back" if kinds[0][g]["returns"] else "drops it"
+                print(f"| {g} | {keeps} | {size:.1f}% | {need:.1f}% | {helps:.1f}% |")
     # Each question's share at the made-up cases, with how many of its runs
-    # fell in the range the case should get.
+    # fall in the range their construction gives, on what a compaction drops
+    # and on all the context.
     print(
-        "\n| made-up case | the turn end | context | should be | "
+        "\n| made-up case | the turn end | context | should be: lost | of all | "
         + " | ".join(f"model's share ({q})" for q in questions)
         + " |"
     )
-    print("|---|---|---|---|" + "---|" * len(questions))
+    print("|---|---|---|---|---|" + "---|" * len(questions))
     for name, made in contrived.CASES.items():
-        shares = [r for r in mine(name, "share") if r["helpful"] is not None]
-        lo, hi = made["should"]
+        shares = shares_of(name)
+        cut, runs = latest(every, name, digests.get(name))
+        if not (cut and runs):
+            continue
+        lost, whole = contrived.should(parts.scored(cut["parts"], runs))
         cells = []
         for q in questions:
-            got = [r["helpful"] for r in shares if r["question"] == q]
-            inside = sum(lo <= v <= hi for v in got)
-            cells.append(f"{span(got)} ({inside}/{len(got)} in range)" if got else "")
-        size = f"{shares[0]['context'] // 1000}k" if shares else ""
+            got = said(shares, q)
+            inside = [sum(lo <= v <= hi for v in got) for lo, hi in (lost, whole)]
+            cells.append(
+                f"{span(got)} ({inside[0]}/{len(got)} in range on what's lost, {inside[1]}/{len(got)} of all)"
+                if got
+                else ""
+            )
         print(
-            f"| {name} | {made['what']} | {size} | {lo}–{hi}% | "
+            f"| {name} | {made['what']} | {cut['context'] // 1000}k "
+            f"| {lost[0]}–{lost[1]}% | {whole[0]}–{whole[1]}% | "
             + " | ".join(cells)
             + " |"
         )
@@ -536,14 +658,15 @@ def report() -> None:
 
 
 # Where the columns of shares right of the bars end, in fractions of the plot's width.
-COLUMNS = (1.08, 1.19)
+COLUMNS = (1.08, 1.17, 1.26)
 
 
 def draw(cases: list[tuple[str, list, dict, list[int]]]) -> None:
     """Each labelled case's request as a bar, its parts coloured by their
-    labels, with the model's share and the labels' share needed or helpful
-    beside it, each the mean of its runs; light and dark, left waiting to
-    publish."""
+    labels and hatched where a compaction puts them back, with the model's
+    share beside it and the labels' share needed or helpful, of what a
+    compaction drops and of all the context, each the mean of its runs;
+    light and dark, left waiting to publish."""
     strength = {"needed": 0.85, "helpful": 0.5, "one run": 0.25, "not needed": 0.08}
     names = {
         "needed": "needed",
@@ -556,27 +679,35 @@ def draw(cases: list[tuple[str, list, dict, list[int]]]) -> None:
             colours = {
                 k: charts.tint(t["ink"], t["page"], v) for k, v in strength.items()
             }
-            fig, ax = plt.subplots(figsize=(8.4, 0.42 * len(cases) + 1.3))
+            fig, ax = plt.subplots(figsize=(8.4, 0.42 * len(cases) + 1.5))
             charts.style(ax, t)
             ax.grid(axis="y", visible=False)
             ax.grid(axis="x", color=t["grid"], lw=0.8)
             for row, (_, cut, got, model) in enumerate(cases):
                 segments, at = [], 0
-                for (_, tokens), label in zip(cut, got["labels"], strict=True):
-                    if segments and segments[-1][2] == label:
+                for (kind, tokens), label in zip(cut, got["labels"], strict=True):
+                    back = kind in parts.RETURNS
+                    if segments and segments[-1][2:] == [label, back]:
                         segments[-1][1] += tokens
                     else:
-                        segments.append([at, tokens, label])
+                        segments.append([at, tokens, label, back])
                     at += tokens
-                ax.broken_barh(
-                    [(a, w) for a, w, _ in segments],
-                    (row - 0.34, 0.68),
-                    facecolors=[colours[k] for _, _, k in segments],
-                    linewidth=0,
-                )
-                mean = sum(got["helpful"]) / len(got["helpful"])
+                for back in (False, True):
+                    drawn = [s for s in segments if s[3] == back]
+                    ax.broken_barh(
+                        [(a, w) for a, w, *_ in drawn],
+                        (row - 0.34, 0.68),
+                        facecolors=[colours[k] for _, _, k, _ in drawn],
+                        edgecolor=t["page"],
+                        hatch="////" if back else None,
+                        linewidth=0,
+                    )
                 said = f"{sum(model) / len(model):.0f}%" if model else "–"
-                for x, text in zip(COLUMNS, (said, f"{mean:.0f}%"), strict=True):
+                shares = [
+                    f"{sum(got[k]) / len(got[k]):.0f}%"
+                    for k in ("lost_helpful", "helpful")
+                ]
+                for x, text in zip(COLUMNS, (said, *shares), strict=True):
                     ax.annotate(
                         text,
                         (x, row),
@@ -586,7 +717,7 @@ def draw(cases: list[tuple[str, list, dict, list[int]]]) -> None:
                         fontsize=9,
                         color=t["ink"],
                     )
-            for x, text in zip(COLUMNS, ("model", "hindsight"), strict=True):
+            for x, text in zip(COLUMNS, ("model", "lost", "of all"), strict=True):
                 ax.annotate(
                     text,
                     (x, -0.85),
@@ -604,10 +735,19 @@ def draw(cases: list[tuple[str, list, dict, list[int]]]) -> None:
             ax.set_xlim(0, None)
             ax.set_xlabel("tokens of context, in order", color=t["muted"], fontsize=10)
             ax.legend(
-                handles=[Patch(color=colours[k], label=names[k]) for k in strength],
+                handles=[Patch(color=colours[k], label=names[k]) for k in strength]
+                + [
+                    Patch(
+                        facecolor=colours["not needed"],
+                        edgecolor=t["ink"],
+                        hatch="////",
+                        linewidth=0,
+                        label="a compaction puts it back",
+                    )
+                ],
                 loc="lower left",
                 bbox_to_anchor=(0, 1.01),
-                ncols=4,
+                ncols=3,
                 frameon=False,
                 fontsize=9,
                 labelcolor=t["ink"],

@@ -17,14 +17,41 @@ import { parseArgs } from 'node:util'
 
 const {
   positionals: [registerPath, tokens],
-  values: { idle, instructions },
+  values: { idle, instructions, bounds },
 } = parseArgs({
   allowPositionals: true,
-  options: { idle: { type: 'string' }, instructions: { type: 'string' } },
+  options: {
+    idle: { type: 'string' },
+    instructions: { type: 'string' },
+    bounds: { type: 'boolean' },
+  },
 })
+const source = readFileSync(registerPath, 'utf8')
+// Older checkouts lack these: one from before the plugin compacted without
+// asking has no CEILING, and one from before its figures no AUTHOR.
+const has = (name: string) => new RegExp(`^const ${name}\\b`, 'm').test(source)
 const copy = resolve(dirname(registerPath), `.question-${process.pid}.ts`)
-writeFileSync(copy, `${readFileSync(registerPath, 'utf8')}\nexport { question }\n`)
-const { question } = await import(copy).finally(() => unlinkSync(copy))
+writeFileSync(
+  copy,
+  `${source}
+export { question }
+export const BOUNDS = {
+  floor: ${has('AUTHOR') ? 'AUTHOR.FLOOR' : 'null'},
+  idleFloor: ${has('AUTHOR') ? 'AUTHOR.IDLE_FLOOR' : 'null'},
+  ceiling: ${has('CEILING') ? 'CEILING' : 'null'},
+}
+`,
+)
+const { question, BOUNDS } = await import(copy).finally(() => unlinkSync(copy))
+
+// With --bounds, the sizes between which the checkout asks at all, as JSON:
+// from `floor` at a turn end and `idleFloor` in an idle session, and below
+// `ceiling`, from where it compacts without asking. A bound the checkout
+// doesn't have is null.
+if (bounds) {
+  process.stdout.write(JSON.stringify(BOUNDS))
+  process.exit(0)
+}
 
 const params = /^function question\(([^)]*)\)/.exec(question.toString())![1]
 const names = params.split(',').map(p => p.trim().split(/[\s:=?]/)[0])
