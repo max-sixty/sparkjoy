@@ -22,7 +22,8 @@ Two kinds of case check the answer:
   says the turn just ended. `parts.py` cuts the request into its parts, each
   with its tokens as the API counts them (`counted`), and the same model,
   shown what the session did next up to its next compaction (`next_work`),
-  as much of it as the window holds beside the request (`fitted`), labels
+  one JSON record per message, tool call or result, as much of it as the
+  window holds beside the request (`fitted`), labels
   each part needed, helpful or neither (`LABEL`), in `RUNS` runs.
   Only I can label a case, since labelling reads my transcripts. Each label
   names the request and a hash of the question it was asked (`shown`), which
@@ -123,7 +124,7 @@ Judge each part by the work that followed:
 - "helpful": it would have helped the next work, such as by saving a lookup or giving background to a decision, but the work could have done without it.
 - Every other part is not needed.
 
-What the session did next:
+What the session did next is below, one JSON object per line, in order. "t" is when it happened, and "who" what it was: "user" for what the user typed, "assistant" for the model's text, "call" for a tool call, with its "tool" and "input", "result" for what that call returned, marked "error" where it failed, and "compaction" where the context was compacted: the work after it ran without the context above. A long value may be cut in the middle, at " […] ".
 
 {next}
 
@@ -146,110 +147,51 @@ def listing(request_parts: list[dict]) -> str:
     )
 
 
-# The log's line for a compaction at the turn end itself, which `LABEL`'s
-# "needed" reads: the work after it ran without the context.
-AT_TURN_END = (
-    "COMPACTED here, at the turn end: the work below ran without the context above"
-)
-
-
-def next_work(case: dict) -> list[str]:
-    """What the session did after the turn end, up to its next compaction,
-    where the context starts again whatever this turn end decided: what the
-    user typed, the model's text, its calls and what each returned, each
-    whole, for `fitted` to shorten to the window. A compaction at the turn
-    end itself, as when sparkjoy compacted there, doesn't end it, since the
-    work after it is what the context would have served."""
+def next_work(case: dict) -> list[dict]:
+    """What the session did after the case's turn end, as `parts.next_work`
+    reads it from the transcript."""
     path = next(fit.PROJECTS.glob(f"*/{case['source']['session']}.jsonl"), None)
     if path is None:
         raise LookupError(f"no transcript of session {case['source']['session']}")
-    lines, began = [], False
     with path.open() as f:
-        for n, raw in enumerate(f):
-            if n <= case["source"]["line"]:
-                continue
-            e = json.loads(raw)
-            ts = e.get("timestamp", "")[:16]
-            if e.get("type") == "system" and e.get("subtype") == "compact_boundary":
-                if began:
-                    lines.append(f"[{ts}] COMPACTED, and the session went on")
-                    break
-                lines.append(f"[{ts}] {AT_TURN_END}")
-                continue
-            if e.get("isSidechain") or e.get("isCompactSummary"):
-                continue
-            if e.get("type") == "user" and not e.get("isMeta"):
-                for b in parts.blocks_of(e["message"]):
-                    text = b.get("text") or ""
-                    if b.get("type") == "text" and text and not text.startswith("<"):
-                        lines.append(f"[{ts}] USER: {text}")
-                    elif b.get("type") == "tool_result":
-                        error = " (error)" if b.get("is_error") else ""
-                        result = parts.text_of(b.get("content"))
-                        lines.append(f"[{ts}] RESULT{error}: {result}")
-            elif e.get("type") == "assistant":
-                began = True
-                for b in e["message"].get("content") or []:
-                    if b.get("type") == "text" and b.get("text"):
-                        lines.append(f"[{ts}] ASSISTANT: {b['text']}")
-                    elif b.get("type") == "tool_use":
-                        given = json.dumps(b.get("input") or {}, ensure_ascii=False)
-                        lines.append(f"[{ts}] CALL {b['name']}: {given}")
-    return lines
-
-
-def shortened(lines: list[str], chars: int) -> list[str]:
-    """`lines` in about `chars` characters: each line longer than a common
-    length keeps its head and tail, the length the longest that fits."""
-    lengths = sorted(map(len, lines))
-    total = 0
-    for i, n in enumerate(lengths):
-        if total + n * (len(lengths) - i) > chars:
-            half = max((chars - total) // (len(lengths) - i), 0) // 2
-            break
-        total += n
-    else:
-        return lines
-    return [
-        f"{line[:half]} […] {line[len(line) - half :]}"
-        if len(line) > 2 * half
-        else line
-        for line in lines
-    ]
+        return parts.next_work(
+            json.loads(raw) for n, raw in enumerate(f) if n > case["source"]["line"]
+        )
 
 
 def fitted(
-    request: dict, headers: dict, cut: list[dict], then: list[str]
-) -> tuple[str, list[str]]:
+    request: dict, headers: dict, cut: list[dict], then: list[dict]
+) -> tuple[str, list[dict]]:
     """`LABEL` asked with what the session did next (`then`) shortened to
     fit the window beside the request and `LABEL_OUTPUT`, by the API's
-    count, and the lines of it shown."""
+    count, and the records of it shown."""
 
-    def asked(lines: list[str]) -> str:
-        return LABEL.format(next="\n".join(lines), parts=listing(cut))
+    def asked(records: list[dict]) -> str:
+        return LABEL.format(next=parts.rendered(records), parts=listing(cut))
 
-    def tokens(lines: list[str]) -> int:
-        log = "\n".join(lines) or "."
+    def tokens(records: list[dict]) -> int:
         return plain(
             {
                 "model": request["params"]["model"],
-                "messages": [{"role": "user", "content": log}],
+                "messages": [
+                    {"role": "user", "content": parts.rendered(records) or "."}
+                ],
             },
             headers,
         )
 
     room = fit.WINDOW - LABEL_OUTPUT - count(request, headers, asked([]))
-    # Each pass asks for fewer characters than the last, so the lines
+    # Each pass asks for fewer characters than the last, so the records
     # shorten until they fit or can't shorten further.
-    lines, chars = then, sum(map(len, then))
-    while (used := tokens(lines)) > room:
+    records, chars = then, sum(map(parts.length, then))
+    while (used := tokens(records)) > room:
         chars = chars * room // used * 97 // 100
-        if (shorter := shortened(then, chars)) == lines:
+        if (shorter := parts.shortened(then, chars)) == records:
             raise LookupError(
                 f"the window holds {room} tokens, too few for the next work"
             )
-        lines = shorter
-    return asked(lines), lines
+        records = shorter
+    return asked(records), records
 
 
 def count(request: dict, headers: dict, question: str = ".") -> int:

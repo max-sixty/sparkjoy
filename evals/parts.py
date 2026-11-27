@@ -27,12 +27,15 @@ A labeller marks each part needed, helpful or neither, in several runs
 (`share.py`), and `scored` turns the runs into shares of the context: what
 the work needed, and needed or was helped by, of the whole context, and of
 it what a compaction drops (`lost_*`), which is what the work then has to
-read back and what the share is weighed against.
+read back and what the share is weighed against. It judges them by what the
+session did next (`next_work`), one record per message, tool call or result,
+which `shortened` cuts to the window, each value keeping its head and tail.
 """
 
 import copy
 import json
 import re
+from collections.abc import Iterable
 
 # The kinds a compaction puts back.
 RETURNS = {
@@ -184,6 +187,134 @@ def text_of(content) -> str:
 def blocks_of(message: dict) -> list[dict]:
     content = message["content"]
     return content if isinstance(content, list) else [{"type": "text", "text": content}]
+
+
+# The next work's record of a compaction at the turn end itself, which
+# `share.LABEL`'s "needed" reads: the work after it ran without the context.
+AT_TURN_END = (
+    "COMPACTED here, at the turn end: the work below ran without the context above"
+)
+# Where `shortened` cuts a value, between its head and tail.
+CUT = " […] "
+
+
+def next_work(entries: Iterable[dict]) -> list[dict]:
+    """What the session did after a turn end, from its transcript's entries
+    after it, up to its next compaction, where the context starts again
+    whatever the turn end decided: one record for each thing the user typed,
+    each text of the model's, each tool call with its input, and each
+    result, each whole, for `shortened` to cut to the window. A compaction at
+    the turn end itself, as when sparkjoy compacted there, doesn't end it,
+    since the work after it is what the context would have served."""
+    records, began, tools = [], False, {}
+    for e in entries:
+        t = e.get("timestamp", "")[:16]
+        if e.get("type") == "system" and e.get("subtype") == "compact_boundary":
+            if began:
+                records.append(
+                    {
+                        "t": t,
+                        "who": "compaction",
+                        "text": "COMPACTED, and the session went on",
+                    }
+                )
+                break
+            records.append({"t": t, "who": "compaction", "text": AT_TURN_END})
+            continue
+        if e.get("isSidechain") or e.get("isCompactSummary"):
+            continue
+        if e.get("type") == "user" and not e.get("isMeta"):
+            for b in blocks_of(e["message"]):
+                text = b.get("text") or ""
+                if b.get("type") == "text" and text and not text.startswith("<"):
+                    records.append({"t": t, "who": "user", "text": text})
+                elif b.get("type") == "tool_result":
+                    record = {"t": t, "who": "result"}
+                    if tool := tools.get(b.get("tool_use_id")):
+                        record["tool"] = tool
+                    if b.get("is_error"):
+                        record["error"] = True
+                    records.append(record | {"text": text_of(b.get("content"))})
+        elif e.get("type") == "assistant":
+            began = True
+            for b in e["message"].get("content") or []:
+                if b.get("type") == "text" and b.get("text"):
+                    records.append({"t": t, "who": "assistant", "text": b["text"]})
+                elif b.get("type") == "tool_use":
+                    tools[b.get("id")] = b["name"]
+                    records.append(
+                        {
+                            "t": t,
+                            "who": "call",
+                            "tool": b["name"],
+                            "input": b.get("input") or {},
+                        }
+                    )
+    return records
+
+
+def values(value) -> list[str]:
+    """The strings in a record's `text` and `input`, which `shortened` may cut."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        value = value.values()
+    elif not isinstance(value, list):
+        return []
+    return [s for v in value for s in values(v)]
+
+
+def length(record: dict) -> int:
+    return sum(map(len, values([record.get("text"), record.get("input")])))
+
+
+def cut(value, half: int):
+    """`value` with each string longer than twice `half` kept to its head
+    and tail."""
+    if isinstance(value, str):
+        return (
+            f"{value[:half]}{CUT}{value[len(value) - half :]}"
+            if len(value) > 2 * half
+            else value
+        )
+    if isinstance(value, dict):
+        return {k: cut(v, half) for k, v in value.items()}
+    if isinstance(value, list):
+        return [cut(v, half) for v in value]
+    return value
+
+
+def common(lengths: list[int], budget: int) -> int | None:
+    """The largest length every item longer than it is cut to so that
+    `lengths` take `budget` in all, or None where they fit whole."""
+    total = 0
+    for i, n in enumerate(ordered := sorted(lengths)):
+        if total + n * (len(ordered) - i) > budget:
+            return max((budget - total) // (len(ordered) - i), 0)
+        total += n
+    return None
+
+
+def shortened(records: list[dict], chars: int) -> list[dict]:
+    """`records` with their `text` and `input` in about `chars` characters:
+    each record longer than a common length is cut to it, the length the
+    longest that fits, and within a record its longest values are cut first,
+    each keeping its head and tail, so every record stays whole JSON."""
+    if (limit := common([length(r) for r in records], chars)) is None:
+        return records
+    out = []
+    for r in records:
+        within = common(list(map(len, values([r.get("text"), r.get("input")]))), limit)
+        if within is None:
+            out.append(r)
+            continue
+        out.append(r | {k: cut(r[k], within // 2) for k in ("text", "input") if k in r})
+    return out
+
+
+def rendered(records: list[dict]) -> str:
+    """The records as the labeller reads them, one JSON object per line."""
+    return "\n".join(json.dumps(r, ensure_ascii=False) for r in records)
 
 
 def sections(text: str, role: str) -> list[tuple[int, int]]:
