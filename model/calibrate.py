@@ -27,7 +27,10 @@ requests whose failures were all the worktree guard's; it explored when every ca
 lookup. `corrected` counts CORRECTION's matches, which J scales to `corrections_share`, the share of
 requests in turns the user corrected. Trouble is against REFERENCE's band, and the thresholds are at
 fit.BASE's β. `D_top_usd` is D at the top of its interval, and `replayed` the best turn-end
-threshold, with its saving and the saving at fit.FLOOR.
+threshold, with its saving and the saving at fit.FLOOR. `share` is the share threshold at a turn
+end, by band and size, with the requests to the next reset from these sessions and the prices and
+parameters from the cost model's, at D = 0 and at the D the user's and Claude Code's compactions
+waste.
 """
 
 import argparse
@@ -87,6 +90,14 @@ REFERENCE = 3  # 400k to 600k, where most compactions happen
 # The half points searched for the saturating form, 1 - 2^(-x/s), which the comparison of forms fits
 # beside the power law.
 DRAWS = 200
+# The share threshold at a turn end: the bands of context it is given for, with the requests to the
+# next reset averaged over each, and the sizes it is given at, with those requests interpolated
+# between the bands' means at their median contexts.
+BANDS = ((200_000, 300_000), (300_000, 450_000), (450_000, 650_000), (650_000, 965_000))
+SIZES = (230_000, 300_000, 400_000, 600_000, 800_000)
+# A curve A (1 - FLOOR / x) under the fitted one, whose D the doc gives: a proposed wording of the
+# question stated the threshold from a height of 0.25 and a floor of 212k.
+LOWER = (0.25, 212_000)
 
 
 def corrects(text):
@@ -345,6 +356,80 @@ def interval(values, q=(5, 95)):
     return np.percentile(np.array(values, float), q, axis=0)
 
 
+def share(S, p, c, wasted, D):
+    """The share threshold at a turn end (fit.share_threshold), with the requests to the next reset
+    from S and the prices and parameters from p and c: with no detail lost beyond what is read back,
+    and with D more wasted requests, each costing `wasted` cached reads. Each band's requests to the
+    reset have a 90% interval from resampling sessions; each size's are interpolated between the
+    bands', and give the D that puts the threshold on LOWER."""
+    x, n, k = fit.to_reset(S)
+    h, _, F0 = fit.terms(p, c)
+    star = lambda z, m, d=0.0: fit.share_threshold(p, c, z, m, d * wasted)
+    rng = np.random.default_rng(0)
+    bands = []
+    for lo, hi in BANDS:
+        sel = (x >= lo) & (x < hi)
+        # Each session's requests to the reset and turn ends in the band, to resample whole sessions.
+        ids, at = np.unique(k[sel], return_inverse=True)
+        total, ends = np.bincount(at, n[sel]), np.bincount(at)
+        boot = []
+        for _ in range(DRAWS):
+            pick = rng.integers(0, len(ids), len(ids))
+            boot.append(total[pick].sum() / ends[pick].sum())
+        mean, mid = n[sel].mean(), np.median(x[sel])
+        bands.append(
+            {
+                "from": lo,
+                "to": hi,
+                "turn_ends": int(sel.sum()),
+                "sessions": len(ids),
+                "requests_to_reset": {"value": mean, "interval_90": interval(boot)},
+                "median_context": mid,
+                "threshold": {
+                    "value": star(mid, mean),
+                    "interval_90": star(mid, interval(boot)),
+                },
+                "threshold_with_D": star(mid, mean, D),
+            }
+        )
+    sizes = []
+    for z in SIZES:
+        m = np.interp(
+            z,
+            [b["median_context"] for b in bands],
+            [b["requests_to_reset"]["value"] for b in bands],
+        )
+        lower = LOWER[0] * (1 - LOWER[1] / z)
+        per = star(z, m) - star(z, m, 1)  # s* is linear in D
+        sizes.append(
+            {
+                "context": z,
+                "requests_to_reset": m,
+                "threshold": star(z, m),
+                "threshold_with_D": star(z, m, D),
+                "per_wasted_request": per,
+                "lower": lower,
+                "D_for_lower": (star(z, m) - lower) / per,
+            }
+        )
+    mean = n.mean()
+    form = lambda d: {
+        "A": (mean * h - 1) / (mean * h + c.write - 1),
+        "FLOOR": (mean * h * p.K + F0 + d * wasted) / (mean * h - 1),
+    }
+    return {
+        "turn_ends": len(x),
+        "sessions": len(np.unique(k)),
+        "requests_to_reset": mean,
+        "D": D,
+        "request_usd": wasted * c.read,
+        "bands": bands,
+        "sizes": sizes,
+        "form": {"D_zero": form(0.0), "with_D": form(D)},
+        "lower": {"A": LOWER[0], "FLOOR": LOWER[1]},
+    }
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     fit.window_args(ap)
@@ -507,6 +592,9 @@ def main():
         "first_turn_after_compaction": raw(first),
         "other_turns": raw(rest),
     }
+
+    # At the D the user's and Claude Code's compactions waste, which the doc's parameters give.
+    figures["share"] = share(S, p, c, wasted, x["D requests other"])
 
     figures["D_top_usd"] = high * c.read
     figures["steady_threshold"] = {

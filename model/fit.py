@@ -926,6 +926,39 @@ def idle_break_even(p, c):
     return (c.output * p.N + c.write * p.K) / (c.write - 1)
 
 
+# The decision at a turn end, given the share of the context the work ahead needs.
+
+
+def to_reset(S, low=200_000):
+    """Each turn end at a context of `low` or more, as arrays of its context, the requests until its
+    session's next reset (the next compaction, or the session's end), and the session's index. A turn
+    end a compaction ended at once is left out: how long its session would have run on had it kept is
+    unobserved, not zero."""
+    x, n, k = [], [], []
+    for i, s in enumerate(S):
+        resets = np.flatnonzero((s.kind == USER) | (s.kind == POLICY))
+        for j in np.flatnonzero(s.end & (s.size >= low)):
+            later = resets[resets > j]
+            left = (later[0] if len(later) else len(s.size)) - (j + 1)
+            if len(later) and left == 0:
+                continue
+            x.append(s.size[j])
+            n.append(left)
+            k.append(i)
+    return np.array(x, float), np.array(n, float), np.array(k)
+
+
+def share_threshold(p, c, x, n, lost=0.0):
+    """s*(x), the share of a context x that the work ahead needs under which compacting at a turn end
+    costs less over the n requests to the session's next reset. Keeping, they read x each, n h x.
+    Compacting costs F(x) = x + F0, and they read K and what the work reads back, the share s of x,
+    written once: x + F0 + n h K + s x (n h + w - 1). `lost` is D, what the detail the compaction drops
+    costs beyond what is read back, in cached reads. With one n, s*(x) = A (1 - FLOOR / x), with
+    A = (n h - 1) / (n h + w - 1) and FLOOR = (n h K + F0 + D) / (n h - 1)."""
+    h, _, F0 = terms(p, c)
+    return (n * h * (x - p.K) - x - F0 - lost) / (x * (n * h + c.write - 1))
+
+
 CHECK_OUTPUT = 100  # output tokens of a question
 
 
