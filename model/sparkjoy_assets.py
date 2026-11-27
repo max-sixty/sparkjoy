@@ -77,7 +77,7 @@ RESULTS = "evals/results/*.jsonl"
 IMAGES = "images/*/" + "[0-9a-f]" * 12 + ".*"
 # Where the README and docs link each image, and the names an image can take.
 LINKS = "https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/"
-NAME = re.compile(r"[a-z0-9][a-z0-9-]*")
+NAME = re.compile(r"[a-z0-9][a-z0-9-]*\.[a-z0-9]+")
 
 
 def git(*args: str, cwd: Path = CLONE, **kwargs) -> str:
@@ -200,19 +200,21 @@ def wait(directory: str, hashed: bytes, data: bytes, extension: str) -> Path:
     shutil.rmtree(waiting, ignore_errors=True)
     waiting.mkdir(parents=True)
     target = waiting / f"{hashlib.sha256(hashed).hexdigest()[:12]}{extension}"
-    # Written under a name no publish takes, then renamed, so that a publish
-    # never takes a file half written.
-    partial = waiting / f".{target.name}.part"
-    partial.write_bytes(data)
-    partial.rename(target)
+    # Written under a name of its own that no publish takes, then renamed, so
+    # that a publish never takes a file half written.
+    with tempfile.NamedTemporaryFile(dir=UNPUBLISHED, prefix=".", delete=False) as file:
+        file.write(data)
+    Path(file.name).rename(target)
     return target
 
 
 def image(file: Path) -> Path:
     """Make the image at `file` wait to publish, under its name, the file's name
     without its extension."""
-    if not NAME.fullmatch(file.stem):
-        sys.exit(f"{file}: name an image in lowercase letters, digits and dashes.")
+    if not NAME.fullmatch(file.name):
+        sys.exit(
+            f"{file}: name an image in lowercase letters, digits and dashes, with an extension."
+        )
     data = file.read_bytes()
     return wait(f"images/{file.stem}", data, data, file.suffix)
 
@@ -247,17 +249,15 @@ def point(paths: list[str]) -> None:
         POINTERS.write_text(json.dumps(pointers, indent=2) + "\n")
     images = {
         re.compile(
-            re.escape(LINKS + p.rsplit("/", 1)[0]) + r"/[0-9a-f]{12}\.\w+"
+            re.escape(LINKS + p.rsplit("/", 1)[0]) + r"/[0-9a-f]{12}\.[a-z0-9]+"
         ): LINKS + p
         for p in paths
         if p.startswith("images/")
     }
     if not images:
         return
-    listed = git(
-        "ls-files", "--cached", "--others", "--exclude-standard", "*.md", cwd=ROOT
-    )
-    for markdown in {ROOT / name for name in listed.splitlines()}:
+    listed = git("ls-files", "-z", "*.md", cwd=ROOT)
+    for markdown in {ROOT / name for name in listed.split("\0") if name}:
         if not markdown.is_file():
             continue
         text = markdown.read_text()
