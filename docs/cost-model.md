@@ -466,9 +466,11 @@ classifier saves over the single threshold, since the session avoids all D
 wasted requests at each turn end the classifier judges right, and pays for a
 question at every turn end where it asks.
 
-Unlike this classifier, sparkjoy's question also states what keeping the context
-costs, so the session's model can compact at a turn end in the middle of a task
-once keeping costs more than the detail a compaction would drop.
+sparkjoy's question also states what a compaction saves at the context's size,
+but in the evals its verdict follows its answer about the detail whatever size
+it states ([Size](../evals/README.md#size)), so it acts as this classifier
+does. sparkjoy applies the threshold for work that needs its history itself:
+from 900k it compacts without asking.
 
 ### What the model needs measured
 
@@ -570,8 +572,8 @@ Prices for the one-hour cache. Every other section's figures are for Opus 5.5.
 `/sparkjoy report` fits the model to your sessions of the last 14 days, and its
 Thresholds section gives the pair of floors that minimizes their cost. From then
 on, sparkjoy asks once the context reaches those floors, unless you set floors
-of your own, and its question states the parameters the report measured in
-place of mine. The fit needs some compactions in those sessions, to measure K
+of your own, and its question's sums use the parameters the report measured
+in place of mine. The fit needs some compactions in those sessions, to measure K
 and N.
 
 ## Questions about the model

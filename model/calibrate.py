@@ -4,8 +4,7 @@
 # dependencies = ["numpy>=2.1", "matplotlib>=3.9"]
 # ///
 """Measures how trouble varies with the context in your sessions, and fits D, the cost of the detail
-a compaction drops, as the extra wasted requests after a compaction, which sparkjoy's question
-states (WASTED in hooks/register.ts).
+a compaction drops, as the extra wasted requests after a compaction.
 
     uv run --script model/calibrate.py --since 2026-09-17T00:00Z --until 2026-11-16T00:00Z \
         --costs-since 2026-11-18T00:00Z --costs-until 2026-11-23T00:00Z

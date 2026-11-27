@@ -1,34 +1,33 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.12"
+# dependencies = ["numpy>=2.1"]
 # ///
-"""Asks a checkout's question at each case's turn end, and scores the verdicts.
+"""Asks a checkout's question at each case's turn end, as the plugin's fork
+asks it, and scores the verdicts.
 
-    uv run --script evals/run.py [--question-from CHECKOUT ...] [--case ID ...] [--repeat N] [--keep-reply]
+    uv run --script evals/run.py [--question-from CHECKOUT ...] [--case ID ...] [--repeat N] [--told TOKENS] [--published]
     uv run --script evals/run.py --report
 
-Each run rebuilds a case's fixture as a session in a scratch Claude Code
-config, resumes it with `claude -p --resume <id> --fork-session`, and sends
-the question that `question()` in `<checkout>/hooks/register.ts` renders for
-the case's context size (`question.ts`), with the case's reply for a checkout
-whose question quotes it. The child has no tools, no
-MCP servers and no user instructions, skills or plugins. Each result is
-appended to `results.jsonl` (or `--results`); `--report` prints the table
-README.md shows.
+A case's request is the one the turn's reply answered, with the reply after
+it. `$.model.fork` sends that request again with its prompt after the reply,
+so a run sends the same straight to the API, with the question `question()`
+in `<checkout>/hooks/register.ts` renders for the case's recorded context size
+(`question.ts`), or for `--told` tokens. Where the case's session is on this
+machine, a run rebuilds the request from its transcript, as the live fork
+sends it (`build.fork_request`); elsewhere, or with `--published`, it sends the
+one published in the evals' data repository (`sparkjoy_assets.py`), without
+the thinking and the words the build took out of it. Each row records which it
+sent. A tool call is answered as the fork answers it, with the error the fork
+returns, and the request sent again. Each result is appended to a file of
+the batch's results, which the batch publishes to that repository's
+`evals/results/` when it ends (`sparkjoy_assets.batch`). `--report` prints the table
+README.md shows from every batch's results, and for each question asked at
+several `--told` sizes, how often it compacted at each.
 
-The session stops before the turn's reply, as the plugin's fork does: the fork
-replays the turn's last request, which ends before the reply. `--keep-reply`
-ends it with the reply instead, so the question is the next message after the
-model's own last word.
-
-Runs of one case go in sequence from one directory and share one cache write
-of its transcript, so each run after the first costs about a twentieth of it.
-Claude Code puts the cache breakpoint on the last content block, so the
-questions' common opening (up to the quoted reply, when they agree that far)
-goes first in a request of its own, and every run then sends that opening and
-the rest of its question as two blocks, reading the transcript and the opening
-from the cache. `FORCE_PROMPT_CACHING_5M` keeps the write at the five-minute
-price, which the runs refresh as they read it. Cases run `--jobs` at a time.
+Runs of one case go in sequence and share one cache write of its context, so
+each run after the first costs about a twentieth of it, whatever question it
+asks. Cases run `--jobs` at a time.
 
 `--question-from` takes a checkout or a `register.ts` file, so a variant of the
 question can be tried from a scratch copy before it is committed.
@@ -45,203 +44,191 @@ import gzip
 import http.client
 import json
 import os
-import shutil
+import re
 import subprocess
 import sys
-import tempfile
-import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime, timedelta
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from datetime import UTC, datetime
 from pathlib import Path
-from threading import Thread
 
 HERE = Path(__file__).parent
-RESULTS = HERE / "results.jsonl"
-MODEL = "claude-opus-5-5"
-# The effort Claude Code's own sessions ran at in the fixtures.
-EFFORT = "xhigh"
+sys.path.insert(0, str(HERE.parent / "model"))
+import build  # noqa: E402
+import fit  # noqa: E402
+import sparkjoy_assets  # noqa: E402
+
 # How long an idle case's session has sat untouched when it is asked: the
 # plugin's wait on a one-hour cache (IDLE_MS).
 IDLE_MINUTES = 55
+# What the fork answers a tool call with.
+DENIED = "A model fork cannot use tools"
+# The requests a run may make, the first and one after each denied tool call,
+# before it gives up.
+MAX_REQUESTS = 5
 
 
-def access_token() -> dict[str, str]:
-    """The credential a child authenticates with, as environment variables."""
-    for name in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"):
-        if os.environ.get(name):
-            return {name: os.environ[name]}
-    if sys.platform == "darwin":
-        found = subprocess.run(
-            [
-                "security",
-                "find-generic-password",
-                "-s",
-                "Claude Code-credentials",
-                "-a",
-                os.environ.get("USER") or getpass.getuser(),
-                "-w",
-            ],
-            capture_output=True,
-            text=True,
+def credential() -> dict[str, str]:
+    """The headers a request authenticates with."""
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return {"x-api-key": os.environ["ANTHROPIC_API_KEY"]}
+    token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
+    if not token:
+        if sys.platform == "darwin":
+            found = subprocess.run(
+                [
+                    "security",
+                    "find-generic-password",
+                    "-s",
+                    "Claude Code-credentials",
+                    "-a",
+                    os.environ.get("USER") or getpass.getuser(),
+                    "-w",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            blob = found.stdout if found.returncode == 0 else None
+        else:
+            path = Path.home() / ".claude/.credentials.json"
+            blob = path.read_text() if path.is_file() else None
+        token = (
+            (json.loads(blob).get("claudeAiOauth") or {}).get("accessToken")
+            if blob
+            else None
         )
-        blob = found.stdout if found.returncode == 0 else None
-    else:
-        path = Path.home() / ".claude/.credentials.json"
-        blob = path.read_text() if path.is_file() else None
-    token = (
-        (json.loads(blob).get("claudeAiOauth") or {}).get("accessToken")
-        if blob
-        else None
-    )
     if not token:
         sys.exit(
             "No credentials: set CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY, or log in to Claude Code."
         )
-    return {"CLAUDE_CODE_OAUTH_TOKEN": token}
+    return {"authorization": f"Bearer {token}"}
 
 
-# The text of the message Claude Code puts after a resumed session's last
-# message when that message is the user's, such as a tool result.
-NO_RESPONSE = "No response requested."
-
-
-def added_on_resume(message: dict) -> bool:
-    content = message["content"]
-    if (
-        isinstance(content, list)
-        and len(content) == 1
-        and content[0].get("type") == "text"
-    ):
-        content = content[0]["text"]
-    return message["role"] == "assistant" and content == NO_RESPONSE
-
-
-class Proxy(BaseHTTPRequestHandler):
-    """Forwards the child's API requests, dropping the assistant message Claude Code
-    adds on resuming a session that ends with a tool result. The plugin's fork sends
-    no such message: its question follows the turn's last tool result."""
-
-    def do_POST(self):
-        body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
-        if self.path.split("?")[0] == "/v1/messages":
-            request = json.loads(body)
-            request["messages"] = [
-                m for m in request["messages"] if not added_on_resume(m)
-            ]
-            body = json.dumps(request).encode()
-        headers = {
-            k: v
-            for k, v in self.headers.items()
-            if k.lower() not in ("host", "content-length", "connection")
-        }
-        upstream = http.client.HTTPSConnection("api.anthropic.com", timeout=900)
-        upstream.request(
-            "POST", self.path, body, headers | {"Content-Length": str(len(body))}
-        )
-        response = upstream.getresponse()
-        self.send_response(response.status)
-        for k, v in response.getheaders():
-            if k.lower() not in ("transfer-encoding", "connection", "content-length"):
-                self.send_header(k, v)
-        self.send_header("Connection", "close")
-        self.end_headers()
-        while chunk := response.read1(65536):
-            self.wfile.write(chunk)
-            self.wfile.flush()
-        upstream.close()
-
-    def log_message(self, *_):
-        pass
-
-
-def start_proxy() -> str:
-    """Serves `Proxy` on a free local port; returns its base URL."""
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Proxy)
-    Thread(target=server.serve_forever, daemon=True).start()
-    return f"http://127.0.0.1:{server.server_port}"
-
-
-def child_env(config: Path, credential: dict[str, str], proxy: str) -> dict[str, str]:
-    """This environment without any Claude Code or Anthropic setting, pointed at `config` and `proxy`."""
-    env = {
-        k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE", "ANTHROPIC"))
+def body_of(request: dict, question: str) -> dict:
+    """The fork's request: the recorded one, the reply, then the question, with
+    the cache breakpoints on the system prompt and the reply."""
+    system = [*request["system"]]
+    system[-1] = system[-1] | {"cache_control": {"type": "ephemeral"}}
+    *messages, reply = request["messages"]
+    reply = reply | {
+        "content": [
+            *reply["content"][:-1],
+            reply["content"][-1] | {"cache_control": {"type": "ephemeral"}},
+        ]
     }
-    return (
-        env
-        | credential
-        | {
-            "ANTHROPIC_BASE_URL": proxy,
-            "CLAUDE_CONFIG_DIR": str(config),
-            "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
-            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-            "FORCE_PROMPT_CACHING_5M": "1",
-        }
-    )
+    params = {k: v for k, v in request["params"].items() if k != "betas"}
+    return params | {
+        "system": system,
+        "tools": request["tools"],
+        "messages": [*messages, reply, {"role": "user", "content": question}],
+        "stream": True,
+    }
 
 
-def project_dir(path: Path) -> str:
-    """Claude Code's folder name for a working directory's sessions."""
-    return "".join(c if c.isalnum() else "-" for c in str(path))
-
-
-def load(case: dict) -> list[dict]:
-    with gzip.open(HERE / "fixtures" / f"{case['id']}.jsonl.gz", "rt") as f:
-        return [json.loads(line) for line in f]
-
-
-def split_reply(entries: list[dict]) -> tuple[list[dict], str]:
-    """The fixture without the assistant message it ends with, the turn's reply, and that reply's text."""
-    last = entries[-1]["message"]["id"]
-    first = next(
-        i
-        for i, e in enumerate(entries)
-        if e["type"] == "assistant" and e["message"]["id"] == last
-    )
-    blocks = [b for e in entries[first:] for b in e["message"]["content"]]
-    return entries[:first], "\n\n".join(
-        b["text"] for b in blocks if b.get("type") == "text"
-    )
-
-
-def stage(entries: list[dict], case: dict, config: Path, cwd: Path) -> str:
-    """Writes the fixture as a session Claude Code can resume from `cwd`; returns its id."""
-    session = str(uuid.uuid4())
-    # The turn ended a moment ago, or IDLE_MINUTES ago for an idle case.
-    ago = timedelta(minutes=IDLE_MINUTES if case["kind"] == "idle" else 1)
-    shift = datetime.now(UTC) - ago - datetime.fromisoformat(entries[-1]["timestamp"])
-    folder = config / "projects" / project_dir(cwd)
-    folder.mkdir(parents=True, exist_ok=True)
-    with (folder / f"{session}.jsonl").open("w") as f:
-        for entry in entries:
-            stamp = (
-                (datetime.fromisoformat(entry["timestamp"]) + shift)
-                .isoformat()
-                .replace("+00:00", "Z")
+def stream(body: dict, headers: dict) -> tuple[list[dict], str | None, dict]:
+    """One streamed request: the reply's content blocks, its stop reason, and its usage."""
+    conn = http.client.HTTPSConnection("api.anthropic.com", timeout=900)
+    conn.request("POST", "/v1/messages", json.dumps(body).encode(), headers)
+    response = conn.getresponse()
+    if response.status != 200:
+        raise RuntimeError(f"{response.status}: {response.read()[:500]!r}")
+    blocks, stop, usage, inputs = [], None, {}, {}
+    for raw in response:
+        line = raw.decode().strip()
+        if not line.startswith("data: "):
+            continue
+        event = json.loads(line[6:])
+        kind = event["type"]
+        if kind == "message_start":
+            usage = event["message"].get("usage") or {}
+        elif kind == "content_block_start":
+            blocks.append(dict(event["content_block"]))
+        elif kind == "content_block_delta":
+            block, delta = blocks[event["index"]], event["delta"]
+            field = delta["type"].removesuffix("_delta")
+            if field in ("text", "thinking", "signature"):
+                block[field] = block.get(field, "") + delta[field]
+            elif field == "input_json":
+                inputs[event["index"]] = (
+                    inputs.get(event["index"], "") + delta["partial_json"]
+                )
+            else:
+                raise RuntimeError(f"a delta this runner can't read: {delta['type']}")
+        elif kind == "content_block_stop" and event["index"] in inputs:
+            blocks[event["index"]]["input"] = json.loads(
+                inputs.pop(event["index"]) or "{}"
             )
-            extra = {
-                "sessionId": session,
-                "cwd": str(cwd),
-                "userType": "external",
-                "isSidechain": False,
+        elif kind == "message_delta":
+            stop = event["delta"].get("stop_reason")
+            usage = usage | (event.get("usage") or {})
+        elif kind == "error":
+            raise RuntimeError(json.dumps(event)[:500])
+    conn.close()
+    return blocks, stop, usage
+
+
+def ask(body: dict, headers: dict) -> tuple[str, dict]:
+    """The fork's answer and what its requests used, summed: requests until one
+    ends without a tool call. `context` is the first request's input."""
+    used = {"requests": 0, "thinking": 0}
+    while True:
+        if used["requests"] == MAX_REQUESTS:
+            raise RuntimeError(f"still calling tools after {MAX_REQUESTS} requests")
+        blocks, stop, usage = stream(body, headers)
+        used["requests"] += 1
+        used.setdefault(
+            "context",
+            sum(
+                usage.get(k) or 0
+                for k in (
+                    "input_tokens",
+                    "cache_read_input_tokens",
+                    "cache_creation_input_tokens",
+                )
+            ),
+        )
+        for k in (
+            "input_tokens",
+            "cache_read_input_tokens",
+            "cache_creation_input_tokens",
+            "output_tokens",
+        ):
+            used[k] = used.get(k, 0) + (usage.get(k) or 0)
+        used["thinking"] += (usage.get("output_tokens_details") or {}).get(
+            "thinking_tokens"
+        ) or 0
+        calls = [b for b in blocks if b["type"] == "tool_use"]
+        if stop != "tool_use" or not calls:
+            return "".join(
+                b.get("text", "") for b in blocks if b["type"] == "text"
+            ), used
+        denied = [
+            {
+                "type": "tool_result",
+                "tool_use_id": c["id"],
+                "content": DENIED,
+                "is_error": True,
             }
-            f.write(
-                json.dumps(entry | extra | {"timestamp": stamp}, ensure_ascii=False)
-                + "\n"
-            )
-    return session
+            for c in calls
+        ]
+        body = body | {
+            "messages": body["messages"]
+            + [
+                {"role": "assistant", "content": blocks},
+                {"role": "user", "content": denied},
+            ]
+        }
 
 
 def register(source: Path) -> Path:
     return source if source.is_file() else source / "hooks/register.ts"
 
 
-def render(source: Path, reply: str, case: dict) -> str:
+def render(source: Path, reply: str, case: dict, told: int | None) -> str:
     args = [
         "bun",
         str(HERE / "question.ts"),
         str(register(source)),
-        str(case["tokens"]),
+        str(told or case["tokens"]),
     ]
     if case["kind"] == "idle":
         args += ["--idle", str(IDLE_MINUTES)]
@@ -264,230 +251,229 @@ def parse(text: str) -> dict | None:
     return value if ok else None
 
 
-def label(source: Path) -> str:
-    """The checkout's branch and commit, e.g. `main@02beed1`, or a file's name."""
+def label(source: Path, told: int | None = None) -> str:
+    """The checkout's branch and commit, e.g. `main@02beed1`, or a file's name,
+    with the size the question states where it isn't the case's own, as in
+    `main@02beed1-told-900k`."""
+    suffix = f"-told-{told // 1000}k" if told else ""
     if source.is_file():
-        return source.stem
-    checkout = source
+        return source.stem + suffix
 
     def git(*args):
         return subprocess.run(
-            ["git", "-C", str(checkout), *args], capture_output=True, text=True
+            ["git", "-C", str(source), *args], capture_output=True, text=True
         ).stdout.strip()
 
-    return f"{git('rev-parse', '--abbrev-ref', 'HEAD')}@{git('rev-parse', '--short', 'HEAD')}"
+    return f"{git('rev-parse', '--abbrev-ref', 'HEAD')}@{git('rev-parse', '--short', 'HEAD')}{suffix}"
 
 
-def shared_opening(questions: list[str]) -> str:
-    """The paragraphs every question opens with, through the quoted reply at most."""
-    paragraphs = [q.split("\n\n") for q in questions]
-    common = []
-    for parts in zip(*paragraphs, strict=False):
-        if len(set(parts)) > 1:
-            break
-        common.append(parts[0])
-        if parts[0].endswith("</reply>"):
-            break
-    # Every question keeps a part of its own after the opening.
-    while common and any(len(p) <= len(common) for p in paragraphs):
-        common.pop()
-    return "\n\n".join(common)
+def request_of(case: dict, published: bool) -> tuple[dict, str] | None:
+    """The case's request, and where it came from: rebuilt from the session's
+    transcript where it is on this machine, as the live fork sends it, or else
+    as published, without what the build took out of it (build.py). None
+    where there is neither."""
+    if not published:
+        try:
+            return build.fork_request(build.entries_of(case)), "transcript"
+        except LookupError:
+            pass
+    found = sparkjoy_assets.request(case["id"])
+    return (json.loads(gzip.decompress(found)), "published") if found else None
 
 
-def send(
-    blocks: list[str],
-    session: str,
-    config: Path,
-    cwd: Path,
-    credential: dict[str, str],
-    proxy: str,
+def row_of(
+    case: dict, question: str, request: dict, origin: str, text: str, used: dict
 ) -> dict:
-    """One request on the staged session, its last message made of `blocks`; returns Claude Code's result."""
-    message = {
-        "type": "user",
-        "message": {
-            "role": "user",
-            "content": [{"type": "text", "text": b} for b in blocks],
-        },
-    }
-    proc = subprocess.run(
-        [
-            "claude",
-            "-p",
-            "--resume",
-            session,
-            "--fork-session",
-            "--no-session-persistence",
-            "--model",
-            MODEL,
-            "--effort",
-            EFFORT,
-            "--tools",
-            "",
-            "--strict-mcp-config",
-            "--disable-slash-commands",
-            "--input-format",
-            "stream-json",
-            "--output-format",
-            "stream-json",
-            "--verbose",
-        ],
-        input=json.dumps(message) + "\n",
-        cwd=cwd,
-        env=child_env(config, credential, proxy),
-        capture_output=True,
-        text=True,
-        timeout=900,
-    )
-    events = [
-        json.loads(line) for line in proc.stdout.splitlines() if line.startswith("{")
-    ]
-    # A resumed session can report a result for a notification it replays before
-    # taking the message, so the answer is the last result.
-    out = next((e for e in reversed(events) if e.get("type") == "result"), {})
-    if out.get("is_error") or "result" not in out:
-        raise RuntimeError(
-            (out.get("result") or proc.stderr or proc.stdout).strip()[:500]
-        )
-    return out
-
-
-def row_of(case: dict, source: Path, out: dict, claude: str) -> dict:
-    usage = out.get("usage") or {}
-    verdict = parse(out.get("result") or "")
+    verdict = parse(text)
     got = None if verdict is None else ("compact" if verdict["compact"] else "keep")
-    return {
+    read, write = used["cache_read_input_tokens"], used["cache_creation_input_tokens"]
+    # A run's cache writes last five minutes.
+    i, o, w5, _, r = fit.PRICES[request["params"]["model"]]
+    row = {
         "case": case["id"],
-        "question": label(source),
+        "question": question,
         "at": datetime.now(UTC).isoformat(timespec="seconds"),
         "expected": case["expected"],
         "got": got,
-        "reason": verdict["reason"] if verdict else (out.get("result") or "")[:300],
-        "context": sum(
-            usage.get(k, 0)
-            for k in (
-                "input_tokens",
-                "cache_read_input_tokens",
-                "cache_creation_input_tokens",
+        "reason": verdict["reason"] if verdict else text[:300],
+        "context": used["context"],
+        "cache_read": read,
+        "output": used["output_tokens"],
+        # Thinking tokens among the output; zero where the model answered
+        # without thinking.
+        "thinking": used["thinking"],
+        "requests": used["requests"],
+        "cost": round(
+            (
+                used["input_tokens"] * i
+                + used["output_tokens"] * o
+                + read * r
+                + write * w5
             )
+            / 1e6,
+            4,
         ),
-        "cache_read": usage.get("cache_read_input_tokens", 0),
-        "output": usage.get("output_tokens", 0),
-        "cost": out.get("total_cost_usd"),
-        "claude": claude,
+        # The Claude Code release that recorded the request.
+        "client": request["version"],
+        "request": origin,
     }
+    # The answer's other fields, such as whether the next turns need the
+    # transcript's detail, for a question that asks for them.
+    if verdict is not None:
+        row |= {k: v for k, v in verdict.items() if k not in ("compact", "reason")}
+    return row
 
 
 def run(
     cases: list[dict],
     sources: list[Path],
+    told: list[int | None],
+    published: bool,
     repeat: int,
     jobs: int,
-    results: Path,
-    keep_reply: bool,
 ) -> None:
-    credential, proxy = access_token(), start_proxy()
-    # The mid-task verdicts have moved between batches of the same question and
-    # transcripts, so each row records the client that ran it.
-    claude = subprocess.run(
-        ["claude", "--version"], capture_output=True, text=True, check=True
-    ).stdout.split()[0]
+    labels = [label(source, size) for source in sources for size in told]
+    if len(set(labels)) < len(labels):
+        sys.exit(
+            f"Two questions would share a label: {labels}. Give their files other names."
+        )
+    auth = credential()
+    # Before the cases' threads start, so that none of them clones.
+    sparkjoy_assets.fetch()
 
     def one_case(case: dict) -> list[dict]:
-        entries = load(case)
-        before, reply = split_reply(entries)
-        if not keep_reply:
-            entries = before
-        questions = {source: render(source, reply, case) for source in sources}
-        opening = shared_opening(list(questions.values()))
-        # One fixed directory per case, so that every run of it gets the same
-        # system prompt, which names the working directory. Resolved, since
-        # Claude Code files a session under its directory's real path
-        # (`/private/var/…` on macOS).
-        scratch = Path(tempfile.gettempdir()).resolve() / "sparkjoy-evals" / case["id"]
-        shutil.rmtree(scratch, ignore_errors=True)
-        rows, primed = [], 0.0
-        try:
-            config, cwd = scratch / "config", scratch / "work"
-            cwd.mkdir(parents=True)
-            session = stage(entries, case, config, cwd)
-            if opening and len(sources) * repeat > 1:
-                primed = (
-                    send([opening], session, config, cwd, credential, proxy).get(
-                        "total_cost_usd"
-                    )
-                    or 0.0
+        if (found := request_of(case, published)) is None:
+            print(f"SKIP {case['id']}: no transcript or published request", flush=True)
+            return []
+        request, origin = found
+        if request["params"]["model"] not in fit.PRICES:
+            print(
+                f"SKIP {case['id']}: fit.PRICES has no price for its model", flush=True
+            )
+            return []
+        headers = auth | {
+            "anthropic-version": "2023-06-01",
+            "anthropic-beta": ",".join(
+                request["params"]["betas"]
+                + (["oauth-2025-04-20"] if "authorization" in auth else [])
+            ),
+            "content-type": "application/json",
+        }
+        reply = "\n\n".join(
+            b["text"] for b in request["messages"][-1]["content"] if b["type"] == "text"
+        )
+        bodies = {
+            label(source, size): body_of(request, render(source, reply, case, size))
+            for source in sources
+            for size in told
+        }
+        rows = []
+        # The questions take turns, so drift over a batch falls on each alike.
+        for _ in range(repeat):
+            for question, body in bodies.items():
+                try:
+                    text, used = ask(body, headers)
+                except (RuntimeError, OSError) as error:
+                    print(f"ERROR {case['id']} [{question}]: {error}", flush=True)
+                    continue
+                row = row_of(case, question, request, origin, text, used)
+                results.write(json.dumps(row) + "\n")
+                results.flush()
+                mark = "PASS" if row["got"] == row["expected"] else "FAIL"
+                print(
+                    f"{mark} {row['case']} [{row['question']}] expected {row['expected']}, got {row['got']} "
+                    f"at {row['context'] // 1000}k (${row['cost']:.2f}): {row['reason']}",
+                    flush=True,
                 )
-            for source, question in questions.items():
-                blocks = (
-                    [opening, question[len(opening) :].lstrip("\n")]
-                    if opening
-                    else [question]
-                )
-                for _ in range(repeat):
-                    try:
-                        row = row_of(
-                            case,
-                            source,
-                            send(blocks, session, config, cwd, credential, proxy),
-                            claude,
-                        )
-                    except (RuntimeError, subprocess.SubprocessError) as error:
-                        print(
-                            f"ERROR {case['id']} [{label(source)}]: {error}", flush=True
-                        )
-                        continue
-                    # The first run carries the cache write.
-                    if primed:
-                        row["cost"], primed = (row["cost"] or 0) + primed, 0.0
-                    with results.open("a") as f:
-                        f.write(json.dumps(row) + "\n")
-                    mark = "PASS" if row["got"] == row["expected"] else "FAIL"
-                    print(
-                        f"{mark} {row['case']} [{row['question']}] expected {row['expected']}, got {row['got']} "
-                        f"at {row['context'] // 1000}k (${row['cost'] or 0:.2f}): {row['reason']}",
-                        flush=True,
-                    )
-                    rows.append(row)
-        finally:
-            shutil.rmtree(scratch, ignore_errors=True)
+                rows.append(row)
         return rows
 
-    with ThreadPoolExecutor(jobs) as pool:
-        rows = [row for rows in pool.map(one_case, cases) for row in rows]
-    print(
-        f"{sum(r['got'] == r['expected'] for r in rows)}/{len(rows)} passed, ${sum(r['cost'] or 0 for r in rows):.2f}"
+    try:
+        with sparkjoy_assets.batch() as results, ThreadPoolExecutor(jobs) as pool:
+            rows = [row for rows in pool.map(one_case, cases) for row in rows]
+        print(
+            f"{sum(r['got'] == r['expected'] for r in rows)}/{len(rows)} passed, ${sum(r['cost'] for r in rows):.2f}"
+        )
+    finally:
+        # The batch's results, with any an earlier batch didn't publish; a
+        # rebuilt request waits for a look first.
+        try:
+            sparkjoy_assets.publish(sparkjoy_assets.RESULTS)
+        except subprocess.CalledProcessError:
+            print(
+                f"The results weren't published, and wait in {sparkjoy_assets.UNPUBLISHED}."
+            )
+
+
+def column(row: dict) -> str:
+    """The question a row asked, marked where it sent a published request."""
+    return row["question"] + (
+        " (published)" if row.get("request") == "published" else ""
     )
 
 
-def report(cases: list[dict], results: Path) -> None:
-    """The results table: per case and question, how many runs matched the label."""
-    rows = [json.loads(line) for line in results.open()] if results.exists() else []
-    questions = list(dict.fromkeys(r["question"] for r in rows))
-    print(
-        "| case | kind | recorded | replayed | expected | "
-        + " | ".join(questions)
-        + " |"
-    )
-    print("|---|---|---|---|---|" + "---|" * len(questions))
+def report(cases: list[dict]) -> None:
+    """The results table: per case and question, how many runs matched the
+    label, and how many of them thought before answering."""
+    rows = [
+        json.loads(line) for path in sparkjoy_assets.results() for line in path.open()
+    ]
+    questions = list(dict.fromkeys(column(r) for r in rows))
+    print("| case | kind | context | expected | " + " | ".join(questions) + " |")
+    print("|---|---|---|---|" + "---|" * len(questions))
     for case in cases:
         mine = [r for r in rows if r["case"] == case["id"]]
-        replayed = max((r["context"] for r in mine), default=0)
         cells = []
         for q in questions:
-            runs = [r for r in mine if r["question"] == q]
+            runs = [r for r in mine if column(r) == q]
             passed = sum(r["got"] == case["expected"] for r in runs)
-            cells.append(f"{passed}/{len(runs)}" if runs else "")
+            thought = sum(r["thinking"] > 0 for r in runs)
+            cells.append(f"{passed}/{len(runs)} ({thought} thought)" if runs else "")
         print(
-            f"| {case['id']} | {case['kind']} | {case['tokens'] // 1000}k | {replayed // 1000}k | {case['expected']} | "
+            f"| {case['id']} | {case['kind']} | {case['tokens'] // 1000}k | {case['expected']} | "
             + " | ".join(cells)
             + " |"
         )
+    # Scored against the labels as they stand, at the cases listed.
+    expected = {case["id"]: case["expected"] for case in cases}
     for q in questions:
-        runs = [r for r in rows if r["question"] == q]
+        runs = [r for r in rows if column(r) == q and r["case"] in expected]
         print(
-            f"\n{q}: {sum(r['got'] == r['expected'] for r in runs)}/{len(runs)} runs passed, ${sum(r['cost'] or 0 for r in runs):.2f}"
+            f"\n{q}: {sum(r['got'] == expected[r['case']] for r in runs)}/{len(runs)} runs passed, ${sum(r['cost'] for r in runs):.2f}"
         )
+    by_size(cases, rows)
+
+
+def by_size(cases: list[dict], rows: list[dict]) -> None:
+    """For each question asked at several `--told` sizes, how many runs at each
+    case compacted at each size. Each case holds its work fixed, so a question
+    that weighs the context's size compacts more often the larger the size it
+    states."""
+    told: dict[str, dict[tuple[str, int], list[dict]]] = {}
+    for r in rows:
+        m = re.fullmatch(r"(.*)-told-(\d+)k(.*)", column(r))
+        if m:
+            told.setdefault(m[1] + m[3], {}).setdefault(
+                (r["case"], int(m[2])), []
+            ).append(r)
+    for question, runs in told.items():
+        sizes = sorted({size for _, size in runs})
+        if len(sizes) < 2:
+            continue
+        print(f"\n{question}, runs that compacted at each size it stated:\n")
+        print("| case | " + " | ".join(f"{s}k" for s in sizes) + " |")
+        print("|---|" + "---|" * len(sizes))
+        for case in cases:
+            cells = [runs.get((case["id"], s), []) for s in sizes]
+            if any(cells):
+                print(
+                    f"| {case['id']} | "
+                    + " | ".join(
+                        f"{sum(r['got'] == 'compact' for r in c)}/{len(c)}" if c else ""
+                        for c in cells
+                    )
+                    + " |"
+                )
 
 
 def main() -> None:
@@ -503,19 +489,18 @@ def main() -> None:
         "--repeat", type=int, default=1, help="runs per case and question"
     )
     parser.add_argument(
-        "--keep-reply",
+        "--told",
+        action="append",
+        help="context size the question states, in tokens, or `recorded` for the case's own (default: recorded)",
+    )
+    parser.add_argument(
+        "--published",
         action="store_true",
-        help="end the session with the turn's reply, so the question follows it",
+        help="send the published requests even where the transcripts are on this machine",
     )
     parser.add_argument("--jobs", type=int, default=3, help="cases run at once")
     parser.add_argument(
         "--report", action="store_true", help="print the results table and exit"
-    )
-    parser.add_argument(
-        "--results",
-        type=Path,
-        default=RESULTS,
-        help="the file runs append to and --report reads",
     )
     args = parser.parse_args()
     cases = json.loads((HERE / "cases.json").read_text())
@@ -525,9 +510,10 @@ def main() -> None:
             sys.exit(f"Unknown cases: {sorted(unknown)}")
         cases = [c for c in cases if c["id"] in args.case]
     if args.report:
-        return report(cases, args.results)
+        return report(cases)
     sources = [p.expanduser().resolve() for p in args.question_from or [HERE.parent]]
-    run(cases, sources, args.repeat, args.jobs, args.results, args.keep_reply)
+    told = [None if t == "recorded" else int(t) for t in args.told or ["recorded"]]
+    run(cases, sources, told, args.published, args.repeat, args.jobs)
 
 
 if __name__ == "__main__":
