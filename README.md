@@ -77,6 +77,11 @@ To see its verdicts without compacting anything, run
   sparkjoy: Compacting at 404k tokens: Move is finished and pushed; file paths, commands and conventions fit in a summary, and files can be re-read
   ```
 
+- **It logs each verdict and compaction** outside the transcript, as a JSON line
+  in `~/.claude/sparkjoy/log/<day>/<session>.jsonl`, with what the line leaves
+  out: the context in tokens, the figures its question stated, the model's whole
+  answer, and what the question read from the prompt cache. The report reads it.
+
 - **`/sparkjoy report`** opens a page on your sessions of the last 14 days,
   with every verdict and what the compactions saved. It fits the [cost
   model](#cost-model) to those sessions, and sparkjoy uses the fit from then on.

@@ -44,6 +44,7 @@ const FIVE_MINUTES = {
 // Code's configuration directory there.
 const HOME = '/home/u'
 const FIGURES = `${HOME}/.claude/sparkjoy/figures.json`
+const TRANSCRIPT = `${HOME}/.claude/projects/-work/s1.jsonl`
 
 // Stands for the engine beneath the mod: a context of `tokens` until `resize`
 // changes it or a compaction leaves it unmeasured, the rate-limit windows
@@ -100,13 +101,25 @@ function engine(
   const sets: { key: string; value: unknown }[] = []
   const logs: string[] = []
 
+  // The files the mod wrote, by path.
+  const files: Record<string, string> = {}
+
   mock.store(on, stored)
   on('session.id', () => ({ value: 's1' }))
+  on('session.info', () => ({ value: { transcriptPath: TRANSCRIPT } }))
+  on('session.version', () => ({ value: { version: '2.1.332', base: '2.1.332' } }))
   on('env.get', (_, e) => ({ value: env[e.name] }))
   on('fs.read', (_, e) => {
+    const written = files[e.path]
+    if (written !== undefined) return { value: written }
     if (e.path !== figuresAt || saved === undefined)
       throw new Error(`ENOENT: no such file or directory, open '${e.path}'`)
     return { value: saved }
+  })
+  on('fs.exists', (_, e) => ({ value: e.path in files }))
+  on('fs.write', (_, e) => {
+    files[e.path] = e.text
+    return { value: undefined }
   })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('turn.start', (_, e) => {
@@ -204,6 +217,13 @@ function engine(
       presentation: { isFullscreen: false, columns: 80 },
     })
 
+  // The records the mod logged on each day, as it wrote them.
+  const records = (day: string) =>
+    (files[`${HOME}/.claude/sparkjoy/log/${day}/s1.jsonl`] ?? '')
+      .split('\n')
+      .filter(line => line !== '')
+      .map(line => JSON.parse(line))
+
   return {
     clock,
     forks,
@@ -213,6 +233,7 @@ function engine(
     prompts,
     sets,
     logs,
+    records,
     begin,
     turn,
     resize,
@@ -251,6 +272,46 @@ test('a finished turn compacts with no instructions and no /compact row', async 
   expect(compactions).toEqual([''])
   expect(commands).toEqual([])
   expect(logs).toEqual(['Compacting at 500k tokens: the PR merged'])
+})
+
+test('each verdict and compaction is logged outside the transcript, with what its line drops', async ($, on) => {
+  const { begin, turn, resize, records } = engine(on)
+  await begin($)
+
+  await turn($, 't1')
+  resize(400_000)
+  await turn($, 't2')
+
+  const [kept, start, end, ...rest] = records('1970-01-01')
+  expect(rest.length).toBe(3)
+  expect(kept).toEqual({
+    t: '1970-01-01T00:00:00.000Z',
+    session: 's1',
+    transcript: TRANSCRIPT,
+    version: null,
+    claude_code: '2.1.332',
+    event: 'verdict',
+    kind: 'Compacting',
+    reason: 'the PR merged',
+    tokens: 500_000,
+    figures: expect.objectContaining({ FLOOR: 250_000, K: 142_000 }),
+    usage: { ...USAGE, cache_read_input_tokens: 500_000 },
+    missed: false,
+    answer: { compact: true, reason: 'the PR merged' },
+  })
+  expect(start).toEqual(
+    expect.objectContaining({
+      event: 'compaction',
+      phase: 'start',
+      tokens: 500_000,
+      resumed: false,
+    }),
+  )
+  expect(end).toEqual(expect.objectContaining({ event: 'compaction', phase: 'end' }))
+  expect(end.error).toBeUndefined()
+  expect(rest[0]).toEqual(
+    expect.objectContaining({ kind: 'Compacting', tokens: 400_000 }),
+  )
 })
 
 test('the question sizes the saving for the context it asks about', async ($, on) => {
@@ -725,7 +786,9 @@ test('an idle question that missed the prompt cache says so in its verdict’s l
 })
 
 test('a compaction the engine refuses says why, and is tried again once the session sits idle', async ($, on) => {
-  const { begin, clock, compactions, logs, turn } = engine(on, { compactFailures: 1 })
+  const { begin, clock, compactions, logs, records, turn } = engine(on, {
+    compactFailures: 1,
+  })
   await begin($)
 
   await turn($, 't1')
@@ -734,6 +797,9 @@ test('a compaction the engine refuses says why, and is tried again once the sess
   expect(logs.length).toBe(2)
   expect(logs[0]).toBe('Compacting at 500k tokens: the PR merged')
   expect(logs[1]).toStartWith("Didn't compact at 500k tokens: ")
+  // The log's end of the compaction carries the same error.
+  const refused = logs[1] ?? ''
+  expect(records('1970-01-01')[2]?.error).toBe(refused.slice(refused.indexOf(': ') + 2))
 
   await clock.advance(IDLE)
   await clock.settle()
