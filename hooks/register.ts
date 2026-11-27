@@ -467,7 +467,12 @@ async function judge(
 // mod that managed settings enable. So the line points to `/sparkjoy report`,
 // whose table of misses shows whether other sessions lost their cache at the
 // same time, as a switch makes them do, and the README's FAQ lists the causes.
-// After a turn that wrote nothing (`plain`), there was nothing to read.
+// The mod acts on an idle question's verdict even when the question missed.
+// The miss wrote the context to the cache again, so waiting another lifetime
+// and asking again would keep the context for a user who returns within it.
+// That would be a second path for a case that should stay rare, and the report
+// and `/sparkjoy bug` are there to make it rarer. After a turn that wrote
+// nothing (`plain`), there was nothing to read.
 type Miss = 'bug' | 'idle' | 'plain'
 
 // The clause a question's line carries when the question missed the prompt
