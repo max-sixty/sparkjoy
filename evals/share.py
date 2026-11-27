@@ -602,7 +602,7 @@ def report() -> None:
                 f"{got['dropped']:.0f}%",
             ]
             # The chart shows the share the latest question gave.
-            model = said(shares, questions[-1])
+            model = said(shares, questions[-1]) if questions else []
             drawn.append((name, cut["parts"], got, model))
             kinds.append(got["kinds"])
         size = f"{case['tokens'] // 1000}k"
