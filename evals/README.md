@@ -477,8 +477,8 @@ is what the next work used, which needn't be all it needed. Its two runs at
 a case differ by up to 10 points in what a compaction drops that the work
 needed, and 15 counting what helped, both at leaf-menu-build-wait, 5 in what
 was needed at leaf-ring-test-rewrite-wait and leaf-data-attrs-merged, and
-elsewhere by at most 3 and 4; of all the context, they differ by 12 points
-at leaf-hover-closeout, where one run left the system prompt and tools
+elsewhere by at most 3 and 4. Of all the context, leaf-hover-closeout's
+runs differ by 12 points, since one left the system prompt and tools
 unmarked. At the largest contexts the request and its listing of parts leave
 little of the window: by characters of the records' values,
 leaf-menu-build-wait sees 34% of its next work, leaf-followups-merged 48%,
