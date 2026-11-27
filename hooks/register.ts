@@ -8,12 +8,10 @@
 // the mod compacts if it says to. A session left idle at IDLE_FLOOR or more is
 // asked again just before its prompt cache lapses, whether the cache lives an
 // hour or five minutes, told that the next request would otherwise write the
-// whole context to the cache again. From CEILING the mod compacts without
-// asking, since the judge keeps a context the work ahead needs at any size.
-// Each decision shows in the transcript as a dim line the model never reads,
-// so a session that stays large says why. The engine's auto-compaction at its
-// threshold still runs as before, and covers a turn that grows past the floor
-// before it ends.
+// whole context to the cache again. Each decision shows in the transcript as a
+// dim line the model never reads, so a session that stays large says why.
+// Claude Code's own auto-compaction still runs at its threshold, so a context
+// the judge keeps, or one that fills within a turn, compacts there as before.
 //
 // The judge is the session's model over the whole transcript rather than a
 // small model over the last reply: which parts the work ahead still needs
@@ -212,36 +210,6 @@ const MODES: Record<
 // reaches FLOOR.
 const WINDOW = 1_000_000
 
-// From this many context tokens the mod compacts at a turn end, or before an
-// idle session's cache lapses, without asking. The judge keeps the context
-// wherever the work ahead needs its detail, whatever the question says of the
-// context's size, its cost or how soon Claude Code compacts on its own
-// (evals/README.md, "Size"), so a long task would otherwise run on until
-// Claude Code compacts it in the middle of a turn, near 965k. A turn that
-// ends below CEILING can still grow that far: of three such compactions in my
-// sessions of 25 Oct-25 Nov 2026, this would have come first at two. In
-// docs/cost-model.md's replay of sessions judged turn end by turn end ("Work
-// that differs"), work that needs its history costs least compacted from
-// 900k, and other work from about 280k.
-const CEILING = 900_000
-
-// The verdict past CEILING.
-const PAST_CEILING: Verdict = {
-  compact: true,
-  reason: `past ${thousands(CEILING)}, where even work that needs the detail compacts`,
-}
-
-// Acts on PAST_CEILING, with a line that says no question was asked, so
-// model/fit.py prices none for it.
-function pastCeiling(
-  $: EngineInterface,
-  settings: Settings,
-  say: (text: string) => void,
-  at: string,
-) {
-  return act($, settings, say, at, PAST_CEILING, outcome(say, at, ', without asking'))
-}
-
 // How long a session sits idle before it is asked, by the lifetime of the
 // prompt cache its last turn wrote to: inside that lifetime, so the question
 // reads the context from the cache, and its read keeps the cache alive for the
@@ -382,10 +350,6 @@ async function afterTurn(
     }
     if (tokens < figures.FLOOR) return
     const at = `${thousands(tokens)} tokens`
-    if (tokens >= CEILING) {
-      if (isCurrent()) await pastCeiling($, settings, say, at)
-      return
-    }
     const prompt = question(tokens, undefined, figures, settings.instructions)
     // A turn that wrote to the cache left it seconds old, so a question that
     // misses it had a prompt that differed from the turn's, which is a bug. A
@@ -416,7 +380,6 @@ async function idle(
   try {
     if ((await $.clock.now()) > due + LATE_MS || !(await isUntouched())) return
     const at = `${thousands(tokens)} tokens, idle ${minutes} minutes`
-    if (tokens >= CEILING) return await pastCeiling($, settings, say, at)
     const prompt = question(
       tokens,
       minutes,
@@ -435,7 +398,7 @@ async function idle(
 // says what the question's line makes of a miss of the prompt cache.
 async function judge(
   $: EngineInterface,
-  settings: Settings,
+  { mode }: Settings,
   say: (text: string) => void,
   stands: () => Promise<boolean>,
   at: string,
@@ -446,11 +409,27 @@ async function judge(
   const answer = await $.model.fork({ prompt })
   // A fork that made no request reports no usage.
   const missed = 'usage' in answer ? missing(answer.usage, tokens, miss) : ''
-  const line = outcome(say, at, missed, missed !== '' && miss === 'bug')
+  // Says what came of the question in one line: its kind, then the clause on a
+  // missed cache, if any, and after a colon the reason, which is the model's
+  // alone, as model/fit.py's VERDICT parses it. When the line reports a bug, or
+  // the question's miss is one, the line saying how to report it follows.
+  const line = (kind: string, reason: string, isBug = false) => {
+    const text = `${kind} at ${at}${missed}: ${reason}`
+    if (isBug || (missed !== '' && miss === 'bug')) sayBug(say, text)
+    else say(text)
+  }
   if (!(await stands())) return line('Dropped the verdict', 'the conversation moved on')
   const verdict = answer.isAnswered ? parse(answer.text) : undefined
-  if (verdict) {
-    await act($, settings, say, at, verdict, line)
+  if (verdict?.compact && mode === 'classify') {
+    line('Would compact', verdict.reason)
+  } else if (verdict?.compact) {
+    // `$.session.compact` draws no `/compact` row, so neither the user nor
+    // the model reads the compaction as one the user typed. A hook's veto
+    // draws its own line.
+    line('Compacting', verdict.reason)
+    await compact($, say, at)
+  } else if (verdict) {
+    line('Kept', verdict.reason)
   } else if (answer.isAnswered) {
     line('Unreadable verdict', answer.text, true)
   } else {
@@ -489,46 +468,6 @@ function missing(usage: ModelUsage, tokens: number, miss: Miss) {
       : 'the prompt cache'
   const route = miss === 'idle' ? '; /sparkjoy report lists the misses' : ''
   return `, after missing ${cache} (read ${thousands(read)} of ${thousands(input)}${route})`
-}
-
-// Says what came of a question at `at`, in one line: its kind, then any
-// `clause` on how it was asked, and after a colon the reason, which is the
-// model's alone, as model/fit.py's VERDICT parses it. When the line reports a bug, or the
-// question's miss is one, the line saying how to report it follows.
-function outcome(
-  say: (text: string) => void,
-  at: string,
-  clause = '',
-  isMissBug = false,
-) {
-  return (kind: string, reason: string, isBug = false) => {
-    const text = `${kind} at ${at}${clause}: ${reason}`
-    if (isBug || isMissBug) sayBug(say, text)
-    else say(text)
-  }
-}
-
-// Acts on a verdict: compacts if it says to and the mod is on, and says so
-// with `line`.
-async function act(
-  $: EngineInterface,
-  { mode }: Settings,
-  say: (text: string) => void,
-  at: string,
-  verdict: Verdict,
-  line: ReturnType<typeof outcome>,
-) {
-  if (verdict.compact && mode === 'classify') {
-    line('Would compact', verdict.reason)
-  } else if (verdict.compact) {
-    // `$.session.compact` draws no `/compact` row, so neither the user nor
-    // the model reads the compaction as one the user typed. A hook's veto
-    // draws its own line.
-    line('Compacting', verdict.reason)
-    await compact($, say, at)
-  } else {
-    line('Kept', verdict.reason)
-  }
 }
 
 // A compaction under way, as `$.store` keeps it for the next process: `at`
@@ -648,7 +587,8 @@ function hash(text: string) {
 // middle of a task it compacted in all 16 runs, though in 12 it answered that
 // the next turns would need the detail. This one keeps there in 22 of 24, and
 // its verdict follows that answer whatever it says of the context's size
-// (evals/README.md, "Size"), which is why CEILING exists.
+// (evals/README.md, "Size"), so a long task whose next turns need the detail
+// can keep it until Claude Code compacts on its own.
 // The fork sends the turn's last request with the turn's reply after it, so
 // the question needn't quote the reply. The answer gives what most likely
 // comes next and whether that needs the transcript's detail before `compact`,
@@ -725,7 +665,7 @@ function saving(tokens: number, { WRITE, K, LAPSE }: Figures) {
 // The floors and figures sparkjoy uses, and where each floor comes from. A
 // floor the user set wins over the one `/sparkjoy report` last saved, and each
 // figure the report saved wins over `AUTHOR`'s. A source whose value the
-// question's sums can't use gives way to the next: a floor from CEILING up,
+// question's sums can't use gives way to the next: a floor outside the window,
 // a cache write no dearer than a read, a context after a compaction no larger
 // than the cached system prompt and tools or at least the FLOOR the question
 // is asked from at a turn end, a lapse share outside 0 to 1, or a turn of under
@@ -775,17 +715,16 @@ async function fitted($: EngineInterface, settings: Settings) {
     figures[name] = v
     if (name === 'FLOOR' || name === 'IDLE_FLOOR') from[name] = source
   }
-  // A floor from CEILING up would leave the mod nothing to ask.
-  const belowCeiling = (v: number) => v > 0 && v < CEILING
+  const inWindow = (v: number) => v > 0 && v < WINDOW
   const below = (floor: number) => (v: number) => v > 0 && v < floor
   // The K the question states with the turn-end floor `floor`.
   const contextAfter = (floor: number) => value('K', below(floor), 'report') ?? AUTHOR.K
   // FLOOR before K, and K before P, so each is held below the one before; the
   // user's FLOOR is held above its K.
-  take('FLOOR', belowCeiling)
-  take('FLOOR', v => belowCeiling(v) && v > contextAfter(v), 'setting')
-  take('IDLE_FLOOR', belowCeiling)
-  take('IDLE_FLOOR', belowCeiling, 'setting')
+  take('FLOOR', inWindow)
+  take('FLOOR', v => inWindow(v) && v > contextAfter(v), 'setting')
+  take('IDLE_FLOOR', inWindow)
+  take('IDLE_FLOOR', inWindow, 'setting')
   take('WRITE', v => v > 1)
   take('OUTPUT', v => v > 0)
   take('SUMMARY', v => v > 0)
@@ -870,13 +809,8 @@ async function status($: EngineInterface, settings: Settings, isWhole = false) {
     !isWhole && instructions.length > 60
       ? `${instructions.slice(0, 61).replace(/\s+\S*$/, '')}…`
       : instructions
-  const ceilingLine =
-    mode === 'off' || window < WINDOW
-      ? []
-      : [`From ${thousands(CEILING)} it doesn't ask: its verdict is to compact.`]
   return [
     MODES[mode].status(floors),
-    ...ceilingLine,
     ...windowLine,
     instructions
       ? `Its question carries your instructions: "${excerpt}"`

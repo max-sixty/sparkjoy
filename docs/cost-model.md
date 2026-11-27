@@ -469,8 +469,9 @@ question at every turn end where it asks.
 sparkjoy's question also states what a compaction saves at the context's size,
 but in the evals its verdict follows its answer about the detail whatever size
 it states ([Size](../evals/README.md#size)), so it acts as this classifier
-does. sparkjoy applies the threshold for work that needs its history itself:
-from 900k it compacts without asking.
+does. It leaves work that needs its history to Claude Code's own compaction,
+which in the [replay](#a-replay-of-my-sessions) saves about as much as the 900k
+threshold there.
 
 ### What the model needs measured
 

@@ -62,14 +62,12 @@ IDLE = {
     3600: 55 * 60,
     300: 4 * 60,
 }  # seconds idle before sparkjoy asks, by cache lifetime (IDLE_MS, hooks/register.ts)
-# The line sparkjoy writes in the transcript for each verdict (`outcome` in hooks/register.ts),
+# The line sparkjoy writes in the transcript for each verdict (`judge` in hooks/register.ts),
 # under its current name and the one it had before it was published. A question that missed the
-# prompt cache (MISSED there) says how much of its input it read from it, then may say more. A
-# verdict reached without a question (`pastCeiling` there) says so.
+# prompt cache (MISSED there) says how much of its input it read from it, then may say more.
 VERDICT = re.compile(
     r"(?P<plugin>sparkjoy|compact-when-done): (?:(?P<kind>Compacting|Would compact|Kept|Unreadable verdict|"
     r"No verdict|Dropped the verdict) at (?P<tokens>\d+)k tokens(?:, idle (?P<idle>\d+) minutes)?"
-    r"(?P<unasked>, without asking)?"
     r"(?:, after missing the prompt cache[^(]* \(read (?P<read>\d+)k of (?P<input>\d+)k(?:;[^)]*)?\))?"
     r"|Failed): (?P<reason>.*)",
     re.S,
@@ -116,7 +114,6 @@ class Verdict:
     missed: tuple | None = (
         None  # tokens of its question's input read from the cache, and in all, when it missed
     )
-    asked: bool = True  # a question was asked for it
 
 
 @dataclass
@@ -493,7 +490,6 @@ def transcript(path, since=None, until=None):
                         line["reason"],
                         line["read"]
                         and (int(line["read"]) * 1000, int(line["input"]) * 1000),
-                        not line["unasked"],
                     )
                 )
                 asked = t if kind == "compacted" else asked
@@ -1099,7 +1095,7 @@ def as_run(s, p, opened=None, model=None):
         idle=idle,
     )
     without, without_trace, _ = replay(s, p, c, np.inf, s.ttl, idle=idle)
-    checks = sum(check(v, c) for v in s.verdicts if v.tokens and v.asked)
+    checks = sum(check(v, c) for v in s.verdicts if v.tokens)
     dollars = (
         ((ran + checks) * c.read, without * c.read, checks * c.read) if priced else None
     )

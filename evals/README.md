@@ -8,8 +8,9 @@ next.
 The cases test one claim: the right answer at a natural break depends on how
 much the work ahead would carry. A finished piece of work at 700k should
 compact, the same kind of moment at 200k–300k shouldn't, and a moment in the
-middle of a task should keep, up to 900k, from where sparkjoy compacts without
-asking.
+middle of a task should keep, unless the context is so near the 965k where
+Claude Code compacts on its own that keeping would carry the detail through
+little more work.
 
 ## Running them
 
@@ -235,12 +236,8 @@ Where a run answered whether the next turns need the detail, its verdict was
 the opposite in 59 of 60. Asked how many more requests the work under way
 needs the detail for, it answered 6 to 30 at the two real turn ends past 850k,
 though from the first of them the build ran about 90 more requests before
-Claude Code compacted it. So no wording
-tried makes the model trade the detail for the context's size, and the plugin
-applies the size itself: from 900k (`CEILING` in `hooks/register.ts`) it
-compacts at a turn end without asking, where the [cost model](../docs/cost-model.md)
-finds work that needs its history cheapest compacted. Since the plugin asks
-nothing there, no case sits past 900k.
+Claude Code compacted it. So no wording tried makes the model trade the detail
+for the context's size.
 
 ### Published requests
 
@@ -293,11 +290,8 @@ live verdicts to compare against, and to grade by what each session did next.
 ## Where this leaves them
 
 The question keeps in the middle of a task and compacts where a piece of work
-is finished, and from 900k the plugin compacts whatever it would answer, so a
-long task no longer keeps its context through a turn end from 900k. A turn that
-starts below 900k can still grow until Claude Code compacts it in the middle:
-of three such compactions in my sessions of the last month, the plugin would
-have come first at two. Below 900k, whether the size should outweigh the detail is the gap
+is finished, so a long task can keep its context until Claude Code compacts it
+in the middle of a turn. Whether the size should outweigh the detail is the gap
 between the labels and the [cost model](../docs/cost-model.md): the mid-task
 keep labels encode a rule, that work in progress keeps, while the cost model
 finds compacting at any turn end from about 250k cheapest when a compaction
