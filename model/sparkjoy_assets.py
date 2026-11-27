@@ -75,6 +75,9 @@ POINTERS = ROOT / "evals/requests.json"
 REQUESTS = "evals/requests/*/*.json.gz"
 RESULTS = "evals/results/*.jsonl"
 IMAGES = "images/*/" + "[0-9a-f]" * 12 + ".*"
+# Where the README and docs link each image, and the names an image can take.
+LINKS = "https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/"
+NAME = re.compile(r"[a-z0-9][a-z0-9-]*")
 
 
 def git(*args: str, cwd: Path = CLONE, **kwargs) -> str:
@@ -197,12 +200,19 @@ def wait(directory: str, hashed: bytes, data: bytes, extension: str) -> Path:
     shutil.rmtree(waiting, ignore_errors=True)
     waiting.mkdir(parents=True)
     target = waiting / f"{hashlib.sha256(hashed).hexdigest()[:12]}{extension}"
-    target.write_bytes(data)
+    # Written under a name no publish takes, then renamed, so that a publish
+    # never takes a file half written.
+    partial = waiting / f".{target.name}.part"
+    partial.write_bytes(data)
+    partial.rename(target)
     return target
 
 
 def image(file: Path) -> Path:
-    """Make the image at `file` wait to publish, under its name."""
+    """Make the image at `file` wait to publish, under its name, the file's name
+    without its extension."""
+    if not NAME.fullmatch(file.stem):
+        sys.exit(f"{file}: name an image in lowercase letters, digits and dashes.")
     data = file.read_bytes()
     return wait(f"images/{file.stem}", data, data, file.suffix)
 
@@ -229,7 +239,7 @@ def publish(*patterns: str) -> None:
 
 def point(paths: list[str]) -> None:
     """Point `evals/requests.json` at each published request, and each link in a
-    Markdown file at the published image of its name."""
+    Markdown file to an image of a published image's name at it."""
     if requests := [p.split("/")[2:] for p in paths if p.startswith("evals/requests/")]:
         pointers = json.loads(POINTERS.read_text())
         for case, name in requests:
@@ -237,20 +247,25 @@ def point(paths: list[str]) -> None:
         POINTERS.write_text(json.dumps(pointers, indent=2) + "\n")
     images = {
         re.compile(
-            rf"{re.escape(p.rsplit('/', 1)[0])}/[0-9a-f]{{12}}{re.escape(Path(p).suffix)}"
-        ): p
+            re.escape(LINKS + p.rsplit("/", 1)[0]) + r"/[0-9a-f]{12}\.\w+"
+        ): LINKS + p
         for p in paths
         if p.startswith("images/")
     }
     if not images:
         return
-    for name in git("ls-files", "*.md", cwd=ROOT).splitlines():
-        text = (ROOT / name).read_text()
+    listed = git(
+        "ls-files", "--cached", "--others", "--exclude-standard", "*.md", cwd=ROOT
+    )
+    for markdown in {ROOT / name for name in listed.splitlines()}:
+        if not markdown.is_file():
+            continue
+        text = markdown.read_text()
         linked = text
-        for link, path in images.items():
-            linked = link.sub(path, linked)
+        for link, url in images.items():
+            linked = link.sub(url, linked)
         if linked != text:
-            (ROOT / name).write_text(linked)
+            markdown.write_text(linked)
 
 
 def push(files: list[Path], paths: list[str]) -> None:
@@ -258,9 +273,9 @@ def push(files: list[Path], paths: list[str]) -> None:
     another publish moved main first, build the commit again on top of it."""
     while True:
         fetch()
-        listed = git(
-            "ls-tree", "--format=%(path)%x09%(objectname)", "HEAD", "--", *paths
-        )
+        # Read once, since another process in this checkout can move the clone.
+        base = git("rev-parse", "HEAD")
+        listed = git("ls-tree", "--format=%(path)%x09%(objectname)", base, "--", *paths)
         held = dict(line.split("\t") for line in listed.splitlines())
         # A request is named for its JSON, so main holds it already where it
         # holds the name, whatever bytes another gzip made of it.
@@ -278,17 +293,17 @@ def push(files: list[Path], paths: list[str]) -> None:
             sys.exit(f"Main holds other copies of {', '.join(changed)}.")
         with tempfile.TemporaryDirectory() as scratch:
             env = os.environ | {"GIT_INDEX_FILE": f"{scratch}/index"}
-            git("read-tree", "HEAD", env=env)
+            git("read-tree", base, env=env)
             lines = "".join(f"100644 {blob}\t{path}\n" for path, blob in entries)
             git("update-index", "--index-info", input=lines, env=env)
             tree = git("write-tree", env=env)
         # A publish whose push went through may have stopped before it deleted
         # the files, so main can hold them already.
-        if tree == git("rev-parse", "HEAD^{tree}"):
+        if tree == git("rev-parse", f"{base}^{{tree}}"):
             return
         branch = git("rev-parse", "--abbrev-ref", "HEAD", cwd=ROOT)
         message = f"Publish from sparkjoy {branch}"
-        commit = git("commit-tree", tree, "-p", "HEAD", "-m", message)
+        commit = git("commit-tree", tree, "-p", base, "-m", message)
         try:
             git(
                 "push",
@@ -300,7 +315,7 @@ def push(files: list[Path], paths: list[str]) -> None:
             )
         except subprocess.CalledProcessError:
             git("fetch", "--quiet", "origin", "main")
-            if git("rev-parse", "FETCH_HEAD") == git("rev-parse", "HEAD"):
+            if git("rev-parse", "FETCH_HEAD") == base:
                 raise
             # Fails, and so stops the retries, where main was rewritten.
             git("merge", "--quiet", "--ff-only", "FETCH_HEAD")
