@@ -331,72 +331,6 @@ def test_names_who_made_each_compaction_by_its_mark_wherever_the_log_puts_it(tmp
     )
 
 
-def test_reads_verdicts_and_compactions_from_sparkjoys_log_where_a_session_has_one(
-    tmp_path,
-):
-    """A session whose log records two verdicts to compact and the compactions. The first also has
-    its line in the transcript, and counts once; the second has none, so only the log says the
-    compaction after it was sparkjoy's. A question that missed the prompt cache reports the
-    tokens it read exactly, as its record's usage gives them."""
-    usage = {
-        "input_tokens": 2,
-        "cache_read_input_tokens": 30_000,
-        "cache_creation_input_tokens": 200_011,
-        "output_tokens": 90,
-    }
-    log(
-        tmp_path,
-        [
-            logged(
-                "10:00:59",
-                event="verdict",
-                kind="Compacting",
-                reason="the fix landed",
-                tokens=230_000,
-                usage=usage,
-                missed=True,
-            ),
-            logged("10:01:00", event="compaction", phase="start", tokens=230_000),
-            logged("10:02:01", event="compaction", phase="end"),
-            logged(
-                "11:30:59",
-                event="verdict",
-                kind="Compacting",
-                reason="the docs landed",
-                tokens=230_000,
-                usage={**usage, "cache_read_input_tokens": 230_000},
-                missed=False,
-            ),
-            logged("11:31:00", event="compaction", phase="start", tokens=230_000),
-            logged("11:32:01", event="compaction", phase="end"),
-        ],
-    )
-    summary, page = report(
-        tmp_path,
-        [
-            prompt("10:00:00Z", "go on"),
-            request("10:00:10Z", 30_000, 200_000),
-            line(
-                "10:00:59Z",
-                "sparkjoy: Compacting at 230k tokens, after missing the prompt cache the turn had "
-                "just written to (read 30k of 230k): the fix landed",
-            ),
-            boundary("10:02:00Z"),
-            compact_summary("10:02:00Z"),
-            prompt("11:30:00Z", "back again"),
-            request("11:30:10Z", 30_000, 200_000),
-            boundary("11:32:00Z"),
-            compact_summary("11:32:00Z"),
-            prompt("13:00:00Z", "and again"),
-            request("13:00:10Z", 30_000, 200_000),
-        ],
-    )
-    assert summary[1].startswith("2 verdicts in 1 of 1 sessions: 2 compacted")
-    assert "1 missed the prompt cache" in summary[1]
-    assert "<td>30k of 230k</td>" in page
-    assert "2 had been compacted in between (2 by sparkjoy)" in " ".join(summary)
-
-
 def test_a_verdict_reached_without_asking_costs_no_check(tmp_path):
     """The same session with a verdict from past the ceiling, where sparkjoy compacts without
     asking: the verdict counts, and the checks cost what they did."""
@@ -557,3 +491,69 @@ def test_a_figures_file_it_cannot_save_leaves_the_page(tmp_path):
         "sparkjoy keeps the floors and figures it has: saving them failed: "
     )
     assert "its question uses these figures" not in page and "Fix the parser" in page
+
+
+def test_reads_verdicts_and_compactions_from_sparkjoys_log_where_a_session_has_one(
+    tmp_path,
+):
+    """A session whose log records two verdicts to compact and the compactions. The first also has
+    its line in the transcript, and counts once; the second has none, so only the log says the
+    compaction after it was sparkjoy's. A question that missed the prompt cache reports the
+    tokens it read exactly, as its record's usage gives them."""
+    usage = {
+        "input_tokens": 2,
+        "cache_read_input_tokens": 30_000,
+        "cache_creation_input_tokens": 200_011,
+        "output_tokens": 90,
+    }
+    log(
+        tmp_path,
+        [
+            logged(
+                "10:00:59",
+                event="verdict",
+                kind="Compacting",
+                reason="the fix landed",
+                tokens=230_000,
+                usage=usage,
+                missed=True,
+            ),
+            logged("10:01:00", event="compaction", phase="start", tokens=230_000),
+            logged("10:02:01", event="compaction", phase="end"),
+            logged(
+                "11:30:59",
+                event="verdict",
+                kind="Compacting",
+                reason="the docs landed",
+                tokens=230_000,
+                usage={**usage, "cache_read_input_tokens": 230_000},
+                missed=False,
+            ),
+            logged("11:31:00", event="compaction", phase="start", tokens=230_000),
+            logged("11:32:01", event="compaction", phase="end"),
+        ],
+    )
+    summary, page = report(
+        tmp_path,
+        [
+            prompt("10:00:00Z", "go on"),
+            request("10:00:10Z", 30_000, 200_000),
+            line(
+                "10:00:59Z",
+                "sparkjoy: Compacting at 230k tokens, after missing the prompt cache the turn had "
+                "just written to (read 30k of 230k): the fix landed",
+            ),
+            boundary("10:02:00Z"),
+            compact_summary("10:02:00Z"),
+            prompt("11:30:00Z", "back again"),
+            request("11:30:10Z", 30_000, 200_000),
+            boundary("11:32:00Z"),
+            compact_summary("11:32:00Z"),
+            prompt("13:00:00Z", "and again"),
+            request("13:00:10Z", 30_000, 200_000),
+        ],
+    )
+    assert summary[1].startswith("2 verdicts in 1 of 1 sessions: 2 compacted")
+    assert "1 missed the prompt cache" in summary[1]
+    assert "<td>30k of 230k</td>" in page
+    assert "2 had been compacted in between (2 by sparkjoy)" in " ".join(summary)
