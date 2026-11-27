@@ -54,6 +54,7 @@ import argparse
 import hashlib
 import http.client
 import json
+import statistics
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
@@ -182,15 +183,29 @@ def fitted(
 
     room = fit.WINDOW - LABEL_OUTPUT - count(request, headers, asked([]))
     # Each pass asks for fewer characters than the last, so the records
-    # shorten until they fit or can't shorten further.
+    # shorten until they fit or can't shorten further. Where even every value
+    # cut doesn't fit, the work right after the turn end stays: as many of the
+    # earliest records as fit with each cut to the median record's length, so
+    # that most show whole and long results their head and tail, and one
+    # record counts the rest.
     records, chars = then, sum(map(parts.length, then))
-    while (used := tokens(records)) > room:
+    used = tokens(then)
+    while used > room:
         chars = chars * room // used * 97 // 100
         if (shorter := parts.shortened(then, chars)) == records:
-            raise LookupError(
-                f"the window holds {room} tokens, too few for the next work"
-            )
+            typical = int(statistics.median(map(parts.length, then)))
+            each = [parts.capped(r, typical) for r in then]
+            target = len(parts.rendered(each)) * room // tokens(each)
+            if then[-1]["kind"] == "omitted" or (
+                (fewer := parts.omitted(then, target, typical)) == then
+            ):
+                raise LookupError(
+                    f"the window holds {room} tokens, too few for the next work"
+                )
+            then = fewer
+            shorter, chars = then, sum(map(parts.length, then))
         records = shorter
+        used = tokens(records)
     return asked(records), records
 
 

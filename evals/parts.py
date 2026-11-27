@@ -283,26 +283,46 @@ def common(lengths: list[int], budget: int) -> int | None:
     return None
 
 
+def capped(record: dict, limit: int) -> dict:
+    """`record` with its `text` and `input` in about `limit` characters, its
+    longest values cut first, each keeping its head and tail."""
+    within = common(
+        list(map(len, values([record.get("text"), record.get("input")]))), limit
+    )
+    if within is None:
+        return record
+    return record | {
+        k: cut(record[k], within // 2) for k in ("text", "input") if k in record
+    }
+
+
 def shortened(records: list[dict], chars: int) -> list[dict]:
     """`records` with their `text` and `input` in about `chars` characters:
-    each record longer than a common length is cut to it, the length the
-    longest that fits, and within a record its longest values are cut first,
-    each keeping its head and tail, so every record stays whole JSON."""
+    each record longer than a common length is cut to it (`capped`), the
+    length the longest that fits, so every record stays whole JSON."""
     if (limit := common([length(r) for r in records], chars)) is None:
         return records
-    out = []
-    for r in records:
-        within = common(list(map(len, values([r.get("text"), r.get("input")]))), limit)
-        if within is None:
-            out.append(r)
-            continue
-        out.append(r | {k: cut(r[k], within // 2) for k in ("text", "input") if k in r})
-    return out
+    return [capped(r, limit) for r in records]
 
 
 def rendered(records: list[dict]) -> str:
     """The records as the labeller reads them, one JSON object per line."""
     return "\n".join(json.dumps(r, ensure_ascii=False) for r in records)
+
+
+def omitted(records: list[dict], chars: int, limit: int) -> list[dict]:
+    """The earliest `records` that take about `chars` characters as the
+    labeller reads them, each cut to `limit` (`capped`), up to and with the
+    one that crosses it, left whole for `shortened`, and in place of the rest
+    one record counting them."""
+    total = 0
+    for n, r in enumerate(records, 1):
+        total += len(rendered([capped(r, limit)])) + 1
+        if total > chars:
+            break
+    if total <= chars or n == len(records):
+        return records
+    return [*records[:n], {"kind": "omitted", "records": len(records) - n}]
 
 
 def sections(text: str, role: str) -> list[tuple[int, int]]:

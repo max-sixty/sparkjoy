@@ -330,6 +330,35 @@ def test_the_next_work_is_one_record_per_message_call_and_result():
     ]
 
 
+def test_records_past_what_the_window_holds_are_counted_in_one_record():
+    records = [
+        {"t": "2026-11-08T18:28", "kind": "user", "text": "u" * 100},
+        {
+            "t": "2026-11-08T18:28",
+            "kind": "call",
+            "tool": "Read",
+            "input": {"file_path": "/w/SKILL.md"},
+        },
+        {"t": "2026-11-08T18:29", "kind": "result", "tool": "Read", "text": "r" * 5000},
+        {"t": "2026-11-08T18:29", "kind": "assistant", "text": "a" * 100},
+        {"t": "2026-11-08T19:00", "kind": "compaction"},
+    ]
+    whole = len(parts.rendered(records))
+    assert parts.omitted(records, whole, 5000) == records
+    # Measured with each record cut to the limit, the long result takes no
+    # more room than the others, so the records up to and with the one that
+    # crosses the length stay, whole, and one record counts the rest.
+    each = [len(parts.rendered([parts.capped(r, 100)])) + 1 for r in records]
+    got = parts.omitted(records, sum(each[:3]) + 10, 100)
+    assert got == [*records[:4], {"kind": "omitted", "records": 1}]
+    assert parts.omitted(records, sum(each[:3]) + 10, 5000)[-1] == {
+        "kind": "omitted",
+        "records": 2,
+    }
+    for line in parts.rendered(got).splitlines():
+        json.loads(line)
+
+
 def test_shortening_cuts_long_values_and_keeps_every_record_whole_json():
     records = [
         {"t": "2026-11-04T18:16", "kind": "user", "text": "short"},
