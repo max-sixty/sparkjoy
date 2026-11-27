@@ -19,12 +19,30 @@ uv run --script evals/run.py --question-from ../other-checkout  # another checko
 uv run --script evals/run.py --question-from a.ts --question-from b.ts  # two variants of register.ts
 uv run --script evals/run.py --case leaf-menu-design --repeat 4
 uv run --script evals/run.py --told recorded --told 900000      # also as though the context held 900k
-uv run --script evals/run.py --report                           # the results table, from results.jsonl
+uv run --script evals/run.py --report                           # the results table, from every batch's results
+uv run --script evals/sparkjoy_assets.py publish                # publish rebuilt requests, and results still waiting
 ```
 
-They need `bun` and `uv`, and a Claude Code login or `ANTHROPIC_API_KEY`.
-`--question-from` and `--told` can each be given more than once, and every run
-appends a row to `results.jsonl`.
+They need `bun`, `uv` and `git`, and a Claude Code login or
+`ANTHROPIC_API_KEY`. `--question-from` and `--told` can each be given more than
+once.
+
+The published requests and every run's results are kept in
+[sparkjoy-assets](https://github.com/max-sixty/sparkjoy-assets), so that
+neither this repository's history nor an install of the plugin carries them.
+That repository only gains files. Each request is named for the hash of its
+JSON, and `requests.json` here names the one each case sends. Each batch of
+runs adds a file of its results, and `--report` reads every batch's. The
+scripts clone it into `.tmp/sparkjoy-assets` the first time they need it, and
+fetch each request when a run first asks for it.
+
+A batch publishes its results to sparkjoy-assets when it ends, along with
+those of any earlier batch that didn't, such as one that was killed. `build.py`
+leaves each request it writes in `.tmp/sparkjoy-assets-unpublished` until
+`evals/sparkjoy_assets.py publish` publishes it and points `requests.json` at
+it, so that each new image gets a look first; commit `requests.json` with the
+change that uses the request. Publishing needs push access to sparkjoy-assets;
+without it, results wait in `.tmp/sparkjoy-assets-unpublished` too.
 
 A case's first run writes its whole context to the prompt cache, $1 to $4.30 at
 $5 per million tokens on Opus 5.5. Every run of it after that, within five
@@ -49,9 +67,9 @@ the turn's reply in one of my sessions (`cases.json`). `build.py` finds the
 request that reply answered, rebuilds its messages from the blobs and the
 transcript's lines, checks each against the hash the record gives it, and adds
 the reply. `run.py` does that wherever the case's transcript is on the machine,
-and otherwise sends the request published in `requests/<case>.json.gz`; it adds
-the question and sends the whole straight to the API. `question.ts`
-renders the question by calling `question()` from the chosen checkout's
+and otherwise sends the one `requests.json` names in sparkjoy-assets; it adds
+the question and sends the whole straight to the API.
+`question.ts` renders the question by calling `question()` from the chosen checkout's
 `hooks/register.ts`, for the case's recorded context size, so the evals ask
 exactly what the plugin asks. The model's reply is parsed as the plugin parses
 it.
