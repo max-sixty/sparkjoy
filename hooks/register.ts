@@ -231,6 +231,17 @@ const PAST_CEILING: Verdict = {
   reason: `past ${thousands(CEILING)}, where even work that needs the detail compacts`,
 }
 
+// Acts on PAST_CEILING, with a line that says no question was asked, so
+// model/fit.py prices none for it.
+function pastCeiling(
+  $: EngineInterface,
+  settings: Settings,
+  say: (text: string) => void,
+  at: string,
+) {
+  return act($, settings, say, at, PAST_CEILING, outcome(say, at, ', without asking'))
+}
+
 // How long a session sits idle before it is asked, by the lifetime of the
 // prompt cache its last turn wrote to: inside that lifetime, so the question
 // reads the context from the cache, and its read keeps the cache alive for the
@@ -372,7 +383,7 @@ async function afterTurn(
     if (tokens < figures.FLOOR) return
     const at = `${thousands(tokens)} tokens`
     if (tokens >= CEILING) {
-      if (isCurrent()) await act($, settings, say, at, PAST_CEILING)
+      if (isCurrent()) await pastCeiling($, settings, say, at)
       return
     }
     const prompt = question(tokens, undefined, figures, settings.instructions)
@@ -405,7 +416,7 @@ async function idle(
   try {
     if ((await $.clock.now()) > due + LATE_MS || !(await isUntouched())) return
     const at = `${thousands(tokens)} tokens, idle ${minutes} minutes`
-    if (tokens >= CEILING) return await act($, settings, say, at, PAST_CEILING)
+    if (tokens >= CEILING) return await pastCeiling($, settings, say, at)
     const prompt = question(
       tokens,
       minutes,
@@ -473,17 +484,17 @@ function missing(usage: ModelUsage, tokens: number, miss: Miss) {
 }
 
 // Says what came of a question at `at`, in one line: its kind, then any
-// `missed` clause, and after a colon the reason, which is the model's alone, as
-// model/fit.py's VERDICT parses it. When the line reports a bug, or the
+// `clause` on how it was asked, and after a colon the reason, which is the
+// model's alone, as model/fit.py's VERDICT parses it. When the line reports a bug, or the
 // question's miss is one, the line saying how to report it follows.
 function outcome(
   say: (text: string) => void,
   at: string,
-  missed = '',
+  clause = '',
   isMissBug = false,
 ) {
   return (kind: string, reason: string, isBug = false) => {
-    const text = `${kind} at ${at}${missed}: ${reason}`
+    const text = `${kind} at ${at}${clause}: ${reason}`
     if (isBug || isMissBug) sayBug(say, text)
     else say(text)
   }
@@ -497,7 +508,7 @@ async function act(
   say: (text: string) => void,
   at: string,
   verdict: Verdict,
-  line = outcome(say, at),
+  line: ReturnType<typeof outcome>,
 ) {
   if (verdict.compact && mode === 'classify') {
     line('Would compact', verdict.reason)

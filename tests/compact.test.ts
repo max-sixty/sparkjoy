@@ -620,7 +620,7 @@ test('from 900k a turn end compacts without asking', async ($, on) => {
 
   expect(forks).toEqual([])
   expect(compactions).toEqual([''])
-  expect(logs).toEqual([`Compacting at 920k tokens: ${PAST_CEILING}`])
+  expect(logs).toEqual([`Compacting at 920k tokens, without asking: ${PAST_CEILING}`])
 })
 
 test(
@@ -641,8 +641,8 @@ test(
     expect(forks).toEqual([])
     expect(compactions).toEqual([])
     expect(logs).toEqual([
-      `Would compact at 920k tokens: ${PAST_CEILING}`,
-      `Would compact at 920k tokens, idle 55 minutes: ${PAST_CEILING}`,
+      `Would compact at 920k tokens, without asking: ${PAST_CEILING}`,
+      `Would compact at 920k tokens, idle 55 minutes, without asking: ${PAST_CEILING}`,
     ])
   },
 )
