@@ -364,10 +364,34 @@ context window of 1M tokens from the cache costs \$0.20, or \$0.05 at
 sparkjoy's 250k floor. In my sessions of 18 to 22 November, the questions came
 to less than 1% of what the sessions cost.
 
-When a question reads less than nine tenths of its input from the cache,
-sparkjoy prints a line saying so, and when the turn before it had just written
-to the cache, the line reports a bug. `/sparkjoy report` counts the questions
-that missed the cache.
+</details>
+
+<details>
+<summary>Why does a verdict say sparkjoy missed the prompt cache?</summary>
+
+The question behind it read less than nine tenths of its input from the cache,
+and paid to write the rest to the cache again. In
+`after missing the prompt cache (read 31k of 162k)`, the 31k is the system
+prompt and tools, which Claude Code caches across sessions.
+
+At a turn end, the question reads the cache the turn has just written to, so a
+miss there is a bug. Its line says `after missing the prompt cache its turn had just
+written to`, and the next line suggests `/sparkjoy bug`.
+
+An idle session's question comes just before the cache expires, and can find it
+gone already:
+
+- The cache belongs to the account's organization, so signing in to another
+  account while the session sits idle drops it.
+- On the 5-minute cache, sparkjoy waits 4 minutes from the turn's end, so a last
+  request that ran for more than a minute leaves the cache expired.
+
+On the same account and the one-hour cache, the API seldom drops the cache
+early. Claude Code doesn't tell the plugins you install which account a session
+runs under, so the line names no cause. If neither cause applies, `/sparkjoy bug` drafts a
+report.
+
+`/sparkjoy report` counts the questions that missed the cache.
 
 </details>
 

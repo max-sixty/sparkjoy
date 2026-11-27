@@ -43,6 +43,7 @@
 import type {
   CommandRunResult,
   EngineInterface,
+  ModelUsage,
   PluginOptions,
   Register,
   SessionMessage,
@@ -376,11 +377,8 @@ async function afterTurn(
     // A turn that wrote to the cache left it seconds old, so a question that
     // misses it had a prompt that differed from the turn's, which is a bug. A
     // turn that wrote nothing left nothing to read.
-    const sayMiss =
-      (usage?.cache_creation_input_tokens ?? 0) > 0
-        ? (line: string) => sayBug(say, line)
-        : say
-    await judge($, settings, say, async () => isCurrent(), at, prompt, sayMiss)
+    const wrote = (usage?.cache_creation_input_tokens ?? 0) > 0
+    await judge($, settings, say, async () => isCurrent(), at, prompt, wrote)
   } catch (error) {
     sayBug(say, `Failed: ${error}`)
   }
@@ -412,21 +410,23 @@ async function idle(
       (await fitted($, settings)).figures,
       settings.instructions,
     )
-    // Claude Code may have signed in to another account meanwhile (IDLE_MS),
-    // or, as the wait runs from the turn's end, a last request that ran long
-    // may have used up the five-minute cache's margin.
-    await judge($, settings, say, isUntouched, at, prompt, line =>
-      say(`${line}. Signing in to another account while idle drops the cache.`),
-    )
+    // A question that misses the cache here needn't be a bug, so its line
+    // names no cause: Claude Code may have signed in to another account
+    // meanwhile (IDLE_MS), or, as the wait runs from the turn's end, a last
+    // request that ran long may have used up the five-minute cache's margin.
+    // The mod can't tell which, since `$.session.identity` answers only a mod
+    // that managed settings enable. The README's FAQ lists both.
+    await judge($, settings, say, isUntouched, at, prompt, false)
   } catch (error) {
     sayBug(say, `Failed: ${error}`)
   }
 }
 
 // Asks the session's model whether to compact, and compacts if it says to and
-// the mod is on, saying too, with `sayMiss`, when the question missed the
-// prompt cache. The verdict stands only while `stands` holds once the model
-// has answered; `at` names the moment in each line.
+// the mod is on. The verdict stands only while `stands` holds once the model
+// has answered; `at` names the moment. `wrote` says the turn before the
+// question had just written to the prompt cache, which makes a question that
+// misses it a bug.
 async function judge(
   $: EngineInterface,
   settings: Settings,
@@ -434,50 +434,74 @@ async function judge(
   stands: () => Promise<boolean>,
   at: string,
   prompt: string,
-  sayMiss: (text: string) => void,
+  wrote: boolean,
 ) {
   const answer = await $.model.fork({ prompt })
-  // A line of its own, so the verdict's line, which model/fit.py parses, keeps
-  // its reason clean. A fork that made no request reports no usage.
-  if ('usage' in answer) {
-    const { usage } = answer
-    const read = usage.cache_read_input_tokens
-    const input = usage.input_tokens + read + usage.cache_creation_input_tokens
-    if (input - read > MISSED * input)
-      sayMiss(
-        `Missed the prompt cache at ${at}: read ${thousands(read)} of ${thousands(input)} from it`,
-      )
-  }
-  if (!(await stands()))
-    return say(`Dropped the verdict at ${at}: the conversation moved on`)
+  // A fork that made no request reports no usage.
+  const missed = 'usage' in answer ? missing(answer.usage, wrote) : ''
+  const line = outcome(say, at, missed, missed !== '' && wrote)
+  if (!(await stands())) return line('Dropped the verdict', 'the conversation moved on')
   const verdict = answer.isAnswered ? parse(answer.text) : undefined
   if (verdict) {
-    await act($, settings, say, at, verdict)
+    await act($, settings, say, at, verdict, line)
   } else if (answer.isAnswered) {
-    sayBug(say, `Unreadable verdict at ${at}: ${answer.text}`)
+    line('Unreadable verdict', answer.text, true)
   } else {
-    say(`No verdict at ${at}: ${answer.reason}`)
+    line('No verdict', answer.reason)
   }
 }
 
-// Acts on a verdict: compacts if it says to and the mod is on, and says so.
+// The clause a question's line carries when the question read less than nine
+// tenths of its input from the prompt cache (MISSED), or "" when it read more.
+// After a turn that had just written to the cache, the clause says so, since
+// that makes the miss a bug.
+function missing(usage: ModelUsage, wrote: boolean) {
+  const read = usage.cache_read_input_tokens
+  const input = usage.input_tokens + read + usage.cache_creation_input_tokens
+  if (input - read <= MISSED * input) return ''
+  const cache = wrote
+    ? 'the prompt cache its turn had just written to'
+    : 'the prompt cache'
+  return `, after missing ${cache} (read ${thousands(read)} of ${thousands(input)})`
+}
+
+// Says what came of a question at `at`, in one line: its kind, then any
+// `missed` clause, and after a colon the reason, which is the model's alone, as
+// model/fit.py's VERDICT parses it. A line that reports a bug, or follows a
+// question whose miss is one, is followed by the line saying how to report it.
+function outcome(
+  say: (text: string) => void,
+  at: string,
+  missed = '',
+  isMissBug = false,
+) {
+  return (kind: string, reason: string, isBug = false) => {
+    const text = `${kind} at ${at}${missed}: ${reason}`
+    if (isBug || isMissBug) sayBug(say, text)
+    else say(text)
+  }
+}
+
+// Acts on a verdict: compacts if it says to and the mod is on, and says so
+// with `line`.
 async function act(
   $: EngineInterface,
   { mode }: Settings,
   say: (text: string) => void,
   at: string,
   verdict: Verdict,
+  line = outcome(say, at),
 ) {
   if (verdict.compact && mode === 'classify') {
-    say(`Would compact at ${at}: ${verdict.reason}`)
+    line('Would compact', verdict.reason)
   } else if (verdict.compact) {
     // `$.session.compact` draws no `/compact` row, so neither the user nor
     // the model reads the compaction as one the user typed. A hook's veto
     // draws its own line.
-    say(`Compacting at ${at}: ${verdict.reason}`)
+    line('Compacting', verdict.reason)
     await compact($, say, at)
   } else {
-    say(`Kept at ${at}: ${verdict.reason}`)
+    line('Kept', verdict.reason)
   }
 }
 

@@ -62,19 +62,15 @@ IDLE = {
     3600: 55 * 60,
     300: 4 * 60,
 }  # seconds idle before sparkjoy asks, by cache lifetime (IDLE_MS, hooks/register.ts)
-# The line sparkjoy writes in the transcript for each verdict (`judge` and `afterTurn` in
-# hooks/register.ts), under its current name and the one it had before it was published.
+# The line sparkjoy writes in the transcript for each verdict (`outcome` in hooks/register.ts),
+# under its current name and the one it had before it was published. A question that read less
+# than nine tenths of its input from the prompt cache (MISSED there) says how much it read.
 VERDICT = re.compile(
     r"(?P<plugin>sparkjoy|compact-when-done): (?:(?P<kind>Compacting|Would compact|Kept|Unreadable verdict|"
-    r"No verdict|Dropped the verdict) at (?P<tokens>\d+)k tokens(?:, idle (?P<idle>\d+) minutes)?|Failed): "
-    r"(?P<reason>.*)",
+    r"No verdict|Dropped the verdict) at (?P<tokens>\d+)k tokens(?:, idle (?P<idle>\d+) minutes)?"
+    r"(?:, after missing the prompt cache(?: its turn had just written to)? "
+    r"\(read (?P<read>\d+)k of (?P<input>\d+)k\))?|Failed): (?P<reason>.*)",
     re.S,
-)
-# The line it writes before a verdict whose question read less than nine tenths of its input from
-# the prompt cache (MISSED in hooks/register.ts), which in an idle session goes on to say why.
-MISSED = re.compile(
-    r"sparkjoy: Missed the prompt cache at \d+k tokens(?:, idle \d+ minutes)?: "
-    r"read (?P<read>\d+)k of (?P<input>\d+)k from it(?:\. .*)?"
 )
 # Every line sparkjoy writes in the transcript, under either name, and those Claude Code writes
 # about it there.
@@ -377,7 +373,7 @@ def transcript(path, since=None, until=None):
     )
     title_lines = tuple(f'{{"type":"{t}"' for t in TITLES)
     reqs, comps, prompts, verdicts, lines = {}, [], [], [], []
-    entry, version, asked, missed, background = None, None, None, None, False
+    entry, version, asked, background = None, None, None, False
     titles, first, models, said, failed, summaries = {}, None, Counter(), [], {}, []
     for raw in path.open(errors="replace"):
         prompt = (
@@ -482,9 +478,7 @@ def transcript(path, since=None, until=None):
             text = str(e.get("content", ""))
             if text.startswith(LINE):
                 lines.append((t, text))
-            if line := MISSED.fullmatch(text):
-                missed = int(line["read"]) * 1000, int(line["input"]) * 1000
-            elif line := VERDICT.fullmatch(text):
+            if line := VERDICT.fullmatch(text):
                 kind = KINDS[line["kind"]]
                 verdicts.append(
                     Verdict(
@@ -494,10 +488,10 @@ def transcript(path, since=None, until=None):
                         line["tokens"] and int(line["tokens"]) * 1000,
                         line["idle"] and int(line["idle"]),
                         line["reason"],
-                        missed,
+                        line["read"]
+                        and (int(line["read"]) * 1000, int(line["input"]) * 1000),
                     )
                 )
-                missed = None
                 asked = t if kind == "compacted" else asked
             elif (
                 text.startswith("Compacted while idle")

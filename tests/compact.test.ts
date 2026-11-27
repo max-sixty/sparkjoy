@@ -636,7 +636,7 @@ test(
 // The line sparkjoy adds after one reporting a bug.
 const BUG = 'That looks like a bug: /sparkjoy bug drafts a report of it.'
 
-test('a question at a turn’s end that missed the prompt cache says so and calls it a bug', async ($, on) => {
+test('a question at a turn’s end that missed the prompt cache says so in its verdict’s line and calls it a bug', async ($, on) => {
   const { begin, compactions, logs, turn } = engine(on, { forkUsage: MISS })
   await begin($)
 
@@ -644,9 +644,20 @@ test('a question at a turn’s end that missed the prompt cache says so and call
 
   expect(compactions).toEqual([''])
   expect(logs).toEqual([
-    'Missed the prompt cache at 500k tokens: read 30k of 502k from it',
+    'Compacting at 500k tokens, after missing the prompt cache its turn had just written to (read 30k of 502k): the PR merged',
     BUG,
-    'Compacting at 500k tokens: the PR merged',
+  ])
+})
+
+test('an unreadable verdict from a question that missed the prompt cache calls it a bug once', async ($, on) => {
+  const { begin, logs, turn } = engine(on, { forkUsage: MISS, verdict: 'compact it' })
+  await begin($)
+
+  await turn($, 't1')
+
+  expect(logs).toEqual([
+    'Unreadable verdict at 500k tokens, after missing the prompt cache its turn had just written to (read 30k of 502k): compact it',
+    BUG,
   ])
 })
 
@@ -660,8 +671,7 @@ test('a question after a turn that wrote nothing to the cache says it missed, bu
   await turn($, 't1')
 
   expect(logs).toEqual([
-    'Missed the prompt cache at 500k tokens: read 30k of 502k from it',
-    'Compacting at 500k tokens: the PR merged',
+    'Compacting at 500k tokens, after missing the prompt cache (read 30k of 502k): the PR merged',
   ])
 })
 
@@ -675,7 +685,7 @@ test('an unreadable verdict says so and calls it a bug', async ($, on) => {
   expect(logs).toEqual(['Unreadable verdict at 500k tokens: compact it', BUG])
 })
 
-test('an idle question that missed the prompt cache names an account switch', async ($, on) => {
+test('an idle question that missed the prompt cache says so in its verdict’s line, and not that it’s a bug', async ($, on) => {
   const { begin, clock, logs, turn } = engine(on, {
     tokens: 200_000,
     forkUsage: { ...MISS, cache_creation_input_tokens: 170_000 },
@@ -687,8 +697,7 @@ test('an idle question that missed the prompt cache names an account switch', as
   await clock.settle()
 
   expect(logs).toEqual([
-    'Missed the prompt cache at 200k tokens, idle 55 minutes: read 30k of 202k from it. Signing in to another account while idle drops the cache.',
-    'Compacting at 200k tokens, idle 55 minutes: the PR merged',
+    'Compacting at 200k tokens, idle 55 minutes, after missing the prompt cache (read 30k of 202k): the PR merged',
   ])
 })
 
