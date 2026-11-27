@@ -63,13 +63,13 @@ IDLE = {
     300: 4 * 60,
 }  # seconds idle before sparkjoy asks, by cache lifetime (IDLE_MS, hooks/register.ts)
 # The line sparkjoy writes in the transcript for each verdict (`outcome` in hooks/register.ts),
-# under its current name and the one it had before it was published. A question that read less
-# than nine tenths of its input from the prompt cache (MISSED there) says how much it read.
+# under its current name and the one it had before it was published. A question that missed the
+# prompt cache (MISSED there) says how much of its input it read from it, then may say more.
 VERDICT = re.compile(
     r"(?P<plugin>sparkjoy|compact-when-done): (?:(?P<kind>Compacting|Would compact|Kept|Unreadable verdict|"
     r"No verdict|Dropped the verdict) at (?P<tokens>\d+)k tokens(?:, idle (?P<idle>\d+) minutes)?"
-    r"(?:, after missing the prompt cache(?: its turn had just written to)? "
-    r"\(read (?P<read>\d+)k of (?P<input>\d+)k\))?|Failed): (?P<reason>.*)",
+    r"(?:, after missing the prompt cache[^(]* \(read (?P<read>\d+)k of (?P<input>\d+)k(?:;[^)]*)?\))?"
+    r"|Failed): (?P<reason>.*)",
     re.S,
 )
 # Every line sparkjoy writes in the transcript, under either name, and those Claude Code writes

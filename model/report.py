@@ -58,8 +58,8 @@ MEANING = {
     "failed": "An error stopped the check.",
 }
 MISSED = (
-    "Its question read less than nine tenths of its input from the prompt cache, so the rest cost a cache "
-    "write. sparkjoy logs these from 20 November 2026 on."
+    "Its question read less than nine tenths of the context from the prompt cache, so the rest cost a cache "
+    "write. sparkjoy logs these from 27 November 2026 on."
 )
 
 

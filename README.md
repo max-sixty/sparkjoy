@@ -369,13 +369,12 @@ to less than 1% of what the sessions cost.
 <details>
 <summary>Why does a verdict say sparkjoy missed the prompt cache?</summary>
 
-The question behind it read less than nine tenths of its input from the cache,
-and paid to write the rest to the cache again. In
-`after missing the prompt cache (read 31k of 162k)`, the 31k is the system
-prompt and tools, which Claude Code caches across sessions.
+The question behind it found the session's context gone from the cache, and
+wrote it there again. In `read 31k of 162k`, the 31k is about the size of the
+system prompt and tools, which Claude Code caches across sessions.
 
-At a turn end, the question reads the cache the turn has just written to, so a
-miss there is a bug. Its line says `after missing the prompt cache its turn had just
+When the turn before the question has just written to the cache, a miss is a
+bug. The line then says `after missing the prompt cache the turn had just
 written to`, and the next line suggests `/sparkjoy bug`.
 
 An idle session's question comes just before the cache expires, and can find it
@@ -383,13 +382,16 @@ gone already:
 
 - The cache belongs to the account's organization, so signing in to another
   account while the session sits idle drops it.
-- On the 5-minute cache, sparkjoy waits 4 minutes from the turn's end, so a last
-  request that ran for more than a minute leaves the cache expired.
+- sparkjoy's wait runs from the turn's end, and the cache's lifetime from when
+  the turn's last request was sent. A last request that ran for over a minute on
+  the 5-minute cache, or over 4 minutes on the one-hour cache, leaves the cache
+  expired when the question comes.
 
-On the same account and the one-hour cache, the API seldom drops the cache
-early. Claude Code doesn't tell the plugins you install which account a session
-runs under, so the line names no cause. If neither cause applies, `/sparkjoy bug` drafts a
-report.
+Claude Code doesn't tell the plugins you install which account a session runs
+under, so the line can't say which happened, and ends
+`/sparkjoy bug if you didn't switch accounts`. If you didn't, run
+`/sparkjoy bug the idle question missed the cache` to draft a report about that
+line.
 
 `/sparkjoy report` counts the questions that missed the cache.
 

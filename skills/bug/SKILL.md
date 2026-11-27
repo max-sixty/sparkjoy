@@ -26,8 +26,8 @@ Fill in its two sections in italics:
 
 - **What happened**: what the user says went wrong and expected, in their
   words, and the line it concerns. If they gave no account, describe the latest
-  line that sparkjoy followed with one suggesting `/sparkjoy bug`, and ask
-  whether that's the one.
+  line of sparkjoy's that suggests `/sparkjoy bug`, or that sparkjoy followed
+  with one that does, and ask whether that's the one.
 - **Settings**: the quoted settings, whole.
 
 Then show the user the draft's path, the title you'd give the issue, the

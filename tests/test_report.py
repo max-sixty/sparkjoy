@@ -142,7 +142,7 @@ def session_with_compactions():
         line(
             "13:25:20Z",
             "sparkjoy: Compacting at 260k tokens, idle 55 minutes, after missing the prompt cache "
-            "(read 30k of 262k): the lexer is done",
+            "(read 30k of 262k; /sparkjoy bug if you didn't switch accounts): the lexer is done",
         ),
         boundary("13:26:00Z"),
         compact_summary("13:26:00Z"),
@@ -151,7 +151,7 @@ def session_with_compactions():
         line("15:00:20Z", "sparkjoy: Failed: Error: the fork failed"),
         line(
             "15:00:40Z",
-            "sparkjoy: Compacting at 226k tokens, after missing the prompt cache its turn had just "
+            "sparkjoy: Compacting at 226k tokens, after missing the prompt cache the turn had just "
             "written to (read 30k of 227k): all done",
         ),  # a compaction that never ran
         line(

@@ -51,7 +51,8 @@ const FIGURES = `${HOME}/.claude/sparkjoy/figures.json`
 // otherwise), turns that end reporting `usage` (`HOUR` unless told
 // otherwise), a fork that answers `verdict` after a turn and `idleVerdict`
 // after an idle wait, each after `forkMs` (`null`: an empty reply) and
-// reporting `forkUsage`,
+// reporting `forkUsage` (the whole context read from the cache unless told
+// otherwise),
 // compactions that take `compactMs` and fail `compactFailures` times before
 // one succeeds, a turn whose end settles after `endMs`, a store holding
 // `stored` (what an earlier process left), a conversation of user messages
@@ -68,7 +69,7 @@ function engine(
     verdict = COMPACT as string | null,
     idleVerdict = COMPACT as string | null,
     forkMs = 0,
-    forkUsage = USAGE as ModelUsage,
+    forkUsage = undefined as ModelUsage | undefined,
     endMs = 0,
     compactMs = 0,
     compactFailures = 0,
@@ -129,11 +130,13 @@ function engine(
   }))
   on('model.fork', async (_, e) => {
     forks.push(e.prompt)
+    // What the fork read: the context as it was sent.
+    const usage = forkUsage ?? { ...USAGE, cache_read_input_tokens: size ?? 0 }
     await clock.sleep(forkMs)
     const answer = e.prompt.includes('minutes ago') ? idleVerdict : verdict
     if (answer === null)
-      return { value: { isAnswered: false, reason: 'empty-reply', usage: forkUsage } }
-    return { value: { isAnswered: true, text: answer, usage: forkUsage } }
+      return { value: { isAnswered: false, reason: 'empty-reply', usage } }
+    return { value: { isAnswered: true, text: answer, usage } }
   })
   // A plugin's `$.session.compact` reaches here as the plugin made it, with no
   // `trigger`; the engine stamps it `plugin`.
@@ -583,8 +586,19 @@ const MISS = {
   cache_creation_input_tokens: 470_000,
 }
 
-test('a question read from the prompt cache adds no line', async ($, on) => {
+test('a question read from the prompt cache says nothing of it', async ($, on) => {
   const { begin, logs, turn } = engine(on, { forkUsage: HIT })
+  await begin($)
+
+  await turn($, 't1')
+
+  expect(logs).toEqual(['Compacting at 500k tokens: the PR merged'])
+})
+
+test('a question that read the whole context from the cache hit it, however long the reply after it', async ($, on) => {
+  const { begin, logs, turn } = engine(on, {
+    forkUsage: { ...USAGE, input_tokens: 80_000, cache_read_input_tokens: 500_000 },
+  })
   await begin($)
 
   await turn($, 't1')
@@ -644,7 +658,7 @@ test('a question at a turn’s end that missed the prompt cache says so in its v
 
   expect(compactions).toEqual([''])
   expect(logs).toEqual([
-    'Compacting at 500k tokens, after missing the prompt cache its turn had just written to (read 30k of 502k): the PR merged',
+    'Compacting at 500k tokens, after missing the prompt cache the turn had just written to (read 30k of 502k): the PR merged',
     BUG,
   ])
 })
@@ -656,7 +670,7 @@ test('an unreadable verdict from a question that missed the prompt cache calls i
   await turn($, 't1')
 
   expect(logs).toEqual([
-    'Unreadable verdict at 500k tokens, after missing the prompt cache its turn had just written to (read 30k of 502k): compact it',
+    'Unreadable verdict at 500k tokens, after missing the prompt cache the turn had just written to (read 30k of 502k): compact it',
     BUG,
   ])
 })
@@ -697,7 +711,7 @@ test('an idle question that missed the prompt cache says so in its verdict’s l
   await clock.settle()
 
   expect(logs).toEqual([
-    'Compacting at 200k tokens, idle 55 minutes, after missing the prompt cache (read 30k of 202k): the PR merged',
+    "Compacting at 200k tokens, idle 55 minutes, after missing the prompt cache (read 30k of 202k; /sparkjoy bug if you didn't switch accounts): the PR merged",
   ])
 })
 

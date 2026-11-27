@@ -23,7 +23,7 @@ def test_drafts_sparkjoys_lines_beside_the_requests_around_them(tmp_path):
             request("10:00:10Z", 290_000, 10_000),
             line(
                 "10:00:20Z",
-                "sparkjoy: Unreadable verdict at 300k tokens, after missing the prompt cache its "
+                "sparkjoy: Unreadable verdict at 300k tokens, after missing the prompt cache the "
                 "turn had just written to (read 30k of 302k): <b>Keep</b>\n\nIt's half done.",
             ),
             line(
@@ -35,7 +35,7 @@ def test_drafts_sparkjoys_lines_beside_the_requests_around_them(tmp_path):
             line(
                 "10:56:21Z",
                 "sparkjoy: Compacting at 305k tokens, idle 55 minutes, after missing the prompt "
-                "cache (read 30k of 307k): the fix | its test landed",
+                "cache (read 30k of 307k; /sparkjoy bug if you didn't switch accounts): the fix | its test landed",
             ),
             boundary("10:57:00Z", before=305_002),
             compact_summary("10:57:00Z"),
@@ -75,9 +75,9 @@ def test_drafts_sparkjoys_lines_beside_the_requests_around_them(tmp_path):
         """\
 | Time | Line | Request before | Request after |
 | --- | --- | --- | --- |
-| Nov 2 10:00 | sparkjoy: Unreadable verdict at 300k tokens, after missing the prompt cache its turn had just written to (read 30k of 302k): &lt;b&gt;Keep&lt;/b&gt;<br><br>It's half done. | 10 s earlier: 300k, 290k read from the cache | 50 s later: 305k, 300k read from the cache |
+| Nov 2 10:00 | sparkjoy: Unreadable verdict at 300k tokens, after missing the prompt cache the turn had just written to (read 30k of 302k): &lt;b&gt;Keep&lt;/b&gt;<br><br>It's half done. | 10 s earlier: 300k, 290k read from the cache | 50 s later: 305k, 300k read from the cache |
 | Nov 2 10:00 | sparkjoy: That looks like a bug: /sparkjoy bug drafts a report of it. | 10 s earlier: 300k, 290k read from the cache | 50 s later: 305k, 300k read from the cache |
-| Nov 2 10:56 | sparkjoy: Compacting at 305k tokens, idle 55 minutes, after missing the prompt cache (read 30k of 307k): the fix \\| its test landed | 55 min earlier: 305k, 300k read from the cache | 1 h 04 min later: 130k, 30k read from the cache |
+| Nov 2 10:56 | sparkjoy: Compacting at 305k tokens, idle 55 minutes, after missing the prompt cache (read 30k of 307k; /sparkjoy bug if you didn't switch accounts): the fix \\| its test landed | 55 min earlier: 305k, 300k read from the cache | 1 h 04 min later: 130k, 30k read from the cache |
 
 Compactions since the first of those lines:
 

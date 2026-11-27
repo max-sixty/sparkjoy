@@ -255,9 +255,11 @@ const IDLE_MS = { '1h': 55 * 60_000, '5m': 4 * 60_000 }
 // no test reaches this.
 const LATE_MS = 60_000
 
-// The share of the fork's input not read from the prompt cache past which the
-// question missed it: a hit leaves only the question uncached and a miss most
-// of the context, so any share between separates them.
+// The share of the turn's last request that the question didn't read from the
+// prompt cache, past which it missed the cache. The fork sends that request
+// again, which the request itself left cached, so a hit reads all of it and a
+// miss only the system prompt and tools, and any share between separates them.
+// The turn's reply and the question come after it, and are never cached.
 const MISSED = 0.1
 
 // What the line after one reporting a bug, in sparkjoy or in the Claude Code
@@ -377,8 +379,8 @@ async function afterTurn(
     // A turn that wrote to the cache left it seconds old, so a question that
     // misses it had a prompt that differed from the turn's, which is a bug. A
     // turn that wrote nothing left nothing to read.
-    const wrote = (usage?.cache_creation_input_tokens ?? 0) > 0
-    await judge($, settings, say, async () => isCurrent(), at, prompt, wrote)
+    const miss = (usage?.cache_creation_input_tokens ?? 0) > 0 ? 'bug' : 'plain'
+    await judge($, settings, say, async () => isCurrent(), at, tokens, prompt, miss)
   } catch (error) {
     sayBug(say, `Failed: ${error}`)
   }
@@ -410,13 +412,7 @@ async function idle(
       (await fitted($, settings)).figures,
       settings.instructions,
     )
-    // A question that misses the cache here needn't be a bug, so its line
-    // names no cause: Claude Code may have signed in to another account
-    // meanwhile (IDLE_MS), or, as the wait runs from the turn's end, a last
-    // request that ran long may have used up the five-minute cache's margin.
-    // The mod can't tell which, since `$.session.identity` answers only a mod
-    // that managed settings enable. The README's FAQ lists both.
-    await judge($, settings, say, isUntouched, at, prompt, false)
+    await judge($, settings, say, isUntouched, at, tokens, prompt, 'idle')
   } catch (error) {
     sayBug(say, `Failed: ${error}`)
   }
@@ -424,22 +420,22 @@ async function idle(
 
 // Asks the session's model whether to compact, and compacts if it says to and
 // the mod is on. The verdict stands only while `stands` holds once the model
-// has answered; `at` names the moment. `wrote` says the turn before the
-// question had just written to the prompt cache, which makes a question that
-// misses it a bug.
+// has answered; `at` names the moment, and `tokens` the context then. `miss`
+// says what the question's line makes of a miss of the prompt cache.
 async function judge(
   $: EngineInterface,
   settings: Settings,
   say: (text: string) => void,
   stands: () => Promise<boolean>,
   at: string,
+  tokens: number,
   prompt: string,
-  wrote: boolean,
+  miss: Miss,
 ) {
   const answer = await $.model.fork({ prompt })
   // A fork that made no request reports no usage.
-  const missed = 'usage' in answer ? missing(answer.usage, wrote) : ''
-  const line = outcome(say, at, missed, missed !== '' && wrote)
+  const missed = 'usage' in answer ? missing(answer.usage, tokens, miss) : ''
+  const line = outcome(say, at, missed, missed !== '' && miss === 'bug')
   if (!(await stands())) return line('Dropped the verdict', 'the conversation moved on')
   const verdict = answer.isAnswered ? parse(answer.text) : undefined
   if (verdict) {
@@ -451,24 +447,35 @@ async function judge(
   }
 }
 
-// The clause a question's line carries when the question read less than nine
-// tenths of its input from the prompt cache (MISSED), or "" when it read more.
-// After a turn that had just written to the cache, the clause says so, since
-// that makes the miss a bug.
-function missing(usage: ModelUsage, wrote: boolean) {
+// What a question's line makes of a miss of the prompt cache. After a turn
+// that had just written to the cache (`bug`), the miss is a bug, and the line
+// says so. In an idle session (`idle`) it needn't be: Claude Code may have
+// signed in to another account meanwhile (IDLE_MS), or, as the wait runs from
+// the turn's end, a last request that ran long may have used up the cache's
+// margin. The mod can't tell which, since `$.session.identity` answers only a
+// mod that managed settings enable, so the line leaves the account to the
+// user, and the README's FAQ lists the causes. After a turn that wrote nothing
+// (`plain`), there was nothing to read.
+type Miss = 'bug' | 'idle' | 'plain'
+
+// The clause a question's line carries when the question missed the prompt
+// cache (MISSED) at a context of `tokens`, or "" when it didn't.
+function missing(usage: ModelUsage, tokens: number, miss: Miss) {
   const read = usage.cache_read_input_tokens
+  if (read >= (1 - MISSED) * tokens) return ''
   const input = usage.input_tokens + read + usage.cache_creation_input_tokens
-  if (input - read <= MISSED * input) return ''
-  const cache = wrote
-    ? 'the prompt cache its turn had just written to'
-    : 'the prompt cache'
-  return `, after missing ${cache} (read ${thousands(read)} of ${thousands(input)})`
+  const cache =
+    miss === 'bug'
+      ? 'the prompt cache the turn had just written to'
+      : 'the prompt cache'
+  const route = miss === 'idle' ? "; /sparkjoy bug if you didn't switch accounts" : ''
+  return `, after missing ${cache} (read ${thousands(read)} of ${thousands(input)}${route})`
 }
 
 // Says what came of a question at `at`, in one line: its kind, then any
 // `missed` clause, and after a colon the reason, which is the model's alone, as
-// model/fit.py's VERDICT parses it. A line that reports a bug, or follows a
-// question whose miss is one, is followed by the line saying how to report it.
+// model/fit.py's VERDICT parses it. When the line reports a bug, or the
+// question's miss is one, the line saying how to report it follows.
 function outcome(
   say: (text: string) => void,
   at: string,
