@@ -13,7 +13,10 @@ A case's request is the one the turn's reply answered, with the reply after
 it. `$.model.fork` sends that request again with its prompt after the reply,
 so a run sends the same straight to the API, with the question `question()`
 in `<checkout>/hooks/register.ts` renders for the case's recorded context size
-(`question.ts`), or for `--told` tokens. Where the case's session is on this
+(`question.ts`), or for `--told` tokens. It asks only at the sizes where that
+checkout's plugin asks, and `--report` counts older runs at other sizes in no
+total, since the plugin keeps below its floor without asking. Where the
+case's session is on this
 machine, a run rebuilds the request from its transcript, as the live fork
 sends it (`build.fork_request`); elsewhere, or with `--published`, it sends the
 one published in the evals' data repository (`sparkjoy_assets.py`), without
@@ -41,6 +44,7 @@ token): the macOS keychain item `Claude Code-credentials`, or
 import argparse
 import getpass
 import gzip
+import hashlib
 import http.client
 import json
 import os
@@ -101,6 +105,30 @@ def credential() -> dict[str, str]:
             "No credentials: set CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY, or log in to Claude Code."
         )
     return {"authorization": f"Bearer {token}"}
+
+
+def headers_of(request: dict, auth: dict[str, str]) -> dict[str, str]:
+    """The headers to send `request` with, authenticated with `auth`."""
+    return auth | {
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": ",".join(
+            request["params"]["betas"]
+            + (["oauth-2025-04-20"] if "authorization" in auth else [])
+        ),
+        "content-type": "application/json",
+    }
+
+
+def cost_of(used: dict, model: str) -> float:
+    """What a run's requests cost, in dollars, at `model`'s list prices. A
+    run's cache writes last five minutes."""
+    i, o, w5, _, r = fit.PRICES[model]
+    return (
+        used["input_tokens"] * i
+        + used["output_tokens"] * o
+        + used["cache_read_input_tokens"] * r
+        + used["cache_creation_input_tokens"] * w5
+    ) / 1e6
 
 
 def body_of(request: dict, question: str) -> dict:
@@ -237,6 +265,32 @@ def render(source: Path, reply: str, case: dict, told: int | None) -> str:
     ).stdout
 
 
+def bounds(source: Path) -> dict:
+    """The sizes from which the checkout's plugin asks at all (`question.ts
+    --bounds`)."""
+    return json.loads(
+        subprocess.run(
+            ["bun", str(HERE / "question.ts"), str(register(source)), "0", "--bounds"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    )
+
+
+def asks(case: dict, stated: int, bound: dict) -> bool:
+    """Whether the plugin asks at the case's turn end with `stated` tokens:
+    from its floor, which is lower for an idle session."""
+    floor = bound["idleFloor" if case["kind"] == "idle" else "floor"] or 0
+    return floor <= stated
+
+
+def stated_of(row: dict, case: dict) -> int:
+    """The size a row's question stated: its `--told` size, or the case's."""
+    m = re.search(r"-told-(\d+)k", row["question"])
+    return int(m[1]) * 1000 if m else case["tokens"]
+
+
 def parse(text: str) -> dict | None:
     """The verdict in `text`, read as the plugin reads it, or None."""
     try:
@@ -254,7 +308,9 @@ def parse(text: str) -> dict | None:
 def label(source: Path, told: int | None = None) -> str:
     """The checkout's branch and commit, e.g. `main@02beed1`, or a file's name,
     with the size the question states where it isn't the case's own, as in
-    `main@02beed1-told-900k`."""
+    `main@02beed1-told-500k`. A checkout whose `register.ts` differs from its
+    commit's adds the hash of the file it asks from, as in
+    `main@02beed1+3f9a1c2e`, so two texts never share a label."""
     suffix = f"-told-{told // 1000}k" if told else ""
     if source.is_file():
         return source.stem + suffix
@@ -262,9 +318,13 @@ def label(source: Path, told: int | None = None) -> str:
     def git(*args):
         return subprocess.run(
             ["git", "-C", str(source), *args], capture_output=True, text=True
-        ).stdout.strip()
+        )
 
-    return f"{git('rev-parse', '--abbrev-ref', 'HEAD')}@{git('rev-parse', '--short', 'HEAD')}{suffix}"
+    commit = f"{git('rev-parse', '--abbrev-ref', 'HEAD').stdout.strip()}@{git('rev-parse', '--short', 'HEAD').stdout.strip()}"
+    if git("diff", "--quiet", "HEAD", "--", "hooks/register.ts").returncode:
+        text = register(source).read_bytes()
+        commit += "+" + hashlib.sha256(text).hexdigest()[:8]
+    return commit + suffix
 
 
 def request_of(case: dict, published: bool) -> tuple[dict, str] | None:
@@ -286,9 +346,6 @@ def row_of(
 ) -> dict:
     verdict = parse(text)
     got = None if verdict is None else ("compact" if verdict["compact"] else "keep")
-    read, write = used["cache_read_input_tokens"], used["cache_creation_input_tokens"]
-    # A run's cache writes last five minutes.
-    i, o, w5, _, r = fit.PRICES[request["params"]["model"]]
     row = {
         "case": case["id"],
         "question": question,
@@ -297,30 +354,24 @@ def row_of(
         "got": got,
         "reason": verdict["reason"] if verdict else text[:300],
         "context": used["context"],
-        "cache_read": read,
+        "cache_read": used["cache_read_input_tokens"],
         "output": used["output_tokens"],
         # Thinking tokens among the output; zero where the model answered
         # without thinking.
         "thinking": used["thinking"],
         "requests": used["requests"],
-        "cost": round(
-            (
-                used["input_tokens"] * i
-                + used["output_tokens"] * o
-                + read * r
-                + write * w5
-            )
-            / 1e6,
-            4,
-        ),
+        "cost": round(cost_of(used, request["params"]["model"]), 4),
         # The Claude Code release that recorded the request.
         "client": request["version"],
         "request": origin,
     }
     # The answer's other fields, such as whether the next turns need the
-    # transcript's detail, for a question that asks for them.
+    # transcript's detail, for a question that asks for them, apart from the
+    # measured ones whatever their names.
     if verdict is not None:
-        row |= {k: v for k, v in verdict.items() if k not in ("compact", "reason")}
+        row["answer"] = {
+            k: v for k, v in verdict.items() if k not in ("compact", "reason")
+        }
     return row
 
 
@@ -340,8 +391,23 @@ def run(
     auth = credential()
     # Before the cases' threads start, so that none of them clones.
     sparkjoy_assets.fetch()
+    bound = {source: bounds(source) for source in sources}
 
     def one_case(case: dict) -> list[dict]:
+        # Only where the plugin asks: below its floor it keeps without asking.
+        pairs = []
+        for source in sources:
+            for size in told:
+                if asks(case, size or case["tokens"], bound[source]):
+                    pairs.append((source, size))
+                else:
+                    print(
+                        f"SKIP {case['id']} [{label(source, size)}]: the plugin doesn't "
+                        f"ask at {(size or case['tokens']) // 1000}k",
+                        flush=True,
+                    )
+        if not pairs:
+            return []
         if (found := request_of(case, published)) is None:
             print(f"SKIP {case['id']}: no transcript or published request", flush=True)
             return []
@@ -351,21 +417,13 @@ def run(
                 f"SKIP {case['id']}: fit.PRICES has no price for its model", flush=True
             )
             return []
-        headers = auth | {
-            "anthropic-version": "2023-06-01",
-            "anthropic-beta": ",".join(
-                request["params"]["betas"]
-                + (["oauth-2025-04-20"] if "authorization" in auth else [])
-            ),
-            "content-type": "application/json",
-        }
+        headers = headers_of(request, auth)
         reply = "\n\n".join(
             b["text"] for b in request["messages"][-1]["content"] if b["type"] == "text"
         )
         bodies = {
             label(source, size): body_of(request, render(source, reply, case, size))
-            for source in sources
-            for size in told
+            for source, size in pairs
         }
         rows = []
         # The questions take turns, so drift over a batch falls on each alike.
@@ -414,6 +472,15 @@ def report(cases: list[dict]) -> None:
         json.loads(line) for path in sparkjoy_assets.results() for line in path.open()
     ]
     questions = list(dict.fromkeys(column(r) for r in rows))
+    # A run at a size where the plugin, as this checkout has it, doesn't ask
+    # scores nothing the plugin does, so it shows apart and counts in no total.
+    bound = bounds(HERE.parent)
+    by_id = {case["id"]: case for case in cases}
+
+    def scored(r: dict) -> bool:
+        case = by_id.get(r["case"])
+        return case is not None and asks(case, stated_of(r, case), bound)
+
     print("| case | kind | context | expected | " + " | ".join(questions) + " |")
     print("|---|---|---|---|" + "---|" * len(questions))
     for case in cases:
@@ -423,19 +490,21 @@ def report(cases: list[dict]) -> None:
             runs = [r for r in mine if column(r) == q]
             passed = sum(r["got"] == case["expected"] for r in runs)
             thought = sum(r["thinking"] > 0 for r in runs)
-            cells.append(f"{passed}/{len(runs)} ({thought} thought)" if runs else "")
+            cell = f"{passed}/{len(runs)} ({thought} thought)" if runs else ""
+            cells.append(cell if not runs or scored(runs[0]) else f"not asked: {cell}")
         print(
-            f"| {case['id']} | {case['kind']} | {case['tokens'] // 1000}k | {case['expected']} | "
+            f"| {case['id']} | {case['kind']} | {round(case['tokens'] / 1000)}k | {case['expected']} | "
             + " | ".join(cells)
             + " |"
         )
-    # Scored against the labels as they stand, at the cases listed.
-    expected = {case["id"]: case["expected"] for case in cases}
+    # Scored against the labels as they stand, at the cases listed, where the
+    # plugin asks.
     for q in questions:
-        runs = [r for r in rows if column(r) == q and r["case"] in expected]
-        print(
-            f"\n{q}: {sum(r['got'] == expected[r['case']] for r in runs)}/{len(runs)} runs passed, ${sum(r['cost'] for r in runs):.2f}"
-        )
+        runs = [r for r in rows if column(r) == q and scored(r)]
+        if runs:
+            print(
+                f"\n{q}: {sum(r['got'] == by_id[r['case']]['expected'] for r in runs)}/{len(runs)} runs passed, ${sum(r['cost'] for r in runs):.2f}"
+            )
     by_size(cases, rows)
 
 
