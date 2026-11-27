@@ -20,7 +20,7 @@ uv run --script evals/run.py --question-from a.ts --question-from b.ts  # two va
 uv run --script evals/run.py --case leaf-menu-design --repeat 4
 uv run --script evals/run.py --told recorded --told 900000      # also as though the context held 900k
 uv run --script evals/run.py --report                           # the results table, from every batch's results
-uv run --script evals/sparkjoy_assets.py publish                # publish rebuilt requests, and results still waiting
+uv run --script model/sparkjoy_assets.py publish                # publish rebuilt requests, and results still waiting
 ```
 
 They need `bun`, `uv` and `git`, and a Claude Code login or
@@ -39,7 +39,7 @@ fetch each request when a run first asks for it.
 A batch publishes its results to sparkjoy-assets when it ends, along with
 those of any earlier batch that didn't, such as one that was killed. `build.py`
 leaves each request it writes in `.tmp/sparkjoy-assets-unpublished` until
-`evals/sparkjoy_assets.py publish` publishes it and points `requests.json` at
+`model/sparkjoy_assets.py publish` publishes it and points `requests.json` at
 it, so that each new image gets a look first; commit `requests.json` with the
 change that uses the request. Publishing needs push access to sparkjoy-assets;
 without it, results wait in `.tmp/sparkjoy-assets-unpublished` too.

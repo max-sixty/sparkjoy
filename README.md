@@ -34,8 +34,8 @@ Without sparkjoy, you need to judge the best time to compact and wait for `/comp
 A comparison of context lengths of a real session, with sparkjoy vs. modeled without:
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/session-dark.svg">
-  <img alt="Context per request across one session of 3,506 requests over four days. With sparkjoy, dots mark the 68 times the plugin asked whether to compact, 62 at turn ends and 6 when idle. At 32 of them the session kept going, 16 times in a row as it grew from 445k to 700k, and at the other 36 it compacted, at sizes from 154k to 713k tokens. In a replay without it, the context climbs to about 960k each time before Claude Code compacts, seven times in all." src="assets/session-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/session-dark/7835ff6ecb7f.svg">
+  <img alt="Context per request across one session of 3,506 requests over four days. With sparkjoy, dots mark the 68 times the plugin asked whether to compact, 62 at turn ends and 6 when idle. At 32 of them the session kept going, 16 times in a row as it grew from 445k to 700k, and at the other 36 it compacted, at sizes from 154k to 713k tokens. In a replay without it, the context climbs to about 960k each time before Claude Code compacts, seven times in all." src="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/session-light/973c3d48eead.svg">
 </picture>
 
 Every request reads the whole context, so the area under each line is the number of tokens read during the session. Each dot marks a time the plugin asked the session's
@@ -80,15 +80,15 @@ To see its verdicts without compacting anything, run
 - **`/sparkjoy report`** opens a page on your sessions of the last 14 days,
   with every verdict and what the compactions saved. It fits the [cost
   model](#cost-model) to those sessions, and sparkjoy uses the fit from then on.
-  It reads your transcripts on your machine and sends nothing. It needs
+  It runs on your machine and doesn't send your transcripts anywhere. It needs
   [uv](https://docs.astral.sh/uv/).
 
 <details>
 <summary>Sample report</summary>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/report-dark.png">
-  <img alt="A sparkjoy report for 8 to 22 November, under the sparkjoy logo: saved $5,243, 26% of what the sessions would have cost without its compactions; 969 verdicts, 727 compacted and 238 kept; the floors that cost least for these sessions; then a table of sessions, each with its context per request with and without sparkjoy's compactions, its verdicts and its cost." src="assets/report-light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/report-dark/ae8f1f0ff57e.png">
+  <img alt="A sparkjoy report for 8 to 22 November, under the sparkjoy logo: saved $5,243, 26% of what the sessions would have cost without its compactions; 969 verdicts, 727 compacted and 238 kept; the floors that cost least for these sessions; then a table of sessions, each with its context per request with and without sparkjoy's compactions, its verdicts and its cost." src="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/report-light/ab1d9a9907e2.png">
 </picture>
 
 </details>
@@ -132,8 +132,8 @@ What my sessions of
 <!-- Generated from docs/cost-model.md's Results by docs/embed.py; edit that file. -->
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/savings-dark.svg">
-  <img alt="What 163 sessions cost, as three bars: $9,539 under Claude Code's default in a replay without its idle compaction, $8,672 in a replay with it, and $6,612 with sparkjoy as the sessions ran, 31% and 24% less." src="assets/savings-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/savings-dark/d67e1d150f78.svg">
+  <img alt="What 163 sessions cost, as three bars: $9,539 under Claude Code's default in a replay without its idle compaction, $8,672 in a replay with it, and $6,612 with sparkjoy as the sessions ran, 31% and 24% less." src="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/savings-light/14db44b089fb.svg">
 </picture>
 
 The replay prices the same requests without sparkjoy's compactions or its
@@ -151,8 +151,8 @@ Claude Code's idle compaction runs.
 each request carried, as sparkjoy ran and in a replay without it:
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/context-dark.svg">
-  <img alt="Share of requests at each context size. With the plugin, most requests carry 100k to 350k tokens; without it, a long tail runs to 1M." src="assets/context-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/context-dark/146e22e6f60f.svg">
+  <img alt="Share of requests at each context size. With the plugin, most requests carry 100k to 350k tokens; without it, a long tail runs to 1M." src="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/context-light/eb9a4adf9906.svg">
 </picture>
 
 ## How it decides
@@ -163,9 +163,9 @@ lapses. It asks at the end of a turn because that's the most likely point where 
 
 To ask, it forks the conversation for one
 request. The fork reads the whole conversation, which is already in the prompt
-cache. The model answers in about a hundred tokens, a verdict and a one-line
-reason. The fork goes from Claude Code to the session's own model, so the
-conversation goes only where the session already sends it.
+cache. The model answers in about 100 tokens, a verdict and a one-line
+reason. Claude Code sends the fork to the session's own model, so the
+conversation isn't sent to any other model or service.
 
 The question asks whether the next turns are likely to need the details which a summary would drop (such
 as failed attempts or a design still taking shape), and states how many
@@ -340,8 +340,8 @@ like this:
   are fitted to, and only in interactive ones, not in `-p` runs or SDK hosts.
 - Its default floors, 250k at a turn end and 175k in an idle session, are
   fitted to my sessions ([Floors](docs/cost-model.md#floors)). My sessions hold
-  about 139k after a compaction, much of it my own instructions and skills, and
-  sessions that hold less would do better with lower floors. `/sparkjoy report`
+  about 139k after a compaction, much of it my own instructions and skills, and if
+  your sessions hold less after a compaction, lower floors would cost them less. `/sparkjoy report`
   fits the floors to your own sessions, and you can set them yourself
   ([Settings](#settings)).
 - It leaves Claude Code's own compaction on, so Claude Code still compacts when
@@ -349,9 +349,9 @@ like this:
   also compacts an idle context of 200k or more itself, before sparkjoy would
   ask.
 - I run sparkjoy without `/autocompact`. If you set it, keep it above sparkjoy's
-  turn-end floor: at or below the floor, Claude Code compacts mid-turn before
-  the context reaches the floor at any turn end, so sparkjoy never asks at a
-  turn end.
+  turn-end floor. With `/autocompact` at or below the floor, Claude Code compacts
+  in the middle of a turn whenever the context reaches that setting, so the
+  context is below the floor at every turn end and sparkjoy never asks there.
 
 ## FAQ
 
@@ -368,6 +368,27 @@ When a question reads less than nine tenths of its input from the cache,
 sparkjoy prints a line saying so, and when the turn before it had just written
 to the cache, the line reports a bug. `/sparkjoy report` counts the questions
 that missed the cache.
+
+</details>
+
+<details>
+<summary>sparkjoy compacts once my work is finished, just before I close the session. Isn't that a waste?</summary>
+
+It is, but a small one. Most of a compaction's cost is the cache write of the
+request after it: at 500k, \$0.82 of the \$1.02 ([What a request and a compaction
+cost](docs/cost-model.md#what-a-request-and-a-compaction-cost)). So if you close the
+session right after a compaction, the compaction costs only \$0.20: \$0.10 to read
+the context from the cache, and \$0.10 to write the summary. The read is cheap
+because sparkjoy compacts only while the cache holds the context.
+
+If you continue the session after its cache has expired, its first request writes
+the whole context to the cache again. At 500k that costs \$3.73, \$2.89 more than
+the first request after a compaction. So the compaction reduces costs if you
+continue even one session in 14.
+
+In my sessions of 18 to 22 November, 7 of sparkjoy's 470 compactions ended a
+session, while 131 were followed by a request after the cache had expired.
+`/sparkjoy report` counts both for your sessions.
 
 </details>
 
@@ -472,8 +493,8 @@ and in a replay without it:
 <!-- What sparkjoy saves -->
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/savings-dark.svg">
-  <img alt="What 163 sessions cost, as three bars: $9,539 under Claude Code's default in a replay without its idle compaction, $8,672 in a replay with it, and $6,612 with sparkjoy as the sessions ran, 31% and 24% less." src="assets/savings-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/savings-dark/d67e1d150f78.svg">
+  <img alt="What 163 sessions cost, as three bars: $9,539 under Claude Code's default in a replay without its idle compaction, $8,672 in a replay with it, and $6,612 with sparkjoy as the sessions ran, 31% and 24% less." src="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/savings-light/14db44b089fb.svg">
 </picture>
 
 The replay prices the same requests without sparkjoy's compactions or its
@@ -571,15 +592,15 @@ $`\displaystyle F(X) = F_0 + X, \qquad F_0 = o\,N + (w - 1)(K - P)`$
 parameter and where it comes from.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/model-cycles-dark.svg">
-  <img alt="Eight panels, two rows by four columns, in symbols without figures. Columns: compact early, compact at X*(0), compact late, and Claude Code's default, which compacts near the window's end. Top row, the context: a sawtooth rising from K to the column's X and dropping back to K, with many short teeth when compacting early and one long tooth under Claude Code's default. Bottom row, cost per request: the request's own cost, rising with the context, with its share of the compaction ending its cycle on top, thick when compacting early and thin when late. A line marks each column's mean cost per request, lowest at X*(0)." src="assets/model-cycles-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-cycles-dark/cc482660ce97.svg">
+  <img alt="Eight panels, two rows by four columns, in symbols without figures. Columns: compact early, compact at X*(0), compact late, and Claude Code's default, which compacts near the window's end. Top row, the context: a sawtooth rising from K to the column's X and dropping back to K, with many short teeth when compacting early and one long tooth under Claude Code's default. Bottom row, cost per request: the request's own cost, rising with the context, with its share of the compaction ending its cycle on top, thick when compacting early and thin when late. A line marks each column's mean cost per request, lowest at X*(0)." src="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-cycles-light/e74ac0d257da.svg">
 </picture>
 
 ### What a request and a compaction cost
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/model-inputs-dark.svg">
-  <img alt="Two panels against the context x, from 0 to 965k, in dollars; parts named in orange are fitted to the sessions. Top, a request's cost by part with the cache warm, the fixed parts at the bottom: output and uncached input, and the cache write of the new tokens, about $0.027 together; above them the cache read of the context, the only part that grows; $0.055 in all at 139k and $0.167 at 700k. Bottom, F(x), a compaction's cost by part, about $1 at any context: the compaction request's output, $0.10; the cache write of the context after it, $0.82, in three bands by source, the summary and the rest of the context $0.17, files re-attached or read again $0.12, and skills, instructions and memory $0.52; and the cache read of the context, the only part that grows; $1.06 at 700k." src="assets/model-inputs-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-inputs-dark/010933a69001.svg">
+  <img alt="Two panels against the context x, from 0 to 965k, in dollars; parts named in orange are fitted to the sessions. Top, a request's cost by part with the cache warm, the fixed parts at the bottom: output and uncached input, and the cache write of the new tokens, about $0.027 together; above them the cache read of the context, the only part that grows; $0.055 in all at 139k and $0.167 at 700k. Bottom, F(x), a compaction's cost by part, about $1 at any context: the compaction request's output, $0.10; the cache write of the context after it, $0.82, in three bands by source, the summary and the rest of the context $0.17, files re-attached or read again $0.12, and skills, instructions and memory $0.52; and the cache read of the context, the only part that grows; $1.06 at 700k." src="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-inputs-light/56d541ad9373.svg">
 </picture>
 
 A compaction costs about \$1 whatever the context it compacts[^parts], since
@@ -592,8 +613,8 @@ asks an idle session whether to compact before its cache lapses
 ([Idle sessions](docs/cost-model.md#idle-sessions)):
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/model-lapse-dark.svg">
-  <img alt="A compaction's cost by part after the prompt cache lapses, against the context x, from 0 to 965k, in dollars; parts named in orange are fitted to the sessions. At the bottom, as in the chart of F(x) above, the compaction request's output and the cache write of the context after it, in three bands, about $0.92 together at any context. Above them, the cache write of the context after a lapse grows with the context, and the cache read of the context lies on top. In all, $2.26 at 200k against $0.96 while the cache holds the context, $4.66 at 500k against $1.02, and about $8.40 at 965k." src="assets/model-lapse-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-lapse-dark/23a710c5e369.svg">
+  <img alt="A compaction's cost by part after the prompt cache lapses, against the context x, from 0 to 965k, in dollars; parts named in orange are fitted to the sessions. At the bottom, as in the chart of F(x) above, the compaction request's output and the cache write of the context after it, in three bands, about $0.92 together at any context. Above them, the cache write of the context after a lapse grows with the context, and the cache read of the context lies on top. In all, $2.26 at 200k against $0.96 while the cache holds the context, $4.66 at 500k against $1.02, and about $8.40 at 965k." src="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-lapse-light/e90045dd3fa8.svg">
 </picture>
 
 The larger the context, the sooner a compaction pays for itself. After a
@@ -602,8 +623,8 @@ compaction pays for itself within 8 requests; at 400k within 17, and at 200k
 within 67:
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/model-payback-dark.svg">
-  <img alt="Later requests until a compaction pays for itself, against the context it compacts. The curve falls steeply from above 100 just past 139k, the context after a compaction, to 67 requests at 200k, where each later request reads 61k less, 17 at 400k, reading 261k less, and 8 at 700k, reading 561k less, then flattens toward 6 near 965k." src="assets/model-payback-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-payback-dark/f49f0f5fac25.svg">
+  <img alt="Later requests until a compaction pays for itself, against the context it compacts. The curve falls steeply from above 100 just past 139k, the context after a compaction, to 67 requests at 200k, where each later request reads 61k less, 17 at 400k, reading 261k less, and 8 at 700k, reading 561k less, then flattens toward 6 near 965k." src="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-payback-light/0d876ee11f10.svg">
 </picture>
 
 ## Cost alone
@@ -618,8 +639,8 @@ threshold, X\*(0), has a closed form:
 $`\displaystyle X^*(0) = K + \sqrt{\frac{2g\,(F_0 + K)}{h}}`$
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/model-average-dark.svg">
-  <img alt="Cost per request against the compaction threshold X, in symbols without figures. The average, a request's cost with its share of the compaction included, falls steeply from just above K to its minimum at X*(0), then rises slowly to Claude Code's default near the window's end, where a hollow dot marks it. The marginal cost, a straight grey line from K, rises through the minimum, where a filled dot labelled min(cost) at X*(0) marks the crossing." src="assets/model-average-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-average-dark/d806052152b1.svg">
+  <img alt="Cost per request against the compaction threshold X, in symbols without figures. The average, a request's cost with its share of the compaction included, falls steeply from just above K to its minimum at X*(0), then rises slowly to Claude Code's default near the window's end, where a hollow dot marks it. The marginal cost, a straight grey line from K, rises through the minimum, where a filled dot labelled min(cost) at X*(0) marks the crossing." src="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-average-light/cda845baa6dd.svg">
 </picture>
 
 For my sessions, X\*(0) is 253k, with a 90% interval of 248–257k:
@@ -663,8 +684,8 @@ one at 1M, and [Sensitivity](docs/cost-model.md#sensitivity) shows how the most 
 threshold moves with β.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/model-effectiveness-dark.svg">
-  <img alt="Effectiveness η(x), relative to a request at 1M, against the context x, for β of 0, 0.25, 0.5 and 1 on one blue ramp, the base case, β = 0.5, drawn thicker. β = 0 is flat at 100%; the others rise from 0 to 100% at 1M, β = 1 in a straight line." src="assets/model-effectiveness-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-effectiveness-dark/079c9517a0c6.svg">
+  <img alt="Effectiveness η(x), relative to a request at 1M, against the context x, for β of 0, 0.25, 0.5 and 1 on one blue ramp, the base case, β = 0.5, drawn thicker. β = 0 is flat at 100%; the others rise from 0 to 100% at 1M, β = 1 in a straight line." src="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-effectiveness-light/72f3930e9a05.svg">
 </picture>
 
 η depends only on the context's size, so a request right after a compaction, at
@@ -678,8 +699,8 @@ turn end](docs/cost-model.md#mid-turn-or-at-a-turn-end) adds as D wasted request
 ### Cost at each threshold
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/model-cost-dark.svg">
-  <img alt="Two panels against the compaction threshold from 139k to 965k, each relative to Claude Code's default, compacting at 965k. Top, a request's cost and its effectiveness, each averaged over a cycle. The cost, its share of the compaction included, is the same at any β: it falls steeply from 139k to its lowest, 54% at 253k, and rises to 100% at 965k. The effectiveness, for β of 0, 0.25, 0.5 and 1 on one blue ramp, the base case, β = 0.5, drawn thicker, is flat at 100% for β = 0, and for the others rises from 72%, 52% and 25% at 139k to 100% at 965k. The cost line drops below the lines for β of 0, 0.25 and 0.5 at 155k, 167k and 204k and stays below them to 965k, and it is above the line for β = 1 everywhere. Bottom, their ratio, cost per unit of effectiveness, for the same β. The first three fall steeply from 139k to a minimum and rise to 100% at 965k; dots mark the minima: 54.1% at 253k for β = 0, 68.3% at 287k for 0.25 and 84.7% at 363k for 0.5. β = 1 stays above 100% and falls to it at 965k." src="assets/model-cost-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-cost-dark/4400b9a0d3f2.svg">
+  <img alt="Two panels against the compaction threshold from 139k to 965k, each relative to Claude Code's default, compacting at 965k. Top, a request's cost and its effectiveness, each averaged over a cycle. The cost, its share of the compaction included, is the same at any β: it falls steeply from 139k to its lowest, 54% at 253k, and rises to 100% at 965k. The effectiveness, for β of 0, 0.25, 0.5 and 1 on one blue ramp, the base case, β = 0.5, drawn thicker, is flat at 100% for β = 0, and for the others rises from 72%, 52% and 25% at 139k to 100% at 965k. The cost line drops below the lines for β of 0, 0.25 and 0.5 at 155k, 167k and 204k and stays below them to 965k, and it is above the line for β = 1 everywhere. Bottom, their ratio, cost per unit of effectiveness, for the same β. The first three fall steeply from 139k to a minimum and rise to 100% at 965k; dots mark the minima: 54.1% at 253k for β = 0, 68.3% at 287k for 0.25 and 84.7% at 363k for 0.5. β = 1 stays above 100% and falls to it at 965k." src="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-cost-light/cb22fe7342e8.svg">
 </picture>
 
 At β = 0.5, the most efficient threshold X\*(0.5) is 363k, with a 90% interval
@@ -690,8 +711,8 @@ of that.
 ### Sensitivity
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/model-sensitivity-dark.svg">
-  <img alt="Horizontal bars at β = 0.5, one for each parameter measured in the sessions and one for β, from the most efficient threshold with the parameter halved (open dot) to the threshold with it doubled (filled dot), with a thick segment where the threshold lies across a measured parameter's 90% interval, and a vertical line at the most efficient threshold with every parameter as measured, 363k. β: 287k to 965k, where Claude Code compacts. K: 254k to 566k. g: 289k to 486k. ℓ: 379k to 337k. P: 378k to 330k. N: 358k to 374k." src="assets/model-sensitivity-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-sensitivity-dark/8b2b8c786be9.svg">
+  <img alt="Horizontal bars at β = 0.5, one for each parameter measured in the sessions and one for β, from the most efficient threshold with the parameter halved (open dot) to the threshold with it doubled (filled dot), with a thick segment where the threshold lies across a measured parameter's 90% interval, and a vertical line at the most efficient threshold with every parameter as measured, 363k. β: 287k to 965k, where Claude Code compacts. K: 254k to 566k. g: 289k to 486k. ℓ: 379k to 337k. P: 378k to 330k. N: 358k to 374k." src="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-sensitivity-light/1ca9e561053d.svg">
 </picture>
 
 Across their 90% intervals, the measured parameters move the most efficient
@@ -738,7 +759,7 @@ the middle of a turn, smaller at a turn end in the middle of a task, and close
 to 0 once a piece of work is finished. Here each compaction in the middle of a
 turn wastes ΔD more requests than one at a turn end.
 
-β and D put a compaction's cost on different requests. Through β, every request
+β and D describe costs that fall on different requests. Through β, every request
 until the next compaction gets less done, and the more a compaction shrinks the
 context, the less each gets done. The D wasted requests come right after a
 compaction, whatever the context. So D can differ between two moments in one
@@ -803,8 +824,8 @@ about half a perfect classifier's information, and one right 99 times in 100 has
 about 90%.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/model-voi-dark.svg">
-  <img alt="What a classifier saves against Claude Code's default, after what its questions cost, by its accuracy as a share of a perfect classifier's information, for 50% of the work at β = 1, 25% at β = 2 and 10% at β = 5, the rest at β = 0. With no information the β = 1 line starts at 1.3%, what the most efficient single threshold saves less the questions, and the other two at −1.6%, the questions' cost alone, since for them that threshold is Claude Code's own. A perfect classifier saves 15%, 23% and 26%. The β = 1 line climbs fastest at first, the β = 2 line crosses 0 at 15% of the information and then rises nearly straight, and the β = 5 line stays below 0 until about 45% of the information and reaches half its saving only at about 90%." src="assets/model-voi-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-voi-dark/3500bbe5bbc8.svg">
+  <img alt="What a classifier saves against Claude Code's default, after what its questions cost, by its accuracy as a share of a perfect classifier's information, for 50% of the work at β = 1, 25% at β = 2 and 10% at β = 5, the rest at β = 0. With no information the β = 1 line starts at 1.3%, what the most efficient single threshold saves less the questions, and the other two at −1.6%, the questions' cost alone, since for them that threshold is Claude Code's own. A perfect classifier saves 15%, 23% and 26%. The β = 1 line climbs fastest at first, the β = 2 line crosses 0 at 15% of the information and then rises nearly straight, and the β = 5 line stays below 0 until about 45% of the information and reaches half its saving only at about 90%." src="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-voi-light/ae6d2bb8a06a.svg">
 </picture>
 
 Each line of the chart shows a mix of work with mean β 0.5, the base case, in
@@ -828,8 +849,8 @@ otherwise. At each turn end the classifier names the next turn's kind, and the
 session compacts if its context has passed that kind's threshold. Each row that
 compacts where the judgment says uses the pair of thresholds that costs least
 for that row. An idle session compacts from 175k, or from the higher threshold
-when the classifier expects β = 1.25 work next. No compaction loses detail the
-work needs.
+when the classifier expects β = 1.25 work next. The replay assumes that no
+compaction loses detail the work needs.
 
 | against Claude Code's default                                                     | thresholds for β = 0.25 and β = 1.25 work | without Claude Code's idle compaction | with it |
 | --------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------- | ------- |
@@ -871,9 +892,9 @@ mid-turn and each waste D.
 At D = 12, a compaction wastes 6 requests on average, as many as my sessions'
 compactions did ([Parameter values](docs/cost-model.md#parameter-values)). A perfect classifier's
 compactions lose none of that detail. So the more a compaction loses, the more a
-classifier saves over the single threshold, since at each turn end it judges
-right the session avoids all D wasted requests, while the session pays for a
-question at every turn end it asks at.
+classifier saves over the single threshold, since the session avoids all D
+wasted requests at each turn end the classifier judges right, and pays for a
+question at every turn end where it asks.
 
 sparkjoy's question also states what a compaction saves at the context's size,
 but in the evals its verdict follows its answer about the detail whatever size
@@ -895,8 +916,8 @@ The replay runs my sessions again under each compaction policy. It keeps every
 logged request and moves only the compactions.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/model-threshold-dark.svg">
-  <img alt="Most efficient threshold against β from 0 to 1, with 90% bands. The steady-state model's, compacting after any request (grey), rises from 253k at β = 0 to 363k at 0.5, crosses 400k at 0.57 and reaches 965k, where Claude Code compacts, from 0.83. The replay's most efficient turn-end threshold (black) stays lower: 210k at β = 0, 220k from 0.1 to 0.3, 270k to 280k from 0.35 to 0.5, 330k at 0.6 and 860k at 0.85 and 0.9, then 890k. A vertical line marks the base case, β = 0.5, and a horizontal one 250k, sparkjoy's default floor." src="assets/model-threshold-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-threshold-dark/7fc25a7d7aef.svg">
+  <img alt="Most efficient threshold against β from 0 to 1, with 90% bands. The steady-state model's, compacting after any request (grey), rises from 253k at β = 0 to 363k at 0.5, crosses 400k at 0.57 and reaches 965k, where Claude Code compacts, from 0.83. The replay's most efficient turn-end threshold (black) stays lower: 210k at β = 0, 220k from 0.1 to 0.3, 270k to 280k from 0.35 to 0.5, 330k at 0.6 and 860k at 0.85 and 0.9, then 890k. A vertical line marks the base case, β = 0.5, and a horizontal one 250k, sparkjoy's default floor." src="https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/model-threshold-light/2394e33d00f7.svg">
 </picture>
 
 The table below takes the base case and compacts no idle sessions. Its savings
@@ -924,8 +945,8 @@ asks at each of them, and its answer decides where to compact.
 
 Compacting idle sessions gets much of the saving of a lower turn-end threshold:
 with idle sessions from 150k, every turn-end floor from 250k to 450k comes
-within a point of the most efficient pair. Each pair of floors pays for a
-question at every turn end and idle session past it.
+within a point of the most efficient pair. Each saving counts the cost of a
+question at every turn end and idle session past the floors.
 
 A floor is where sparkjoy starts asking, and its question decides at which turn
 ends above the floor to compact. So sparkjoy puts its floors at the most
