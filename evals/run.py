@@ -103,6 +103,30 @@ def credential() -> dict[str, str]:
     return {"authorization": f"Bearer {token}"}
 
 
+def headers_of(request: dict, auth: dict[str, str]) -> dict[str, str]:
+    """The headers to send `request` with, authenticated with `auth`."""
+    return auth | {
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": ",".join(
+            request["params"]["betas"]
+            + (["oauth-2025-04-20"] if "authorization" in auth else [])
+        ),
+        "content-type": "application/json",
+    }
+
+
+def cost_of(used: dict, model: str) -> float:
+    """What a run's requests cost, in dollars, at `model`'s list prices. A
+    run's cache writes last five minutes."""
+    i, o, w5, _, r = fit.PRICES[model]
+    return (
+        used["input_tokens"] * i
+        + used["output_tokens"] * o
+        + used["cache_read_input_tokens"] * r
+        + used["cache_creation_input_tokens"] * w5
+    ) / 1e6
+
+
 def body_of(request: dict, question: str) -> dict:
     """The fork's request: the recorded one, the reply, then the question, with
     the cache breakpoints on the system prompt and the reply."""
@@ -286,9 +310,6 @@ def row_of(
 ) -> dict:
     verdict = parse(text)
     got = None if verdict is None else ("compact" if verdict["compact"] else "keep")
-    read, write = used["cache_read_input_tokens"], used["cache_creation_input_tokens"]
-    # A run's cache writes last five minutes.
-    i, o, w5, _, r = fit.PRICES[request["params"]["model"]]
     row = {
         "case": case["id"],
         "question": question,
@@ -297,22 +318,13 @@ def row_of(
         "got": got,
         "reason": verdict["reason"] if verdict else text[:300],
         "context": used["context"],
-        "cache_read": read,
+        "cache_read": used["cache_read_input_tokens"],
         "output": used["output_tokens"],
         # Thinking tokens among the output; zero where the model answered
         # without thinking.
         "thinking": used["thinking"],
         "requests": used["requests"],
-        "cost": round(
-            (
-                used["input_tokens"] * i
-                + used["output_tokens"] * o
-                + read * r
-                + write * w5
-            )
-            / 1e6,
-            4,
-        ),
+        "cost": round(cost_of(used, request["params"]["model"]), 4),
         # The Claude Code release that recorded the request.
         "client": request["version"],
         "request": origin,
@@ -351,14 +363,7 @@ def run(
                 f"SKIP {case['id']}: fit.PRICES has no price for its model", flush=True
             )
             return []
-        headers = auth | {
-            "anthropic-version": "2023-06-01",
-            "anthropic-beta": ",".join(
-                request["params"]["betas"]
-                + (["oauth-2025-04-20"] if "authorization" in auth else [])
-            ),
-            "content-type": "application/json",
-        }
+        headers = headers_of(request, auth)
         reply = "\n\n".join(
             b["text"] for b in request["messages"][-1]["content"] if b["type"] == "text"
         )

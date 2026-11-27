@@ -330,12 +330,17 @@ def images(value) -> int:
 
 
 def build(case: dict) -> Path:
-    request, removed = published(fork_request(entries_of(case)))
+    return write(case["id"], fork_request(entries_of(case)))
+
+
+def write(case: str, request: dict) -> Path:
+    """Leave `request`, as it can be published, waiting to publish as `case`'s."""
+    request, removed = published(request)
     if found := left_over(request):
-        raise SystemExit(f"{case['id']}: " + "\n".join(found))
+        raise SystemExit(f"{case}: " + "\n".join(found))
     body = json.dumps(request, ensure_ascii=False).encode()
     target = sparkjoy_assets.wait(
-        f"evals/requests/{case['id']}",
+        f"evals/requests/{case}",
         body,
         # mtime=0, and no file name in the header, so that an unchanged
         # request writes the same bytes.
@@ -343,7 +348,7 @@ def build(case: dict) -> Path:
         ".json.gz",
     )
     print(
-        f"{case['id']}: {target.stat().st_size / 1e6:.1f} MB, {len(removed)} sentences"
+        f"{case}: {target.stat().st_size / 1e6:.1f} MB, {len(removed)} sentences"
         f" ({sum(map(len, removed))} characters) removed, {images(request)} images"
     )
     return target
