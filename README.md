@@ -175,9 +175,6 @@ conversation isn't sent to any other model or service.
 The question asks whether the next turns are likely to need the details which a summary would drop (such
 as failed attempts or a design still taking shape), and states how many
 requests a compaction takes to pay for itself at the context's current size.
-From 900k sparkjoy compacts without asking: the model keeps a context the work
-ahead needs at any size, and a long task would otherwise run on until Claude
-Code compacts it in the middle of a turn.
 
 ### The prompt
 
@@ -289,9 +286,8 @@ turns would need the detail. Without that list the model keeps there, and its
 verdict follows its answer about the detail whatever the question says of the
 context's size. Telling it the context held 300k, 500k, 700k or 900k moved no
 turn end's verdict in step with the size under any of three wordings, and five
-wordings kept in all 16
-runs at real turn ends at 853k and 928k. So from 900k sparkjoy compacts without
-asking ([Size](evals/README.md#size)).
+wordings kept in all 16 runs at real turn ends at 853k and 928k
+([Size](evals/README.md#size)).
 
 The hook reads only `compact` and `reason`, yet the question asks for `next` and
 `needs_detail` first, because without them the model seldom keeps the context:
@@ -932,8 +928,9 @@ question at every turn end where it asks.
 sparkjoy's question also states what a compaction saves at the context's size,
 but in the evals its verdict follows its answer about the detail whatever size
 it states ([Size](evals/README.md#size)), so it acts as this classifier
-does. sparkjoy applies the threshold for work that needs its history itself:
-from 900k it compacts without asking.
+does. It leaves work that needs its history to Claude Code's own compaction,
+which in the [replay](docs/cost-model.md#a-replay-of-my-sessions) saves about as much as the 900k
+threshold there.
 
 ### What the model needs measured
 
