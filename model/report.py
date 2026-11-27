@@ -49,8 +49,10 @@ SMALL = 200_000
 KINDS = list(fit.KINDS.values())
 # What each verdict means, from `judge` in hooks/register.ts.
 MEANING = {
-    "compacted": "The model said to compact, and sparkjoy began compacting.",
-    "would compact": "The model said to compact, and sparkjoy, set to classify, left the context as it was.",
+    "compacted": "The model said to compact, or the context was past the size where sparkjoy compacts "
+    "without asking, and sparkjoy began compacting.",
+    "would compact": "The model said to compact, or the context was past the size where sparkjoy compacts "
+    "without asking, and sparkjoy, set to classify, left the context as it was.",
     "kept": "The model said to keep going.",
     "unreadable": "The model's reply wasn't the JSON the question asks for.",
     "no verdict": "The model gave no reply.",

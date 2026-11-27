@@ -370,9 +370,9 @@ to less than 1% of what the sessions cost.
 <summary>Why does a verdict say sparkjoy missed the prompt cache?</summary>
 
 The question behind it read less than nine tenths of the session's context
-from the cache, and wrote the rest there again. In `read 31k of 162k`, the 31k
-is about the size of the system prompt and tools, which Claude Code caches
-across sessions.
+from the cache. In `read 31k of 162k`, the 31k is about the size of the system
+prompt and tools, which Claude Code caches across sessions, and the 162k is all
+the question's input.
 
 When the turn before the question has just written to the cache, a miss is a
 bug. The line then says `after missing the prompt cache the turn had just
