@@ -119,7 +119,7 @@ LABEL = """This is not a request to continue the work. It comes from the sparkjo
 Below is what the session actually did next, taken from its transcript, and then the parts of the context above, numbered in order, each with its kind, its size in tokens and its opening words.
 
 Judge each part by the work that followed:
-- "needed": the next work used it, or would have gone wrong or had to fetch it again without it. Count what the work relied on without reading it again, such as the state of a fix, a decision taken, or what the user asked for, as well as what it read.
+- "needed": the next work used it, or would have gone wrong or had to fetch it again without it. Count what the work relied on without reading it again, such as the state of a fix, a decision taken, or what the user asked for, as well as what it read. Where the context was compacted before the work, the work ran without it, so a part whose content it then read, searched for or ran again is needed: that fetch is what losing it cost.
 - "helpful": it would have helped the next work, such as by saving a lookup or giving background to a decision, but the work could have done without it.
 - Every other part is not needed.
 
@@ -146,6 +146,13 @@ def listing(request_parts: list[dict]) -> str:
     )
 
 
+# The log's line for a compaction at the turn end itself, which `LABEL`'s
+# "needed" reads: the work after it ran without the context.
+AT_TURN_END = (
+    "COMPACTED here, at the turn end: the work below ran without the context above"
+)
+
+
 def next_work(case: dict) -> list[str]:
     """What the session did after the turn end, up to its next compaction,
     where the context starts again whatever this turn end decided: what the
@@ -167,7 +174,7 @@ def next_work(case: dict) -> list[str]:
                 if began:
                     lines.append(f"[{ts}] COMPACTED, and the session went on")
                     break
-                lines.append(f"[{ts}] COMPACTED")
+                lines.append(f"[{ts}] {AT_TURN_END}")
                 continue
             if e.get("isSidechain") or e.get("isCompactSummary"):
                 continue
