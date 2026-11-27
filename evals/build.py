@@ -48,7 +48,6 @@ import gzip
 import hashlib
 import json
 import re
-import shutil
 import sys
 from pathlib import Path
 
@@ -335,13 +334,14 @@ def build(case: dict) -> Path:
     if found := left_over(request):
         raise SystemExit(f"{case['id']}: " + "\n".join(found))
     body = json.dumps(request, ensure_ascii=False).encode()
-    waiting = sparkjoy_assets.UNPUBLISHED / "evals/requests" / case["id"]
-    shutil.rmtree(waiting, ignore_errors=True)
-    waiting.mkdir(parents=True)
-    target = waiting / f"{hashlib.sha256(body).hexdigest()[:12]}.json.gz"
-    # mtime=0, and no file name in the header, so that an unchanged request
-    # writes the same bytes.
-    target.write_bytes(gzip.compress(body, compresslevel=9, mtime=0))
+    target = sparkjoy_assets.wait(
+        f"evals/requests/{case['id']}",
+        body,
+        # mtime=0, and no file name in the header, so that an unchanged
+        # request writes the same bytes.
+        gzip.compress(body, compresslevel=9, mtime=0),
+        ".json.gz",
+    )
     print(
         f"{case['id']}: {target.stat().st_size / 1e6:.1f} MB, {len(removed)} sentences"
         f" ({sum(map(len, removed))} characters) removed, {images(request)} images"

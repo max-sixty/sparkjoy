@@ -22,12 +22,14 @@ the cache lifetime most sessions used. It writes every figure to docs/figures.js
   charts    the figures the cost model quotes from its charts (charts.py)
   replay    the figures the README quotes from its charts (replay_charts.py)
 
-calibrate.py writes its own section, `calibrate`, which measures D over a longer window. The charts go to assets/, in
-a light and a dark theme. Figures keep their units: tokens, dollars under keys ending in `_usd`,
+calibrate.py writes its own section, `calibrate`, which measures D over a longer window. It draws each chart in a
+light and a dark theme, and publishes them to sparkjoy-assets with sparkjoy_assets.py, which points the README's
+and docs' links at them. Figures keep their units: tokens, dollars under keys ending in `_usd`,
 and shares and savings as fractions; a threshold never reached is null.
 """
 
 import argparse
+import tempfile
 from dataclasses import replace
 from pathlib import Path
 
@@ -36,6 +38,7 @@ import context
 import fit
 import numpy as np
 import replay_charts
+import sparkjoy_assets
 from fit import (
     ASKS,
     AUTO,
@@ -56,7 +59,6 @@ from fit import (
 SINCE, UNTIL = "2026-11-18T00:00Z", "2026-11-23T00:00Z"
 # A prefix of the id of the session the README's session chart shows.
 SESSION = "00e0c1c4"
-ASSETS = Path(__file__).parents[1] / "assets"
 
 
 def k(x):
@@ -553,6 +555,16 @@ def main():
         "mixed_work": mixed_work(S, p, c, ttl),
         "models": models(S),
     }
+    with tempfile.TemporaryDirectory() as scratch:
+        drawn = Path(scratch)
+        drawings = {
+            "charts": charts.draw(
+                drawn, p, c, boot, cost, effectiveness, BT, BX, parts
+            ),
+            "replay": replay_charts.draw(drawn, S, runs, SESSION),
+        }
+        for chart in sorted(drawn.glob("*.svg")):
+            sparkjoy_assets.image(chart)
     fit.save_figures(
         {
             "window": {
@@ -565,13 +577,11 @@ def main():
             },
             "fit": fitted,
             "context": parts,
-            "charts": charts.draw(
-                ASSETS, p, c, boot, cost, effectiveness, BT, BX, parts
-            ),
-            "replay": replay_charts.draw(ASSETS, S, runs, SESSION),
+            **drawings,
         }
     )
-    print(f"wrote {fit.DOC_FIGURES} and the charts in {ASSETS}")
+    print(f"wrote {fit.DOC_FIGURES}")
+    sparkjoy_assets.publish(sparkjoy_assets.IMAGES)
 
 
 if __name__ == "__main__":

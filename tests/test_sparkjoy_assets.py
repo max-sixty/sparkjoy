@@ -1,7 +1,8 @@
-"""Publishes eval results and requests from two checkouts of sparkjoy to a
-local copy of the evals' data repository, as evals/sparkjoy_assets.py
-publishes them to GitHub: `uvx pytest tests`."""
+"""Publishes eval results, requests and images from two checkouts of sparkjoy
+to a local copy of sparkjoy-assets, as model/sparkjoy_assets.py publishes them
+to GitHub: `uvx pytest tests`."""
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -13,6 +14,7 @@ import pytest
 
 ROOT = Path(__file__).parents[1]
 URL = "https://github.com/max-sixty/sparkjoy-assets.git"
+CHART = "https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/images/chart/{}.svg"
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -22,22 +24,26 @@ def git(cwd: Path, *args: str) -> str:
 
 
 def sparkjoy(path: Path):
-    """A checkout of sparkjoy holding evals/sparkjoy_assets.py, whose one case's
-    request is `seed`, and the module as that checkout imports it."""
-    (path / "evals").mkdir(parents=True)
-    shutil.copy(ROOT / "evals/sparkjoy_assets.py", path / "evals/sparkjoy_assets.py")
+    """A checkout of sparkjoy holding model/sparkjoy_assets.py, whose one case's
+    request is `seed` and whose README shows an image, and the module as that
+    checkout imports it."""
+    for directory in ("evals", "model"):
+        (path / directory).mkdir(parents=True)
+    shutil.copy(ROOT / "model/sparkjoy_assets.py", path / "model/sparkjoy_assets.py")
     (path / "evals/requests.json").write_text(json.dumps({"case": "seed"}))
+    (path / "README.md").write_text(f"![A chart]({CHART.format('0' * 12)})\n")
     git(path, "init", "--quiet", "--initial-branch", path.name)
-    git(path, "commit", "--quiet", "--allow-empty", "--message", "init")
+    git(path, "add", "README.md")
+    git(path, "commit", "--quiet", "--message", "init")
     spec = importlib.util.spec_from_file_location(
-        path.name, path / "evals/sparkjoy_assets.py"
+        path.name, path / "model/sparkjoy_assets.py"
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-def test_two_checkouts_publish_results_and_requests(tmp_path, monkeypatch):
+def test_two_checkouts_publish_to_sparkjoy_assets(tmp_path, monkeypatch):
     for key, value in {
         "GIT_CONFIG_GLOBAL": os.devnull,
         "GIT_CONFIG_NOSYSTEM": "1",
@@ -134,3 +140,14 @@ def test_two_checkouts_publish_results_and_requests(tmp_path, monkeypatch):
     results.write_text('{"case": "another"}\n')
     with pytest.raises(SystemExit):
         other.publish(other.RESULTS)
+    # An image is published under the hash of its bytes, and the README's link
+    # to the image of its name points at it.
+    chart = tmp_path / "chart.svg"
+    chart.write_text("<svg/>")
+    one.image(chart)
+    one.publish(one.IMAGES)
+    digest = hashlib.sha256(b"<svg/>").hexdigest()[:12]
+    assert git(remote, "show", f"main:images/chart/{digest}.svg") == "<svg/>"
+    assert (
+        one.ROOT / "README.md"
+    ).read_text() == f"![A chart]({CHART.format(digest)})\n"

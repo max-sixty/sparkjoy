@@ -2,18 +2,25 @@
 # /// script
 # requires-python = ">=3.12"
 # ///
-"""Fetches and publishes the evals' data, which sparkjoy keeps in
-max-sixty/sparkjoy-assets so that neither its history nor an install of the
-plugin carries it.
+"""Fetches and publishes what sparkjoy keeps in max-sixty/sparkjoy-assets, so
+that neither its history nor an install of the plugin carries it: the evals'
+requests and results, and the images the README and docs show.
 
-    uv run --script evals/sparkjoy_assets.py publish
+    uv run --script model/sparkjoy_assets.py publish
+    uv run --script model/sparkjoy_assets.py image FILE...
 
-That repository only ever gains files, each under a name no other file
-takes: each case's request at `evals/requests/<case>/<hash>.json.gz`, named
-for the hash of its JSON, and each batch of runs' results at
-`evals/results/<started>-<random>.jsonl`. So its `main` holds every file ever
-published, and nothing pins a commit of it. `evals/requests.json` here names
-the hash of the request each case sends.
+That repository only ever gains files, each under a name no other file takes:
+
+- each case's request at `evals/requests/<case>/<hash>.json.gz`, named for the
+  hash of its JSON;
+- each image at `images/<name>/<hash>.<extension>`, named for the hash of its
+  bytes, where `<name>` is the file's name without its extension, as in
+  `images/savings-dark/<hash>.svg`;
+- each batch of runs' results at `evals/results/<started>-<random>.jsonl`.
+
+So its `main` holds every file ever published, and nothing pins a commit of it.
+Here, `evals/requests.json` names the hash of the request each case sends, and
+the Markdown files link each image at its URL in that repository.
 
 `fetch()` clones the repository into `.tmp/sparkjoy-assets` without file
 contents, then checks out only `evals/results/`. Offline, it reads the clone as
@@ -26,8 +33,12 @@ until it is published:
   publishes it, with any results an earlier batch didn't publish. That
   includes a batch a signal stopped, whose lock went with its process;
 - `build.py` writes each request there, and `publish` publishes it, with any
-  waiting results, once each new image has had a look. It then points
-  `evals/requests.json` at it, so that the file names only published requests.
+  waiting results, once each new image in it has had a look. It then points
+  `evals/requests.json` at it, so that the file names only published requests;
+- `model/docs.py` writes each chart it draws there and publishes them, and
+  `image` does the same for an image made by hand, such as a screenshot of the
+  report. Once an image is published, each link in a Markdown file here to an
+  image of the same name points at it.
 
 A publish commits the waiting files onto the repository's `main`, in an index
 of its own, pushes the commit, and deletes them. Since no two files share a
@@ -40,9 +51,12 @@ copy. A push that fails for any other reason leaves the files waiting.
 
 import contextlib
 import fcntl
+import hashlib
 import json
 import os
+import re
 import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -60,6 +74,7 @@ POINTERS = ROOT / "evals/requests.json"
 # and renames it to match only once it ends.
 REQUESTS = "evals/requests/*/*.json.gz"
 RESULTS = "evals/results/*.jsonl"
+IMAGES = "images/*/" + "[0-9a-f]" * 12 + ".*"
 
 
 def git(*args: str, cwd: Path = CLONE, **kwargs) -> str:
@@ -175,13 +190,30 @@ def abandoned() -> None:
             finish(part)
 
 
+def wait(directory: str, hashed: bytes, data: bytes, extension: str) -> Path:
+    """Write `data` to wait in `directory`, named for the hash of `hashed`, in
+    place of any file waiting there already."""
+    waiting = UNPUBLISHED / directory
+    shutil.rmtree(waiting, ignore_errors=True)
+    waiting.mkdir(parents=True)
+    target = waiting / f"{hashlib.sha256(hashed).hexdigest()[:12]}{extension}"
+    target.write_bytes(data)
+    return target
+
+
+def image(file: Path) -> Path:
+    """Make the image at `file` wait to publish, under its name."""
+    data = file.read_bytes()
+    return wait(f"images/{file.stem}", data, data, file.suffix)
+
+
 def publish(*patterns: str) -> None:
-    """Publish the waiting files `patterns` match, by default every request
-    and batch of results."""
+    """Publish the waiting files `patterns` match, by default every request,
+    batch of results and image."""
     abandoned()
     files = sorted(
         file
-        for pattern in patterns or (REQUESTS, RESULTS)
+        for pattern in patterns or (REQUESTS, RESULTS, IMAGES)
         for file in UNPUBLISHED.glob(pattern)
     )
     if not files:
@@ -189,14 +221,36 @@ def publish(*patterns: str) -> None:
         return
     paths = [str(p.relative_to(UNPUBLISHED)) for p in files]
     push(files, paths)
+    point(paths)
+    for file in files:
+        file.unlink()
+    print(f"Published {', '.join(paths)}.")
+
+
+def point(paths: list[str]) -> None:
+    """Point `evals/requests.json` at each published request, and each link in a
+    Markdown file at the published image of its name."""
     if requests := [p.split("/")[2:] for p in paths if p.startswith("evals/requests/")]:
         pointers = json.loads(POINTERS.read_text())
         for case, name in requests:
             pointers[case] = name.removesuffix(".json.gz")
         POINTERS.write_text(json.dumps(pointers, indent=2) + "\n")
-    for file in files:
-        file.unlink()
-    print(f"Published {', '.join(paths)}.")
+    images = {
+        re.compile(
+            rf"{re.escape(p.rsplit('/', 1)[0])}/[0-9a-f]{{12}}{re.escape(Path(p).suffix)}"
+        ): p
+        for p in paths
+        if p.startswith("images/")
+    }
+    if not images:
+        return
+    for name in git("ls-files", "*.md", cwd=ROOT).splitlines():
+        text = (ROOT / name).read_text()
+        linked = text
+        for link, path in images.items():
+            linked = link.sub(path, linked)
+        if linked != text:
+            (ROOT / name).write_text(linked)
 
 
 def push(files: list[Path], paths: list[str]) -> None:
@@ -256,6 +310,12 @@ def push(files: list[Path], paths: list[str]) -> None:
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] != ["publish"]:
-        sys.exit(__doc__.split("\n\n")[1])
-    publish()
+    match sys.argv[1:]:
+        case ["publish"]:
+            publish()
+        case ["image", *files] if files:
+            for file in files:
+                image(Path(file))
+            publish(IMAGES)
+        case _:
+            sys.exit(__doc__.split("\n\n")[1])
