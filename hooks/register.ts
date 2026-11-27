@@ -47,7 +47,7 @@ import type {
   SessionMessage,
   TurnUsage,
 } from 'claude-code'
-import { checkForUpdate } from './update'
+import { checkForUpdate, installOf } from './update'
 
 // Set while this process compacts. `$.state` outlives a reload of the mod but
 // not the process, so a reload that finds a compaction announced leaves it to
@@ -133,14 +133,59 @@ const AUTHOR = {
 
 type Figures = typeof AUTHOR
 
-// The file `/sparkjoy report` saves the user's figures to, under Claude Code's
-// configuration directory, as model/report.py names it. Its home would be the
-// plugin's data folder, but Claude Code before 2.1.326 gives a hooks module no
-// way to find that folder, and refuses at load a module that calls
-// `$.process.hookEnv()`, the API that names it.
-// TODO: save and read it in that folder once every release CI tests has
-// `$.process.hookEnv()`.
-const FIGURES = 'sparkjoy/figures.json'
+// The file `/sparkjoy report` saves the user's figures to, in sparkjoy's data
+// folder (`dataDir`), as model/report.py names it.
+const FIGURES = 'figures.json'
+
+// sparkjoy's log, beside FIGURES: a JSON line for each verdict and for each
+// compaction the mod starts and ends, in a file a session and a day,
+// `<LOG>/<session>/<day>.jsonl`, the day in UTC. The transcript's line says
+// what a person reads; the record keeps what model/fit.py and the report read
+// back, which that line drops: the context in tokens, the figures the question
+// stated, the model's whole answer and what its fork read. A record's `kind`
+// is the line's word for the verdict, and a verdict without `usage` was
+// reached with no request. `$.fs` writes only whole files, so each record
+// reads its file and writes it back a line longer, one record at a time; a
+// day's records stay far under the 4 MiB a read returns.
+const LOG = 'log'
+
+// sparkjoy's data folder, ${CLAUDE_PLUGIN_DATA}, which Claude Code keeps across
+// updates and deletes with the plugin. Rejects where it can't be made.
+async function dataDir($: EngineInterface) {
+  return (await $.process.hookEnv()).CLAUDE_PLUGIN_DATA
+}
+
+// What a record says beside when, which session and which release.
+type Facts = Record<string, unknown>
+
+// The records waiting to be written, in order, since each rewrites the file.
+let logging = Promise.resolve()
+
+// Appends a record of `facts` to the session's log, timed when it was asked
+// for rather than when its turn to be written came. A failure goes to the
+// debug log, since the transcript's line already says what happened.
+function record($: EngineInterface, facts: Facts) {
+  const now = $.clock.now()
+  logging = logging
+    .then(async () => {
+      const data = await dataDir($)
+      const t = new Date(await now).toISOString()
+      const session = await $.session.id()
+      const path = `${data}/${LOG}/${session}/${t.slice(0, 10)}.jsonl`
+      const line = JSON.stringify({
+        t,
+        session,
+        transcript: (await $.session.info()).transcriptPath,
+        version: installOf($.plugin.root)?.commit ?? null,
+        claude_code: (await $.session.version()).version,
+        ...facts,
+      })
+      const before = (await $.fs.exists(path)) ? await $.fs.read(path) : ''
+      await $.fs.write(path, `${before}${line}\n`)
+    })
+    .catch(error => $.ui.log(`Logging failed: ${error}`, { to: 'debug' }))
+  return logging
+}
 
 // The user's settings, from the fields `userConfig` declares in
 // .claude-plugin/plugin.json. Off, the mod asks nothing and compacts nothing,
@@ -247,6 +292,11 @@ const BUG = 'That looks like a bug: /sparkjoy bug drafts a report of it.'
 
 type Verdict = { compact: boolean; reason: string }
 
+// A moment the mod decides at: `at` names it in the transcript's lines,
+// `tokens` is the context then, `idleMinutes` how long the session had sat
+// idle when it was asked for that, and `figures` those its question states.
+type Ask = { at: string; tokens: number; idleMinutes?: number; figures: Figures }
+
 type Watch = {
   // Whether the mod asks in this session: it is on or classifying, and a
   // person is at the prompt.
@@ -349,15 +399,15 @@ async function afterTurn(
       )
     }
     if (tokens < figures.FLOOR) return
-    const at = `${thousands(tokens)} tokens`
+    const ask: Ask = { at: `${thousands(tokens)} tokens`, tokens, figures }
     const prompt = question(tokens, undefined, figures, settings.instructions)
     // A turn that wrote to the cache left it seconds old, so a question that
     // misses it had a prompt that differed from the turn's, which is a bug. A
     // turn that wrote nothing left nothing to read.
     const miss = (usage?.cache_creation_input_tokens ?? 0) > 0 ? 'bug' : 'plain'
-    await judge($, settings, say, async () => isCurrent(), at, tokens, prompt, miss)
+    await judge($, settings, say, async () => isCurrent(), ask, prompt, miss)
   } catch (error) {
-    sayBug(say, `Failed: ${error}`)
+    fail($, say, error)
   }
 }
 
@@ -379,47 +429,58 @@ async function idle(
     isCurrent() && (await $.session.usage()).context.tokens === tokens
   try {
     if ((await $.clock.now()) > due + LATE_MS || !(await isUntouched())) return
+    const { figures } = await fitted($, settings)
     const at = `${thousands(tokens)} tokens, idle ${minutes} minutes`
-    const prompt = question(
-      tokens,
-      minutes,
-      (await fitted($, settings)).figures,
-      settings.instructions,
-    )
-    await judge($, settings, say, isUntouched, at, tokens, prompt, 'idle')
+    const ask: Ask = { at, tokens, idleMinutes: minutes, figures }
+    const prompt = question(tokens, minutes, figures, settings.instructions)
+    await judge($, settings, say, isUntouched, ask, prompt, 'idle')
   } catch (error) {
-    sayBug(say, `Failed: ${error}`)
+    fail($, say, error)
   }
 }
 
-// Asks the session's model whether to compact, and compacts if it says to and
-// the mod is on. The verdict stands only while `stands` holds once the model
-// has answered; `at` names the moment, and `tokens` the context then. `miss`
-// says what the question's line makes of a miss of the prompt cache.
+// Asks the session's model whether to compact at `ask`, and compacts if it
+// says to and the mod is on. The verdict stands only while `stands` holds once
+// the model has answered. `miss` says what the question's line makes of a miss
+// of the prompt cache.
 async function judge(
   $: EngineInterface,
   { mode }: Settings,
   say: (text: string) => void,
   stands: () => Promise<boolean>,
-  at: string,
-  tokens: number,
+  ask: Ask,
   prompt: string,
   miss: Miss,
 ) {
   const answer = await $.model.fork({ prompt })
   // A fork that made no request reports no usage.
-  const missed = 'usage' in answer ? missing(answer.usage, tokens, miss) : ''
+  const usage = 'usage' in answer ? answer.usage : undefined
+  const missed = usage ? missing(usage, ask.tokens, miss) : ''
+  const verdict = answer.isAnswered ? parse(answer.text) : undefined
   // Says what came of the question in one line: its kind, then the clause on a
   // missed cache, if any, and after a colon the reason, which is the model's
   // alone, as model/fit.py's VERDICT parses it. When the line reports a bug, or
-  // the question's miss is one, the line saying how to report it follows.
+  // the question's miss is one, the line saying how to report it follows. Each
+  // line is also recorded in the log (LOG), with what the question's fork
+  // answered and read.
   const line = (kind: string, reason: string, isBug = false) => {
-    const text = `${kind} at ${at}${missed}: ${reason}`
+    const text = `${kind} at ${ask.at}${missed}: ${reason}`
     if (isBug || (missed !== '' && miss === 'bug')) sayBug(say, text)
     else say(text)
+    void record($, {
+      event: 'verdict',
+      kind,
+      reason,
+      tokens: ask.tokens,
+      idle_minutes: ask.idleMinutes,
+      figures: ask.figures,
+      usage,
+      missed: missed !== '',
+      // The whole answer, `next` and `needs_detail` with what the mod reads.
+      answer: verdict,
+    })
   }
   if (!(await stands())) return line('Dropped the verdict', 'the conversation moved on')
-  const verdict = answer.isAnswered ? parse(answer.text) : undefined
   if (verdict?.compact && mode === 'classify') {
     line('Would compact', verdict.reason)
   } else if (verdict?.compact) {
@@ -427,7 +488,7 @@ async function judge(
     // the model reads the compaction as one the user typed. A hook's veto
     // draws its own line.
     line('Compacting', verdict.reason)
-    await compact($, say, at)
+    await compact($, say, ask)
   } else if (verdict) {
     line('Kept', verdict.reason)
   } else if (answer.isAnswered) {
@@ -471,9 +532,10 @@ function missing(usage: ModelUsage, tokens: number, miss: Miss) {
 }
 
 // A compaction under way, as `$.store` keeps it for the next process: `at`
-// names the moment, and `messages` the keys of the conversation's messages
-// then (`messageKey`).
-type Announcement = { at: string; messages: string[] }
+// names the moment, `tokens` the context then, and `messages` the keys of the
+// conversation's messages then (`messageKey`). One an earlier release stored
+// has no `tokens`.
+type Announcement = { at: string; tokens?: number; messages: string[] }
 
 // Compacts, keeping the announcement in `$.store` under the session's id until
 // the compaction settles, for `resume` to finish if the process ends first.
@@ -492,13 +554,30 @@ type Announcement = { at: string; messages: string[] }
 // none. The summary is written from the same transcript the judge read, so
 // anything the mod could tell it, such as the verdict's `next` or `reason`, is
 // the judge's reading of what the summarizer already sees.
-async function compact($: EngineInterface, say: (text: string) => void, at: string) {
+//
+// The log (LOG) records the compaction's start and end, so model/fit.py tells
+// it from another by the time between them; `resumed` marks one a new process
+// finishes, and `error` one the engine refused.
+async function compact(
+  $: EngineInterface,
+  say: (text: string) => void,
+  { at, tokens }: { at: string; tokens?: number },
+  resumed = false,
+) {
   const key = `compacting:${await $.session.id()}`
   await $.state.set(COMPACTING, true)
   try {
-    const announcement: Announcement = { at, messages: await messageKeys($) }
+    const announcement: Announcement = { at, tokens, messages: await messageKeys($) }
     await $.store.set(key, announcement)
-    await $.session.compact().catch(error => say(`Didn't compact at ${at}: ${error}`))
+    void record($, { event: 'compaction', phase: 'start', tokens, resumed })
+    const error = await $.session.compact().then(
+      () => undefined,
+      error => {
+        say(`Didn't compact at ${at}: ${error}`)
+        return `${error}`
+      },
+    )
+    void record($, { event: 'compaction', phase: 'end', error })
   } finally {
     await $.store.delete(key)
     await $.state.set(COMPACTING, false)
@@ -522,9 +601,9 @@ async function resume($: EngineInterface) {
     $.ui.log(
       `Finishing the compaction at ${announced.at}: Claude Code restarted before it landed`,
     )
-    await compact($, text => $.ui.log(text), announced.at)
+    await compact($, text => $.ui.log(text), announced, true)
   } catch (error) {
-    sayBug(text => $.ui.log(text), `Failed: ${error}`)
+    fail($, text => $.ui.log(text), error)
   }
 }
 
@@ -532,6 +611,12 @@ async function resume($: EngineInterface) {
 function sayBug(say: (text: string) => void, text: string) {
   say(text)
   say(BUG)
+}
+
+// Says that the mod failed with `error`, as a bug, and records it.
+function fail($: EngineInterface, say: (text: string) => void, error: unknown) {
+  sayBug(say, `Failed: ${error}`)
+  void record($, { event: 'verdict', kind: 'Failed', reason: `${error}` })
 }
 
 // The keys of the conversation's messages, of the newest 4096, the most
@@ -672,16 +757,12 @@ function saving(tokens: number, { WRITE, K, LAPSE }: Figures) {
 // one request. The user's floor at a turn end must also lie above the context
 // after a compaction, where a compaction can pay for itself.
 // Read for each question, so a report run mid-session counts from the next one;
-// a configuration directory or file that can't be found or read leaves every
-// figure but the user's floors at `AUTHOR`'s. The directory is
-// $CLAUDE_CONFIG_DIR, or ~/.claude, as Claude Code and model/fit.py find it:
-// Windows names the home %USERPROFILE% and sets no HOME.
+// a data folder (`dataDir`) or file that can't be made or read leaves every
+// figure but the user's floors at `AUTHOR`'s.
 async function fitted($: EngineInterface, settings: Settings) {
   let saved: Record<string, unknown> | undefined
   try {
-    const home = (await $.env.get('HOME')) || (await $.env.get('USERPROFILE'))
-    const config = (await $.env.get('CLAUDE_CONFIG_DIR')) || (home && `${home}/.claude`)
-    if (config) saved = JSON.parse(await $.fs.read(`${config}/${FIGURES}`))
+    saved = JSON.parse(await $.fs.read(`${await dataDir($)}/${FIGURES}`))
   } catch {
     saved = undefined
   }

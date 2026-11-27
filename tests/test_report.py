@@ -90,6 +90,19 @@ def transcript(tmp_path, entries, session="session"):
     return tmp_path / "projects"
 
 
+def log(tmp_path, records, session="session"):
+    """Writes `records` as sparkjoy logs them for the session with the id `session`, in the data
+    folder in `tmp_path` that the report reads."""
+    path = tmp_path / "plugin-data" / "log" / session / f"{DAY[:-1]}.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps(r) + "\n" for r in records))
+
+
+def logged(time, **facts):
+    """A record in sparkjoy's log, at `time` on DAY."""
+    return {"t": f"{DAY}{time}.000Z", "session": "session", **facts}
+
+
 def report(tmp_path, entries, *args, others=()):
     """The report's summary and page on the session of `entries` and the sessions of `others`."""
     projects = transcript(tmp_path, entries)
@@ -113,7 +126,11 @@ def report(tmp_path, entries, *args, others=()):
         ],
         capture_output=True,
         text=True,
-        env={"PATH": os.environ["PATH"], "TMPDIR": str(tmp_path)},
+        env={
+            "PATH": os.environ["PATH"],
+            "TMPDIR": str(tmp_path),
+            "CLAUDE_PLUGIN_DATA": str(tmp_path / "plugin-data"),
+        },
         check=True,
     )
     *summary, page = run.stdout.splitlines()
@@ -391,8 +408,9 @@ def test_a_session_below_the_floor_had_nothing_to_ask(tmp_path):
 
 
 def test_saves_the_figures_the_question_uses(tmp_path):
-    figures = tmp_path / "data" / "figures.json"  # in a folder the report makes
-    summary, page = report(tmp_path, session_with_compactions(), "--figures", figures)
+    # In sparkjoy's data folder, where the plugin reads them, which the report makes.
+    figures = tmp_path / "plugin-data" / "figures.json"
+    summary, page = report(tmp_path, session_with_compactions(), "--figures")
     # K is the median first request after the three compactions, 240k, 225k and 120k, as no turn is long
     # enough to measure what they read again; P what those requests read from the cache; SUMMARY the
     # 1k-token summary times the 1.5 output per visible token of the reply its size. Every request ends
@@ -458,3 +476,114 @@ def test_a_figures_file_it_cannot_save_leaves_the_page(tmp_path):
         "sparkjoy keeps the floors and figures it has: saving them failed: "
     )
     assert "its question uses these figures" not in page and "Fix the parser" in page
+
+
+def test_reads_verdicts_and_compactions_from_sparkjoys_log_where_a_session_has_one(
+    tmp_path,
+):
+    """A session whose log records two verdicts to compact and the compactions. The first also has
+    its line in the transcript, and counts once; the second has none, so only the log says the
+    compaction after it was sparkjoy's. A question that missed the prompt cache reports the
+    tokens it read exactly, as its record's usage gives them."""
+    usage = {
+        "input_tokens": 2,
+        "cache_read_input_tokens": 30_000,
+        "cache_creation_input_tokens": 200_011,
+        "output_tokens": 90,
+    }
+    log(
+        tmp_path,
+        [
+            logged(
+                "10:00:59",
+                event="verdict",
+                kind="Compacting",
+                reason="the fix landed",
+                tokens=230_000,
+                usage=usage,
+                missed=True,
+            ),
+            logged("10:01:00", event="compaction", phase="start", tokens=230_000),
+            logged("10:02:01", event="compaction", phase="end"),
+            logged(
+                "11:30:59",
+                event="verdict",
+                kind="Compacting",
+                reason="the docs landed",
+                tokens=230_000,
+                usage={**usage, "cache_read_input_tokens": 230_000},
+                missed=False,
+            ),
+            logged("11:31:00", event="compaction", phase="start", tokens=230_000),
+            logged("11:32:01", event="compaction", phase="end"),
+        ],
+    )
+    summary, page = report(
+        tmp_path,
+        [
+            prompt("10:00:00Z", "go on"),
+            request("10:00:10Z", 30_000, 200_000),
+            line(
+                "10:00:59Z",
+                "sparkjoy: Compacting at 230k tokens, after missing the prompt cache the turn had "
+                "just written to (read 30k of 230k): the fix landed",
+            ),
+            boundary("10:02:00Z"),
+            compact_summary("10:02:00Z"),
+            prompt("11:30:00Z", "back again"),
+            request("11:30:10Z", 30_000, 200_000),
+            boundary("11:32:00Z"),
+            compact_summary("11:32:00Z"),
+            prompt("13:00:00Z", "and again"),
+            request("13:00:10Z", 30_000, 200_000),
+        ],
+    )
+    assert summary[1].startswith("2 verdicts in 1 of 1 sessions: 2 compacted")
+    assert "1 missed the prompt cache" in summary[1]
+    assert "<td>30k of 230k</td>" in page
+    assert "2 had been compacted in between (2 by sparkjoy)" in " ".join(summary)
+
+
+def test_a_verdict_whose_record_was_never_written_keeps_its_line(tmp_path):
+    """A session whose log records the first and last of three verdicts to keep: the middle one's
+    record was lost, as when its process exited with the write still queued. All three count, the
+    recorded ones as their records give them."""
+    log(
+        tmp_path,
+        [
+            logged(
+                "10:00:59",
+                event="verdict",
+                kind="Kept",
+                reason="as recorded first",
+                tokens=301_000,
+            ),
+            logged(
+                "12:00:59",
+                event="verdict",
+                kind="Kept",
+                reason="as recorded last",
+                tokens=301_000,
+            ),
+        ],
+    )
+    summary, page = report(
+        tmp_path,
+        [
+            prompt("10:00:00Z", "fix the parser"),
+            request("10:00:10Z", 290_000, 10_000),
+            line("10:00:59Z", "sparkjoy: Kept at 300k tokens: as the line said first"),
+            prompt("11:00:00Z", "go on"),
+            request("11:00:10Z", 290_000, 10_000),
+            line("11:00:59Z", "sparkjoy: Kept at 300k tokens: the fix is half done"),
+            prompt("12:00:00Z", "and on"),
+            request("12:00:10Z", 290_000, 10_000),
+            line("12:00:59Z", "sparkjoy: Kept at 300k tokens: as the line said last"),
+        ],
+    )
+    assert summary[1].startswith(
+        "3 verdicts in 1 of 1 sessions: 0 compacted, 0 would compact, 3 kept"
+    )
+    assert "the fix is half done" in page
+    assert "as recorded first" in page and "as recorded last" in page
+    assert "as the line said" not in page
