@@ -318,11 +318,9 @@ def omitted(records: list[dict], chars: int, limit: int) -> list[dict]:
     total = 0
     for n, r in enumerate(records, 1):
         total += len(rendered([capped(r, limit)])) + 1
-        if total > chars:
-            break
-    if total <= chars or n == len(records):
-        return records
-    return [*records[:n], {"kind": "omitted", "records": len(records) - n}]
+        if total > chars and n < len(records):
+            return [*records[:n], {"kind": "omitted", "records": len(records) - n}]
+    return records
 
 
 def sections(text: str, role: str) -> list[tuple[int, int]]:
