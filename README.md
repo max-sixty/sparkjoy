@@ -78,7 +78,7 @@ To see its verdicts without compacting anything, run
   ```
 
 - **It logs each verdict and compaction** outside the transcript, as a JSON line
-  in `~/.claude/sparkjoy/log/<day>/<session>.jsonl`, with what the line leaves
+  in `~/.claude/sparkjoy/log/<session>/<day>.jsonl`, with what the line leaves
   out: the context in tokens, the figures its question stated, the model's whole
   answer, and what the question read from the prompt cache. The report reads it.
 

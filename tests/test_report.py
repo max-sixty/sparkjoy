@@ -93,7 +93,7 @@ def transcript(tmp_path, entries, session="session"):
 def log(tmp_path, records, session="session"):
     """Writes `records` as sparkjoy logs them for the session with the id `session`, in the
     configuration directory `tmp_path` that holds the projects directory."""
-    path = tmp_path / "sparkjoy" / "log" / DAY[:-1] / f"{session}.jsonl"
+    path = tmp_path / "sparkjoy" / "log" / session / f"{DAY[:-1]}.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("".join(json.dumps(r) + "\n" for r in records))
 

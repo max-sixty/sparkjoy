@@ -146,7 +146,7 @@ const FIGURES = 'sparkjoy/figures.json'
 
 // sparkjoy's log, beside FIGURES: a JSON line for each verdict and for each
 // compaction the mod starts and ends, in a file a session and a day,
-// `<LOG>/<day>/<session>.jsonl`, the day in UTC. The transcript's line says
+// `<LOG>/<session>/<day>.jsonl`, the day in UTC. The transcript's line says
 // what a person reads; the record keeps what model/fit.py and the report read
 // back, which that line drops: the context in tokens, the figures the question
 // stated, the model's whole answer and what its fork read. A record's `kind`
@@ -183,7 +183,7 @@ function record($: EngineInterface, facts: Facts) {
       if (config === undefined) return
       const t = new Date(await now).toISOString()
       const session = await $.session.id()
-      const path = `${config}/${LOG}/${t.slice(0, 10)}/${session}.jsonl`
+      const path = `${config}/${LOG}/${session}/${t.slice(0, 10)}.jsonl`
       const line = JSON.stringify({
         t,
         session,

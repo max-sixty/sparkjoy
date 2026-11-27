@@ -579,7 +579,7 @@ def logged(path, lo="0", hi="~"):
     """The records sparkjoy logged in [lo, hi), ISO times, for the session whose transcript is at
     `path`, oldest first."""
     found = []
-    for f in (path.parents[2] / LOG).glob(f"*/{path.stem}.jsonl"):
+    for f in (path.parents[2] / LOG / path.stem).glob("*.jsonl"):
         for raw in f.open(errors="replace"):
             try:
                 r = json.loads(raw)

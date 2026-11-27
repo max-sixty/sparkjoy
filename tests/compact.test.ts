@@ -219,7 +219,7 @@ function engine(
 
   // The records the mod logged on each day, as it wrote them.
   const records = (day: string) =>
-    (files[`${HOME}/.claude/sparkjoy/log/${day}/s1.jsonl`] ?? '')
+    (files[`${HOME}/.claude/sparkjoy/log/s1/${day}.jsonl`] ?? '')
       .split('\n')
       .filter(line => line !== '')
       .map(line => JSON.parse(line))
