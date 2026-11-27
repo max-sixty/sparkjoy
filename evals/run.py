@@ -15,8 +15,8 @@ so a run sends the same straight to the API, with the question `question()`
 in `<checkout>/hooks/register.ts` renders for the case's recorded context size
 (`question.ts`), or for `--told` tokens. It asks only at the sizes where that
 checkout's plugin asks, and `--report` counts older runs at other sizes in no
-total, since the plugin keeps below its floor without asking and compacts
-from its ceiling. Where the case's session is on this
+total, since the plugin keeps below its floor without asking. Where the
+case's session is on this
 machine, a run rebuilds the request from its transcript, as the live fork
 sends it (`build.fork_request`); elsewhere, or with `--published`, it sends the
 one published in the evals' data repository (`sparkjoy_assets.py`), without
@@ -266,7 +266,7 @@ def render(source: Path, reply: str, case: dict, told: int | None) -> str:
 
 
 def bounds(source: Path) -> dict:
-    """The sizes between which the checkout's plugin asks at all (`question.ts
+    """The sizes from which the checkout's plugin asks at all (`question.ts
     --bounds`)."""
     return json.loads(
         subprocess.run(
@@ -280,10 +280,9 @@ def bounds(source: Path) -> dict:
 
 def asks(case: dict, stated: int, bound: dict) -> bool:
     """Whether the plugin asks at the case's turn end with `stated` tokens:
-    from its floor, which is lower for an idle session, and below the ceiling
-    from where it compacts without asking."""
+    from its floor, which is lower for an idle session."""
     floor = bound["idleFloor" if case["kind"] == "idle" else "floor"] or 0
-    return floor <= stated < (bound["ceiling"] or float("inf"))
+    return floor <= stated
 
 
 def stated_of(row: dict, case: dict) -> int:
@@ -395,8 +394,7 @@ def run(
     bound = {source: bounds(source) for source in sources}
 
     def one_case(case: dict) -> list[dict]:
-        # Only where the plugin asks: below its floor it keeps without asking,
-        # and from its ceiling it compacts.
+        # Only where the plugin asks: below its floor it keeps without asking.
         pairs = []
         for source in sources:
             for size in told:

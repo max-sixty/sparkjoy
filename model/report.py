@@ -49,10 +49,8 @@ SMALL = 200_000
 KINDS = list(fit.KINDS.values())
 # What each verdict means, from `judge` in hooks/register.ts.
 MEANING = {
-    "compacted": "The model said to compact, or the context was past the size where sparkjoy compacts "
-    "without asking, and sparkjoy began compacting.",
-    "would compact": "The model said to compact, or the context was past the size where sparkjoy compacts "
-    "without asking, and sparkjoy, set to classify, left the context as it was.",
+    "compacted": "The model said to compact, and sparkjoy began compacting.",
+    "would compact": "The model said to compact, and sparkjoy, set to classify, left the context as it was.",
     "kept": "The model said to keep going.",
     "unreadable": "The model's reply wasn't the JSON the question asks for.",
     "no verdict": "The model gave no reply.",
@@ -65,6 +63,16 @@ MISSED = (
 )
 
 
+# How the page names who made a compaction, by its origin (fit.origin).
+MADE_BY = {
+    "sparkjoy": "sparkjoy",
+    "auto": "Claude Code",
+    "idle": "Claude Code",
+    "user": "/compact",
+    "other": "another tool",
+}
+
+
 def returns(S):
     """Each request that took up a context of IDLE_FLOOR or more after RETURN seconds idle, with
     that context, who compacted it in between, if anyone, and what the request's cache write of
@@ -72,20 +80,14 @@ def returns(S):
     rows = []
     for s in S:
         c = fit.prices(s.model, s.ttl) if s.model in fit.PRICES else None
+        # Who made each compaction, by the first request after it.
+        made = {int(np.searchsorted(s.t, t)): by for t, by, _ in s.compactions}
         for j in np.flatnonzero(
             np.roll(s.end, 1) & (s.gap >= RETURN)
         ):  # gap[0] is 0, so j > 0
             context = s.size[j - 1] + s.out[j - 1]
             if context >= fit.IDLE_FLOOR:
-                by = (
-                    "sparkjoy"
-                    if s.sparkjoy[j]
-                    else "Claude Code"
-                    if s.kind[j] == fit.POLICY
-                    else "/compact"
-                    if s.kind[j] == fit.USER
-                    else None
-                )
+                by = MADE_BY.get(made.get(j))
                 rows.append((s, j, context, by, c and s.write[j] * c.write * c.read))
     return sorted(rows, key=lambda r: -r[0].t[r[1]])
 
@@ -333,8 +335,6 @@ def moment(v):
 
 def at(v):
     where = moment(v)
-    if not v.asked:
-        where += ", without asking"
     if v.missed:
         where += ", missed the cache"
     return where

@@ -62,14 +62,12 @@ IDLE = {
     3600: 55 * 60,
     300: 4 * 60,
 }  # seconds idle before sparkjoy asks, by cache lifetime (IDLE_MS, hooks/register.ts)
-# The line sparkjoy writes in the transcript for each verdict (`outcome` in hooks/register.ts),
+# The line sparkjoy writes in the transcript for each verdict (`judge` in hooks/register.ts),
 # under its current name and the one it had before it was published. A question that missed the
-# prompt cache (MISSED there) says how much of its input it read from it, then may say more. A
-# verdict reached without a question (`pastCeiling` there) says so.
+# prompt cache (MISSED there) says how much of its input it read from it, then may say more.
 VERDICT = re.compile(
     r"(?P<plugin>sparkjoy|compact-when-done): (?:(?P<kind>Compacting|Would compact|Kept|Unreadable verdict|"
     r"No verdict|Dropped the verdict) at (?P<tokens>\d+)k tokens(?:, idle (?P<idle>\d+) minutes)?"
-    r"(?P<unasked>, without asking)?"
     r"(?:, after missing the prompt cache[^(]* \(read (?P<read>\d+)k of (?P<input>\d+)k(?:;[^)]*)?\))?"
     r"|Failed): (?P<reason>.*)",
     re.S,
@@ -77,6 +75,23 @@ VERDICT = re.compile(
 # Every line sparkjoy writes in the transcript, under either name, and those Claude Code writes
 # about it there.
 LINE = ("sparkjoy: ", "compact-when-done: ")
+# The line sparkjoy writes as it starts a compaction: its verdict to compact, or, after Claude Code
+# restarted before one landed, that it is finishing it (`resume` in hooks/register.ts).
+COMPACTING = re.compile(
+    r"(?:sparkjoy|compact-when-done): (?:Compacting|Finishing the compaction) at "
+)
+# The row a typed `/compact` draws. Until 8 November 2026 sparkjoy compacted by running `/compact`,
+# which drew one too, beside its line.
+TYPED = "<command-name>/compact</command-name>"
+# How long before a compaction starts each mark of its origin may have been logged, in seconds; a
+# mark logged after it ended is another compaction's. A mark is placed by when it was logged rather
+# than where: Claude Code can log the end of the turn a compaction follows, the mark among it, after
+# the compaction's boundary. Of sparkjoy's 1,352 compactions in my sessions from 16 October to 27
+# November 2026, all but 10 began within a second of its line and the rest within 60 s; 411 of the
+# 421 typed `/compact` rows lie within a second of the start and the rest within 10 s; Claude
+# Code's line about an idle compaction follows its boundary within 10 s.
+BEFORE = {"sparkjoy": 60, "typed": 10}
+IDLE_LINE = 10
 KINDS = {
     "Compacting": "compacted",
     "Would compact": "would compact",
@@ -95,9 +110,10 @@ TITLES = {
 }
 
 # Request kinds. A FIRST request opens the session; a USER request is the first
-# after a compaction the user typed, which every replayed arm keeps; a POLICY
-# request is the first after one that sparkjoy or Claude Code's auto-compaction
-# made, which each arm decides for itself; NORMAL is every other request.
+# after a compaction no replayed arm decides, which every arm keeps: one the user
+# typed, or one another tool made; a POLICY request is the first after one that
+# sparkjoy or Claude Code's auto-compaction made, which each arm decides for
+# itself; NORMAL is every other request.
 FIRST, USER, POLICY, NORMAL = range(4)
 
 
@@ -116,7 +132,6 @@ class Verdict:
     missed: tuple | None = (
         None  # tokens of its question's input read from the cache, and in all, when it missed
     )
-    asked: bool = True  # a question was asked for it
 
 
 @dataclass
@@ -150,7 +165,7 @@ class Session:
     calls: list  # each request's tool calls, as (name, digest of the input, the file_path it names or None)
     failed: list  # each request's tool calls whose result was an error, as the result's opening text
     said: list  # what the user typed, as (seconds since the epoch, text, whether it came mid-turn)
-    compactions: list  # (seconds since the epoch, "sparkjoy", "idle", "auto" or "user", tokens before)
+    compactions: list  # (seconds since the epoch, its origin (`origin`), tokens before)
     summaries: (
         list  # the text of each compaction's summary, in tokens at 4 characters each
     )
@@ -375,8 +390,10 @@ def transcript(path, since=None, until=None):
         for t, default in ((since, "0"), (until, "~"))
     )
     title_lines = tuple(f'{{"type":"{t}"' for t in TITLES)
-    reqs, comps, prompts, verdicts, lines = {}, [], [], [], []
-    entry, version, asked, background = None, None, None, False
+    reqs, prompts, verdicts, lines = {}, [], [], []
+    entry, version, background = None, None, False
+    # When each mark of a compaction's origin was logged, and each compaction's boundary.
+    marks, bounds = {"sparkjoy": [], "typed": [], "idle": []}, []
     titles, first, models, said, failed, summaries = {}, None, Counter(), [], {}, []
     for raw in path.open(errors="replace"):
         prompt = (
@@ -416,6 +433,9 @@ def transcript(path, since=None, until=None):
             prompts.append(t)
             if text := typed(e):
                 said.append((t, text, False))
+            content = (e.get("message") or {}).get("content")
+            if isinstance(content, str) and content.lstrip().startswith(TYPED):
+                marks["typed"].append(t)
         elif e.get("type") == "attachment":
             # Plain text typed mid-turn is folded into the turn at its next tool result. Its
             # timestamp is when it was typed; another agent's message carries isMeta.
@@ -481,6 +501,11 @@ def transcript(path, since=None, until=None):
             text = str(e.get("content", ""))
             if text.startswith(LINE):
                 lines.append((t, text))
+            if COMPACTING.match(text):
+                marks["sparkjoy"].append(t)
+            elif text.startswith("Compacted while idle"):
+                # Claude Code's idle compaction logs as an auto compaction, then says so.
+                marks["idle"].append(t)
             if line := VERDICT.fullmatch(text):
                 kind = KINDS[line["kind"]]
                 verdicts.append(
@@ -493,42 +518,27 @@ def transcript(path, since=None, until=None):
                         line["reason"],
                         line["read"]
                         and (int(line["read"]) * 1000, int(line["input"]) * 1000),
-                        not line["unasked"],
                     )
                 )
-                asked = t if kind == "compacted" else asked
-            elif (
-                text.startswith("Compacted while idle")
-                and comps
-                and t - comps[-1][0] < 10
-            ):
-                # Claude Code's idle compaction logs as an auto compaction, then says so.
-                comps[-1][4] = "idle"
         elif e.get("subtype") == "compact_boundary":
             md = e.get("compactMetadata") or {}
-            took = (md.get("durationMs") or 0) / 1000
-            # sparkjoy starts compacting as soon as it writes its line. Of the 351 compactions
-            # that followed one in my sessions (16 Oct to 15 Nov 2026), 349 began
-            # within 2 s of it; the other two were the user's, 20 minutes or more later, after
-            # a compaction of sparkjoy's that never ran.
-            mod = asked is not None and t - took - asked < 60
-            auto = md.get("trigger") == "auto"
-            comps.append(
-                [
+            bounds.append(
+                (
                     t,
-                    mod or auto,
-                    took,
-                    mod,
-                    "sparkjoy" if mod else "auto" if auto else "user",
+                    (md.get("durationMs") or 0) / 1000,
+                    md.get("trigger"),
                     md.get("preTokens"),
-                ]
+                )
             )
-            asked = None
     if entry != "cli" or len(reqs) < 2:
         return None
     name = (
         next((titles[k] for k in TITLES if titles.get(k)), None) or first or "untitled"
     )
+    comps = [
+        (t, took, origin(t - took, t, trigger, marks), before)
+        for t, took, trigger, before in bounds
+    ]
     return session(
         sorted(reqs.values(), key=lambda q: q[0]),
         comps,
@@ -544,6 +554,30 @@ def transcript(path, since=None, until=None):
         said=sorted(said),
         summaries=summaries,
     )
+
+
+# The origins of the compactions each replayed arm decides for itself (POLICY); the rest, "user"
+# and "other", every arm keeps (USER).
+DECIDED = ("sparkjoy", "auto", "idle")
+
+
+def origin(start, end, trigger, marks):
+    """Who made a compaction that ran from `start` to `end`, from the marks the transcript logged
+    near it (`marks`, the times of each kind): "sparkjoy", by its line; "user", by a typed
+    `/compact` row; Claude Code's own, "idle" where it said so and "auto" otherwise; or "other",
+    another tool, such as a mod under test, where nothing marks it."""
+
+    def near(kind):
+        return any(start - BEFORE[kind] <= m <= end for m in marks[kind])
+
+    if near("sparkjoy"):
+        return "sparkjoy"
+    if near("typed"):
+        return "user"
+    if trigger == "auto":
+        idle = any(end - 1 <= m <= end + IDLE_LINE for m in marks["idle"])
+        return "idle" if idle else "auto"
+    return "other"
 
 
 def session(reqs, comps, prompts, failed, **meta):
@@ -566,11 +600,11 @@ def session(reqs, comps, prompts, failed, **meta):
     kind = np.full(n, NORMAL)
     kind[0] = FIRST
     sparkjoy = np.zeros(n, bool)
-    for ct, policy, _, mod, _, _ in comps:
+    for ct, _, by, _ in comps:
         j = np.searchsorted(t, ct)  # the first request after the compaction
         if 0 < j < n:
-            kind[j] = POLICY if policy else USER
-            sparkjoy[j] = mod
+            kind[j] = POLICY if by in DECIDED else USER
+            sparkjoy[j] = by == "sparkjoy"
     grew = np.maximum(np.diff(size, prepend=0), 0)
     grew[kind != NORMAL] = 0
     # Across a compaction the request's growth can't be told from the compacted
@@ -597,11 +631,11 @@ def session(reqs, comps, prompts, failed, **meta):
         rewrote=(kind == NORMAL) & (write > 0.5 * size) & (size > 50_000),
         end=np.array([q[2] for q in reqs]),
         ttl=300 if 2 * write5.sum() >= write.sum() else 3600,
-        durations=[c[2] for c in comps if c[2]],
+        durations=[took for _, took, _, _ in comps if took],
         reads=[q[3] for q in reqs],
         calls=[list(q[5].values()) for q in reqs],
         failed=[[failed[i] for i in q[5] if i in failed] for q in reqs],
-        compactions=[(c[0], c[4], c[5]) for c in comps],
+        compactions=[(ct, by, before) for ct, _, by, before in comps],
         visible=np.array(
             [sum(q[6].values()) / 4 if q[7] == meta["model"] else np.nan for q in reqs]
         ),
@@ -1099,7 +1133,7 @@ def as_run(s, p, opened=None, model=None):
         idle=idle,
     )
     without, without_trace, _ = replay(s, p, c, np.inf, s.ttl, idle=idle)
-    checks = sum(check(v, c) for v in s.verdicts if v.tokens and v.asked)
+    checks = sum(check(v, c) for v in s.verdicts if v.tokens)
     dollars = (
         ((ran + checks) * c.read, without * c.read, checks * c.read) if priced else None
     )

@@ -81,9 +81,8 @@ against the transcript). It states the figures the plugin ships (`AUTHOR`), so
 the evals ask what the plugin asks a user whose own report hasn't saved
 figures of theirs. The model's reply is parsed as the plugin parses it. A run
 asks only where the checkout's plugin asks: from its floor, 250k at a turn end
-and 175k in an idle session, and below 900k, from where it compacts without
-asking. `--report` marks the runs an older batch made outside those sizes "not
-asked" and counts them in no total.
+and 175k in an idle session. `--report` marks the runs an older batch made
+below those sizes "not asked" and counts them in no total.
 
 The requests are published, so `build.py` takes out of them what shouldn't be:
 each sentence about my work outside open source, all of them in my
@@ -203,9 +202,8 @@ asked at several. On 26 November, three wordings stated 300k, 500k, 700k and
 900k at the five mid-task turn ends (the four labelled keep, and
 leaf-menu-build-wait) and at two that finished a piece of work
 (worktrunk-release-tagged and leaf-data-attrs-merged), twice each, for $39,
-with 97% of the input read from the cache. sparkjoy now compacts without
-asking from 900k, so a run no longer states that size. Each cell counts the
-runs that compacted:
+with 97% of the input read from the cache. Each cell counts the runs that
+compacted:
 
 | wording                                                                                                                                                                                                               | turn ends | 300k | 500k  | 700k  | 900k  |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---- | ----- | ----- | ----- |
@@ -248,12 +246,8 @@ Where a run answered whether the next turns need the detail, its verdict was
 the opposite in 59 of 60. Asked how many more requests the work under way
 needs the detail for, it answered 6 to 30 at the two real turn ends past 850k,
 though from the first of them the build ran about 90 more requests before
-Claude Code compacted it. So no wording
-tried makes the model trade the detail for the context's size, and the plugin
-applies the size itself: from 900k (`CEILING` in `hooks/register.ts`) it
-compacts at a turn end without asking, where the [cost model](../docs/cost-model.md)
-finds work that needs its history cheapest compacted. Since the plugin asks
-nothing there, no case sits past 900k.
+Claude Code compacted it. So no wording tried makes the model trade the detail
+for the context's size.
 
 ### Published requests
 
@@ -306,11 +300,8 @@ live verdicts to compare against, and to grade by what each session did next.
 ## Where this leaves them
 
 The question keeps in the middle of a task and compacts where a piece of work
-is finished, and from 900k the plugin compacts whatever it would answer, so a
-long task no longer keeps its context through a turn end from 900k. A turn that
-starts below 900k can still grow until Claude Code compacts it in the middle:
-of three such compactions in my sessions of the last month, the plugin would
-have come first at two. Below 900k, whether the size should outweigh the detail is the gap
+is finished, so a long task can keep its context until Claude Code compacts it
+in the middle of a turn. Whether the size should outweigh the detail is the gap
 between the labels and the [cost model](../docs/cost-model.md): the mid-task
 keep labels encode a rule, that work in progress keeps, while the cost model
 finds compacting at any turn end from about 250k cheapest when a compaction

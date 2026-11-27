@@ -615,46 +615,25 @@ test('a question that read the whole context from the cache hit it, however long
   expect(logs).toEqual(['Compacting at 500k tokens: the PR merged'])
 })
 
-// The verdict from 900k context tokens.
-const PAST_CEILING = 'past 900k, where even work that needs the detail compacts'
-
-test('from 900k a turn end compacts without asking', async ($, on) => {
-  const { begin, compactions, forks, logs, turn } = engine(on, {
+test('near the context window the model still decides, at a turn end and in an idle session', async ($, on) => {
+  const { begin, clock, compactions, forks, logs, turn } = engine(on, {
     tokens: 920_000,
     verdict: KEEP,
+    idleVerdict: KEEP,
   })
   await begin($)
 
   await turn($, 't1')
+  await clock.advance(IDLE)
+  await clock.settle()
 
-  expect(forks).toEqual([])
-  expect(compactions).toEqual([''])
-  expect(logs).toEqual([`Compacting at 920k tokens, without asking: ${PAST_CEILING}`])
+  expect(forks.length).toBe(2)
+  expect(compactions).toEqual([])
+  expect(logs).toEqual([
+    'Kept at 920k tokens: mid-debug',
+    'Kept at 920k tokens, idle 55 minutes: mid-debug',
+  ])
 })
-
-test(
-  'classifying, from 900k a turn end and an idle session say they would compact without asking',
-  { options: { mode: 'classify' } },
-  async ($, on) => {
-    const { begin, clock, compactions, forks, logs, turn } = engine(on, {
-      tokens: 920_000,
-      verdict: KEEP,
-      idleVerdict: KEEP,
-    })
-    await begin($)
-
-    await turn($, 't1')
-    await clock.advance(IDLE)
-    await clock.settle()
-
-    expect(forks).toEqual([])
-    expect(compactions).toEqual([])
-    expect(logs).toEqual([
-      `Would compact at 920k tokens, without asking: ${PAST_CEILING}`,
-      `Would compact at 920k tokens, idle 55 minutes, without asking: ${PAST_CEILING}`,
-    ])
-  },
-)
 
 // The line sparkjoy adds after one reporting a bug.
 const BUG = 'That looks like a bug: /sparkjoy bug drafts a report of it.'
@@ -1229,26 +1208,10 @@ test(
 
     expect(text).toBe(
       "On. It asks whether to compact at a turn end from 300k (your setting) and in an idle session from 120k (the report's fit).\n" +
-        "From 900k it doesn't ask: its verdict is to compact.\n" +
         'Its question carries no instructions of yours.\n' +
         '/sparkjoy on compacts when the model says to, /sparkjoy classify only shows its verdicts, and /sparkjoy off asks nothing. /config sets the floors and instructions.',
     )
     expect(authors.text).toContain('in an idle session from 175k (the default).')
-  },
-)
-
-test(
-  '/sparkjoy says a floor from 900k is out of range, since from there sparkjoy compacts without asking',
-  { options: { floor: 950_000 } },
-  async ($, on) => {
-    const { begin, type } = engine(on)
-    await begin($)
-
-    const { text } = await type($, 'sparkjoy')
-
-    expect(text).toContain(
-      'at a turn end from 250k (the default, as your 950k is out of range)',
-    )
   },
 )
 
@@ -1336,7 +1299,6 @@ test(
     expect(prompts).toEqual([
       "The user typed /sparkjoy bug it compacted mid-debug. Run the sparkjoy:bug skill for them. The session's id is s1. /sparkjoy states its settings as:\n" +
         '> On. It asks whether to compact at a turn end from 250k (the default) and in an idle session from 175k (the default).\n' +
-        "> From 900k it doesn't ask: its verdict is to compact.\n" +
         `> Its question carries your instructions: "${INSTRUCTIONS}"`,
     ])
   },

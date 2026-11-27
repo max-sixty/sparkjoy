@@ -27,8 +27,7 @@ const {
   },
 })
 const source = readFileSync(registerPath, 'utf8')
-// Older checkouts lack these: one from before the plugin compacted without
-// asking has no CEILING, and one from before its figures no AUTHOR.
+// A checkout from before the plugin's figures has no AUTHOR.
 const has = (name: string) => new RegExp(`^const ${name}\\b`, 'm').test(source)
 const copy = resolve(dirname(registerPath), `.question-${process.pid}.ts`)
 writeFileSync(
@@ -38,16 +37,14 @@ export { question }
 export const BOUNDS = {
   floor: ${has('AUTHOR') ? 'AUTHOR.FLOOR' : 'null'},
   idleFloor: ${has('AUTHOR') ? 'AUTHOR.IDLE_FLOOR' : 'null'},
-  ceiling: ${has('CEILING') ? 'CEILING' : 'null'},
 }
 `,
 )
 const { question, BOUNDS } = await import(copy).finally(() => unlinkSync(copy))
 
-// With --bounds, the sizes between which the checkout asks at all, as JSON:
-// from `floor` at a turn end and `idleFloor` in an idle session, and below
-// `ceiling`, from where it compacts without asking. A bound the checkout
-// doesn't have is null.
+// With --bounds, the sizes from which the checkout asks at all, as JSON:
+// `floor` at a turn end and `idleFloor` in an idle session. A bound the
+// checkout doesn't have is null.
 if (bounds) {
   process.stdout.write(JSON.stringify(BOUNDS))
   process.exit(0)
