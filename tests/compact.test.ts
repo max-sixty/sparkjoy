@@ -229,15 +229,13 @@ const FITTED = JSON.stringify({
   P: 20_000,
   LAPSE: 0.01,
   TURN_MEDIAN: 12,
-  TURN_MEAN: 49.6,
 })
 
 // What the question says at 500k with the author's figures.
 const AUTHORS = [
-  'outputs about 6k tokens, thinking included.\n- Afterwards the context holds about 142k tokens',
-  'all of it but the 30k of system prompt and tools, which stay cached.\n- A cache write costs as much as 40 cached reads, and an output token as much as 100.',
-  'At 500k a compaction pays for itself after about 13 more requests',
-  'A turn runs a median of 9 requests and a mean of 38,',
+  'with 500k tokens of context. A compaction would cut it to about 142k,',
+  'and pays for itself once the session runs 13 more requests that need nothing it dropped',
+  'a turn runs a median of 9)',
 ]
 
 test('a finished turn compacts with no instructions and no /compact row', async ($, on) => {
@@ -262,19 +260,10 @@ test('the question sizes the saving for the context it asks about', async ($, on
 
   // (500k read + 100 × 5.6k output + 39 × (142k − 30k) cache write) over the
   // 1.22 × (500k − 142k) each later request saves, rounded up.
-  expect(forks[0]).toContain(
-    'At 500k a compaction pays for itself after about 13 more requests',
-  )
-  expect(forks[1]).toContain(
-    'At 250k a compaction pays for itself after about 40 more requests',
-  )
-  // 9 and 38 requests × that saving, over what a compaction costs.
-  expect(forks[0]).toContain(
-    'keeping 500k through one more turn costs as much as about 0.7 compactions for a median turn and 3 for a mean one',
-  )
-  expect(forks[1]).toContain(
-    'keeping 250k through one more turn costs as much as about 0.2 compactions for a median turn and 1.0 for a mean one',
-  )
+  expect(forks[0]).toContain('with 500k tokens of context')
+  expect(forks[0]).toContain('pays for itself once the session runs 13 more requests')
+  expect(forks[1]).toContain('with 250k tokens of context')
+  expect(forks[1]).toContain('pays for itself once the session runs 40 more requests')
 })
 
 test('the question states the figures the report fitted to the user’s sessions', async ($, on) => {
@@ -283,22 +272,11 @@ test('the question states the figures the report fitted to the user’s sessions
 
   await turn($, 't1')
 
-  expect(forks[0]).toContain(
-    'outputs about 8k tokens, thinking included.\n- Afterwards the context holds about 120k tokens',
-  )
-  expect(forks[0]).toContain(
-    'all of it but the 20k of system prompt and tools, which stay cached.\n- A cache write costs as much as 25 cached reads, and an output token as much as 100.',
-  )
+  expect(forks[0]).toContain('A compaction would cut it to about 120k,')
   // (500k read + 100 × 8k output + 24 × (120k − 20k) cache write) over the
   // 1.24 × (500k − 120k) each later request saves, rounded up.
-  expect(forks[0]).toContain(
-    'At 500k a compaction pays for itself after about 8 more requests',
-  )
-  // 12 and 49.6 requests × that saving, over what a compaction costs: 1.53
-  // and 6.3.
-  expect(forks[0]).toContain(
-    'A turn runs a median of 12 requests and a mean of 50, so keeping 500k through one more turn costs as much as about 2 compactions for a median turn and 6 for a mean one',
-  )
+  expect(forks[0]).toContain('pays for itself once the session runs 8 more requests')
+  expect(forks[0]).toContain('a turn runs a median of 12)')
 })
 
 test('an idle session’s question states the fitted figures too', async ($, on) => {
@@ -310,7 +288,7 @@ test('an idle session’s question states the fitted figures too', async ($, on)
   await clock.settle()
 
   expect(forks[0]).toContain(
-    'makes a cache write of all but 20k of its 200k tokens, against about 100k after a compaction',
+    'the next request will write all but 20k of it to the cache again, against about 100k after a compaction',
   )
 })
 
@@ -326,9 +304,7 @@ test('the figures are read from $CLAUDE_CONFIG_DIR where it is set', async ($, o
 
   await turn($, 't1')
 
-  expect(forks[0]).toContain(
-    'At 500k a compaction pays for itself after about 8 more requests',
-  )
+  expect(forks[0]).toContain('pays for itself once the session runs 8 more requests')
 })
 
 test('the floors the report fitted decide where sparkjoy asks', async ($, on) => {
@@ -362,9 +338,7 @@ test('a report saved mid-session counts from the next question', async ($, on) =
   await turn($, 't2')
 
   for (const text of AUTHORS) expect(forks[0]).toContain(text)
-  expect(forks[1]).toContain(
-    'At 500k a compaction pays for itself after about 8 more requests',
-  )
+  expect(forks[1]).toContain('pays for itself once the session runs 8 more requests')
 })
 
 test('each figure the file lacks, or holds where the sums can’t use it, stays the author’s', async ($, on) => {
@@ -382,11 +356,8 @@ test('each figure the file lacks, or holds where the sums can’t use it, stays 
 
   await turn($, 't1')
 
-  for (const text of AUTHORS.slice(0, 3)) expect(forks[0]).toContain(text)
-  // 12 requests × the author's saving, over what a compaction costs: 0.96.
-  expect(forks[0]).toContain(
-    'A turn runs a median of 12 requests and a mean of 38, so keeping 500k through one more turn costs as much as about 1.0 compactions for a median turn and 3 for a mean one',
-  )
+  for (const text of AUTHORS.slice(0, 2)) expect(forks[0]).toContain(text)
+  expect(forks[0]).toContain('a turn runs a median of 12)')
 })
 
 for (const [name, options] of [
@@ -463,14 +434,15 @@ test(
 
     await turn($, 't1')
 
-    expect(forks[0]).toContain('Afterwards the context holds about 300k tokens')
+    expect(forks[0]).toContain('A compaction would cut it to about 300k,')
   },
 )
 
-// What the question at 500k says between its costs and the answer's format.
+// What the question says between what it asks to decide and the answer's
+// format.
 const INSTRUCTIONS =
   'Keep the context while a pull request awaits review, and compact once it merges.'
-const ADDED = `still pay.\n\nThe user added these instructions for this decision:\n${INSTRUCTIONS}\n\nAnswer with`
+const ADDED = `\n\nThe user added these instructions for this decision:\n${INSTRUCTIONS}\n\nAnswer with`
 
 test(
   'the user’s instructions join both questions before the answer’s format',
@@ -504,7 +476,7 @@ for (const [name, options] of [
 
       await turn($, 't1')
 
-      expect(forks[0]).toContain('still pay.\n\nAnswer with')
+      expect(forks[0]).toContain('cost the next turns.\n\nAnswer with')
     },
   )
 }
@@ -619,6 +591,47 @@ test('a question read from the prompt cache adds no line', async ($, on) => {
 
   expect(logs).toEqual(['Compacting at 500k tokens: the PR merged'])
 })
+
+// The verdict from 900k context tokens.
+const PAST_CEILING = 'past 900k, where even work that needs the detail compacts'
+
+test('from 900k a turn end compacts without asking', async ($, on) => {
+  const { begin, compactions, forks, logs, turn } = engine(on, {
+    tokens: 920_000,
+    verdict: KEEP,
+  })
+  await begin($)
+
+  await turn($, 't1')
+
+  expect(forks).toEqual([])
+  expect(compactions).toEqual([''])
+  expect(logs).toEqual([`Compacting at 920k tokens: ${PAST_CEILING}`])
+})
+
+test(
+  'classifying, from 900k a turn end and an idle session say they would compact without asking',
+  { options: { mode: 'classify' } },
+  async ($, on) => {
+    const { begin, clock, compactions, forks, logs, turn } = engine(on, {
+      tokens: 920_000,
+      verdict: KEEP,
+      idleVerdict: KEEP,
+    })
+    await begin($)
+
+    await turn($, 't1')
+    await clock.advance(IDLE)
+    await clock.settle()
+
+    expect(forks).toEqual([])
+    expect(compactions).toEqual([])
+    expect(logs).toEqual([
+      `Would compact at 920k tokens: ${PAST_CEILING}`,
+      `Would compact at 920k tokens, idle 55 minutes: ${PAST_CEILING}`,
+    ])
+  },
+)
 
 // The line sparkjoy adds after one reporting a bug.
 const BUG = 'That looks like a bug: /sparkjoy bug drafts a report of it.'
@@ -858,7 +871,7 @@ test('a session left idle is asked again before its prompt cache lapses', async 
   await clock.settle()
   expect(forks.length).toBe(1)
   expect(forks[0]).toContain(
-    'makes a cache write of all but 30k of its 200k tokens, against about 112k after a compaction',
+    'the next request will write all but 30k of it to the cache again, against about 112k after a compaction',
   )
   expect(forks[0]).not.toContain('pays for itself')
   expect(compactions).toEqual([''])
@@ -1030,9 +1043,7 @@ test('an idle session on a five-minute cache is asked after 4 minutes', async ($
   await clock.settle()
   expect(forks.length).toBe(1)
   expect(forks[0]).toContain('Your turn ended 4 minutes ago')
-  expect(forks[0]).toContain(
-    'The prompt cache holding the conversation lapses within a few minutes.',
-  )
+  expect(forks[0]).toContain('the prompt cache holding it lapses within a few minutes')
 
   // Kept, the context stays as it was, and nothing asks again at 55 minutes.
   await clock.advance(IDLE)
@@ -1186,10 +1197,26 @@ test(
 
     expect(text).toBe(
       "On. It asks whether to compact at a turn end from 300k (your setting) and in an idle session from 120k (the report's fit).\n" +
+        "From 900k it doesn't ask: its verdict is to compact.\n" +
         'Its question carries no instructions of yours.\n' +
         '/sparkjoy on compacts when the model says to, /sparkjoy classify only shows its verdicts, and /sparkjoy off asks nothing. /config sets the floors and instructions.',
     )
     expect(authors.text).toContain('in an idle session from 175k (the default).')
+  },
+)
+
+test(
+  '/sparkjoy says a floor from 900k is out of range, since from there sparkjoy compacts without asking',
+  { options: { floor: 950_000 } },
+  async ($, on) => {
+    const { begin, type } = engine(on)
+    await begin($)
+
+    const { text } = await type($, 'sparkjoy')
+
+    expect(text).toContain(
+      'at a turn end from 250k (the default, as your 950k is out of range)',
+    )
   },
 )
 
@@ -1277,6 +1304,7 @@ test(
     expect(prompts).toEqual([
       "The user typed /sparkjoy bug it compacted mid-debug. Run the sparkjoy:bug skill for them. The session's id is s1. /sparkjoy states its settings as:\n" +
         '> On. It asks whether to compact at a turn end from 250k (the default) and in an idle session from 175k (the default).\n' +
+        "> From 900k it doesn't ask: its verdict is to compact.\n" +
         `> Its question carries your instructions: "${INSTRUCTIONS}"`,
     ])
   },

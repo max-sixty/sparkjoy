@@ -17,7 +17,7 @@ context after an hour or more idle. It leaves out the sessions Claude Code compa
 before 200k, as in a 200k context window, where sparkjoy doesn't act. It reads, replays
 and fits with fit.py, so it opens only the transcripts modified since --since, at low
 priority.
-With --figures it also saves, as JSON, the figures sparkjoy's question states, fitted to
+With --figures it also saves, as JSON, the figures sparkjoy's question uses, fitted to
 the same sessions, to sparkjoy/figures.json in Claude Code's configuration directory,
 where hooks/register.ts reads them, or to the file it names. It prints a summary and the
 page's path.
@@ -207,7 +207,7 @@ def model_name(model):
     return f"{family.title()} {'.'.join(version)}"
 
 
-# The figures sparkjoy's question states, by the names of their constants in hooks/register.ts,
+# The figures sparkjoy's question uses, by the names of their constants in hooks/register.ts,
 # each with how the page and the summary name and show it.
 FIGURES = (
     ("FLOOR", "floor at turn ends", tokens),
@@ -216,7 +216,6 @@ FIGURES = (
     ("P", "system prompt and tools within it", tokens),
     ("SUMMARY", "output of the request that writes the summary", tokens),
     ("TURN_MEDIAN", "median requests per turn", "{:.0f}".format),
-    ("TURN_MEAN", "mean requests per turn", "{:.0f}".format),
     ("LAPSE", "requests that find the prompt cache lapsed", "{:.2%}".format),
     ("WRITE", "cached reads a cache write costs", "{:g}".format),
     ("OUTPUT", "cached reads an output token costs", "{:g}".format),
@@ -224,11 +223,9 @@ FIGURES = (
 
 
 def figures(p, c, floors=None):
-    """The figures sparkjoy's question states, fitted to these sessions at the prices `c`, by
+    """The figures sparkjoy's question uses, fitted to these sessions at the prices `c`, by
     the names of their constants in hooks/register.ts. Any the window couldn't measure is left
-    out, and the question states the one in `AUTHOR` instead. So is WASTED, the extra wasted
-    requests after a compaction: calibrate.py measures it over 60 days, and over a report's
-    window it varies across resamples by more than its own size. `floors` is the pair sparkjoy
+    out, and the question uses the one in `AUTHOR` instead. `floors` is the pair sparkjoy
     asks from, at turn ends and in idle sessions, where the report fitted one."""
     fitted = {
         **dict(zip(("FLOOR", "IDLE_FLOOR"), floors or (), strict=False)),
@@ -236,7 +233,6 @@ def figures(p, c, floors=None):
         "P": p.P,
         "SUMMARY": p.N,
         "TURN_MEDIAN": p.turn_median,
-        "TURN_MEAN": p.turn,
         "LAPSE": p.lapse,
         "WRITE": c.write,
         "OUTPUT": c.output,
@@ -739,7 +735,7 @@ def page(
         parts.append(h2("Fitted figures"))
         parts.append(
             "<p>From the next turn end or idle session, sparkjoy asks from these floors, except where you "
-            "set a floor of your own, and its question states these figures, fitted to these sessions, in "
+            "set a floor of your own, and its question uses these figures, fitted to these sessions, in "
             "place of its defaults.</p>"
         )
         parts.append(
@@ -756,17 +752,11 @@ def page(
             + "</div>"
         )
         missing = [label for key, label, _ in FIGURES if key not in saved]
-        parts.append(
-            "<p class=note>"
-            + (
-                f"The window measured no {' or '.join(missing)}, so the question states "
-                "its default. "
-                if missing
-                else ""
+        if missing:
+            parts.append(
+                f"<p class=note>The window measured no {' or '.join(missing)}, so the question "
+                "uses its default.</p>"
             )
-            + "The requests a compaction wastes re-reading what it dropped stay at their default: "
-            "measuring them takes months of sessions.</p>"
-        )
 
     if rows:
         parts.append(h2("Idle returns"))
@@ -821,7 +811,7 @@ def main():
         type=Path,
         nargs="?",
         const=fit.PROJECTS.parent / "sparkjoy" / "figures.json",
-        help="also save the figures sparkjoy's question states, fitted to these sessions, to this "
+        help="also save the figures sparkjoy's question uses, fitted to these sessions, to this "
         "JSON file; with no file named, to the one the plugin reads",
     )
     a = ap.parse_args()
