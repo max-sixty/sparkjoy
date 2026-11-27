@@ -49,8 +49,10 @@ SMALL = 200_000
 KINDS = list(fit.KINDS.values())
 # What each verdict means, from `judge` in hooks/register.ts.
 MEANING = {
-    "compacted": "The model said to compact, and sparkjoy began compacting.",
-    "would compact": "The model said to compact, and sparkjoy, set to classify, left the context as it was.",
+    "compacted": "The model said to compact, or the context was past the size where sparkjoy compacts "
+    "without asking, and sparkjoy began compacting.",
+    "would compact": "The model said to compact, or the context was past the size where sparkjoy compacts "
+    "without asking, and sparkjoy, set to classify, left the context as it was.",
     "kept": "The model said to keep going.",
     "unreadable": "The model's reply wasn't the JSON the question asks for.",
     "no verdict": "The model gave no reply.",
@@ -58,8 +60,8 @@ MEANING = {
     "failed": "An error stopped the check.",
 }
 MISSED = (
-    "Its question read less than nine tenths of its input from the prompt cache, so the rest cost a cache "
-    "write. sparkjoy logs these from 20 November 2026 on."
+    "Its question read less than nine tenths of the context from the prompt cache, and the savings price the "
+    "rest as a cache write. sparkjoy logs these from 27 November 2026 on."
 )
 
 
@@ -301,6 +303,8 @@ def mark(kind):
 
 def at(v):
     where = "" if v.tokens is None else f"idle {v.idle} min" if v.idle else "turn end"
+    if not v.asked:
+        where += ", without asking"
     if v.missed:
         where += (
             f", missed the cache (read {tokens(v.missed[0])} of {tokens(v.missed[1])})"

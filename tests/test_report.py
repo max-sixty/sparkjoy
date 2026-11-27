@@ -140,13 +140,9 @@ def session_with_compactions():
         prompt("12:30:00Z", "back again"),  # after two and a half hours, at 240k
         request("12:30:10Z", 30_000, 230_000),
         line(
-            "13:25:19Z",
-            "sparkjoy: Missed the prompt cache at 260k tokens, idle 55 minutes: read 30k of 262k "
-            "from it. Signing in to another account while idle drops the cache.",
-        ),
-        line(
             "13:25:20Z",
-            "sparkjoy: Compacting at 260k tokens, idle 55 minutes: the lexer is done",
+            "sparkjoy: Compacting at 260k tokens, idle 55 minutes, after missing the prompt cache "
+            "(read 30k of 262k; /sparkjoy bug if you didn't switch accounts): the lexer is done",
         ),
         boundary("13:26:00Z"),
         compact_summary("13:26:00Z"),
@@ -154,16 +150,14 @@ def session_with_compactions():
         request("15:00:10Z", 30_000, 195_000),
         line("15:00:20Z", "sparkjoy: Failed: Error: the fork failed"),
         line(
-            "15:00:39Z",
-            "sparkjoy: Missed the prompt cache at 226k tokens: read 30k of 227k from it",
-        ),
+            "15:00:40Z",
+            "sparkjoy: Compacting at 226k tokens, after missing the prompt cache the turn had just "
+            "written to (read 30k of 227k): all done",
+        ),  # a compaction that never ran
         line(
-            "15:00:39Z",
+            "15:00:40Z",
             "sparkjoy: That looks like a bug: /sparkjoy bug drafts a report of it.",
         ),
-        line(
-            "15:00:40Z", "sparkjoy: Compacting at 226k tokens: all done"
-        ),  # a compaction that never ran
         # A verdict to compact in the mode `classify`, just before the user's own compaction.
         line("15:29:50Z", "sparkjoy: Would compact at 226k tokens: the lexer is done"),
         prompt("15:30:00Z", "<command-name>/compact</command-name>"),
@@ -233,6 +227,26 @@ def test_a_compaction_after_the_last_request_ends_its_session_and_costs_its_summ
         "end. Of the other 2, the next request came once before the prompt cache lapsed, and once "
         "after it lapsed." in summary
     )
+
+
+def test_a_verdict_reached_without_asking_costs_no_check(tmp_path):
+    """The same session with a verdict from past the ceiling, where sparkjoy compacts without
+    asking: the verdict counts, and the checks cost what they did."""
+    summary, _ = report(
+        tmp_path,
+        [
+            *session_with_compactions(),
+            line(
+                "17:00:20Z",
+                "sparkjoy: Would compact at 920k tokens, without asking: past 900k, where even work "
+                "that needs the detail compacts",
+            ),
+        ],
+    )
+    assert summary[1].startswith(
+        "8 verdicts in 1 of 1 sessions: 3 compacted, 2 would compact"
+    )
+    assert "$3.70 of it for its checks" in summary[2]
 
 
 def test_a_first_run_leads_with_what_the_fitted_floors_would_have_saved(tmp_path):
