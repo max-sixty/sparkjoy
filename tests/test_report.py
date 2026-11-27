@@ -187,6 +187,8 @@ def test_counts_verdicts_and_returns(tmp_path):
         "sparkjoy's compactions, $3.70 of it for its checks, against $5.93 without them.",
         "Asking from 350k at turn ends and 250k in idle sessions costs least in this session's "
         "replay, of the floors it tried.",
+        "None of sparkjoy's 2 compactions ended a session. Of the 2, the next request came once "
+        "before the prompt cache lapsed, and once after it lapsed.",
         "3 returns after an hour or more idle to sessions left with 175k or more in context; 2 had "
         "been compacted in between (1 by /compact, 1 by sparkjoy). The other 1 wrote 230k tokens to "
         "the cache again, for $1.84.",
@@ -203,6 +205,34 @@ def test_counts_verdicts_and_returns(tmp_path):
     # The lockup, its dots in the accent, and the icon as the favicon.
     assert '<svg class="logo"' in page and page.count('class="accent"') == 3
     assert '<link rel="icon"' in page
+
+
+def test_a_compaction_after_the_last_request_ends_its_session_and_costs_its_summary(
+    tmp_path,
+):
+    """The same session, closed right after one more compaction of sparkjoy's. The replay with
+    sparkjoy's compactions prices that compaction's request, which raises what they cost by more
+    than the question before it."""
+    summary, _ = report(
+        tmp_path,
+        [
+            *session_with_compactions(),
+            line(
+                "17:00:20Z", "sparkjoy: Compacting at 120k tokens: the lexer has landed"
+            ),
+            boundary("17:01:00Z"),
+            compact_summary("17:01:00Z"),
+        ],
+    )
+    assert summary[0] == (
+        "Cost $5.39 more, 91% more than these sessions would have cost without sparkjoy's "
+        "compactions."
+    )
+    assert (
+        "1 of sparkjoy's 3 compactions ended a session, with no request after it by the window's "
+        "end. Of the other 2, the next request came once before the prompt cache lapsed, and once "
+        "after it lapsed." in summary
+    )
 
 
 def test_a_first_run_leads_with_what_the_fitted_floors_would_have_saved(tmp_path):

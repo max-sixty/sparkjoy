@@ -325,7 +325,7 @@ the middle of a turn, smaller at a turn end in the middle of a task, and close
 to 0 once a piece of work is finished. Here each compaction in the middle of a
 turn wastes ΔD more requests than one at a turn end.
 
-β and D put a compaction's cost on different requests. Through β, every request
+β and D describe costs that fall on different requests. Through β, every request
 until the next compaction gets less done, and the more a compaction shrinks the
 context, the less each gets done. The D wasted requests come right after a
 compaction, whatever the context. So D can differ between two moments in one
@@ -417,8 +417,8 @@ otherwise. At each turn end the classifier names the next turn's kind, and the
 session compacts if its context has passed that kind's threshold. Each row that
 compacts where the judgment says uses the pair of thresholds that costs least
 for that row. An idle session compacts from 175k, or from the higher threshold
-when the classifier expects β = 1.25 work next. No compaction loses detail the
-work needs.
+when the classifier expects β = 1.25 work next. The replay assumes that no
+compaction loses detail the work needs.
 
 | against Claude Code's default                                                     | thresholds for β = 0.25 and β = 1.25 work | without Claude Code's idle compaction | with it |
 | --------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------- | ------- |
@@ -462,9 +462,9 @@ mid-turn and each waste D.
 At D = 12, a compaction wastes 6 requests on average, as many as my sessions'
 compactions did ([Parameter values](#parameter-values)). A perfect classifier's
 compactions lose none of that detail. So the more a compaction loses, the more a
-classifier saves over the single threshold, since at each turn end it judges
-right the session avoids all D wasted requests, while the session pays for a
-question at every turn end it asks at.
+classifier saves over the single threshold, since the session avoids all D
+wasted requests at each turn end the classifier judges right, and pays for a
+question at every turn end where it asks.
 
 sparkjoy's question also states what a compaction saves at the context's size,
 but in the evals its verdict follows its answer about the detail whatever size
@@ -515,8 +515,8 @@ asks at each of them, and its answer decides where to compact.
 
 Compacting idle sessions gets much of the saving of a lower turn-end threshold:
 with idle sessions from 150k, every turn-end floor from 250k to 450k comes
-within a point of the most efficient pair. Each pair of floors pays for a
-question at every turn end and idle session past it.
+within a point of the most efficient pair. Each saving counts the cost of a
+question at every turn end and idle session past the floors.
 
 A floor is where sparkjoy starts asking, and its question decides at which turn
 ends above the floor to compact. So sparkjoy puts its floors at the most
