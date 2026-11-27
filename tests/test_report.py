@@ -266,6 +266,58 @@ def test_a_compaction_after_the_last_request_ends_its_session_and_costs_its_summ
     )
 
 
+def test_names_who_made_each_compaction_by_its_mark_wherever_the_log_puts_it(tmp_path):
+    """Four compactions, each followed by a return after an hour or more idle. Claude Code can log
+    the end of the turn before a compaction, sparkjoy's line or a typed `/compact` among it, after
+    the compaction's boundary, so each mark counts by its time. sparkjoy's line marks its
+    compaction, as does the line it writes on finishing one that Claude Code's restart cut short;
+    a typed `/compact` row marks the user's; and a compaction nothing marks is another tool's, not
+    the user's."""
+
+    def turn(at, then):
+        """A turn ending at 230k at `at`, and a return to it at `then`."""
+        return [prompt(f"{at}:00Z", "go on"), request(f"{at}:10Z", 30_000, 200_000)], [
+            prompt(f"{then}:00Z", "back again"),
+            request(f"{then}:10Z", 30_000, 200_000),
+        ]
+
+    first, back1 = turn("10:00", "11:30")
+    _, back2 = turn("11:30", "13:00")
+    _, back3 = turn("13:00", "14:30")
+    _, back4 = turn("14:30", "16:00")
+    summary, _ = report(
+        tmp_path,
+        [
+            *first,
+            boundary("10:02:00Z"),
+            line("10:00:59Z", "sparkjoy: Compacting at 230k tokens: the fix landed"),
+            compact_summary("10:02:00Z"),
+            *back1,
+            boundary("11:32:00Z"),
+            line(
+                "11:30:59Z",
+                "sparkjoy: Finishing the compaction at 230k tokens: Claude Code restarted before "
+                "it landed",
+            ),
+            compact_summary("11:32:00Z"),
+            *back2,
+            boundary("13:02:00Z"),
+            prompt("13:01:00Z", "<command-name>/compact</command-name>"),
+            compact_summary("13:02:00Z"),
+            *back3,
+            boundary("14:32:00Z"),
+            compact_summary("14:32:00Z"),
+            *back4,
+        ],
+    )
+    assert "None of sparkjoy's 2 compactions ended a session." in " ".join(summary)
+    assert (
+        "4 returns after an hour or more idle to sessions left with 175k or more in context; 4 "
+        "had been compacted in between (2 by sparkjoy, 1 by another tool, 1 by /compact)."
+        in summary
+    )
+
+
 def test_a_first_run_leads_with_what_the_fitted_floors_would_have_saved(tmp_path):
     """Before sparkjoy has run: the same session, with the user's compactions and none of
     sparkjoy's lines."""
