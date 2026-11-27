@@ -78,9 +78,11 @@ To see its verdicts without compacting anything, run
   ```
 
 - **It logs each verdict and compaction** outside the transcript, as a JSON line
-  in `~/.claude/sparkjoy/log/<session>/<day>.jsonl`, with what the line leaves
-  out: the context in tokens, the figures its question stated, the model's whole
-  answer, and what the question read from the prompt cache. The report reads it.
+  in `log/<session>/<day>.jsonl` in its data folder,
+  `~/.claude/plugins/data/sparkjoy-sparkjoy/`, with what the line leaves out: the
+  context in tokens, the figures its question stated, the model's whole answer,
+  and what the question read from the prompt cache. The report reads it.
+  Uninstalling sparkjoy deletes the folder, and the log with it.
 
 - **`/sparkjoy report`** opens a page on your sessions of the last 14 days,
   with every verdict and what the compactions saved. It fits the [cost

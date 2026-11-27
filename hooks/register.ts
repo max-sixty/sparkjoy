@@ -133,14 +133,9 @@ const AUTHOR = {
 
 type Figures = typeof AUTHOR
 
-// The file `/sparkjoy report` saves the user's figures to, under Claude Code's
-// configuration directory, as model/report.py names it. Its home would be the
-// plugin's data folder, but Claude Code before 2.1.326 gives a hooks module no
-// way to find that folder, and refuses at load a module that calls
-// `$.process.hookEnv()`, the API that names it.
-// TODO: save and read it in that folder once every release CI tests has
-// `$.process.hookEnv()`.
-const FIGURES = 'sparkjoy/figures.json'
+// The file `/sparkjoy report` saves the user's figures to, in sparkjoy's data
+// folder (`dataDir`), as model/report.py names it.
+const FIGURES = 'figures.json'
 
 // sparkjoy's log, beside FIGURES: a JSON line for each verdict and for each
 // compaction the mod starts and ends, in a file a session and a day,
@@ -152,16 +147,12 @@ const FIGURES = 'sparkjoy/figures.json'
 // reached with no request. `$.fs` writes only whole files, so each record
 // reads its file and writes it back a line longer, one record at a time; a
 // day's records stay far under the 4 MiB a read returns.
-const LOG = 'sparkjoy/log'
+const LOG = 'log'
 
-// Claude Code's configuration directory, $CLAUDE_CONFIG_DIR or ~/.claude, as
-// Claude Code and model/fit.py find it: Windows names the home %USERPROFILE%
-// and sets no HOME. Undefined where neither can be found.
-async function configDir($: EngineInterface) {
-  const home = (await $.env.get('HOME')) || (await $.env.get('USERPROFILE'))
-  return (
-    (await $.env.get('CLAUDE_CONFIG_DIR')) || (home && `${home}/.claude`) || undefined
-  )
+// sparkjoy's data folder, ${CLAUDE_PLUGIN_DATA}, which Claude Code keeps across
+// updates and deletes with the plugin. Rejects where it can't be made.
+async function dataDir($: EngineInterface) {
+  return (await $.process.hookEnv()).CLAUDE_PLUGIN_DATA
 }
 
 // What a record says beside when, which session and which release.
@@ -177,11 +168,10 @@ function record($: EngineInterface, facts: Facts) {
   const now = $.clock.now()
   logging = logging
     .then(async () => {
-      const config = await configDir($)
-      if (config === undefined) return
+      const data = await dataDir($)
       const t = new Date(await now).toISOString()
       const session = await $.session.id()
-      const path = `${config}/${LOG}/${session}/${t.slice(0, 10)}.jsonl`
+      const path = `${data}/${LOG}/${session}/${t.slice(0, 10)}.jsonl`
       const line = JSON.stringify({
         t,
         session,
@@ -767,13 +757,12 @@ function saving(tokens: number, { WRITE, K, LAPSE }: Figures) {
 // one request. The user's floor at a turn end must also lie above the context
 // after a compaction, where a compaction can pay for itself.
 // Read for each question, so a report run mid-session counts from the next one;
-// a configuration directory (`configDir`) or file that can't be found or read
-// leaves every figure but the user's floors at `AUTHOR`'s.
+// a data folder (`dataDir`) or file that can't be made or read leaves every
+// figure but the user's floors at `AUTHOR`'s.
 async function fitted($: EngineInterface, settings: Settings) {
   let saved: Record<string, unknown> | undefined
   try {
-    const config = await configDir($)
-    if (config) saved = JSON.parse(await $.fs.read(`${config}/${FIGURES}`))
+    saved = JSON.parse(await $.fs.read(`${await dataDir($)}/${FIGURES}`))
   } catch {
     saved = undefined
   }

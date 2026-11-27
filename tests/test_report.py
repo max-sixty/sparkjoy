@@ -91,9 +91,9 @@ def transcript(tmp_path, entries, session="session"):
 
 
 def log(tmp_path, records, session="session"):
-    """Writes `records` as sparkjoy logs them for the session with the id `session`, in the
-    configuration directory `tmp_path` that holds the projects directory."""
-    path = tmp_path / "sparkjoy" / "log" / session / f"{DAY[:-1]}.jsonl"
+    """Writes `records` as sparkjoy logs them for the session with the id `session`, in the data
+    folder in `tmp_path` that the report reads."""
+    path = tmp_path / "plugin-data" / "log" / session / f"{DAY[:-1]}.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("".join(json.dumps(r) + "\n" for r in records))
 
@@ -126,7 +126,11 @@ def report(tmp_path, entries, *args, others=()):
         ],
         capture_output=True,
         text=True,
-        env={"PATH": os.environ["PATH"], "TMPDIR": str(tmp_path)},
+        env={
+            "PATH": os.environ["PATH"],
+            "TMPDIR": str(tmp_path),
+            "CLAUDE_PLUGIN_DATA": str(tmp_path / "plugin-data"),
+        },
         check=True,
     )
     *summary, page = run.stdout.splitlines()
@@ -404,8 +408,9 @@ def test_a_session_below_the_floor_had_nothing_to_ask(tmp_path):
 
 
 def test_saves_the_figures_the_question_uses(tmp_path):
-    figures = tmp_path / "data" / "figures.json"  # in a folder the report makes
-    summary, page = report(tmp_path, session_with_compactions(), "--figures", figures)
+    # In sparkjoy's data folder, where the plugin reads them, which the report makes.
+    figures = tmp_path / "plugin-data" / "figures.json"
+    summary, page = report(tmp_path, session_with_compactions(), "--figures")
     # K is the median first request after the three compactions, 240k, 225k and 120k, as no turn is long
     # enough to measure what they read again; P what those requests read from the cache; SUMMARY the
     # 1k-token summary times the 1.5 output per visible token of the reply its size. Every request ends

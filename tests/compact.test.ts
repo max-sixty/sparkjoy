@@ -40,10 +40,9 @@ const FIVE_MINUTES = {
   ephemeral_1h_input_tokens: 0,
 }
 
-// The user's home, and the figures file `/sparkjoy report` saves in Claude
-// Code's configuration directory there.
+// The user's home, and sparkjoy's data folder there.
 const HOME = '/home/u'
-const FIGURES = `${HOME}/.claude/sparkjoy/figures.json`
+const DATA = `${HOME}/.claude/plugins/data/sparkjoy-sparkjoy`
 const TRANSCRIPT = `${HOME}/.claude/projects/-work/s1.jsonl`
 
 // Stands for the engine beneath the mod: a context of `tokens` until `resize`
@@ -58,8 +57,9 @@ const TRANSCRIPT = `${HOME}/.claude/projects/-work/s1.jsonl`
 // one succeeds, a turn whose end settles after `endMs`, a store holding
 // `stored` (what an earlier process left), a conversation of user messages
 // with the texts `conversation`, which a turn adds a message to and a
-// compaction its summary, a process environment of `env` (`HOME` unless told
-// otherwise), a file at `figuresAt` holding `saved` (none when undefined),
+// compaction its summary, a data folder at `data` (`DATA` unless told
+// otherwise, and null for one Claude Code can't make), a figures file there
+// holding `saved` (none when undefined),
 // settings that take each change the mod makes, and a record of what it was
 // asked.
 function engine(
@@ -81,8 +81,7 @@ function engine(
       { kind: 'seven_day', percentUsed: 30 },
     ],
     usage = HOUR as TurnUsage,
-    env = { HOME } as Record<string, string>,
-    figuresAt = FIGURES,
+    data = DATA as string | null,
     saved = undefined as string | undefined,
   } = {},
 ) {
@@ -108,11 +107,14 @@ function engine(
   on('session.id', () => ({ value: 's1' }))
   on('session.info', () => ({ value: { transcriptPath: TRANSCRIPT } }))
   on('session.version', () => ({ value: { version: '2.1.332', base: '2.1.332' } }))
-  on('env.get', (_, e) => ({ value: env[e.name] }))
+  on('process.hookEnv', () => {
+    if (data === null) throw new Error('EACCES: permission denied, mkdir')
+    return { value: { CLAUDE_PLUGIN_DATA: data } }
+  })
   on('fs.read', (_, e) => {
     const written = files[e.path]
     if (written !== undefined) return { value: written }
-    if (e.path !== figuresAt || saved === undefined)
+    if (e.path !== `${data}/figures.json` || saved === undefined)
       throw new Error(`ENOENT: no such file or directory, open '${e.path}'`)
     return { value: saved }
   })
@@ -219,7 +221,7 @@ function engine(
 
   // The records the mod logged on each day, as it wrote them.
   const records = (day: string) =>
-    (files[`${HOME}/.claude/sparkjoy/log/s1/${day}.jsonl`] ?? '')
+    (files[`${DATA}/log/s1/${day}.jsonl`] ?? '')
       .split('\n')
       .filter(line => line !== '')
       .map(line => JSON.parse(line))
@@ -356,21 +358,6 @@ test('an idle session’s question states the fitted figures too', async ($, on)
   )
 })
 
-test('the figures are read from $CLAUDE_CONFIG_DIR where it is set', async ($, on) => {
-  const env = { HOME, CLAUDE_CONFIG_DIR: '/work/claude' }
-  const { begin, forks, turn } = engine(on, {
-    verdict: KEEP,
-    env,
-    figuresAt: '/work/claude/sparkjoy/figures.json',
-    saved: FITTED,
-  })
-  await begin($)
-
-  await turn($, 't1')
-
-  expect(forks[0]).toContain('pays for itself once the session runs 8 more requests')
-})
-
 test('the floors the report fitted decide where sparkjoy asks', async ($, on) => {
   const saved = JSON.stringify({ FLOOR: 150_000, IDLE_FLOOR: 120_000 })
   const { begin, clock, forks, turn, resize } = engine(on, {
@@ -427,7 +414,7 @@ test('each figure the file lacks, or holds where the sums can’t use it, stays 
 for (const [name, options] of [
   ['a figures file that isn’t JSON', { saved: '{"K": 120' }],
   ['a figures file that holds no object', { saved: 'null' }],
-  ['a process with no home or configuration directory', { saved: FITTED, env: {} }],
+  ['a data folder Claude Code can’t make', { saved: FITTED, data: null }],
 ] as const) {
   test(`${name} leaves the question the author’s`, async ($, on) => {
     const { begin, forks, turn } = engine(on, { verdict: KEEP, ...options })
@@ -1290,20 +1277,6 @@ test('/sparkjoy says when the session’s window leaves it nothing to ask', asyn
   expect(text?.split('\n')[1]).toBe(
     "This session's context window is 200k, and sparkjoy acts only in sessions with a 1M window, so it asks nothing here.",
   )
-})
-
-test('on Windows, sparkjoy finds the report’s figures under %USERPROFILE%', async ($, on) => {
-  const profile = '/Users/u'
-  const { begin, type } = engine(on, {
-    env: { USERPROFILE: profile },
-    figuresAt: `${profile}/.claude/sparkjoy/figures.json`,
-    saved: JSON.stringify({ IDLE_FLOOR: 120_000 }),
-  })
-  await begin($)
-
-  const { text } = await type($, 'sparkjoy')
-
-  expect(text).toContain("in an idle session from 120k (the report's fit).")
 })
 
 test(

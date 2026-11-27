@@ -30,8 +30,14 @@ PRICES = {
     "claude-opus-5": (5, 25, 6.25, 10, 0.50),
     "claude-haiku-5-5": (0.5, 2.5, 0.625, 1, 0.05),  # its long-context tier, above 100k
 }
-PROJECTS = (
-    Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "projects"
+CONFIG = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+PROJECTS = CONFIG / "projects"
+# sparkjoy's data folder, where hooks/register.ts keeps its log and /sparkjoy report saves the figures
+# it reads: the one Claude Code names in $CLAUDE_PLUGIN_DATA, which the report's skill passes on, or,
+# run outside Claude Code, the one it gives sparkjoy installed from its own marketplace.
+DATA = Path(
+    os.environ.get("CLAUDE_PLUGIN_DATA")
+    or CONFIG / "plugins" / "data" / "sparkjoy-sparkjoy"
 )
 WINDOW = 1_000_000
 AUTO = 965_000  # where Claude Code compacts a 1M window on its own
@@ -101,12 +107,12 @@ KINDS = {
     "Dropped the verdict": "dropped",
     "Failed": "failed",
 }
-# sparkjoy's log under the configuration directory (LOG in hooks/register.ts): a JSON line for each
+# sparkjoy's log in its data folder (LOG in hooks/register.ts): a JSON line for each
 # verdict, its `kind` the line's word for it, and for each compaction it starts and ends, in a file
 # a session and a day. Where a session has one, it is what `transcript` reads sparkjoy's verdicts
 # and compactions from; the lines and marks above stand for it in sessions from before it, and a
 # line for a verdict whose record was never written.
-LOG = Path("sparkjoy") / "log"
+LOG = DATA / "log"
 
 # Where a session's name comes from, in order of preference: one the user gave it, then
 # the ones Claude Code generates. Failing all three, its first prompt names it.
@@ -578,7 +584,7 @@ def logged(path, lo="0", hi="~"):
     """The records sparkjoy logged in [lo, hi), ISO times, for the session whose transcript is at
     `path`, oldest first."""
     found = []
-    for f in (path.parents[2] / LOG / path.stem).glob("*.jsonl"):
+    for f in (LOG / path.stem).glob("*.jsonl"):
         for raw in f.open(errors="replace"):
             try:
                 r = json.loads(raw)
