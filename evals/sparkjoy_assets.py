@@ -248,6 +248,8 @@ def push(files: list[Path], paths: list[str]) -> None:
             git("fetch", "--quiet", "origin", "main")
             if git("rev-parse", "FETCH_HEAD") == git("rev-parse", "HEAD"):
                 raise
+            # Fails, and so stops the retries, where main was rewritten.
+            git("merge", "--quiet", "--ff-only", "FETCH_HEAD")
             continue
         git("merge", "--quiet", "--ff-only", commit)
         return
