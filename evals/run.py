@@ -397,12 +397,7 @@ def run(
     finally:
         # The batch's results, with any an earlier batch didn't publish; a
         # rebuilt request waits for a look first.
-        try:
-            sparkjoy_assets.publish(sparkjoy_assets.RESULTS)
-        except subprocess.CalledProcessError:
-            print(
-                f"The results weren't published, and wait in {sparkjoy_assets.UNPUBLISHED}."
-            )
+        sparkjoy_assets.publish(sparkjoy_assets.RESULTS)
 
 
 def column(row: dict) -> str:

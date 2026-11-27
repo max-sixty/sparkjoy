@@ -90,8 +90,7 @@ def test_two_checkouts_publish_to_sparkjoy_assets(tmp_path, monkeypatch):
     killed = one.UNPUBLISHED / "evals/results/1-killed.jsonl.part"
     killed.write_text('{"case": "killed"}\n')
     assert one.read("evals/requests/case/seed.json.gz") == b"seed"
-    with pytest.raises(subprocess.CalledProcessError):
-        one.publish(one.RESULTS)
+    assert not one.publish(one.RESULTS)
     monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
     # The other checkout's publish skips its first fetch, as though this one
     # pushed just after it, so its first push is rejected and it tries again.

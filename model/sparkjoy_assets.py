@@ -219,9 +219,10 @@ def image(file: Path) -> Path:
     return wait(f"images/{file.stem}", data, data, file.suffix)
 
 
-def publish(*patterns: str) -> None:
+def publish(*patterns: str) -> bool:
     """Publish the waiting files `patterns` match, by default every request,
-    batch of results and image."""
+    batch of results and image, and say whether the push went through. A push
+    that fails leaves them waiting."""
     abandoned()
     files = sorted(
         file
@@ -230,13 +231,18 @@ def publish(*patterns: str) -> None:
     )
     if not files:
         print("Nothing to publish.")
-        return
+        return True
     paths = [str(p.relative_to(UNPUBLISHED)) for p in files]
-    push(files, paths)
+    try:
+        push(files, paths)
+    except subprocess.CalledProcessError:
+        print(f"Nothing was published, and the files wait in {UNPUBLISHED}.")
+        return False
     point(paths)
     for file in files:
         file.unlink()
     print(f"Published {', '.join(paths)}.")
+    return True
 
 
 def point(paths: list[str]) -> None:
@@ -327,10 +333,10 @@ def push(files: list[Path], paths: list[str]) -> None:
 if __name__ == "__main__":
     match sys.argv[1:]:
         case ["publish"]:
-            publish()
+            sys.exit(not publish())
         case ["image", *files] if files:
             for file in files:
                 image(Path(file))
-            publish(IMAGES)
+            sys.exit(not publish(IMAGES))
         case _:
             sys.exit(__doc__.split("\n\n")[1])

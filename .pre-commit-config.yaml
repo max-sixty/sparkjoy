@@ -5,12 +5,8 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
-        # The charts keep the bytes matplotlib writes.
-        exclude: &generated ^assets/
       - id: end-of-file-fixer
-        exclude: *generated
       - id: mixed-line-ending
-        exclude: *generated
       - id: check-yaml
       - id: check-json
       - id: check-toml
