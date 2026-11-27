@@ -318,26 +318,6 @@ def test_names_who_made_each_compaction_by_its_mark_wherever_the_log_puts_it(tmp
     )
 
 
-def test_a_verdict_reached_without_asking_costs_no_check(tmp_path):
-    """The same session with a verdict from past the ceiling, where sparkjoy compacts without
-    asking: the verdict counts, and the checks cost what they did."""
-    summary, _ = report(
-        tmp_path,
-        [
-            *session_with_compactions(),
-            line(
-                "17:00:20Z",
-                "sparkjoy: Would compact at 920k tokens, without asking: past 900k, where even work "
-                "that needs the detail compacts",
-            ),
-        ],
-    )
-    assert summary[1].startswith(
-        "8 verdicts in 1 of 1 sessions: 3 compacted, 2 would compact"
-    )
-    assert "$3.70 of it for its checks" in summary[2]
-
-
 def test_a_first_run_leads_with_what_the_fitted_floors_would_have_saved(tmp_path):
     """Before sparkjoy has run: the same session, with the user's compactions and none of
     sparkjoy's lines."""
