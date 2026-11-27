@@ -22,7 +22,8 @@ Two kinds of case check the answer:
   says the turn just ended. `parts.py` cuts the request into its parts, each
   with its tokens as the API counts them (`counted`), and the same model,
   shown what the session did next up to its next compaction (`next_work`),
-  labels each part needed, helpful or neither (`LABEL`), in `RUNS` runs.
+  as much of it as the window holds beside the request (`fitted`), labels
+  each part needed, helpful or neither (`LABEL`), in `RUNS` runs.
   Only I can label a case, since labelling reads my transcripts. Each label
   names the request and a hash of the question it was asked (`shown`), which
   holds the next work and the parts, and a case labelled on both is not
@@ -72,9 +73,9 @@ import sparkjoy_assets  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 
 RUNS = 2  # label runs per case
-# Requests of the session's next work the labeller is shown at most, up to
-# its next compaction.
-NEXT_REQUESTS = 300
+# The label runs' max_tokens, which the window keeps free beside the next
+# work: their answers have taken at most 5,180 tokens, thinking included.
+LABEL_OUTPUT = 16_000
 DIRECTORY = "evals/share"
 LOCAL = ROOT / ".tmp/share"
 
@@ -147,58 +148,107 @@ def listing(request_parts: list[dict]) -> str:
 
 def next_work(case: dict) -> list[str]:
     """What the session did after the turn end, up to its next compaction,
-    where the context starts again whatever this turn end decided, and at
-    most `NEXT_REQUESTS` requests: what the user typed, and the model's text
-    and calls. A compaction at the turn end itself, as when sparkjoy
-    compacted there, doesn't end it, since the work after it is what the
-    context would have served."""
+    where the context starts again whatever this turn end decided: what the
+    user typed, the model's text, its calls and what each returned, each
+    whole, for `fitted` to shorten to the window. A compaction at the turn
+    end itself, as when sparkjoy compacted there, doesn't end it, since the
+    work after it is what the context would have served."""
     path = next(fit.PROJECTS.glob(f"*/{case['source']['session']}.jsonl"), None)
     if path is None:
         raise LookupError(f"no transcript of session {case['source']['session']}")
-    lines, seen = [], set()
+    lines, began = [], False
     with path.open() as f:
         for n, raw in enumerate(f):
             if n <= case["source"]["line"]:
                 continue
             e = json.loads(raw)
+            ts = e.get("timestamp", "")[:16]
             if e.get("type") == "system" and e.get("subtype") == "compact_boundary":
-                ts = e.get("timestamp", "")[:16]
-                if seen:
+                if began:
                     lines.append(f"[{ts}] COMPACTED, and the session went on")
                     break
                 lines.append(f"[{ts}] COMPACTED")
                 continue
             if e.get("isSidechain") or e.get("isCompactSummary"):
                 continue
-            ts = e.get("timestamp", "")[:16]
             if e.get("type") == "user" and not e.get("isMeta"):
-                c = e["message"]["content"]
-                texts = (
-                    [c]
-                    if isinstance(c, str)
-                    else [b.get("text") or "" for b in c if b.get("type") == "text"]
-                )
-                lines += [
-                    f"[{ts}] USER: {t[:600]}"
-                    for t in texts
-                    if t and not t.startswith("<")
-                ]
+                for b in parts.blocks_of(e["message"]):
+                    text = b.get("text") or ""
+                    if b.get("type") == "text" and text and not text.startswith("<"):
+                        lines.append(f"[{ts}] USER: {text}")
+                    elif b.get("type") == "tool_result":
+                        error = " (error)" if b.get("is_error") else ""
+                        result = parts.text_of(b.get("content"))
+                        lines.append(f"[{ts}] RESULT{error}: {result}")
             elif e.get("type") == "assistant":
-                seen.add(e["message"].get("id"))
-                if len(seen) > NEXT_REQUESTS:
-                    lines.append("[…the session went on]")
-                    break
+                began = True
                 for b in e["message"].get("content") or []:
                     if b.get("type") == "text" and b.get("text"):
-                        lines.append(f"[{ts}] ASSISTANT: {b['text'][:400]}")
+                        lines.append(f"[{ts}] ASSISTANT: {b['text']}")
                     elif b.get("type") == "tool_use":
-                        lines.append(f"[{ts}] CALL {parts.describe_call(b)}")
+                        given = json.dumps(b.get("input") or {}, ensure_ascii=False)
+                        lines.append(f"[{ts}] CALL {b['name']}: {given}")
     return lines
 
 
-def count(request: dict, headers: dict) -> int:
-    """The tokens of `request`'s context, by the API's count."""
-    body = run.body_of(request, ".")
+def shortened(lines: list[str], chars: int) -> list[str]:
+    """`lines` in about `chars` characters: each line longer than a common
+    length keeps its head and tail, the length the longest that fits."""
+    lengths = sorted(map(len, lines))
+    total = 0
+    for i, n in enumerate(lengths):
+        if total + n * (len(lengths) - i) > chars:
+            half = max((chars - total) // (len(lengths) - i), 0) // 2
+            break
+        total += n
+    else:
+        return lines
+    return [
+        f"{line[:half]} […] {line[len(line) - half :]}"
+        if len(line) > 2 * half
+        else line
+        for line in lines
+    ]
+
+
+def fitted(
+    request: dict, headers: dict, cut: list[dict], then: list[str]
+) -> tuple[str, list[str]]:
+    """`LABEL` asked with what the session did next (`then`) shortened to
+    fit the window beside the request and `LABEL_OUTPUT`, by the API's
+    count, and the lines of it shown."""
+
+    def asked(lines: list[str]) -> str:
+        return LABEL.format(next="\n".join(lines), parts=listing(cut))
+
+    def tokens(lines: list[str]) -> int:
+        log = "\n".join(lines) or "."
+        return plain(
+            {
+                "model": request["params"]["model"],
+                "messages": [{"role": "user", "content": log}],
+            },
+            headers,
+        )
+
+    room = fit.WINDOW - LABEL_OUTPUT - count(request, headers, asked([]))
+    # Each pass asks for fewer characters than the last, so the lines
+    # shorten until they fit or can't shorten further.
+    lines, chars = then, sum(map(len, then))
+    while (used := tokens(lines)) > room:
+        chars = chars * room // used * 97 // 100
+        if (shorter := shortened(then, chars)) == lines:
+            raise LookupError(
+                f"the window holds {room} tokens, too few for the next work"
+            )
+        lines = shorter
+    return asked(lines), lines
+
+
+def count(request: dict, headers: dict, question: str = ".") -> int:
+    """The tokens of `request`'s context, with `question` after it, by the
+    API's count."""
+    body = run.body_of(request, question)
     return plain(
         {
             k: body[k]
@@ -377,11 +427,10 @@ def run_cases(names: list[str], repeat: int, jobs: int) -> None:
                 )
         if case:
             try:
-                then = next_work(case)
+                asked, then = fitted(request, headers, cut, next_work(case))
             except LookupError as error:
                 print(f"NO LABELS {name}: {error}", flush=True)
             else:
-                asked = LABEL.format(next="\n".join(then), parts=listing(cut))
                 shown = hashlib.sha256(asked.encode()).hexdigest()[:12]
                 if labelled(name, digest, shown) < RUNS:
                     label(
@@ -452,7 +501,7 @@ def label(base, request, headers, x, cut, asked, then, write) -> None:
             "parts": [[p["kind"], p["tokens"]] for p in cut],
         }
     )
-    body = run.body_of(request, asked)
+    body = run.body_of(request, asked) | {"max_tokens": LABEL_OUTPUT}
     runs = []
     for _ in range(RUNS):
         try:
