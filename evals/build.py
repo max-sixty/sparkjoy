@@ -330,12 +330,33 @@ def images(value) -> int:
 
 
 def build(case: dict) -> Path:
-    request, removed = published(fork_request(entries_of(case)))
+    entries = entries_of(case)
+    # The question states the context's size as the plugin does: what the
+    # reply's request held, not counting the reply.
+    usage = entries[-1]["message"]["usage"]
+    size = sum(
+        usage.get(k) or 0
+        for k in (
+            "input_tokens",
+            "cache_read_input_tokens",
+            "cache_creation_input_tokens",
+        )
+    )
+    if case["tokens"] != size:
+        raise SystemExit(
+            f"{case['id']}: cases.json says {case['tokens']} tokens, but the reply's request held {size}"
+        )
+    return write(case["id"], fork_request(entries))
+
+
+def write(case: str, request: dict) -> Path:
+    """Leave `request`, as it can be published, waiting to publish as `case`'s."""
+    request, removed = published(request)
     if found := left_over(request):
-        raise SystemExit(f"{case['id']}: " + "\n".join(found))
+        raise SystemExit(f"{case}: " + "\n".join(found))
     body = json.dumps(request, ensure_ascii=False).encode()
     target = sparkjoy_assets.wait(
-        f"evals/requests/{case['id']}",
+        f"evals/requests/{case}",
         body,
         # mtime=0, and no file name in the header, so that an unchanged
         # request writes the same bytes.
@@ -343,7 +364,7 @@ def build(case: dict) -> Path:
         ".json.gz",
     )
     print(
-        f"{case['id']}: {target.stat().st_size / 1e6:.1f} MB, {len(removed)} sentences"
+        f"{case}: {target.stat().st_size / 1e6:.1f} MB, {len(removed)} sentences"
         f" ({sum(map(len, removed))} characters) removed, {images(request)} images"
     )
     return target

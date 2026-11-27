@@ -16,19 +16,21 @@ That repository only ever gains files, each under a name no other file takes:
 - each image at `images/<name>/<hash>.<extension>`, named for the hash of its
   bytes, where `<name>` is the file's name without its extension, as in
   `images/savings-dark/<hash>.svg`;
-- each batch of runs' results at `evals/results/<started>-<random>.jsonl`.
+- each batch of runs' results at `evals/<eval>/<started>-<random>.jsonl`,
+  where `<eval>` is `results` for `evals/run.py`'s batches and `share` for
+  `evals/share.py`'s.
 
 So its `main` holds every file ever published, and nothing pins a commit of it.
 Here, `evals/requests.json` names the hash of the request each case sends, and
 the Markdown files link each image at its URL in that repository.
 
 `fetch()` clones the repository into `.tmp/sparkjoy-assets` without file
-contents, then checks out only `evals/results/`. Offline, it reads the clone as
+contents, then checks out only the batches' directories, `BATCHES`. Offline, it reads the clone as
 it is. `read()` fetches a request the first time it is asked for. A new file
 waits in `.tmp/sparkjoy-assets-unpublished`, at its path in the repository,
 until it is published:
 
-- `run.py` writes a running batch's results to a `.part` file there, locked
+- `run.py` and `share.py` write a running batch's results to a `.part` file there, locked
   while the batch runs. When the batch ends, it renames the file and
   publishes it, with any results an earlier batch didn't publish. That
   includes a batch a signal stopped, whose lock went with its process;
@@ -73,7 +75,9 @@ POINTERS = ROOT / "evals/requests.json"
 # The waiting files a publish takes: a running batch writes to a `.part` file
 # and renames it to match only once it ends.
 REQUESTS = "evals/requests/*/*.json.gz"
-RESULTS = "evals/results/*.jsonl"
+RESULTS = "evals/*/*.jsonl"
+# The directories batches of results go to, one for each eval.
+BATCHES = ("evals/results", "evals/share")
 IMAGES = "images/*/" + "[0-9a-f]" * 12 + ".*"
 # Where the README and docs link each image, and the names an image can take.
 LINKS = "https://raw.githubusercontent.com/max-sixty/sparkjoy-assets/main/"
@@ -100,6 +104,9 @@ def fetch() -> None:
             git("pull", "--quiet", "--ff-only")
         except subprocess.CalledProcessError:
             print(f"Reading {CLONE} as it is.", file=sys.stderr)
+        # A clone made before an eval's directory was added checks it out too.
+        if git("sparse-checkout", "list").split() != list(BATCHES):
+            git("sparse-checkout", "set", *BATCHES)
         return
     CLONE.parent.mkdir(exist_ok=True)
     # Cloned beside the target and moved into place once checked out, so an
@@ -118,7 +125,7 @@ def fetch() -> None:
             ],
             check=True,
         )
-        git("sparse-checkout", "set", "evals/results", cwd=clone)
+        git("sparse-checkout", "set", *BATCHES, cwd=clone)
         clone.rename(CLONE)
 
 
@@ -145,22 +152,23 @@ def request(case: str) -> bytes | None:
     return digest and read(f"evals/requests/{case}/{digest}.json.gz")
 
 
-def results() -> list[Path]:
-    """Every batch's results, published, waiting or still running, oldest
-    first."""
+def results(directory: str = "evals/results") -> list[Path]:
+    """Every batch's results in `directory`, one of `BATCHES`, published,
+    waiting or still running, oldest first."""
     fetch()
     files = [
-        *(CLONE / "evals/results").glob("*.jsonl"),
-        *(UNPUBLISHED / "evals/results").glob("*.jsonl*"),
+        *(CLONE / directory).glob("*.jsonl"),
+        *(UNPUBLISHED / directory).glob("*.jsonl*"),
     ]
     return sorted(files, key=lambda path: path.name)
 
 
 @contextlib.contextmanager
-def batch() -> Iterator[TextIO]:
-    """The file a new batch of runs writes its results to, locked while the
-    batch runs, and made ready to publish when it ends."""
-    directory = UNPUBLISHED / "evals/results"
+def batch(directory: str = "evals/results") -> Iterator[TextIO]:
+    """The file a new batch of runs writes its results to in `directory`, one
+    of `BATCHES`, locked while the batch runs, and made ready to publish when
+    it ends."""
+    directory = UNPUBLISHED / directory
     directory.mkdir(parents=True, exist_ok=True)
     started = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     part = directory / f"{started}-{secrets.token_hex(3)}.jsonl.part"
@@ -184,7 +192,7 @@ def finish(part: Path) -> None:
 def abandoned() -> None:
     """Finish each batch whose process died without finishing it, such as one
     a signal stopped: the lock on its file went with the process."""
-    for part in (UNPUBLISHED / "evals/results").glob("*.jsonl.part"):
+    for part in UNPUBLISHED.glob("evals/*/*.jsonl.part"):
         with part.open("a") as file:
             try:
                 fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
