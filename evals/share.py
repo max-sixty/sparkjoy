@@ -125,7 +125,7 @@ Judge each part by the work that followed:
 - "helpful": it would have helped the next work, such as by saving a lookup or giving background to a decision, but the work could have done without it.
 - Every other part is not needed.
 
-What the session did next is below, one JSON object per line, in order, up to its next compaction. Each has "t", when it happened, and "kind": "user" for what the user typed; "assistant" for what the assistant wrote; "call" for a tool call, with its "tool" and "input"; "result" for what a call returned, with its "tool", and "error": true where it failed; and "compaction" where the context was compacted. A compaction at the start, at this turn end, means the work after it ran without the context above. A long value may be cut in the middle, at " […] ".
+What the session did next is below, one JSON object per line, in order, up to its next compaction. Each has "t", when it happened, and "kind": "user" for what the user typed; "assistant" for what the assistant wrote; "call" for a tool call, with its "tool" and "input"; "result" for what a call returned, with its "tool", and "error": true where it failed; "compaction" where the context was compacted; and "omitted", last, standing in for its "records" later records that the window has no room for, so the work went on past the last record shown. A compaction at the start, at this turn end, means the work after it ran without the context above. A long value may be cut in the middle, at " […] ".
 
 {next}
 
