@@ -382,7 +382,8 @@ An idle session's question comes just before the cache expires, and can find it
 gone already:
 
 - The cache belongs to the account's organization, so signing in to another
-  account while the session sits idle drops it.
+  account while the session sits idle drops it, in every session that follows
+  the sign-in.
 - sparkjoy waits 4 minutes on the 5-minute cache and 55 on the one-hour cache,
   counting from the turn's end, while the cache's lifetime counts from when the
   turn's last request was sent. So a last request that ran for minutes can leave
@@ -390,11 +391,11 @@ gone already:
 
 Claude Code doesn't tell the plugins you install which account a session runs
 under, so the line can't say which happened, and ends
-`/sparkjoy bug if you didn't switch accounts`. If you didn't, run
-`/sparkjoy bug the idle question missed the cache` to draft a report about that
-line.
-
-`/sparkjoy report` counts the questions that missed the cache.
+`/sparkjoy report lists the misses`. The report's table of misses shows, beside
+each one, how many of the other sessions active then lost their cache too, as a
+sign-in makes them do. If idle misses keep coming that you can't account for,
+run `/sparkjoy bug idle questions keep missing the cache` in a session that
+had one.
 
 </details>
 
