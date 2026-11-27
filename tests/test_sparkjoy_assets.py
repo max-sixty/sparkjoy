@@ -87,6 +87,16 @@ def test_two_checkouts_publish_results_and_requests(tmp_path, monkeypatch):
     with pytest.raises(subprocess.CalledProcessError):
         one.publish(one.RESULTS)
     monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    # The other checkout's publish skips its first fetch, as though this one
+    # pushed just after it, so its first push is rejected and it tries again.
+    other = checkouts[1]
+    other.fetch()
+    fetch = other.fetch
+
+    def stale() -> None:
+        monkeypatch.setattr(other, "fetch", fetch)
+
+    monkeypatch.setattr(other, "fetch", stale)
     for checkout in checkouts:
         checkout.publish(checkout.RESULTS)
     assert git(remote, "ls-tree", "--name-only", "main", "evals/requests/case/") == (
@@ -112,7 +122,6 @@ def test_two_checkouts_publish_results_and_requests(tmp_path, monkeypatch):
         assert checkout.request("case") == name.encode()
         waiting = [p for p in checkout.UNPUBLISHED.rglob("*") if p.is_file()]
         assert [p.name for p in waiting] == ["notes.txt"]
-    other = checkouts[1]
     # A request is named for its JSON, so other bytes under a published name
     # leave main's copy as it is.
     regzipped = other.UNPUBLISHED / "evals/requests/case/one.json.gz"

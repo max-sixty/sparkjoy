@@ -31,10 +31,11 @@ until it is published:
 
 A publish commits the waiting files onto the repository's `main`, in an index
 of its own, pushes the commit, and deletes them. Since no two files share a
-name, it never conflicts with another publish. Where main holds a request's
-name already, it holds the request, whatever bytes another gzip made of it;
-for results, a publish stops before it would replace main's copy. A failed
-push leaves the files waiting.
+name, it never conflicts with another publish; where another moved `main`
+before its push, it builds its commit again on top. Where `main` holds a
+request's name already, it holds the request, whatever bytes another gzip
+made of it; for results, a publish stops before it would replace `main`'s
+copy. A push that fails for any other reason leaves the files waiting.
 """
 
 import contextlib
@@ -186,18 +187,8 @@ def publish(*patterns: str) -> None:
     if not files:
         print("Nothing to publish.")
         return
-    fetch()
     paths = [str(p.relative_to(UNPUBLISHED)) for p in files]
-    listed = git("ls-tree", "--format=%(path)%x09%(objectname)", "HEAD", "--", *paths)
-    held = dict(line.split("\t") for line in listed.splitlines())
-    # A request is named for its JSON, so main holds it already where it holds
-    # the name, whatever bytes another gzip made of it.
-    if adding := [
-        (file, path)
-        for file, path in zip(files, paths, strict=True)
-        if not (path in held and path.startswith("evals/requests/"))
-    ]:
-        push(adding, held)
+    push(files, paths)
     if requests := [p.split("/")[2:] for p in paths if p.startswith("evals/requests/")]:
         pointers = json.loads(POINTERS.read_text())
         for case, name in requests:
@@ -208,36 +199,58 @@ def publish(*patterns: str) -> None:
     print(f"Published {', '.join(paths)}.")
 
 
-def push(adding: list[tuple[Path, str]], held: dict[str, str]) -> None:
-    """Add each waiting file to main at its path, and push the commit. `held`
-    maps each of those paths main holds already to the blob it holds there."""
-    blobs = git("hash-object", "-w", *(str(file) for file, _ in adding)).splitlines()
-    entries = [(path, blob) for (_, path), blob in zip(adding, blobs, strict=True)]
-    if changed := [path for path, blob in entries if held.get(path, blob) != blob]:
-        # Each name is published once, so that main only ever gains files.
-        sys.exit(f"Main holds other copies of {', '.join(changed)}.")
-    with tempfile.TemporaryDirectory() as scratch:
-        env = os.environ | {"GIT_INDEX_FILE": f"{scratch}/index"}
-        git("read-tree", "HEAD", env=env)
-        lines = "".join(f"100644 {blob}\t{path}\n" for path, blob in entries)
-        git("update-index", "--index-info", input=lines, env=env)
-        tree = git("write-tree", env=env)
-    # A publish whose push went through may have stopped before it deleted
-    # the files, so main can hold them already.
-    if tree == git("rev-parse", "HEAD^{tree}"):
+def push(files: list[Path], paths: list[str]) -> None:
+    """Add the waiting files to main at their paths, and push the commit. Where
+    another publish moved main first, build the commit again on top of it."""
+    while True:
+        fetch()
+        listed = git(
+            "ls-tree", "--format=%(path)%x09%(objectname)", "HEAD", "--", *paths
+        )
+        held = dict(line.split("\t") for line in listed.splitlines())
+        # A request is named for its JSON, so main holds it already where it
+        # holds the name, whatever bytes another gzip made of it.
+        adding = [
+            (file, path)
+            for file, path in zip(files, paths, strict=True)
+            if not (path in held and path.startswith("evals/requests/"))
+        ]
+        if not adding:
+            return
+        blobs = git("hash-object", "-w", *(str(f) for f, _ in adding)).splitlines()
+        entries = [(path, blob) for (_, path), blob in zip(adding, blobs, strict=True)]
+        if changed := [path for path, blob in entries if held.get(path, blob) != blob]:
+            # Each name is published once, so that main only ever gains files.
+            sys.exit(f"Main holds other copies of {', '.join(changed)}.")
+        with tempfile.TemporaryDirectory() as scratch:
+            env = os.environ | {"GIT_INDEX_FILE": f"{scratch}/index"}
+            git("read-tree", "HEAD", env=env)
+            lines = "".join(f"100644 {blob}\t{path}\n" for path, blob in entries)
+            git("update-index", "--index-info", input=lines, env=env)
+            tree = git("write-tree", env=env)
+        # A publish whose push went through may have stopped before it deleted
+        # the files, so main can hold them already.
+        if tree == git("rev-parse", "HEAD^{tree}"):
+            return
+        branch = git("rev-parse", "--abbrev-ref", "HEAD", cwd=ROOT)
+        message = f"Publish from sparkjoy {branch}"
+        commit = git("commit-tree", tree, "-p", "HEAD", "-m", message)
+        try:
+            git(
+                "push",
+                "--quiet",
+                "origin",
+                f"{commit}:refs/heads/main",
+                # Fail rather than ask for a login: only the owner can push.
+                env=os.environ | {"GIT_TERMINAL_PROMPT": "0"},
+            )
+        except subprocess.CalledProcessError:
+            git("fetch", "--quiet", "origin", "main")
+            if git("rev-parse", "FETCH_HEAD") == git("rev-parse", "HEAD"):
+                raise
+            continue
+        git("merge", "--quiet", "--ff-only", commit)
         return
-    branch = git("rev-parse", "--abbrev-ref", "HEAD", cwd=ROOT)
-    message = f"Publish from sparkjoy {branch}"
-    commit = git("commit-tree", tree, "-p", "HEAD", "-m", message)
-    git(
-        "push",
-        "--quiet",
-        "origin",
-        f"{commit}:refs/heads/main",
-        # Fail rather than ask for a login: only the owner can push.
-        env=os.environ | {"GIT_TERMINAL_PROMPT": "0"},
-    )
-    git("merge", "--quiet", "--ff-only", commit)
 
 
 if __name__ == "__main__":
