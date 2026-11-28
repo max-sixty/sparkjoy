@@ -32,10 +32,10 @@ section below, and each adds something the one before it leaves out:
   ahead. A classifier that tells work with a high β or u from work with a low
   one, as sparkjoy's question aims to, lets the session compact each kind of
   work where it costs least.
-- **[The share at a turn end](#the-share-at-a-turn-end).** It decides at one
-  turn end from the share of the context the work ahead needs, which it has to
-  read back after a compaction, and gives the share under which compacting
-  pays.
+- **[The share at a turn end](#the-share-at-a-turn-end).** It assumes the work
+  reads back the share of the context it needs after each compaction, and that
+  compacting at a size means compacting there every time. It gives the share
+  under which compacting at a turn end pays.
 - **[A replay of my sessions](#a-replay-of-my-sessions).** It keeps every logged
   request and moves only the compactions, so it includes what the other models
   leave out: uneven growth, long turns, cache lapses and sessions that end.
@@ -88,6 +88,7 @@ compaction cost, in symbols and then in my sessions' figures.
 | ------ | ------------------------------------------------------------------------------------------- |
 | x      | Context of a request, in tokens. Over each cycle between compactions, it grows from K to X. |
 | X      | Context at which the session compacts, in tokens.                                           |
+| s      | Share of the context the work ahead needs, which it reads back after a compaction.          |
 
 **Functions of the variables**
 
@@ -118,9 +119,11 @@ compaction cost, in symbols and then in my sessions' figures.
 
 **Result**
 
-| symbol | what it is                                                                                                                                                                                   |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| X\*(β) | Most efficient threshold, the value of X that makes J lowest at a given β, in tokens. X\*(0) is the most efficient threshold when only cost counts. Where the β is clear, it is written X\*. |
+| symbol    | what it is                                                                                                                                                                                               |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| X\*(β)    | Most efficient threshold, the value of X that makes J lowest at a given β, in tokens. X\*(0) is the most efficient threshold when only cost counts. Where the β is clear, it is written X\*.             |
+| $`X^*_s`$ | Most efficient threshold when only cost counts, the work reads back the share s of the context after each compaction, and each compaction loses the share u, in tokens. At s = 0 and u = 0 it is X\*(0). |
+| s\*(x)    | Share threshold at context x: compacting at a turn end pays when s is under it. It is the s at which $`X^*_s = x`$.                                                                                      |
 
 </details>
 
@@ -494,72 +497,77 @@ threshold there.
 
 ## The share at a turn end
 
-Compacting at a turn end pays when the share of the context that the work
-ahead needs is under s\*(x), which for my sessions is 13% at 230k, 25% at 300k,
-41% at 600k and 46% at 800k, where the compaction loses nothing beyond what the
-work reads back. A compaction that also loses u, the share of the context that
-is unfinished state its summary can't carry, pays when s + λ u < s\*(x), with λ
-from 1.3 at 230k to 1.7 at 800k. The threshold 0.25 (1 − 212k / x), which a
-proposed wording of sparkjoy's question states, is 11 to 28 points lower. It
-would be right only if u were 9% at 230k to 17% at 800k, and my sessions'
-compactions lost 2.3% of their context, with a 90% interval up to 7%. So by
-these prices the
-question should state s\*(x). A lower threshold needs a measured cost for the
-detail a compaction loses ([What the model needs
-measured](#what-the-model-needs-measured)).
+Compacting at a turn end pays when s, the share of the context that the work
+ahead needs and reads back after a compaction, is under s\*(x). Counting cost
+alone, with nothing lost beyond what the work reads back, s\*(x) for my sessions
+is 18% at 300k, 40% at 400k, 53% at 500k, 61% at 600k, 67% at 700k and 71% at
+800k. Below 253k, X\*(0), keeping pays whatever the share.
 
-If the session keeps its context, each of the n requests until its next reset,
-its next compaction or its end reads x. If it compacts, it pays F(x), and each
-request then reads K and the s x read back, which is written to the cache once.
-The work also redoes the u x tokens the compaction lost, at ρ each. So
-compacting pays when
+s\*(x) takes compacting at x to mean compacting there every time. A session that
+compacts whenever its context reaches X restarts at K + s X and regrows g tokens
+a request, so a cycle runs ((1 − s) X − K) / g requests. Its compaction costs
+F₀ + a X, where a X covers the read of X, the cache write of the s X read back,
+and redoing the share u of X that the compaction loses. Each request costs h
+times its context, plus c₀. With
 
 ```math
-x + F_0 + n\,h\,K + s\,x\,(n\,h + w - 1) + \rho\,u\,x < n\,h\,x
+a = 1 + (w - 1)\,s + \rho\,u, \qquad b = 1 - s
 ```
 
-that is, when s + λ u < s\*(x), with
+a request costs on average
 
 ```math
-s^*(x) = \frac{n\,h\,(x - K) - x - F_0}{x\,(n\,h + w - 1)}, \qquad \lambda = \frac{\rho}{n\,h + w - 1}
+\frac{g\,(F_0 + a\,X)}{b\,X - K} + \frac{h\,\big((1 + s)\,X + K\big)}{2} + c_0
 ```
 
-λ is what redoing a lost token costs, ρ, over what a token read back costs
-across the n requests, n h + w − 1. Both sides are linear in n, so the
-threshold takes n's mean at x. With one n, s\*(x) is A (1 − FLOOR / x):
+which is lowest at
 
 ```math
-A = \frac{n\,h - 1}{n\,h + w - 1}, \qquad \mathrm{FLOOR} = \frac{n\,h\,K + F_0}{n\,h - 1}
+X^*_s = \frac{1}{b}\left(K + \sqrt{\frac{2g\,(a\,K + b\,F_0)}{h\,(1 + s)}}\right)
 ```
 
-At my turn ends' mean n, 72, A is 0.68, FLOOR 195k and λ 1.4. u counts only
-what a compaction loses beyond the reading back that s x prices. When
-`model/calibrate.py` measures u, it counts a lookup as repeated only if the
-same lookup came since the last compaction, so reading back what a compaction
-dropped is never in u.
+At s = u = 0 this is X\*(0), from [Cost alone](#cost-alone). $`X^*_s`$ rises
+with s, and s\*(x) is the s at which $`X^*_s = x`$.
 
-For my sessions, n is the mean over 13,270 turn ends from 200k in 767 of them,
-17 September to 15 November: 83 at 200–300k, 68 at 300–450k, 60 at 450–650k
-and 57 at 650–965k. Resampling sessions gives the threshold a 90% interval of 16–19% at
-250k, widening to 33–49% at 700k. The table takes n between the bands' means,
-and ρ as 180 cached reads, a request just after a compaction, \$0.059, over the
-1,627 tokens it adds:
+s\*(x) takes only the prices and the parameters K, g, h and F₀, and ρ where a
+compaction loses u. It needs no rate at which sessions end, no turn lengths, and
+no measure of how long the work keeps needing what it read back. A policy that
+decides after every request, with sessions ending at my sessions' rate and what
+is read back needed at every later compaction, puts its threshold 3 to 5 points
+below s\*(x) from 300k to 700k. A dynamic program outside `model/` solves that
+policy, so its figures aren't in `docs/figures.json`.
 
-| context | n   | s\*(x) | λ    | s\*(x) − λ u, at the measured 2.3% | 0.25 (1 − 212k / x) | the u it implies |
-| ------- | --- | ------ | ---- | ---------------------------------- | ------------------- | ---------------- |
-| 230k    | 83  | 13%    | 1.31 | 10%                                | 2%                  | 8.6%, \$0.71     |
-| 300k    | 77  | 25%    | 1.39 | 22%                                | 7%                  | 12.7%, \$1.38    |
-| 400k    | 66  | 33%    | 1.53 | 29%                                | 12%                 | 13.8%, \$1.99    |
-| 600k    | 59  | 41%    | 1.66 | 38%                                | 16%                 | 15.1%, \$3.27    |
-| 800k    | 57  | 46%    | 1.68 | 42%                                | 18%                 | 16.6%, \$4.78    |
+u moves s\*(x) by a few points. At 400k, the 2.3% that the user's and Claude
+Code's compactions lost in my sessions ([Parameter values](#parameter-values))
+lowers it from 40% to 39%, and a u of 10% lowers it to 34%. Spread over a
+cycle's ((1 − s) X − K) / g requests, the ρ u X a compaction loses costs
+ρ u g / (1 − s) per request wherever the session compacts, plus what a fixed
+ρ u K / (1 − s) at each compaction would cost, and only that fixed part moves
+the threshold. u moves s\*(x) more near where it starts, since u also moves the
+start, from 253k to 259k at the measured u and to 280k at 10%. At 300k, a u of
+10% lowers s\*(x) from 18% to 8%.
 
-Each dollar figure in the last column is what redoing that share of the context
-costs.
+u counts only what a compaction loses beyond what the work reads back, which s
+prices. When `model/calibrate.py` measures u, it counts a lookup as repeated
+only if the same lookup came since the last compaction, so the first lookup that
+reads back what a compaction dropped never counts as repeated.
 
-Two terms bias s\*(x). K holds E, the 11k the first requests after a compaction
-read again, which s also counts, so taking E out of K would raise s\*(x) by
-E / x, 4 points at 300k and 2 at 600k. And n counts the resets these sessions
-had, so a policy that compacts more often makes n, and the threshold, smaller.
+The table gives s\*(x) at each size with nothing lost beyond what the work
+reads back, and at three values of u. Resampling my sessions puts s\*(x) within
+2 points of its value at each size:
+
+| context | s\*(x) | 90% interval | at u = 2.3%, as measured | at u = 5% | at u = 10% |
+| ------- | ------ | ------------ | ------------------------ | --------- | ---------- |
+| 300k    | 18%    | 17–20%       | 16%                      | 13%       | 8%         |
+| 400k    | 40%    | 39–42%       | 39%                      | 37%       | 34%        |
+| 500k    | 53%    | 52–54%       | 52%                      | 51%       | 49%        |
+| 600k    | 61%    | 60–62%       | 60%                      | 59%       | 58%        |
+| 700k    | 67%    | 66–68%       | 66%                      | 65%       | 64%        |
+| 800k    | 71%    | 71–72%       | 71%                      | 70%       | 69%        |
+
+K holds E, the 11k the first requests after a compaction read again, which s
+also counts. Taking E out of K, and its cache write out of F₀, would raise
+s\*(x) by 6 points at 300k, 4 at 400k and 3 at 600k.
 
 ## A replay of my sessions
 
@@ -615,22 +623,21 @@ idle from 175k saves 20.3%.
 <details>
 <summary>My sessions' value for each parameter, and its source</summary>
 
-| parameter                                       | value                        | source                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ----------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| K, context after a compaction                   | 139k                         | measured[^sessions], 90% interval 135–142k: the first request after a compaction holds 128k, and the next few requests read 11k of files again                                                                                                                                                                                                                                                                                   |
-| g, growth of the context per request            | 1,627                        | measured, 1,585–1,667: the mean over the sessions' requests except the first few after a compaction, since K counts the files those read again                                                                                                                                                                                                                                                                                   |
-| P, system prompt and tools                      | 33.5k                        | measured, 33.3–33.5k                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ℓ, share of requests that find the cache lapsed | 0.48%                        | measured, 0.44–0.52%: the one-hour cache expires after an hour idle                                                                                                                                                                                                                                                                                                                                                              |
-| N, output of the compaction request             | 5.1k                         | measured, 5.0–5.3k: the summary's text is a median 3.3k tokens, and requests with about 3.3k tokens of visible output produce 1.56 times that in all, thinking included                                                                                                                                                                                                                                                          |
-| w, price of a token's cache write               | 40 cached reads              | list price, for the one-hour cache; a write to the five-minute cache costs 25                                                                                                                                                                                                                                                                                                                                                    |
-| o, price of an output token                     | 100 cached reads             | list price                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| β, growth of effectiveness with the context     | 0.5                          | assumed, since no session measures it: a request at 250k gets half as much done as one at 1M                                                                                                                                                                                                                                                                                                                                     |
-| u, share of the context a compaction loses      | 2.3%                         | measured, very noisily, over two months of my sessions to 15 November, since it needs many: after the user's and Claude Code's compactions, nearly always at a turn end or in an idle session, they had about 6 more wasted requests than usual, such as failed tool calls, repeated lookups and corrections. Those cost as much as redoing 2.3% of the 420k a compaction compacted on average, with a 90% interval of −1% to 7% |
-| n, requests from a turn end to the next reset   | 83 at 200–300k, 57 from 650k | measured over the same two months as u: the mean over the turn ends from 200k, but those a compaction ended at once; The share at a turn end gives each band                                                                                                                                                                                                                                                                     |
-| h, cost per request of a token in the context   | 1.19                         | derived                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| c₀, fixed cost of a request                     | 128k cached reads, \$0.026   | derived                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| F₀, fixed cost of a compaction                  | 4.62M cached reads, \$0.92   | derived                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ρ, cost of redoing a token                      | 180 cached reads             | derived                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| parameter                                       | value                      | source                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| K, context after a compaction                   | 139k                       | measured[^sessions], 90% interval 135–142k: the first request after a compaction holds 128k, and the next few requests read 11k of files again                                                                                                                                                                                                                                                                                   |
+| g, growth of the context per request            | 1,627                      | measured, 1,585–1,667: the mean over the sessions' requests except the first few after a compaction, since K counts the files those read again                                                                                                                                                                                                                                                                                   |
+| P, system prompt and tools                      | 33.5k                      | measured, 33.3–33.5k                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ℓ, share of requests that find the cache lapsed | 0.48%                      | measured, 0.44–0.52%: the one-hour cache expires after an hour idle                                                                                                                                                                                                                                                                                                                                                              |
+| N, output of the compaction request             | 5.1k                       | measured, 5.0–5.3k: the summary's text is a median 3.3k tokens, and requests with about 3.3k tokens of visible output produce 1.56 times that in all, thinking included                                                                                                                                                                                                                                                          |
+| w, price of a token's cache write               | 40 cached reads            | list price, for the one-hour cache; a write to the five-minute cache costs 25                                                                                                                                                                                                                                                                                                                                                    |
+| o, price of an output token                     | 100 cached reads           | list price                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| β, growth of effectiveness with the context     | 0.5                        | assumed, since no session measures it: a request at 250k gets half as much done as one at 1M                                                                                                                                                                                                                                                                                                                                     |
+| u, share of the context a compaction loses      | 2.3%                       | measured, very noisily, over two months of my sessions to 15 November, since it needs many: after the user's and Claude Code's compactions, nearly always at a turn end or in an idle session, they had about 6 more wasted requests than usual, such as failed tool calls, repeated lookups and corrections. Those cost as much as redoing 2.3% of the 420k a compaction compacted on average, with a 90% interval of −1% to 7% |
+| h, cost per request of a token in the context   | 1.19                       | derived                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| c₀, fixed cost of a request                     | 128k cached reads, \$0.026 | derived                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| F₀, fixed cost of a compaction                  | 4.62M cached reads, \$0.92 | derived                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ρ, cost of redoing a token                      | 180 cached reads           | derived                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 </details>
 
@@ -716,12 +723,13 @@ Claude Code's default:
 
 [^sessions]:
     My 163 sessions of 18 to 22 November 2026, all on the one-hour cache.
-    Every figure here comes from them except u's and the requests from a turn
-    end to the next reset, and the measured parameters have 90% intervals from
-    resampling sessions.
-    [`model/docs.py`](../model/docs.py) writes them all to
+    Every figure here comes from them except u's and those of the policy that
+    decides after every request in
+    [The share at a turn end](#the-share-at-a-turn-end), and the measured
+    parameters have 90% intervals from resampling sessions.
+    [`model/docs.py`](../model/docs.py) writes them to
     [`docs/figures.json`](../docs/figures.json), and `model/calibrate.py` adds
-    u's. Every cost is at Opus 5.5's
+    u and s\*(x). Every cost is at Opus 5.5's
     list prices for the one-hour cache, unless a figure names the five-minute
     cache. The formulas count costs in cached reads, the price of reading one
     token from the prompt cache, \$0.20 per million tokens on Opus 5.5

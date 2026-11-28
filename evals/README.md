@@ -303,11 +303,13 @@ The question keeps in the middle of a task and compacts where a piece of work
 is finished, so a long task can keep its context until Claude Code compacts it
 in the middle of a turn. Whether the size should outweigh the detail is the gap
 between the labels and the [cost model](../docs/cost-model.md): the mid-task
-keep labels encode a rule, that work in progress keeps, while the cost model
-finds compacting at any turn end from about 250k cheapest when a compaction
-loses nothing. What a compaction loses is very noisy and hard to judge, but as
-some indication, my sessions had about 6 more wasted requests than usual after
-one. The share eval below labels it part by part: of what a compaction would
+keep labels encode a rule, that work in progress keeps, while the cost model,
+counting cost alone with nothing lost beyond what the work reads back, finds
+compacting at a turn end cheaper once the share of the context the work reads
+back is under [s\*(x)](../docs/cost-model.md#the-share-at-a-turn-end), which is
+0 below about 250k, 18% at 300k and 40% at 400k. What a compaction
+loses is very noisy and hard to judge, but as some indication, my sessions had
+about 6 more wasted requests than usual after one. The share eval below labels it part by part: of what a compaction would
 have dropped, the next work needed or was helped by 5% to 23% of the context,
 a median 15% at the turn ends labelled keep and 10% at those labelled
 compact. So the keep labels rest on that loss costing more than reading it back,

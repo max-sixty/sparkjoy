@@ -1004,10 +1004,17 @@ def log_steady(p, c, beta, at=150_000):
     return x0, float(X[J.argmin()]), J.min() / J[-1]
 
 
-def closed_form(p, c):
-    """X* where every request is equally effective (β = 0): K + sqrt(2 g (F0 + K) / h)."""
+def closed_form(p, c, s=0.0, u=0.0):
+    """X* where every request is equally effective (β = 0): K + sqrt(2 g (F0 + K) / h). With s, the
+    share of the context the work reads back after each compaction, and u, the share each loses
+    (`redo`), a cycle restarts at K + s X and runs ((1 - s) X - K) / g requests. Its compaction costs
+    F0 + a X, with a = 1 + (w - 1) s + ρ u for the read of X, the cache write of what is read back and
+    the loss, and its requests h times their context, so with b = 1 - s a request costs
+    g (F0 + a X) / (b X - K) + h ((1 + s) X + K) / 2 + c0 on average, lowest at
+    (K + sqrt(2 g (a K + b F0) / (h (1 + s)))) / b."""
     h, _, F0 = terms(p, c)
-    return p.K + np.sqrt(2 * p.g * (F0 + p.K) / h)
+    a, b = 1 + (c.write - 1) * s + redo(p, c) * u, 1 - s
+    return (p.K + np.sqrt(2 * p.g * (a * p.K + b * F0) / (h * (1 + s)))) / b
 
 
 def idle_break_even(p, c):
@@ -1019,42 +1026,16 @@ def idle_break_even(p, c):
 # The decision at a turn end, given the share of the context the work ahead needs.
 
 
-def to_reset(S, low=200_000):
-    """Each turn end at a context of `low` or more, as arrays of its context, the requests until its
-    session's next reset (the next compaction, or the session's end), and the session's index. A turn
-    end a compaction ended at once is left out: how long its session would have run on had it kept is
-    unobserved, not zero."""
-    x, n, k = [], [], []
-    for i, s in enumerate(S):
-        resets = np.flatnonzero((s.kind == USER) | (s.kind == POLICY))
-        for j in np.flatnonzero(s.end & (s.size >= low)):
-            later = resets[resets > j]
-            left = (later[0] if len(later) else len(s.size)) - (j + 1)
-            if len(later) and left == 0:
-                continue
-            x.append(s.size[j])
-            n.append(left)
-            k.append(i)
-    return np.array(x, float), np.array(n, float), np.array(k)
-
-
-def share_threshold(p, c, x, n):
+def share_threshold(p, c, x, u=0.0):
     """s*(x), the share of a context x that the work ahead needs under which compacting at a turn end
-    costs less over the n requests to the session's next reset, when the compaction loses nothing
-    beyond what is read back. Keeping, they read x each, n h x. Compacting costs F(x) = x + F0, and
-    they read K and what the work reads back, the share s of x, written once:
-    x + F0 + n h K + s x (n h + w - 1). With one n, s*(x) = A (1 - FLOOR / x), with
-    A = (n h - 1) / (n h + w - 1) and FLOOR = (n h K + F0) / (n h - 1). A compaction that also loses u
-    (`redo`) costs ρ u x more, so it pays when s + λ u < s*(x) (`weight`)."""
-    h, _, F0 = terms(p, c)
-    return (n * h * (x - p.K) - x - F0) / (x * (n * h + c.write - 1))
-
-
-def weight(p, c, n):
-    """λ = ρ / (n h + w - 1), what a share u lost weighs against the share s read back at a turn end
-    with n requests to the session's next reset: ρ u x against s x (n h + w - 1)."""
-    h, _, _ = terms(p, c)
-    return redo(p, c) / (n * h + c.write - 1)
+    pays, taking compacting at x to mean compacting there every time: the share s whose cheapest
+    size to compact at, `closed_form`, is x, found by bisection, since that size rises with s. It is
+    0 below closed_form at s = 0, where keeping pays whatever the share."""
+    lo, hi = 0.0, 1.0
+    for _ in range(50):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if closed_form(p, c, mid, u) <= x else (lo, mid)
+    return lo
 
 
 CHECK_OUTPUT = 100  # output tokens of a question
