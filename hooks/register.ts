@@ -533,9 +533,8 @@ function missing(usage: ModelUsage, tokens: number, miss: Miss) {
 
 // A compaction under way, as `$.store` keeps it for the next process: `at`
 // names the moment, `tokens` the context then, and `messages` the keys of the
-// conversation's messages then (`messageKey`). One an earlier release stored
-// has no `tokens`.
-type Announcement = { at: string; tokens?: number; messages: string[] }
+// conversation's messages then (`messageKey`).
+type Announcement = { at: string; tokens: number; messages: string[] }
 
 // Compacts, keeping the announcement in `$.store` under the session's id until
 // the compaction settles, for `resume` to finish if the process ends first.
@@ -561,7 +560,7 @@ type Announcement = { at: string; tokens?: number; messages: string[] }
 async function compact(
   $: EngineInterface,
   say: (text: string) => void,
-  { at, tokens }: { at: string; tokens?: number },
+  { at, tokens }: { at: string; tokens: number },
   resumed = false,
 ) {
   const key = `compacting:${await $.session.id()}`

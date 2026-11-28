@@ -15,7 +15,11 @@ const SUMMARY = { messages: [said('summary')] }
 // The announcement of a compaction made while the conversation was the one
 // message `m0`.
 const ANNOUNCED = {
-  'compacting:s1': { at: '489k tokens', messages: [messageKey(said('m0'))] },
+  'compacting:s1': {
+    at: '489k tokens',
+    tokens: 489_000,
+    messages: [messageKey(said('m0'))],
+  },
 }
 
 // How long a session sits idle before it is asked, on a one-hour cache and on
@@ -775,7 +779,9 @@ test('a compaction the engine refuses says why, and is tried again once the sess
 test('a compaction whose process ended first is finished when the next process starts', async ($, on) => {
   // What a process left that ended mid-compaction, as one does when Claude
   // Code's background daemon restarts it after an update.
-  const { begin, clock, compactions, forks, logs } = engine(on, { stored: ANNOUNCED })
+  const { begin, clock, compactions, forks, logs, records } = engine(on, {
+    stored: ANNOUNCED,
+  })
 
   await begin($)
   await clock.settle()
@@ -784,6 +790,16 @@ test('a compaction whose process ended first is finished when the next process s
   expect(compactions).toEqual([''])
   expect(logs).toEqual([
     'Finishing the compaction at 489k tokens: Claude Code restarted before it landed',
+  ])
+  // The log has the context the announcement held when it was made.
+  expect(records('1970-01-01')).toEqual([
+    expect.objectContaining({
+      event: 'compaction',
+      phase: 'start',
+      tokens: 489_000,
+      resumed: true,
+    }),
+    expect.objectContaining({ event: 'compaction', phase: 'end' }),
   ])
 
   // Settled, it leaves nothing for a later start to finish.
