@@ -1,5 +1,10 @@
 bot_name: sparkjoy-bot
 
+# Tools the repo's checks need, so a tend session can run them locally.
+# docs/embed.py renders the README's copies of the question with bun.
+setup:
+  - uses: oven-sh/setup-bun@v2
+
 workflows:
   ci-failures:
     watched_workflows:
