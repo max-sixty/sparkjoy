@@ -358,10 +358,17 @@ def interval(values, q=(5, 95)):
 def share(p, c, u, boot):
     """The share threshold at a turn end (fit.share_threshold), from the cost model's prices and
     parameters alone, at each of SIZES: with nothing lost beyond what is read back, with a 90%
-    interval over `boot`, the parameters fitted to resampled sessions; with E, which K holds and s
-    also counts, taken out of K; and where a compaction also loses u, the share the user's and Claude
+    interval over `boot`, the parameters fitted to resampled sessions, which leaves out a resample
+    with no compactions, since its parameters are undefined; with E, which K holds and s also
+    counts, taken out of K; and where a compaction also loses u, the share the user's and Claude
     Code's compactions lose, or one of LOSSES. `floor` is where each starts, at s = 0."""
     losses = (u, *LOSSES)
+    drawn = np.array([[fit.share_threshold(b, c, z) for z in SIZES] for b in boot])
+    if missing := int(np.isnan(drawn).any(axis=1).sum()):
+        print(
+            f"{missing} of {len(boot)} resamples have no compactions; the share thresholds'"
+            " intervals leave them out"
+        )
     return {
         "rho": fit.redo(p, c),
         "u": u,
@@ -373,9 +380,7 @@ def share(p, c, u, boot):
                 "context": z,
                 "threshold": {
                     "value": fit.share_threshold(p, c, z),
-                    "interval_90": interval(
-                        [fit.share_threshold(b, c, z) for b in boot]
-                    ),
+                    "interval_90": np.nanpercentile(drawn[:, k], (5, 95)),
                 },
                 "without_E": fit.share_threshold(replace(p, K=p.K - p.E), c, z),
                 "at_u": [
@@ -383,7 +388,7 @@ def share(p, c, u, boot):
                     for v in losses
                 ],
             }
-            for z in SIZES
+            for k, z in enumerate(SIZES)
         ],
     }
 

@@ -1030,7 +1030,10 @@ def share_threshold(p, c, x, u=0.0):
     """s*(x), the share of a context x that the work ahead needs under which compacting at a turn end
     pays, taking compacting at x to mean compacting there every time: the share s whose cheapest
     size to compact at, `closed_form`, is x, found by bisection, since that size rises with s. It is
-    0 below closed_form at s = 0, where keeping pays whatever the share."""
+    0 below closed_form at s = 0, where keeping pays whatever the share, and NaN where the parameters
+    are, as in a resample of sessions with no compactions."""
+    if np.isnan(closed_form(p, c, 0, u)):
+        return np.nan
     lo, hi = 0.0, 1.0
     for _ in range(50):
         mid = (lo + hi) / 2
