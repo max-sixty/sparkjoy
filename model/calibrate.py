@@ -362,6 +362,12 @@ def interval(values, q=(5, 95)):
     return np.percentile(np.array(values, float), q, axis=0)
 
 
+def empty_bands(x):
+    """The BANDS that no turn end's context `x` (fit.to_reset) falls in: the share has no requests to
+    the reset to average there."""
+    return [(lo, hi) for lo, hi in BANDS if not ((x >= lo) & (x < hi)).any()]
+
+
 def share(S, p, c, u):
     """The share threshold at a turn end (fit.share_threshold), with the requests to the next reset
     from S and the prices and parameters from p and c: with no detail lost beyond what is read back,
@@ -455,6 +461,13 @@ def main():
     )
     a = ap.parse_args()
     S, since, until = fit.read(a)
+    # The share needs turn ends in each band; say so now, not after the rest of the run.
+    if empty := empty_bands(fit.to_reset(S)[0]):
+        names = ", ".join(f"{lo // 1000}k to {hi // 1000}k" for lo, hi in empty)
+        raise SystemExit(
+            f"no turn end in the window has a context of {names}, so the share has nothing to"
+            " average there: widen the window with --since and --until"
+        )
     # Outcomes need many sessions; the cost model can come from fewer, more recent ones.
     C, costs_since, costs_until = (
         fit.read(
