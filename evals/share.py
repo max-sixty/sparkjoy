@@ -21,10 +21,11 @@ Two kinds of case check the answer:
 - the turn ends in `cases.json`, but for the idle one, since the question
   says the turn just ended. `parts.py` cuts the request into its parts, each
   with its tokens as the API counts them (`counted`), and the same model,
-  shown what the session did next up to its next compaction (`next_work`),
-  one JSON record per message, tool call or result, as much of it as the
-  window holds beside the request (`fitted`), labels
-  each part needed, helpful or neither (`LABEL`), in `RUNS` runs.
+  shown what the session did next (`next_work`), through any compaction,
+  as far as one window would have held it (`horizon`), one JSON record per
+  message, tool call or result, as much of it as the window holds beside
+  the request (`fitted`), labels each part needed, helpful or neither
+  (`LABEL`), in `RUNS` runs.
   Only I can label a case, since labelling reads my transcripts. Each label
   names the request and a hash of the question it was asked (`shown`), which
   holds the next work and the parts, and a case labelled on both is not
@@ -53,7 +54,9 @@ light and dark, left waiting to publish.
 import argparse
 import hashlib
 import http.client
+import itertools
 import json
+import math
 import statistics
 import sys
 import tempfile
@@ -69,6 +72,7 @@ import charts  # noqa: E402
 import contrived  # noqa: E402
 import fit  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
 import parts  # noqa: E402
 import run  # noqa: E402
 import sparkjoy_assets  # noqa: E402
@@ -118,14 +122,14 @@ Answer with nothing but one JSON object that matches this schema, filling its fi
 
 LABEL = """This is not a request to continue the work. It comes from the sparkjoy plugin, which is measuring which parts of this context the work after this turn end used, to check its estimates. A program reads your answer.
 
-Below is what the session actually did next, taken from its transcript, and then the parts of the context above, numbered in order, each with its kind, its size in tokens and its opening words.
+Below is what the session actually did next, taken from its transcript, and then the parts of the context above, numbered in order, each with its kind, its size in tokens and its opening words. Parts that hold the same content share one line, which names each of their ids and gives their tokens in all.
 
 Judge each part by the work that followed:
-- "needed": the next work used it, or would have gone wrong or had to fetch it again without it. Count what the work relied on without reading it again, such as the state of a fix, a decision taken, or what the user asked for, as well as what it read. Where the context was compacted before the work, the work ran without it, so a part whose content it then read, searched for or ran again is needed: that fetch is what losing it cost.
+- "needed": the next work used it, or would have gone wrong or had to fetch it again without it. Count what the work relied on without reading it again, such as the state of a fix, a decision taken, or what the user asked for, as well as what it read. Where the context was compacted, at this turn end or later, the work after the compaction ran without it, so a part whose content it then read, searched for or ran again is needed: that fetch is what losing it cost.
 - "helpful": it would have helped the next work, such as by saving a lookup or giving background to a decision, but the work could have done without it.
 - Every other part is not needed.
 
-What the session did next is below, one JSON object per line, in order, up to its next compaction. Each has "t", when it happened, and "kind": "user" for what the user typed; "assistant" for what the assistant wrote; "call" for a tool call, with its "tool" and "input"; "result" for what a call returned, with its "tool", and "error": true where it failed; "compaction" where the context was compacted; and "omitted", last, standing in for its "records" later records that the window has no room for, so the work went on past the last record shown. A compaction at the start, at this turn end, means the work after it ran without the context above. A long value may be cut in the middle, at " […] ".
+What the session did next is below, one JSON object per line, in order, through any compaction, until the context, grown by what each later request added to it, would have passed the 1M-token window, or until the session ended. Each has "t", when it happened, and "kind": "user" for what the user typed; "mid-turn" for what the user typed while the session worked, which it read with its next tool result; "page" for what the user did on a Leaf page the session served, with its "event": "comment" or "reply" with the "text" they wrote, "action" for a choice they made, with what they chose in "detail" and its words in "says", or "resolve" where they closed a thread; "assistant" for what the assistant wrote; "call" for a tool call, with its "tool" and "input"; "result" for what a call returned, with its "tool", and "error": true where it failed; "compaction" where the context was compacted; and "omitted", last, standing in for its "records" later records that the window has no room for, so the work went on past the last record shown. A long value may be cut in the middle, at " […] ".
 
 {next}
 
@@ -133,30 +137,54 @@ The parts:
 
 {parts}
 
-Answer with nothing but one JSON object: {{"needed": [part ids], "helpful": [part ids], "why": {{"<part id>": "a few words on what the next work used it for"}}}}, with "why" for the 20 largest parts you marked needed or helpful."""
+Answer with nothing but one JSON object: {{"needed": [part ids], "helpful": [part ids], "why": {{"<part id>": "a few words on what the next work used it for"}}}}, with "why" for the 20 largest lines you marked needed or helpful. Any one id of a line that names several marks them all."""
 
 
 def share_question(tokens: int) -> str:
     return SHARE.format(size=f"{round(tokens / 1000)}k")
 
 
-def listing(request_parts: list[dict]) -> str:
-    """The parts as the labeller is shown them, each by its kind of block."""
-    return "\n".join(
-        f"#{p['id']} {p['block']}, {p['tokens']} tokens: {p['desc'][:170]}"
-        for p in request_parts
-    )
+def grown(session: fit.Session) -> np.ndarray:
+    """Each request's new tokens, compactions or not: what `fit` counts it
+    grew by, and for the first request after a compaction, whose growth the
+    compacted prompt hides, `fit.NEW_MESSAGE` at most, as `fit` counts it
+    where a replay drops the compaction. What the work reads again after a
+    compaction counts, as the work did read it."""
+    first = (session.kind == fit.USER) | (session.kind == fit.POLICY)
+    return np.where(first, np.minimum(session.write, fit.NEW_MESSAGE), session.grew)
+
+
+def horizon(session: fit.Session, after: float, context: int) -> slice:
+    """The requests of the work after a turn end at `after`, with `context`
+    tokens: from the first after it, while the context, grown from `context`
+    by each request's new tokens (`grown`), stays within the window, through
+    any compaction, or to the session's end."""
+    start = int(np.searchsorted(session.t, after, side="right"))
+    over = np.flatnonzero(context + np.cumsum(grown(session)[start:]) > fit.WINDOW)
+    return slice(start, start + int(over[0]) if len(over) else len(session.t))
 
 
 def next_work(case: dict) -> list[dict]:
     """What the session did after the case's turn end, as `parts.next_work`
-    reads it from the transcript."""
+    reads it from the transcript, up to the end of the reply of the last
+    request within its `horizon`: the input of the first past it, such as
+    the prompt that opened it, stays out with it."""
     path = next(fit.PROJECTS.glob(f"*/{case['source']['session']}.jsonl"), None)
     if path is None:
         raise LookupError(f"no transcript of session {case['source']['session']}")
+    if (session := fit.transcript(path)) is None:
+        raise LookupError(f"session {case['source']['session']} has no requests")
     with path.open() as f:
+        after = (
+            json.loads(raw) for n, raw in enumerate(f) if n >= case["source"]["line"]
+        )
+        span = horizon(session, fit.epoch(next(after)["timestamp"]), case["tokens"])
+        end = session.done[span.stop - 1] if span.stop < len(session.t) else math.inf
         return parts.next_work(
-            json.loads(raw) for n, raw in enumerate(f) if n > case["source"]["line"]
+            itertools.takewhile(
+                lambda e: "timestamp" not in e or fit.epoch(e["timestamp"]) <= end,
+                after,
+            )
         )
 
 
@@ -168,7 +196,7 @@ def fitted(
     count, and the records of it shown."""
 
     def asked(records: list[dict]) -> str:
-        return LABEL.format(next=parts.rendered(records), parts=listing(cut))
+        return LABEL.format(next=parts.rendered(records), parts=parts.listing(cut))
 
     def tokens(records: list[dict]) -> int:
         return plain(
@@ -300,12 +328,13 @@ def answer(text: str) -> dict | None:
     return value if isinstance(value, dict) else None
 
 
-def ids(value) -> list[int] | None:
-    """Part ids as the labeller gave them, such as 12 or "#12"."""
+def ids(value, cut: list[dict]) -> list[int] | None:
+    """The parts `cut` that the ids the labeller gave, such as 12 or "#12",
+    mark (`parts.marked`)."""
     if not isinstance(value, list):
         return None
     try:
-        return sorted({int(str(v).lstrip("#")) for v in value})
+        return parts.marked([int(str(v).lstrip("#")) for v in value], cut)
     except ValueError:
         return None
 
@@ -366,7 +395,7 @@ def run_cases(names: list[str], repeat: int, jobs: int) -> None:
         base = {"case": name, "request": digest, "source": source}
         if name in contrived.CASES:
             # A made-up case is labelled by its construction.
-            shown = hashlib.sha256(listing(cut).encode()).hexdigest()[:12]
+            shown = hashlib.sha256(parts.listing(cut).encode()).hexdigest()[:12]
             if not labelled(name, digest, shown):
                 at = datetime.now(UTC).isoformat(timespec="seconds")
                 write(
@@ -483,7 +512,7 @@ def label(base, request, headers, x, cut, asked, then, n, write) -> None:
             print(f"ERROR {base['case']} [label]: {error}", flush=True)
             continue
         got = answer(text) or {}
-        needed, helpful = ids(got.get("needed")), ids(got.get("helpful"))
+        needed, helpful = ids(got.get("needed"), cut), ids(got.get("helpful"), cut)
         ok = bool(needed) and helpful is not None
         runs.append(
             {

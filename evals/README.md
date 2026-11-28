@@ -353,23 +353,32 @@ tools, each block of each message, and each source Claude Code writes into
 one block, such as each instruction file, or each skill and listing it
 writes back after a compaction. Each kind of part takes the tokens the API
 counts for it, and its parts share them by characters. The same model,
-after the same request, is shown what the session did up to its next
-compaction as JSON Lines, one record for each thing the user typed, text the
-model wrote, tool call with its input, result and compaction, as much of it
-as the window holds beside the request: each record past a common length is
-cut to it, its longest values first, each keeping its head and tail, so
-every record stays whole JSON. Where even every value cut doesn't fit, it
-sees as many of the earliest records as fit with each cut to the median
-record's length, and a record counting the rest. It then marks each part
-needed, helpful or neither, in two runs; an answer that marks no part needed
-counts as unreadable, since the work after any turn end uses the system
-prompt and tools, and is asked again. Where the session compacted at the
-turn end itself, as at six of the 13, the work after it ran without the
-context, so a part it then read, searched for or ran again counts as
-needed: fetching it again is what losing it cost. Told only that the
-session compacted there, the labeller marked such a part not needed, since
-the work had read it afresh. Labelling reads what came next from my
-transcripts, so only I can label a case.
+after the same request, is shown what the session did next as JSON Lines:
+one record for each thing the user typed, at the prompt or while the session
+worked, each comment, reply or choice of theirs on a Leaf page, and each
+text the model wrote, tool call with its input, result and compaction. The
+records run on through any compaction until the context, grown from the turn
+end's by what each later request added, would have passed the 1M window, or
+to the session's end; the first request after a compaction counts as
+growing by its cache write, up to 4k, since the compacted prompt hides what
+it added. The labeller sees as much of that as the window holds beside the
+request: each record past a common length is cut to it, its longest values
+first, each keeping its head and tail, so every record stays whole JSON.
+Where even every value cut doesn't fit, it sees as many of the earliest
+records as fit with each cut to the median record's length, and a record
+counting the rest. It is shown the parts a line each, with its kind, tokens
+and opening words, and parts whose lines would read the same, such as each
+poll of one wait, share one line that names all their ids, so that marking
+the line marks each of them. It then marks each part needed, helpful or
+neither, in two runs; an answer that marks no part needed counts as
+unreadable, since the work after any turn end uses the system prompt and
+tools, and is asked again. Where the session compacted, at the turn end
+itself, as at six of the 13, or later in the work, the work after the
+compaction ran without the context, so a part it then read, searched for or
+ran again counts as needed: fetching it again is what losing it cost. Told
+only that the session compacted there, the labeller marked such a part not
+needed, since the work had read it afresh. Labelling reads what came next
+from my transcripts, so only I can label a case.
 
 What the share is weighed against is what a compaction drops that the work
 needed ("lost" below), as a share of the whole context, since the cost model

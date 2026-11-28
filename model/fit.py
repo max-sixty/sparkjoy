@@ -42,6 +42,9 @@ DATA = Path(
 WINDOW = 1_000_000
 AUTO = 965_000  # where Claude Code compacts a 1M window on its own
 SPAN = 20  # requests over which re-reads after a compaction are counted
+# What the first request after a compaction grew by, at most, as though the session hadn't compacted:
+# its growth can't be told from the compacted prompt, so a new message's worth stands in for it.
+NEW_MESSAGE = 4_000
 # β, the exponent of a request's effectiveness at context x, (x / WINDOW)^β: each doubling of the
 # context makes a request 2^β times as effective, and at 0 every request is equally effective. No
 # session measures it, so every figure takes this base case, where a request at 250k gets half as
@@ -157,6 +160,7 @@ class Session:
     verdicts: list  # what sparkjoy logged
     lines: list  # every line in `LINE`, as (seconds since the epoch, text)
     t: np.ndarray  # when each request started, in seconds since the epoch
+    done: np.ndarray  # when the last block of each request's reply was logged
     sparkjoy: np.ndarray  # the request is the first after a compaction sparkjoy made
     kind: np.ndarray  # one of the request kinds above
     size: np.ndarray  # prompt tokens: uncached input + cache read + cache write
@@ -683,9 +687,7 @@ def session(reqs, comps, prompts, failed, **meta):
             sparkjoy[j] = by == "sparkjoy"
     grew = np.maximum(np.diff(size, prepend=0), 0)
     grew[kind != NORMAL] = 0
-    # Across a compaction the request's growth can't be told from the compacted
-    # prompt; a new message's worth stands in for it.
-    grew[kind == POLICY] = np.minimum(write[kind == POLICY], 4_000)
+    grew[kind == POLICY] = np.minimum(write[kind == POLICY], NEW_MESSAGE)
     # The requests after a compaction, whose growth includes what it made them read again.
     recent = np.zeros(n, bool)
     for j in np.flatnonzero((kind == USER) | (kind == POLICY)):
@@ -693,6 +695,7 @@ def session(reqs, comps, prompts, failed, **meta):
     return Session(
         **meta,
         t=t,
+        done=np.array([q[4] for q in reqs]),
         sparkjoy=sparkjoy,
         kind=kind,
         size=size,

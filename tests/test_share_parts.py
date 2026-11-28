@@ -1,9 +1,11 @@
 """Cuts a made-up request into parts, records what the session did next, and scores
-labels on them, as evals/share.py does: `uvx pytest tests`."""
+labels on them, as evals/share.py does: `uvx pytest tests`. It needs uv."""
 
 import importlib.util
 import itertools
 import json
+import os
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
@@ -257,19 +259,61 @@ def test_a_command_reads_a_file_where_a_step_of_it_prints_one():
     assert kind("gh pr view 5244 --json body | head -60") == "other tool output"
 
 
-def test_the_next_work_is_one_record_per_message_call_and_result():
-    def user(t, content, **more):
-        return {"type": "user", "timestamp": t, "message": {"content": content}} | more
+def test_the_next_work_is_a_record_per_message_call_result_and_word_of_the_users():
+    def user(t, content, origin=None, **more):
+        entry = {"type": "user", "timestamp": t, "message": {"content": content}}
+        return entry | ({"origin": {"kind": origin}} if origin else {}) | more
 
+    def attached(t, attachment):
+        return {"type": "attachment", "timestamp": t, "attachment": attachment}
+
+    def compaction(t):
+        return {"type": "system", "subtype": "compact_boundary", "timestamp": t}
+
+    # A Leaf delivery as the hook adds it, with an event of the agent's
+    # beside the user's and text after it.
+    delivery = {
+        "format": "leaf-delivery/15",
+        "batches": [
+            {
+                "threads": [{"id": "t1", "messages": []}],
+                "events": [
+                    {"kind": "comment", "author": "user", "text": "why a box?"},
+                    {"kind": "reply", "author": "agent", "text": "It frames it."},
+                    {
+                        "kind": "action",
+                        "author": "user",
+                        "detail": {"value": ["drop"]},
+                        "says": {"drop": "Drop the box"},
+                        "seq": 7,
+                    },
+                ],
+            }
+        ],
+    }
     entries = [
-        {
-            "type": "system",
-            "subtype": "compact_boundary",
-            "timestamp": "2026-11-04T17:17:05Z",
-        },
+        # sparkjoy asks for the compaction at the turn end, which the work
+        # after it runs without.
+        user("2026-11-04T17:16:00Z", "/compact", "plugin"),
+        compaction("2026-11-04T17:17:05Z"),
         user("", "summary", isCompactSummary=True),
         user("", "caveat", isMeta=True),
-        user("2026-11-04T18:16:00Z", "check the leaf"),
+        user("2026-11-04T18:16:00Z", "check the leaf", "human"),
+        attached(
+            "2026-11-04T18:16:01Z",
+            {
+                "type": "hook_additional_context",
+                "content": [
+                    "Leaf has new input for your turn.\n"
+                    + json.dumps(delivery)
+                    + "\nLeaf's turn-end check found nothing."
+                ],
+            },
+        ),
+        attached(
+            "2026-11-04T18:16:02Z",
+            {"type": "hook_additional_context", "content": ["Leaf: your status"]},
+        ),
         {
             "type": "assistant",
             "timestamp": "2026-11-04T18:16:30Z",
@@ -290,6 +334,23 @@ def test_the_next_work_is_one_record_per_message_call_and_result():
             "isSidechain": True,
             "message": {"content": [{"type": "text", "text": "aside"}]},
         },
+        attached(
+            "2026-11-04T18:16:40Z",
+            {
+                "type": "queued_command",
+                "prompt": "and the tests",
+                "origin": {"kind": "human"},
+            },
+        ),
+        attached(
+            "2026-11-04T18:16:41Z",
+            {
+                "type": "queued_command",
+                "prompt": "CI passed",
+                "isMeta": True,
+                "origin": {"kind": "peer"},
+            },
+        ),
         user(
             "2026-11-04T18:17:00Z",
             [
@@ -302,16 +363,32 @@ def test_the_next_work_is_one_record_per_message_call_and_result():
                 {"type": "text", "text": "<system-reminder>x</system-reminder>"},
             ],
         ),
-        {
-            "type": "system",
-            "subtype": "compact_boundary",
-            "timestamp": "2026-11-04T19:00:00Z",
-        },
-        user("2026-11-04T19:01:00Z", "after"),
+        user("2026-11-04T18:18:00Z", "<task-notification>", "task-notification"),
+        user(
+            "2026-11-04T18:19:00Z",
+            "<command-message>merge-pr</command-message>",
+            "human",
+        ),
+        # A compaction later in the work doesn't end it.
+        compaction("2026-11-04T19:00:00Z"),
+        user("2026-11-04T19:01:00Z", "after", "human"),
     ]
     assert parts.next_work(iter(entries)) == [
         {"t": "2026-11-04T17:17", "kind": "compaction"},
         {"t": "2026-11-04T18:16", "kind": "user", "text": "check the leaf"},
+        {
+            "t": "2026-11-04T18:16",
+            "kind": "page",
+            "event": "comment",
+            "text": "why a box?",
+        },
+        {
+            "t": "2026-11-04T18:16",
+            "kind": "page",
+            "event": "action",
+            "detail": {"value": ["drop"]},
+            "says": {"drop": "Drop the box"},
+        },
         {"t": "2026-11-04T18:16", "kind": "assistant", "text": "Reading it."},
         {
             "t": "2026-11-04T18:16",
@@ -319,6 +396,7 @@ def test_the_next_work_is_one_record_per_message_call_and_result():
             "tool": "Read",
             "input": {"file_path": "/w/SKILL.md"},
         },
+        {"t": "2026-11-04T18:16", "kind": "mid-turn", "text": "and the tests"},
         {
             "t": "2026-11-04T18:17",
             "kind": "result",
@@ -326,8 +404,161 @@ def test_the_next_work_is_one_record_per_message_call_and_result():
             "error": True,
             "text": "no such file",
         },
+        {
+            "t": "2026-11-04T18:19",
+            "kind": "user",
+            "text": "<command-message>merge-pr</command-message>",
+        },
         {"t": "2026-11-04T19:00", "kind": "compaction"},
+        {"t": "2026-11-04T19:01", "kind": "user", "text": "after"},
     ]
+
+
+def test_the_next_work_runs_through_compactions_until_its_context_would_pass_the_window(
+    tmp_path,
+):
+    def at(t):
+        return f"2026-11-04T{t}Z"
+
+    def request(t, size, write, text):
+        """A main-thread request with `size` tokens of context, `write` of them
+        written to the cache."""
+        usage = {
+            "input_tokens": 0,
+            "cache_read_input_tokens": size - write,
+            "cache_creation_input_tokens": write,
+            "output_tokens": 10,
+        }
+        return {
+            "type": "assistant",
+            "timestamp": at(t),
+            "isSidechain": False,
+            "entrypoint": "cli",
+            "message": {
+                "model": "claude-opus-5-5",
+                "id": f"msg_{t}",
+                "usage": usage,
+                "content": [{"type": "text", "text": text}],
+            },
+        }
+
+    def prompt(t, text, origin="human"):
+        return {
+            "type": "user",
+            "timestamp": at(t),
+            "isSidechain": False,
+            "origin": {"kind": origin},
+            "message": {"role": "user", "content": text},
+        }
+
+    entries = [
+        prompt("09:00:00", "start"),
+        request("09:00:10", 860_000, 860_000, "Started."),
+        prompt("10:00:00", "build it"),
+        request("10:00:10", 900_000, 40_000, "Built."),  # the turn end, at 900k
+        prompt("10:05:00", "now test it"),
+        request("10:05:10", 930_000, 30_000, "Tested."),  # 930k
+        prompt("10:06:00", "/compact", "plugin"),
+        {"type": "system", "subtype": "compact_boundary", "timestamp": at("10:07:00")},
+        {
+            "type": "user",
+            "timestamp": at("10:07:00"),
+            "isSidechain": False,
+            "isCompactSummary": True,
+            "message": {"role": "user", "content": "summary"},
+        },
+        prompt("10:08:00", "and the docs"),
+        # The compacted prompt hides what the request added: 4k stands in.
+        request("10:08:10", 50_000, 45_000, "Writing them."),  # 934k
+        request("10:09:10", 110_000, 60_000, "Written."),  # 994k
+        # The prompt of the request that passes the window goes with it.
+        prompt("10:10:00", "one more"),
+        request("10:10:10", 120_000, 10_000, "Past the window."),  # 1,004k
+        prompt("10:11:00", "later still"),
+    ]
+    transcript = tmp_path / "projects" / "project" / "s.jsonl"
+    transcript.parent.mkdir(parents=True)
+    transcript.write_text(
+        "".join(json.dumps(e, separators=(",", ":")) + "\n" for e in entries)
+    )
+    case = {"id": "c", "tokens": 900_000, "source": {"session": "s", "line": 3}}
+    code = (
+        "import json, sys; sys.path.insert(0, 'evals'); import share; "
+        "print(json.dumps(share.next_work(json.loads(sys.argv[1]))))"
+    )
+    run = subprocess.run(
+        [
+            *("uv", "run", "--no-project", "--with-requirements", "evals/share.py"),
+            *("python", "-c", code, json.dumps(case)),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": os.environ["PATH"],
+            "TMPDIR": str(tmp_path),
+            "CLAUDE_CONFIG_DIR": str(tmp_path),
+            "SPARKJOY_DATA": str(tmp_path / "data"),
+        },
+        check=True,
+    )
+    assert json.loads(run.stdout) == [
+        {"t": "2026-11-04T10:05", "kind": "user", "text": "now test it"},
+        {"t": "2026-11-04T10:05", "kind": "assistant", "text": "Tested."},
+        {"t": "2026-11-04T10:07", "kind": "compaction"},
+        {"t": "2026-11-04T10:08", "kind": "user", "text": "and the docs"},
+        {"t": "2026-11-04T10:08", "kind": "assistant", "text": "Writing them."},
+        {"t": "2026-11-04T10:09", "kind": "assistant", "text": "Written."},
+    ]
+
+
+def test_parts_that_hold_the_same_share_a_line_and_a_mark_on_it():
+    def call(command):
+        return {
+            "type": "tool_use",
+            "id": "x",
+            "name": "Bash",
+            "input": {"command": command},
+        }
+
+    def edit(old):
+        given = {"file_path": "/w/x.css", "old_string": old, "new_string": ""}
+        return {"type": "tool_use", "id": "y", "name": "Edit", "input": given}
+
+    def result(text):
+        return {"type": "tool_result", "tool_use_id": "x", "content": text}
+
+    # An idle wait polled three times, the first two polls alike, and an
+    # edit of one file twice, which reads the same but holds different text.
+    request = {
+        "system": [{"type": "text", "text": "You are Claude Code."}],
+        "tools": [],
+        "messages": [
+            {"role": "assistant", "content": [call("leaf wait /p")]},
+            {"role": "user", "content": [result("nothing new")]},
+            {"role": "assistant", "content": [call("leaf wait /p")]},
+            {"role": "user", "content": [result("nothing new")]},
+            {"role": "assistant", "content": [call("leaf wait /p")]},
+            {"role": "user", "content": [result("a comment")]},
+            {"role": "assistant", "content": [edit("a {}")]},
+            {"role": "assistant", "content": [edit("b {}")]},
+        ],
+    }
+    cut = parts.parts_of(request)
+    for p in cut:
+        p["tokens"] = 10
+    assert parts.listing(cut).splitlines() == [
+        "#0 system prompt, 10 tokens: system prompt",
+        "#1 tools, 10 tokens: 0 tool definitions",
+        "#2, #4, #6 tool call ×3, 30 tokens: Bash: leaf wait /p",
+        "#3, #5 tool result ×2, 20 tokens: result of Bash: leaf wait /p",
+        "#7 tool result, 10 tokens: result of Bash: leaf wait /p",
+        "#8 tool call, 10 tokens: Edit: /w/x.css",
+        "#9 tool call, 10 tokens: Edit: /w/x.css",
+    ]
+    # Any one id of a line marks every part on it, and no other.
+    assert parts.marked([5, 0], cut) == [0, 3, 5]
+    assert parts.marked([99], cut) == []
 
 
 def test_records_past_what_the_window_holds_are_counted_in_one_record():
@@ -379,21 +610,31 @@ def test_shortening_cuts_long_values_and_keeps_every_record_whole_json():
             "tool": "Edit",
             "text": "head\n" + "r" * 2000 + "\ntail",
         },
+        {
+            "t": "2026-11-04T18:18",
+            "kind": "page",
+            "event": "action",
+            "detail": {"value": ["drop"]},
+            "says": {"drop": "Drop the box " + "s" * 1500},
+        },
     ]
     assert parts.shortened(records, 10_000) == records
     got = parts.shortened(records, 400)
     assert got[0] == records[0]
     for before, after in zip(records, got, strict=True):
         assert json.loads(parts.rendered([after])) == after
-        assert {k: v for k, v in after.items() if k not in ("text", "input")} == {
-            k: v for k, v in before.items() if k not in ("text", "input")
+        assert {k: v for k, v in after.items() if k not in parts.CONTENT} == {
+            k: v for k, v in before.items() if k not in parts.CONTENT
         }
     # Within a record the longest values are cut first, each to its head and tail.
     call = got[1]["input"]
     assert call["file_path"] == "/w/a.css" and call["replace_all"] is False
     assert call["old_string"].startswith("o") and parts.CUT in call["old_string"]
     assert got[2]["text"].startswith("head") and got[2]["text"].endswith("tail")
-    assert sum(map(parts.length, got)) <= 400 + 3 * len(parts.CUT)
+    assert got[3]["detail"] == {"value": ["drop"]}
+    says = got[3]["says"]["drop"]
+    assert says.startswith("Drop the box") and parts.CUT in says
+    assert sum(map(parts.length, got)) <= 400 + 4 * len(parts.CUT)
     # Fewer characters never give longer records.
     assert sum(map(parts.length, parts.shortened(records, 200))) < sum(
         map(parts.length, got)

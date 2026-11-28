@@ -23,16 +23,19 @@ comes back in the later one.
 parts out of the request) and `sized` shares a kind's count among its parts
 by characters, with each image counted on its own.
 
-A labeller marks each part needed, helpful or neither, in several runs
-(`share.py`), and `scored` turns the runs into shares of the context: what
-the work needed, and needed or was helped by, of the whole context, and of
-it what a compaction drops (`lost_*`), which is what the work then has to
+A labeller is shown the parts one line each (`listing`), but parts that hold
+the same share one, and marking it marks each of them (`marked`). It marks each part needed, helpful or neither, in several runs
+(`share.py`), and `scored` turns the runs into shares of the context:
+what the work needed, and needed or was helped by, of the whole context, and
+of it what a compaction drops (`lost_*`), which is what the work then has to
 read back and what the share is weighed against. It judges them by what the
 session did next (`next_work`), one record per message, tool call or result,
+and per message the user typed mid-turn or event of theirs on a Leaf page,
 which `shortened` cuts to the window, each value keeping its head and tail.
 """
 
 import copy
+import hashlib
 import json
 import re
 from collections.abc import Iterable
@@ -191,31 +194,57 @@ def blocks_of(message: dict) -> list[dict]:
 
 # Where `shortened` cuts a value, between its head and tail.
 CUT = " […] "
+# The fields of a record that hold what it says, which `shortened` may cut.
+CONTENT = ("text", "input", "detail", "says")
+# Where a Leaf delivery opens, in what a hook adds to the context.
+DELIVERY = re.compile(r'\{"format": "leaf-delivery/')
+
+
+def human(logged: dict) -> bool:
+    """Whether the user wrote a message Claude Code logged, by the origin it
+    logs with it: a plugin's message, another agent's, a task's notification
+    and Claude Code's own text carry another, or none."""
+    return (logged.get("origin") or {}).get("kind") == "human"
+
+
+def page_events(content) -> list[dict]:
+    """What the user did on a Leaf page, from what a hook added to the
+    context: each event of theirs in each Leaf delivery it holds, as the
+    event's kind and what the user wrote or chose."""
+    text = "\n".join(content) if isinstance(content, list) else str(content or "")
+    events = []
+    for m in DELIVERY.finditer(text):
+        delivery, _ = json.JSONDecoder().raw_decode(text, m.start())
+        events += [
+            {"event": e["kind"]}
+            | {k: e[k] for k in ("text", "detail", "says") if k in e}
+            for batch in delivery.get("batches", [])
+            for e in batch.get("events", [])
+            if e.get("author") == "user"
+        ]
+    return events
 
 
 def next_work(entries: Iterable[dict]) -> list[dict]:
-    """What the session did after a turn end, from its transcript's entries
-    after it, up to its next compaction, where the context starts again
-    whatever the turn end decided: one record for each thing the user typed,
-    each text of the model's, each tool call with its input, and each
-    result, each whole, for `shortened` to cut to the window. A compaction at
-    the turn end itself, as when sparkjoy compacted there, doesn't end it,
-    since the work after it is what the context would have served."""
-    records, began, tools = [], False, {}
+    """What the session did after a turn end, from the entries of its
+    transcript after it that `share.py` takes: one record for each thing the
+    user typed, at the prompt or while the work ran, each event of theirs on
+    a Leaf page, each text of the model's, each tool call with its input,
+    each result, and each compaction, each whole, for `shortened` to cut to
+    the window. What else Claude Code attaches to the context stays out,
+    since it holds none of the user's words."""
+    records, tools = [], {}
     for e in entries:
         t = e.get("timestamp", "")[:16]
         if e.get("type") == "system" and e.get("subtype") == "compact_boundary":
             records.append({"t": t, "kind": "compaction"})
-            if began:
-                break
             continue
         if e.get("isSidechain") or e.get("isCompactSummary"):
             continue
         if e.get("type") == "user" and not e.get("isMeta"):
             for b in blocks_of(e["message"]):
-                text = b.get("text") or ""
-                if b.get("type") == "text" and text and not text.startswith("<"):
-                    records.append({"t": t, "kind": "user", "text": text})
+                if b.get("type") == "text" and b.get("text") and human(e):
+                    records.append({"t": t, "kind": "user", "text": b["text"]})
                 elif b.get("type") == "tool_result":
                     record = {"t": t, "kind": "result"}
                     if tool := tools.get(b.get("tool_use_id")):
@@ -223,8 +252,20 @@ def next_work(entries: Iterable[dict]) -> list[dict]:
                     if b.get("is_error"):
                         record["error"] = True
                     records.append(record | {"text": text_of(b.get("content"))})
+        elif e.get("type") == "attachment":
+            a = e["attachment"]
+            # What the user typed while the turn ran reaches the model with
+            # its next tool result.
+            if a.get("type") == "queued_command" and human(a):
+                records.append(
+                    {"t": t, "kind": "mid-turn", "text": text_of(a.get("prompt"))}
+                )
+            elif a.get("type") == "hook_additional_context":
+                records += [
+                    {"t": t, "kind": "page"} | event
+                    for event in page_events(a.get("content"))
+                ]
         elif e.get("type") == "assistant":
-            began = True
             for b in e["message"].get("content") or []:
                 if b.get("type") == "text" and b.get("text"):
                     records.append({"t": t, "kind": "assistant", "text": b["text"]})
@@ -242,7 +283,8 @@ def next_work(entries: Iterable[dict]) -> list[dict]:
 
 
 def values(value) -> list[str]:
-    """The strings in a record's `text` and `input`, which `shortened` may cut."""
+    """The strings in a value, such as a record's `CONTENT`, which `shortened`
+    may cut."""
     if isinstance(value, str):
         return [value]
     if isinstance(value, dict):
@@ -253,7 +295,7 @@ def values(value) -> list[str]:
 
 
 def length(record: dict) -> int:
-    return sum(map(len, values([record.get("text"), record.get("input")])))
+    return sum(map(len, values([record.get(k) for k in CONTENT])))
 
 
 def cut(value, half: int):
@@ -284,20 +326,16 @@ def common(lengths: list[int], budget: int) -> int | None:
 
 
 def capped(record: dict, limit: int) -> dict:
-    """`record` with its `text` and `input` in about `limit` characters, its
-    longest values cut first, each keeping its head and tail."""
-    within = common(
-        list(map(len, values([record.get("text"), record.get("input")]))), limit
-    )
+    """`record` with its `CONTENT` in about `limit` characters, its longest
+    values cut first, each keeping its head and tail."""
+    within = common(list(map(len, values([record.get(k) for k in CONTENT]))), limit)
     if within is None:
         return record
-    return record | {
-        k: cut(record[k], within // 2) for k in ("text", "input") if k in record
-    }
+    return record | {k: cut(record[k], within // 2) for k in CONTENT if k in record}
 
 
 def shortened(records: list[dict], chars: int) -> list[dict]:
-    """`records` with their `text` and `input` in about `chars` characters:
+    """`records` with their `CONTENT` in about `chars` characters:
     each record longer than a common length is cut to it (`capped`), the
     length the longest that fits, so every record stays whole JSON."""
     if (limit := common([length(r) for r in records], chars)) is None:
@@ -340,7 +378,7 @@ def parts_of(request: dict) -> list[dict]:
     """The request's parts in order, each with its `id`, `kind`, `chars`, the
     kind of `block` it is, a line describing it, where it is in the request
     (`at`: "system", "tools", or a message and block, and for a section its
-    span) and, for text, its opening (`head`)."""
+    span), a `digest` of what it holds and, for text, its opening (`head`)."""
     parts = [
         {
             "kind": "system prompt",
@@ -348,6 +386,7 @@ def parts_of(request: dict) -> list[dict]:
             "desc": "system prompt",
             "chars": sum(len(b.get("text", "")) for b in request["system"]),
             "at": "system",
+            "digest": digest(request["system"]),
         },
         {
             "kind": "tools",
@@ -355,6 +394,7 @@ def parts_of(request: dict) -> list[dict]:
             "desc": f"{len(request['tools'])} tool definitions",
             "chars": len(json.dumps(request["tools"])),
             "at": "tools",
+            "digest": digest(request["tools"]),
         },
     ]
     calls = {}
@@ -369,6 +409,7 @@ def parts_of(request: dict) -> list[dict]:
                     "block": "tool call",
                     "desc": describe_call(b),
                     "chars": len(json.dumps(b.get("input"))),
+                    "digest": digest([b["name"], b.get("input")]),
                 }
             elif t == "tool_result":
                 body = text_of(b.get("content"))
@@ -386,6 +427,7 @@ def parts_of(request: dict) -> list[dict]:
                     "desc": f"result of {said}",
                     "chars": len(body.replace("[image]", "")),
                     "head": body[:300],
+                    "digest": digest(content),
                     "images": sum(
                         x.get("type") == "image"
                         for x in (content if isinstance(content, list) else [])
@@ -402,6 +444,7 @@ def parts_of(request: dict) -> list[dict]:
                         "desc": text.lstrip()[:160].replace("\n", " "),
                         "chars": len(text),
                         "head": text[:300],
+                        "digest": digest(text),
                         "at": at
                         if (start, end) == (0, len(body))
                         else [i, j, start, end],
@@ -446,6 +489,7 @@ def parts_of(request: dict) -> list[dict]:
                 part = {"kind": t or "?", "desc": t or "?", "chars": len(json.dumps(b))}
             part.setdefault("block", part["kind"])
             part.setdefault("at", at)
+            part.setdefault("digest", digest(b))
             parts.append(part)
     for p in parts:
         # A skill loaded by the Skill tool can arrive in its result.
@@ -456,6 +500,11 @@ def parts_of(request: dict) -> list[dict]:
         ):
             p["skill"] = found.group(1)
     return resolve(parts)
+
+
+def digest(value) -> str:
+    """A hash of what a part holds, the same for parts that hold the same."""
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()[:16]
 
 
 def text_kind(text: str, role: str) -> str:
@@ -559,6 +608,38 @@ def resolve(parts: list[dict]) -> list[dict]:
     for i, p in enumerate(out):
         p["id"] = i
     return out
+
+
+def lines(parts: list[dict]) -> list[list[dict]]:
+    """The parts on each line of the `listing`: one each, but parts that hold
+    the same share one, where the first of them is. Parts that only read the
+    same, such as two edits of one file, keep a line each, since the context
+    tells them apart."""
+    same = {}
+    for p in parts:
+        same.setdefault((p["block"], p["desc"][:170], p["digest"]), []).append(p)
+    return list(same.values())
+
+
+def listing(parts: list[dict]) -> str:
+    """The parts as the labeller is shown them, each by its kind of block,
+    and parts that hold the same as one line naming each of their ids, with
+    their tokens in all."""
+
+    def line(same: list[dict]) -> str:
+        ids = ", ".join(f"#{p['id']}" for p in same)
+        block = same[0]["block"] + (f" ×{len(same)}" if len(same) > 1 else "")
+        tokens = sum(p["tokens"] for p in same)
+        return f"{ids} {block}, {tokens} tokens: {same[0]['desc'][:170]}"
+
+    return "\n".join(map(line, lines(parts)))
+
+
+def marked(ids: list[int], parts: list[dict]) -> list[int]:
+    """The parts a labeller's `ids` mark: each part on a line of the
+    `listing` that one of them names."""
+    on = {p["id"]: same for same in lines(parts) for p in same}
+    return sorted({p["id"] for i in ids if i in on for p in on[i]})
 
 
 def blank(request: dict, cut: list[dict], ids) -> dict:
