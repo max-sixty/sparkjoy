@@ -879,22 +879,30 @@ def terms(p, c):
     return h, c0, F0
 
 
+def redo(p, c):
+    """ρ, what redoing one token of the work a compaction lost costs, in cached reads: a request just
+    after a compaction costs c(K) and adds g tokens, so ρ = c(K) / g. A compaction at context x that
+    loses u, the share of x that is unfinished state its summary can't carry, then costs ρ u x more."""
+    h, c0, _ = terms(p, c)
+    return (h * p.K + c0) / p.g
+
+
 def eta(x, beta):
     """The effectiveness of a request with context x, (x / WINDOW)^β: 1 at the full window, and at any x
     where β is 0."""
     return (np.asarray(x, float) / WINDOW) ** beta
 
 
-def cycle(p, c, X, beta, lost=0.0, asks=None):
+def cycle(p, c, X, beta, u=0.0, asks=None):
     """A cycle that compacts at X, as integrals over its context from K to X, so each is g times the sum
-    over its (X - K) / g requests: its cost, the requests' c(x) plus g (F(X) + D) for the compaction, and
-    its effectiveness, the requests' η(x) with exponent β. `lost` is D, what the detail a compaction
-    drops costs the requests after it, in cached reads. With `asks`, sparkjoy's turn-end floor, the cost
-    also counts its questions: one at each turn end from the floor, a turn growing the context by its
-    measured mean growth per turn, and the one that compacts at X short of AUTO."""
+    over its (X - K) / g requests: its cost, the requests' c(x) plus g (F(X) + ρ u X) for the compaction,
+    and its effectiveness, the requests' η(x) with exponent β. `u` is the share of the context a
+    compaction loses (`redo`). With `asks`, sparkjoy's turn-end floor, the cost also counts its
+    questions: one at each turn end from the floor, a turn growing the context by its measured mean
+    growth per turn, and the one that compacts at X short of AUTO."""
     h, c0, F0 = terms(p, c)
     K, X = p.K, np.asarray(X, float)
-    cost = p.g * (X + F0 + lost) + h * (X**2 - K**2) / 2 + c0 * (X - K)
+    cost = p.g * (X + F0 + redo(p, c) * u * X) + h * (X**2 - K**2) / 2 + c0 * (X - K)
     if asks is not None:
         q0 = c.output * CHECK_OUTPUT
         a = np.minimum(asks, X)
@@ -910,38 +918,41 @@ def cycle(p, c, X, beta, lost=0.0, asks=None):
     return cost, effectiveness
 
 
-def per_unit(p, c, X, beta, lost=0.0, asks=None):
+def per_unit(p, c, X, beta, u=0.0, asks=None):
     """J(X), the long-run cost per unit of effectiveness of compacting at X; at β = 0, a request's mean cost
     over the cycle, its share of the compaction included, and with `asks`, sparkjoy's questions."""
-    cost, effectiveness = cycle(p, c, X, beta, lost, asks)
+    cost, effectiveness = cycle(p, c, X, beta, u, asks)
     return cost / effectiveness
 
 
-def curve(p, c, beta, lost=0.0, step=1_000, asks=None):
+def curve(p, c, beta, u=0.0, step=1_000, asks=None):
     """J on a grid of X from K, or with `asks`, from sparkjoy's floor, below which it can't compact, to
     AUTO, every `step` tokens."""
     start = p.K + step if asks is None else asks
     X = np.append(np.arange(start, AUTO, float(step)), AUTO)
-    return X, per_unit(p, c, X, beta, lost, asks)
+    return X, per_unit(p, c, X, beta, u, asks)
 
 
-def steady(p, c, beta, lost=0.0):
+def steady(p, c, beta, u=0.0):
     """The compaction threshold that minimises cost per unit of effectiveness, to 100 tokens, which at β = 0
     is the closed form's; AUTO means not before Claude Code."""
-    X, J = curve(p, c, beta, lost, step=100)
+    X, J = curve(p, c, beta, u, step=100)
     return float(X[J.argmin()])
 
 
-def lost_for(p, c, X, beta):
-    """D, in cached reads, that puts the steady-state most efficient threshold at X, or None where none
-    does. At the most efficient threshold one more request's cost, c(X) + g, per unit of its effectiveness
-    η(X), equals J(X), which solved for D gives this; it is negative where the threshold lies beyond X
-    with no lost detail. Near β = 1 that condition marks J's maximum rather than its minimum, and no D
-    puts the threshold at X."""
+def u_for(p, c, X, beta):
+    """The u that puts the steady-state most efficient threshold at X, or None where none does. At the
+    most efficient threshold the cost of compacting one request later, c(X) + g (1 + ρ u), per unit of
+    that request's effectiveness η(X), equals J(X), which solved for u gives this; it is negative where
+    the threshold lies beyond X when a compaction loses nothing. Near β = 1 that condition marks J's
+    maximum rather than its minimum, and no u puts the threshold at X."""
     h, c0, _ = terms(p, c)
     cost, effectiveness = cycle(p, c, X, beta)
-    D = ((h * X + c0 + p.g) * effectiveness / eta(X, beta) - cost) / p.g
-    return D if abs(steady(p, c, beta, D) - X) < 1_000 else None
+    n = eta(X, beta)
+    u = (cost * n - (h * X + c0 + p.g) * effectiveness) / (
+        p.g * redo(p, c) * (effectiveness - X * n)
+    )
+    return u if abs(steady(p, c, beta, u) - X) < 1_000 else None
 
 
 def points(p, c):
@@ -1024,15 +1035,23 @@ def to_reset(S, low=200_000):
     return np.array(x, float), np.array(n, float), np.array(k)
 
 
-def share_threshold(p, c, x, n, lost=0.0):
+def share_threshold(p, c, x, n):
     """s*(x), the share of a context x that the work ahead needs under which compacting at a turn end
-    costs less over the n requests to the session's next reset. Keeping, they read x each, n h x.
-    Compacting costs F(x) = x + F0, and they read K and what the work reads back, the share s of x,
-    written once: x + F0 + n h K + s x (n h + w - 1). `lost` is D, what the detail the compaction drops
-    costs beyond what is read back, in cached reads. With one n, s*(x) = A (1 - FLOOR / x), with
-    A = (n h - 1) / (n h + w - 1) and FLOOR = (n h K + F0 + D) / (n h - 1)."""
+    costs less over the n requests to the session's next reset, when the compaction loses nothing
+    beyond what is read back. Keeping, they read x each, n h x. Compacting costs F(x) = x + F0, and
+    they read K and what the work reads back, the share s of x, written once:
+    x + F0 + n h K + s x (n h + w - 1). With one n, s*(x) = A (1 - FLOOR / x), with
+    A = (n h - 1) / (n h + w - 1) and FLOOR = (n h K + F0) / (n h - 1). A compaction that also loses u
+    (`redo`) costs ρ u x more, so it pays when s + λ u < s*(x) (`weight`)."""
     h, _, F0 = terms(p, c)
-    return (n * h * (x - p.K) - x - F0 - lost) / (x * (n * h + c.write - 1))
+    return (n * h * (x - p.K) - x - F0) / (x * (n * h + c.write - 1))
+
+
+def weight(p, c, n):
+    """λ = ρ / (n h + w - 1), what a share u lost weighs against the share s read back at a turn end
+    with n requests to the session's next reset: ρ u x against s x (n h + w - 1)."""
+    h, _, _ = terms(p, c)
+    return redo(p, c) / (n * h + c.write - 1)
 
 
 CHECK_OUTPUT = 100  # output tokens of a question
@@ -1049,21 +1068,22 @@ def question(size, c, read=None):
 # and only the compactions move.
 
 
-def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0, asks=None):
-    """One session's cost under a policy, with the context each request then carried and what
-    each request cost, a compaction before it included.
+def replay(s, p, c, threshold, ttl, every=False, idle=None, asks=None):
+    """One session's cost under a policy, with the context each request then carried, what each
+    request cost, a compaction before it included, and the context each compaction the policy or
+    Claude Code made before a request compacted (0 where none did), from which a caller prices
+    what the compactions lost (`redo`).
     The policy compacts at the end of any turn (or with `every`, after any request) whose
     context reaches `threshold`, and with `idle`, at any turn end from that size after which
-    the session sits idle for IDLE[ttl] seconds, as sparkjoy's timer does. Each
-    compaction the policy or Claude Code makes also costs `lost`, D in cached reads. Each of
-    `threshold`, `idle` and `lost` can instead hold one value per request: the threshold at a turn
-    end after that request, the threshold if the session then sits idle, and what a compaction
-    after it costs. With `asks`, sparkjoy's floors at a turn end and in an idle session (None for no idle
-    floor), each request's cost also counts the `question` sparkjoy asks after it: at a turn end from
-    the first floor, and once the session has sat idle, from the second, unless the turn end
-    compacted. An idle question that keeps the context keeps its cache alive for `ttl` more."""
+    the session sits idle for IDLE[ttl] seconds, as sparkjoy's timer does. Each of `threshold`
+    and `idle` can instead hold one value per request: the threshold at a turn end after that
+    request, and the threshold if the session then sits idle. With `asks`, sparkjoy's floors at a
+    turn end and in an idle session (None for no idle floor), each request's cost also counts the
+    `question` sparkjoy asks after it: at a turn end from the first floor, and once the session has
+    sat idle, from the second, unless the turn end compacted. An idle question that keeps the
+    context keeps its cache alive for `ttl` more."""
     K, P = p.K, p.P
-    threshold, lost = (np.broadcast_to(v, len(s.size)) for v in (threshold, lost))
+    threshold = np.broadcast_to(threshold, len(s.size))
     idle = None if idle is None else np.broadcast_to(idle, len(s.size))
     lapse = lapsed(s, ttl)
     # Each compaction an arm makes brings the context to K, the E tokens read again included, all
@@ -1076,7 +1096,11 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0, asks=None)
         for i in range(j + 1, min(j + SPAN, len(growth))):
             take = min(growth[i], left)
             growth[i], left = growth[i] - take, left - take
-    trace, paid = np.empty(len(s.size)), np.empty(len(s.size))
+    trace, paid, compacted = (
+        np.empty(len(s.size)),
+        np.empty(len(s.size)),
+        np.zeros(len(s.size)),
+    )
     cost, ctx, pending, ended = 0.0, 0.0, False, False
     for j in range(len(s.size)):
         before = cost
@@ -1102,9 +1126,9 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0, asks=None)
             # had another cause, which the question doesn't prevent.
             cold = lapse[j] and not (asked and ttl < s.gap[j] <= IDLE[ttl] + ttl)
             if pending or (idle is not None and ctx >= idle[j - 1] and idled):
-                cost += (
-                    ctx + c.output * p.N + lost[j - 1]
-                )  # read from the cache, which the turn end left warm
+                # The compaction reads the context from the cache, which the turn end left warm.
+                cost += ctx + c.output * p.N
+                compacted[j] += ctx
                 # After a compaction the context is K, or less where it held less to begin with,
                 # which happens only below K, at a session's first turn ends.
                 left = min(K, ctx)
@@ -1114,11 +1138,8 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0, asks=None)
                 written = ctx - P if cold else grew
             if ctx >= AUTO:
                 # Claude Code compacts before sending, so after a lapse its summary reads uncached input.
-                cost += (
-                    (P + c.input * (ctx - P) if cold else ctx)
-                    + c.output * p.N
-                    + lost[j - 1]
-                )
+                cost += (P + c.input * (ctx - P) if cold else ctx) + c.output * p.N
+                compacted[j] += ctx
                 ctx, written = K + grew, K - P + grew
             cost += (
                 max(ctx - written - inp, 0)
@@ -1146,7 +1167,7 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0, asks=None)
         after += ctx + c.output * p.N
     cost += after
     paid[-1] += after
-    return cost, trace, paid
+    return cost, trace, paid, compacted
 
 
 def arm(S, p, c, ttl, threshold, betas=(BASE,), **kw):
@@ -1154,7 +1175,7 @@ def arm(S, p, c, ttl, threshold, betas=(BASE,), **kw):
     of its requests' η, for each β in `betas`."""
     cost, effectiveness = np.empty(len(S)), np.empty((len(S), len(betas)))
     for i, s in enumerate(S):
-        cost[i], trace, _ = replay(s, p, c, threshold, ttl, **kw)
+        cost[i], trace, _, _ = replay(s, p, c, threshold, ttl, **kw)
         effectiveness[i] = [eta(trace, b).sum() for b in betas]
     return cost, effectiveness
 
@@ -1233,7 +1254,7 @@ def as_run(s, p, opened=None, model=None):
     last = np.full(len(s.size), np.inf)
     if any(by == "sparkjoy" and t > s.t[-1] for t, by, _ in s.compactions):
         last[-1] = 0
-    ran, ran_trace, _ = replay(
+    ran, ran_trace, _, _ = replay(
         replace(s, kind=np.where(s.sparkjoy, USER, s.kind)),
         p,
         c,
@@ -1241,7 +1262,7 @@ def as_run(s, p, opened=None, model=None):
         s.ttl,
         idle=idle,
     )
-    without, without_trace, _ = replay(s, p, c, np.inf, s.ttl, idle=idle)
+    without, without_trace, _, _ = replay(s, p, c, np.inf, s.ttl, idle=idle)
     checks = sum(check(v, c) for v in s.verdicts if v.tokens)
     dollars = (
         ((ran + checks) * c.read, without * c.read, checks * c.read) if priced else None
@@ -1261,32 +1282,25 @@ MOMENTS = (
 
 def moments(S, p, c, ttl, betas, policies=MOMENTS):
     """For each policy, keyed (turn-end threshold, any-request threshold): the cost summed over the
-    sessions, the compactions made in the middle of a turn, Claude Code's own included, and the
-    effectiveness at each β in `betas`, all also compacting idle sessions from IDLE_FLOOR. Cost grows by
-    D with each mid-turn compaction, so a caller charges D, what a mid-turn compaction loses beyond one
-    at a turn end, as cost + D * mid."""
+    sessions; the compactions made in the middle of a turn, Claude Code's own included, and the
+    contexts they compacted, summed; and the effectiveness at each β in `betas`, all also compacting
+    idle sessions from IDLE_FLOOR. A mid-turn compaction at x that loses Δu more than one at a turn
+    end costs ρ Δu x more (`redo`), so a caller charges Δu as cost + ρ Δu * compacted."""
     out = {}
     for turn, anywhere in policies:
-        cost = mid = 0.0
+        cost = mid = compacted = 0.0
         effectiveness = np.zeros(len(betas))
         for s in S:
             threshold = np.where(s.end, min(turn, anywhere), anywhere)
-            plain, trace, _ = replay(
+            spent, trace, _, at = replay(
                 s, p, c, threshold, ttl, every=True, idle=IDLE_FLOOR
             )
-            charged, _, _ = replay(
-                s,
-                p,
-                c,
-                threshold,
-                ttl,
-                every=True,
-                idle=IDLE_FLOOR,
-                lost=(~s.end).astype(float),
-            )
-            cost, mid = cost + plain, mid + charged - plain
+            # A compaction before request j falls mid-turn where request j - 1 ended no turn.
+            during = at[1:][~s.end[:-1]]
+            cost, mid = cost + spent, mid + (during > 0).sum()
+            compacted += during.sum()
             effectiveness += [eta(trace, b).sum() for b in betas]
-        out[turn, anywhere] = cost, mid, effectiveness
+        out[turn, anywhere] = cost, mid, compacted, effectiveness
     return out
 
 
@@ -1337,7 +1351,7 @@ def mixed(
     cost, effectiveness = np.zeros(len(mix)), np.zeros(len(mix))
     for i, s in enumerate(S):
         if not judged:
-            _, trace, paid = replay(s, p, c, threshold, ttl, every, idle, asks=asks)
+            _, trace, paid, _ = replay(s, p, c, threshold, ttl, every, idle, asks=asks)
         for draw in draws:
             kind, said = draw[i]
             if judged:
@@ -1347,7 +1361,9 @@ def mixed(
                 )
                 if claude_idle is not None:
                     idles = np.minimum(np.inf if idles is None else idles, claude_idle)
-                _, trace, paid = replay(s, p, c, at[said], ttl, idle=idles, asks=asks)
+                _, trace, paid, _ = replay(
+                    s, p, c, at[said], ttl, idle=idles, asks=asks
+                )
             cost += np.bincount(kind, paid, len(mix))
             effectiveness += np.bincount(kind, eta(trace, betas[kind]), len(mix))
     return cost, effectiveness

@@ -1212,49 +1212,47 @@ def voi(out, p, c):
     return figures
 
 
-# The share of turn ends in the middle of a task, and the wasted requests D that a compaction at one
-# costs beyond one at a turn end that finishes a piece of work, for voi_lost. No session measures
-# either; at half the turn ends and D = 12, a compaction costs 6 wasted requests on average, the figure
-# calibrate.py measures after my sessions' compactions.
+# The share of turn ends in the middle of a task, and the share u of the context that a compaction
+# at one loses beyond one at a turn end that finishes a piece of work, for voi_lost. No session
+# measures either; at half the turn ends and u = 5%, a compaction loses 2.5% of its context on
+# average, about what calibrate.py measures after my sessions' compactions.
 MID = 0.5
-LOST_REQUESTS = (12, 24, 48, 96)
+LOST_SHARES = (0.05, 0.1, 0.2, 0.4)
 
 
 def voi_lost(p, c):
     """The expected value of a classifier's information where work differs in the detail a
     compaction loses, at the base case for β. A share MID of turn ends fall in the middle of a task,
-    where a compaction costs D wasted requests, each priced as a request at K, and the rest finish a
-    piece of work, where it costs none. Without a classifier a compaction falls at a turn end of
-    either kind, so it costs MID·D on average. A classifier compacts only at turn ends it calls
-    finished, right at a share a of each kind, so each of its compactions costs
-    D·MID(1 - a) / (MID(1 - a) + (1 - MID)a), and the threshold moves to where that costs least.
+    where a compaction loses a share u of its context, which costs ρ u x at context x (fit.redo), and
+    the rest finish a piece of work, where it loses none. Without a classifier a compaction falls at a
+    turn end of either kind, so it loses MID·u on average. A classifier compacts only at turn ends it
+    calls finished, right at a share a of each kind, so each of its compactions loses
+    u·MID(1 - a) / (MID(1 - a) + (1 - MID)a), and the threshold moves to where that costs least.
     Waiting for such a turn end moves each compaction later by about the same amount, which the
     threshold makes up for. Claude Code's own compaction at fit.AUTO falls in the middle of a turn, and
-    so of a task, and costs D. Returns, for each D, the most efficient single threshold and what it saves,
-    what a perfect classifier and one right 9 times in 10 save after the questions they ask from
-    fit.FLOOR, all against Claude Code's default, and the accuracy from which a classifier saves more
-    than the single threshold."""
-    h, c0, _ = fit.terms(p, c)
-    wasted = h * p.K + c0
+    so of a task, and loses u. Returns, for each u, the most efficient single threshold, what a
+    compaction there loses, and what it saves, what a perfect classifier and one right 9 times in 10
+    save after the questions they ask from fit.FLOOR, all against Claude Code's default, and the
+    accuracy from which a classifier saves more than the single threshold."""
     A = np.round(np.linspace(0.5, 1, 501), 4)
 
-    def lowest(d, D, asks=None):
-        """The most efficient threshold where a compaction at a turn end costs d, and J there; one at
-        fit.AUTO, the curve's last point, is Claude Code's and costs D."""
-        X, J = fit.curve(p, c, fit.BASE, lost=d, step=100, asks=asks)
-        J[-1] = fit.per_unit(p, c, fit.AUTO, fit.BASE, D, asks)
+    def lowest(lost, u, asks=None):
+        """The most efficient threshold where a compaction at a turn end loses the share `lost`, and J
+        there; one at fit.AUTO, the curve's last point, is Claude Code's and loses u."""
+        X, J = fit.curve(p, c, fit.BASE, lost, step=100, asks=asks)
+        J[-1] = fit.per_unit(p, c, fit.AUTO, fit.BASE, u, asks)
         return X[J.argmin()], J.min()
 
     figures = {"mid_task_share": MID}
-    for n in LOST_REQUESTS:
-        D = n * wasted
-        X, single = lowest(MID * D, D)
-        default = fit.per_unit(p, c, fit.AUTO, fit.BASE, D)
-        picked = D * MID * (1 - A) / (MID * (1 - A) + (1 - MID) * A)
-        saved = np.array([1 - lowest(d, D, fit.FLOOR)[1] / default for d in picked])
+    for u in LOST_SHARES:
+        X, single = lowest(MID * u, u)
+        default = fit.per_unit(p, c, fit.AUTO, fit.BASE, u)
+        picked = u * MID * (1 - A) / (MID * (1 - A) + (1 - MID) * A)
+        saved = np.array([1 - lowest(v, u, fit.FLOOR)[1] / default for v in picked])
         right = {a: saved[np.abs(A - a).argmin()] for a in (0.9, 1.0)}
-        figures[f"{n}_wasted_requests"] = {
-            "D_usd": D * c.read,
+        figures[f"u_{u:g}"] = {
+            # What a compaction at a turn end in the middle of a task loses at the single threshold.
+            "lost_usd": fit.redo(p, c) * u * X * c.read,
             "single_threshold": X,
             "single_saved": 1 - single / default,
             "perfect_saved": right[1.0],
