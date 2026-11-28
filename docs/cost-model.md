@@ -487,18 +487,20 @@ threshold there.
 
 ## The share at a turn end
 
-The models above choose a context to compact at. sparkjoy decides at one turn
-end, and what that turns on is how much of the context the work ahead needs:
-after a compaction, the work reads back what it needs of what was dropped, and
-each token it reads back is written to the cache again.
-[The share eval](../evals/README.md#how-much-of-the-context-the-work-ahead-needs)
-asks the model for that share, s.
+Compacting at a turn end pays when the share of the context that the work
+ahead needs is under s\*(x), which for my sessions is 13% at 230k, 25% at 300k,
+41% at 600k and 46% at 800k. The threshold 0.25 (1 − 212k / x), which a
+proposed wording of sparkjoy's question states, is 11 to 28 points lower. It
+would be right only if a compaction wasted 13 requests at 230k to 85 at 800k
+beyond what the work reads back, and my sessions' compactions wasted about 6,
+with a 90% interval up to 19. So by these prices the question should state
+s\*(x). A lower threshold needs a measured cost for the detail a compaction
+loses ([What the model needs measured](#what-the-model-needs-measured)).
 
-At a turn end with context x, compacting saves reading the dropped context on
-each of the n requests until the session's next reset, its next compaction or
-its end. Keeping, each of them reads x. Compacting costs F(x), and each reads K
-and the s x read back, which is written to the cache once. With D what the
-detail a compaction drops costs beyond what is read back, compacting pays when
+If the session keeps its context, each of the n requests until its next reset,
+its next compaction or its end reads x. If it compacts, it pays F(x), and each
+request then reads K and the s x read back, which is written to the cache once;
+D is what the dropped detail costs beyond that. So compacting pays when
 
 ```math
 x + F_0 + n\,h\,K + s\,x\,(n\,h + w - 1) + D < n\,h\,x
@@ -511,44 +513,22 @@ s^*(x) = \frac{n\,h\,(x - K) - x - F_0 - D}{x\,(n\,h + w - 1)}
 ```
 
 Both sides are linear in n, so the threshold takes n's mean at x. With one n,
-s\*(x) takes the form A (1 − FLOOR / x), where A is the share it levels off at
-as the context grows, and D raises only the floor:
+s\*(x) is A (1 − FLOOR / x), and D raises only the floor:
 
 ```math
 A = \frac{n\,h - 1}{n\,h + w - 1}, \qquad \mathrm{FLOOR} = \frac{n\,h\,K + F_0 + D}{n\,h - 1}
 ```
 
-The share takes the place of β here. The model takes the share to be all the
-work ahead draws on from the context, so a larger context gets it nothing more.
-And
-the repeated lookups that D counts in [Mid-turn or at a turn
-end](#mid-turn-or-at-a-turn-end) are the reading back that s x prices, so D here
-is the rest of what a compaction wastes: failed tool calls, corrections, and
-detail the work can't read back, such as what was tried and failed.
+At my turn ends' mean n, 72, A is 0.68 and FLOOR 195k, or 216k at 6 wasted
+requests. D counts only what a compaction wastes beyond what the work reads
+back, since the repeated lookups that [Mid-turn or at a turn
+end](#mid-turn-or-at-a-turn-end) counts in D are in s x.
 
-For my sessions, n is the mean over the turn ends from 200k in two months of
-them, 17 September to 15 November, leaving out the turn ends a compaction ended
-at once, since how long the session would have run on had it kept is
-unobserved. It falls as the context grows, since a reset comes sooner. The
-prices and the other parameters are those of [Parameter
-values](#parameter-values). At each band's median context, with a 90% interval
-from resampling sessions:
-
-| context   | turn ends | requests to the next reset, n | compacting pays under, at D = 0 | at 6 wasted requests |
-| --------- | --------- | ----------------------------- | ------------------------------- | -------------------- |
-| 200k–300k | 4,882     | 83                            | 18%, 16–19%                     | 13%                  |
-| 300k–450k | 5,630     | 68                            | 30%, 29–31%                     | 26%                  |
-| 450k–650k | 2,367     | 60                            | 38%, 33–42%                     | 35%                  |
-| 650k–965k | 391       | 57                            | 44%, 33–49%                     | 42%                  |
-
-With one n, the mean over all these turn ends, 72, A is 0.68 and FLOOR 195k, or
-216k at 6 wasted requests.
-
-Each wasted request, priced as a request just after a compaction, \$0.056,
-lowers the threshold by 0.9 points at 230k, 0.6 at 400k and 0.4 at 600k. So a
-lower curve prices D higher. A curve of height 0.25 from 212k, which a proposed
-wording of the question stated, is s\*(x) with these D, taking n at each size
-between the bands' means:
+For my sessions, n is the mean over 13,270 turn ends from 200k in 767 of them,
+17 September to 15 November: 83 at 200–300k, 68 at 300–450k, 60 at 450–650k
+and 57 at 650–965k. Resampling sessions gives the threshold a 90% interval of 16–19% at
+250k, widening to 33–49% at 700k. The table takes n between the bands' means,
+and prices a wasted request as one just after a compaction, \$0.056:
 
 | context | n   | s\*(x), at D = 0 | at 6 wasted requests | 0.25 (1 − 212k / x) | the D it implies           |
 | ------- | --- | ---------------- | -------------------- | ------------------- | -------------------------- |
@@ -558,18 +538,10 @@ between the bands' means:
 | 600k    | 59  | 41%              | 39%                  | 16%                 | 58, \$3.27                 |
 | 800k    | 57  | 46%              | 44%                  | 18%                 | 85, \$4.78                 |
 
-My sessions' compactions wasted about 6 requests, repeated lookups included
-([Parameter values](#parameter-values)). By these prices, then, the lower curve
-keeps far more than compacting pays for, unless a compaction at a turn end in
-the middle of a task wastes several times that, which nothing yet measures
-([What the model needs measured](#what-the-model-needs-measured)).
-
-Two of its terms lean one way. K holds E, the 11k the first requests after a
-compaction read again, and s counts the same reading back, so s\*(x) charges it
-twice; taking E out of K would raise s\*(x) by E / x, 4 points at 300k and 2 at
-600k. And n counts resets as they came in those sessions: the user's
-`/compact`, sparkjoy's compactions, Claude Code's, and the sessions' ends. A
-policy that compacts more often makes n smaller, and the threshold with it.
+Two terms bias s\*(x). K holds E, the 11k the first requests after a compaction
+read again, which s also counts, so taking E out of K would raise s\*(x) by
+E / x, 4 points at 300k and 2 at 600k. And n counts the resets these sessions
+had, so a policy that compacts more often makes n, and the threshold, smaller.
 
 ## A replay of my sessions
 
