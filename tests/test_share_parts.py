@@ -601,7 +601,10 @@ def test_a_line_shows_the_head_and_tail_of_its_part_and_copies_share_one():
     assert cut[copies[1]]["kind"] == "instruction files"
 
 
-def test_records_too_long_for_the_window_keep_every_record_and_cut_the_longest_values():
+def test_what_doesnt_fit_the_window_keeps_every_line_and_record_and_cuts_the_longest():
+    cut = parts.parts_of(REQUEST)
+    for p in cut:
+        p["tokens"] = 10
     records = [
         {"t": "2026-11-04T18:16", "kind": "user", "text": "short"},
         {
@@ -630,25 +633,31 @@ def test_records_too_long_for_the_window_keep_every_record_and_cut_the_longest_v
         },
         {"t": "2026-11-04T19:00", "kind": "compaction"},
     ]
-    whole = len(parts.rendered(records))
-    assert parts.fitting(records, whole) == records
-    got = parts.fitting(records, whole // 4)
-    assert len(parts.rendered(got)) <= whole // 4
+    listing = parts.listing(cut)
+    whole = len(listing) + len(parts.rendered(records))
+    assert parts.fitting(cut, records, whole) == (listing, records)
+    # The records' long values are cut first, since a line already shows no
+    # more than `LINE` characters; each value past one common length is cut
+    # to it, keeping its head and tail, and shorter ones stay whole.
+    lines, got = parts.fitting(cut, records, len(listing) + whole // 4)
+    assert lines == listing
     assert got[0] == records[0] and got[-1] == records[-1]
     for before, after in zip(records, got, strict=True):
         assert json.loads(parts.rendered([after])) == after
         assert {k: v for k, v in after.items() if k not in parts.CONTENT} == {
             k: v for k, v in before.items() if k not in parts.CONTENT
         }
-    # Each value past one common length is cut to it, keeping its head and
-    # tail; shorter ones stay whole.
     call = got[1]["input"]
     assert call["file_path"] == "/w/a.css" and call["replace_all"] is False
     assert call["old_string"].startswith("o") and parts.CUT in call["old_string"]
     assert got[2]["text"].startswith("head") and got[2]["text"].endswith("tail")
-    assert len(call["new_string"]) == len(got[2]["text"])
+    assert len(call["new_string"]) == len(got[2]["text"]) > parts.LINE
     assert got[3]["detail"] == {"value": ["drop"]}
-    assert got[3]["says"]["drop"].startswith("Drop the box")
-    # Fewer characters never give longer records.
-    shorter = parts.fitting(records, whole // 8)
-    assert len(parts.rendered(shorter)) < len(parts.rendered(got))
+    # With less room the lines are cut too, to the same length as the values.
+    lines, tight = parts.fitting(cut, records, whole // 3)
+    shown = [line.split(" tokens: ", 1)[1] for line in lines.splitlines()]
+    assert len(shown) == len(listing.splitlines())
+    assert max(map(len, shown)) == len(tight[2]["text"]) < parts.LINE
+    assert len(lines) + len(parts.rendered(tight)) < len(listing) + len(
+        parts.rendered(got)
+    )

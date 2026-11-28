@@ -23,9 +23,10 @@ Two kinds of case check the answer:
   with its tokens as the API counts them (`counted`), and the same model,
   shown what the session did next (`next_work`), through any compaction,
   as far as one window would have held it (`horizon`), one JSON record per
-  message, tool call or result, cut where they don't fit the window beside
-  the request, its parts and the answer (`fitted`), labels each part
-  needed, helpful or neither (`LABEL`), in `RUNS` runs.
+  message, tool call or result, with the parts listed a line each, both cut
+  where they don't fit the window beside the request and the answer
+  (`fitted`), labels each part needed, helpful or neither (`LABEL`), in
+  `RUNS` runs.
   Only I can label a case, since labelling reads my transcripts. Each label
   names the request and a hash of the question it was asked (`shown`), which
   holds the next work and the parts, and a case labelled on both is not
@@ -190,37 +191,44 @@ def next_work(case: dict) -> list[dict]:
 def fitted(
     request: dict, headers: dict, cut: list[dict], then: list[dict]
 ) -> tuple[str, list[dict]]:
-    """`LABEL` asked with what the session did next (`then`) cut to fit the
-    window beside the request, its parts and `LABEL_OUTPUT`, by the API's
-    count (`parts.fitting`), and the records shown."""
+    """`LABEL` asked with the listing of the request's parts `cut` and what
+    the session did next (`then`), cut to fit the window beside the request
+    and `LABEL_OUTPUT`, by the API's count (`parts.fitting`), and the records
+    shown."""
 
-    def asked(records: list[dict]) -> str:
-        return LABEL.format(next=parts.rendered(records), parts=parts.listing(cut))
-
-    def tokens(records: list[dict]) -> int:
+    def tokens(listing: str, records: list[dict]) -> int:
         return plain(
             {
                 "model": request["params"]["model"],
                 "messages": [
-                    {"role": "user", "content": parts.rendered(records) or "."}
+                    {
+                        "role": "user",
+                        "content": f"{listing}\n\n{parts.rendered(records)}",
+                    }
                 ],
             },
             headers,
         )
 
-    room = fit.WINDOW - LABEL_OUTPUT - count(request, headers, asked([]))
+    room = (
+        fit.WINDOW
+        - LABEL_OUTPUT
+        - count(request, headers, LABEL.format(next="", parts=""))
+    )
     # Each pass asks for fewer characters than the last, in proportion to how
-    # far the records shown pass the room, until they fit or every value is
-    # cut to nothing.
-    shown, chars, bare = then, len(parts.rendered(then)), parts.fitting(then, 0)
-    while (used := tokens(shown)) > room:
+    # far what is shown passes the room, until it fits or every line and value
+    # is cut to nothing.
+    chars = len(parts.listing(cut)) + len(parts.rendered(then))
+    shown, bare = parts.fitting(cut, then, chars), parts.fitting(cut, then, 0)
+    while (used := tokens(*shown)) > room:
         if shown == bare:
             raise LookupError(
-                f"the window holds {room} tokens beside the request and its parts, too few for the next work"
+                f"the window holds {room} tokens beside the request, too few for its parts and the next work"
             )
         chars = chars * room // used * 97 // 100
-        shown = parts.fitting(then, chars)
-    return asked(shown), shown
+        shown = parts.fitting(cut, then, chars)
+    listing, records = shown
+    return LABEL.format(next=parts.rendered(records), parts=listing), records
 
 
 def count(request: dict, headers: dict, question: str = ".") -> int:

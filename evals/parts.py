@@ -25,18 +25,19 @@ by characters, with each image counted on its own.
 
 A labeller is shown the parts a line each (`listing`): its kind of block,
 its tokens and what it holds (`desc`), in at most `LINE` characters, where
-lines would read alike showing where each part departs from the rest
-(`lined`). Copies of one part share a line, and a mark on it marks the
-latest copy, since the work needs their text once (`marked`). It marks each part needed, helpful or
-neither, in several runs (`share.py`), and `scored` turns the runs into
-shares of the context: what the work needed, and needed or was helped by, of
-the whole context, and of it what a compaction drops (`lost_*`), which is
-what the work then has to read back and what the share is weighed against.
-It judges them by what the session did next (`next_work`), one record per
-message, tool call or result, and per message the user typed mid-turn or
-event of theirs on a Leaf page, every record shown, and where they don't
-fit the window, each value cut to the longest common length at which they
-do (`fitting`). A line or value cut keeps its head and tail (`abridged`).
+lines would read alike showing where each part departs from the rest.
+Copies of one part share a line, and a mark on it marks the latest copy,
+since the work needs their text once (`marked`). It marks each part needed,
+helpful or neither, in several runs (`share.py`), and `scored` turns the
+runs into shares of the context: what the work needed, and needed or was
+helped by, of the whole context, and of it what a compaction drops
+(`lost_*`), which is what the work then has to read back and what the share
+is weighed against. It judges them by what the session did next
+(`next_work`), one record per message, tool call or result, and per message
+the user typed mid-turn or event of theirs on a Leaf page. Every line and
+record is shown, and where they don't fit the window, each line and value
+is cut to the longest common length at which they do (`fitting`), keeping
+its head and tail (`abridged`).
 """
 
 import copy
@@ -93,7 +94,8 @@ LABELS = ("needed", "helpful", "one run", "not needed")
 # invoked_skills attachments from 2.1.325 to 2.1.332 never passed either.
 SKILL_CHARS = 20_000
 SKILLS_CHARS = 100_000
-# The characters of what a part holds that its line in the listing shows.
+# The most characters of what a part holds that its line in the listing
+# shows.
 LINE = 140
 # Where `abridged` takes out the middle of a text, between its head and tail.
 CUT = " […] "
@@ -352,16 +354,24 @@ def common(lengths: list[int], budget: int) -> int | None:
     return None
 
 
-def fitting(records: list[dict], chars: int) -> list[dict]:
-    """`records` in about `chars` characters as the labeller reads them:
-    whole, or with each string of their `CONTENT` longer than one common
-    length kept to that length (`abridged`), the longest at which they fit.
-    Every record stays, and stays whole JSON."""
-    lengths = [len(s) for r in records for s in strings([r.get(k) for k in CONTENT])]
-    frame = len(rendered(records)) - sum(lengths)
+def fitting(
+    parts: list[dict], records: list[dict], chars: int
+) -> tuple[str, list[dict]]:
+    """The `listing` of `parts` and the `records`, in about `chars`
+    characters as the labeller reads them: whole, each line at most `LINE`
+    characters, or where they don't fit, with each line and each string of
+    the records' `CONTENT` longer than one common length cut to it, the
+    longest at which they fit. Every line and record stays, and every record
+    stays whole JSON."""
+    lengths = [min(len(same[0]["desc"]), LINE) for same in lines(parts)]
+    lengths += [len(s) for r in records for s in strings([r.get(k) for k in CONTENT])]
+    whole = listing(parts)
+    frame = len(whole) + len(rendered(records)) - sum(lengths)
     if (limit := common(lengths, chars - frame)) is None:
-        return records
-    return [r | {k: abridged(r[k], limit) for k in CONTENT if k in r} for r in records]
+        return whole, records
+    return listing(parts, min(limit, LINE)), [
+        r | {k: abridged(r[k], limit) for k in CONTENT if k in r} for r in records
+    ]
 
 
 def sections(text: str, role: str) -> list[tuple[int, int]]:
@@ -379,10 +389,10 @@ def sections(text: str, role: str) -> list[tuple[int, int]]:
 
 def parts_of(request: dict) -> list[dict]:
     """The request's parts in order, each with its `id`, `kind`, `chars`, the
-    kind of `block` it is, what it holds in a line (`desc`) of at most `LINE`
-    characters, where it is in the request (`at`: "system", "tools", or a
-    message and block, and for a section its span), a `digest` of what it
-    holds and, for text, its opening (`head`)."""
+    kind of `block` it is, what it holds as one line of text (`desc`), where
+    it is in the request (`at`: "system", "tools", or a message and block,
+    and for a section its span), a `digest` of what it holds and, for text,
+    its opening (`head`)."""
     parts = [
         {
             "kind": "system prompt",
@@ -506,35 +516,7 @@ def parts_of(request: dict) -> list[dict]:
             and (found := SKILL_DIR.search(p.get("head", "")))
         ):
             p["skill"] = found.group(1)
-    return lined(resolve(parts))
-
-
-def lined(parts: list[dict]) -> list[dict]:
-    """Cut each part's `desc`, what it holds as one line of text, to at most
-    `LINE` characters: its head and tail. Where lines would read alike though
-    their parts hold different text, the tail gives way to the words from
-    where each part's text departs from the nearest of theirs."""
-    half = (LINE - len(CUT)) // 2
-    texts = [(p["block"], " ".join(p["desc"].split())) for p in parts]
-    alike = {}
-    for p, (block, text) in zip(parts, texts, strict=True):
-        p["desc"] = abridged(text, LINE)
-        alike.setdefault((block, p["desc"]), set()).add(text)
-    # Sorted, a text's nearest is beside it.
-    near = {}
-    for (block, _), group in alike.items():
-        for a, b in itertools.pairwise(sorted(group)):
-            n = len(os.path.commonprefix([a, b]))  # noqa: RUF071
-            near[block, a] = max(near.get((block, a), 0), n)
-            near[block, b] = max(near.get((block, b), 0), n)
-    for p, key in zip(parts, texts, strict=True):
-        if (n := near.get(key)) is not None:
-            # A third of the words shown come before the departure, so that
-            # what departs shows whole, such as a file name that differs in
-            # its last digit.
-            at = max(n - half // 3, 0)
-            p["desc"] = f"{key[1][:half]}{CUT}{key[1][at : at + half]}"
-    return parts
+    return [p | {"desc": " ".join(p["desc"].split())} for p in resolve(parts)]
 
 
 def digest(value) -> str:
@@ -666,18 +648,41 @@ def lines(parts: list[dict]) -> list[list[dict]]:
     return list(same.values())
 
 
-def listing(parts: list[dict]) -> str:
+def listing(parts: list[dict], chars: int = LINE) -> str:
     """The parts as the labeller is shown them, a line each: its kind of
-    block, its tokens and what it holds (`desc`); copies of one part as one
-    line naming each of their ids, with their tokens in all."""
-
-    def line(same: list[dict]) -> str:
+    block, its tokens and at most `chars` characters of what it holds
+    (`desc`), its head and tail. Where lines would then read alike though
+    their parts hold different text, the tail gives way to the words from
+    where each part's text departs from the nearest of theirs. Copies of one
+    part share one line, which names each of their ids and gives their
+    tokens in all."""
+    groups = lines(parts)
+    half = max(chars - len(CUT), 0) // 2
+    shown = [abridged(same[0]["desc"], chars) for same in groups]
+    alike = {}
+    for same, line in zip(groups, shown, strict=True):
+        alike.setdefault((same[0]["block"], line), set()).add(same[0]["desc"])
+    # Sorted, a text's nearest is beside it.
+    near = {}
+    for (block, _), texts in alike.items():
+        for a, b in itertools.pairwise(sorted(texts)):
+            n = len(os.path.commonprefix([a, b]))  # noqa: RUF071
+            near[block, a] = max(near.get((block, a), 0), n)
+            near[block, b] = max(near.get((block, b), 0), n)
+    out = []
+    for same, line in zip(groups, shown, strict=True):
+        text = same[0]["desc"]
+        if (n := near.get((same[0]["block"], text))) is not None:
+            # A third of the words shown come before the departure, so that
+            # what departs shows whole, such as a file name that differs in
+            # its last digit.
+            at = max(n - half // 3, 0)
+            line = f"{text[:half]}{CUT}{text[at : at + half]}"
         ids = ", ".join(f"#{p['id']}" for p in same)
         block = same[0]["block"] + (f" ×{len(same)}" if len(same) > 1 else "")
         tokens = sum(p["tokens"] for p in same)
-        return f"{ids} {block}, {tokens} tokens: {same[0]['desc']}"
-
-    return "\n".join(map(line, lines(parts)))
+        out.append(f"{ids} {block}, {tokens} tokens: {line}")
+    return "\n".join(out)
 
 
 def marked(ids: list[int], parts: list[dict]) -> list[int]:
