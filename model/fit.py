@@ -33,11 +33,11 @@ PRICES = {
 CONFIG = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
 PROJECTS = CONFIG / "projects"
 # sparkjoy's data folder, where hooks/register.ts keeps its log and /sparkjoy report saves the figures
-# it reads: the one Claude Code names in $CLAUDE_PLUGIN_DATA, which the report's skill passes on, or,
-# run outside Claude Code, the one it gives sparkjoy installed from its own marketplace.
+# it reads: $SPARKJOY_DATA, which sparkjoy's skills set from the ${CLAUDE_PLUGIN_DATA} Claude Code
+# substitutes in their text, or else the folder Claude Code gives sparkjoy installed from its own
+# marketplace. Not $CLAUDE_PLUGIN_DATA itself: a session's shell can hold another plugin's.
 DATA = Path(
-    os.environ.get("CLAUDE_PLUGIN_DATA")
-    or CONFIG / "plugins" / "data" / "sparkjoy-sparkjoy"
+    os.environ.get("SPARKJOY_DATA") or CONFIG / "plugins" / "data" / "sparkjoy-sparkjoy"
 )
 WINDOW = 1_000_000
 AUTO = 965_000  # where Claude Code compacts a 1M window on its own

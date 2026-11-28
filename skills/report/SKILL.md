@@ -11,7 +11,7 @@ Run the report script. It reads the user's transcripts in `~/.claude/projects` (
 directory, prints a few lines of summary and the page's path, and opens the page:
 
 ```
-CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" uv run --script --locked "${CLAUDE_PLUGIN_ROOT}/model/report.py" --figures
+SPARKJOY_DATA="${CLAUDE_PLUGIN_DATA}" uv run --script --locked "${CLAUDE_PLUGIN_ROOT}/model/report.py" --figures
 ```
 
 With `--figures` it also saves the floors sparkjoy asks from and the figures its

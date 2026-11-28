@@ -61,7 +61,7 @@ def test_drafts_sparkjoys_lines_beside_the_requests_around_them(tmp_path):
             "PATH": os.environ["PATH"],
             "TMPDIR": str(tmp_path),
             "TZ": "UTC",
-            "CLAUDE_PLUGIN_DATA": str(tmp_path / "plugin-data"),
+            "SPARKJOY_DATA": str(tmp_path / "plugin-data"),
         },
         check=True,
     )

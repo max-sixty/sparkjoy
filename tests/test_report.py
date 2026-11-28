@@ -103,8 +103,9 @@ def logged(time, **facts):
     return {"t": f"{DAY}{time}.000Z", "session": "session", **facts}
 
 
-def report(tmp_path, entries, *args, others=()):
-    """The report's summary and page on the session of `entries` and the sessions of `others`."""
+def report(tmp_path, entries, *args, others=(), data=None):
+    """The report's summary and page on the session of `entries` and the sessions of `others`,
+    with sparkjoy's data folder in `tmp_path` unless `data` gives the environment naming it."""
     projects = transcript(tmp_path, entries)
     for n, other in enumerate(others):
         transcript(tmp_path, other, f"other-{n}")
@@ -129,7 +130,11 @@ def report(tmp_path, entries, *args, others=()):
         env={
             "PATH": os.environ["PATH"],
             "TMPDIR": str(tmp_path),
-            "CLAUDE_PLUGIN_DATA": str(tmp_path / "plugin-data"),
+            **(
+                {"SPARKJOY_DATA": str(tmp_path / "plugin-data")}
+                if data is None
+                else data
+            ),
         },
         check=True,
     )
@@ -441,6 +446,20 @@ def test_saves_the_figures_the_question_uses(tmp_path):
         "sparkjoy asks from these floors, except where you set a floor of your own, and its question"
         in page
     )
+
+
+def test_keeps_to_sparkjoys_data_folder_whatever_plugins_shell_it_runs_in(tmp_path):
+    # A session's shell can hold another plugin's $CLAUDE_PLUGIN_DATA; without $SPARKJOY_DATA, the
+    # figures go to the folder Claude Code gives sparkjoy.
+    config, other = tmp_path / "config", tmp_path / "other-plugin"
+    report(
+        tmp_path,
+        session_with_compactions(),
+        "--figures",
+        data={"CLAUDE_CONFIG_DIR": str(config), "CLAUDE_PLUGIN_DATA": str(other)},
+    )
+    assert (config / "plugins/data/sparkjoy-sparkjoy/figures.json").exists()
+    assert not other.exists()
 
 
 def test_saves_no_figures_without_compactions(tmp_path):

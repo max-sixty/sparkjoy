@@ -18,7 +18,7 @@ before 200k, as in a 200k context window, where sparkjoy doesn't act. It reads, 
 and fits with fit.py, so it opens only the transcripts modified since --since, at low
 priority.
 With --figures it also saves, as JSON, the figures sparkjoy's question uses, fitted to
-the same sessions, to figures.json in sparkjoy's data folder, $CLAUDE_PLUGIN_DATA, where
+the same sessions, to figures.json in sparkjoy's data folder, $SPARKJOY_DATA, where
 hooks/register.ts reads them, or to the file it names. It prints a summary and the
 page's path.
 """
