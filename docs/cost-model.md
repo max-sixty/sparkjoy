@@ -520,9 +520,10 @@ A = \frac{n\,h - 1}{n\,h + w - 1}, \qquad \mathrm{FLOOR} = \frac{n\,h\,K + F_0 +
 ```
 
 At my turn ends' mean n, 72, A is 0.68 and FLOOR 195k, or 216k at 6 wasted
-requests. D counts only what a compaction wastes beyond what the work reads
-back, since the repeated lookups that [Mid-turn or at a turn
-end](#mid-turn-or-at-a-turn-end) counts in D are in s x.
+requests. D counts only what a compaction wastes beyond the reading back that
+s x prices. When `model/calibrate.py` measures D, it counts a lookup as
+repeated only if the same lookup came since the last compaction, so reading
+back what a compaction dropped is never in D.
 
 For my sessions, n is the mean over 13,270 turn ends from 200k in 767 of them,
 17 September to 15 November: 83 at 200–300k, 68 at 300–450k, 60 at 450–650k
