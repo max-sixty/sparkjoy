@@ -27,14 +27,14 @@ requests whose failures were all the worktree guard's; it explored when every ca
 lookup. `corrected` counts CORRECTION's matches, which J scales to `corrections_share`, the share of
 requests in turns the user corrected. Trouble is against REFERENCE's band. `loss` is what each
 source's compactions lost, as wasted requests, dollars and u. `share` is the share threshold at a
-turn end, by band and size, with the requests to the next reset from these sessions and the prices
-and parameters from the cost model's: at u = 0, the weight λ of u, and at the u the user's and
-Claude Code's compactions lose.
+turn end by size, from the cost model's prices and parameters alone, with nothing lost beyond what
+is read back and at the u the user's and Claude Code's compactions lose.
 """
 
 import argparse
 import re
 from collections import defaultdict
+from dataclasses import replace
 
 import fit
 import numpy as np
@@ -86,17 +86,10 @@ EDITS = {"Edit", "Write", "NotebookEdit", "MultiEdit"}
 F = 1.0  # share of a corrected or interrupted turn's requests that are wasted; the script also tries 0 and 2
 BINS = np.array([0, 200_000, 300_000, 400_000, 600_000, np.inf])
 REFERENCE = 3  # 400k to 600k, where most compactions happen
-# The half points searched for the saturating form, 1 - 2^(-x/s), which the comparison of forms fits
-# beside the power law.
-DRAWS = 200
-# The share threshold at a turn end: the bands of context it is given for, with the requests to the
-# next reset averaged over each, and the sizes it is given at, with those requests interpolated
-# between the bands' means at their median contexts.
-BANDS = ((200_000, 300_000), (300_000, 450_000), (450_000, 650_000), (650_000, 965_000))
-SIZES = (230_000, 300_000, 400_000, 600_000, 800_000)
-# A curve A (1 - FLOOR / x) under the fitted one, whose u the doc gives: a proposed wording of the
-# question stated the threshold from a height of 0.25 and a floor of 212k.
-LOWER = (0.25, 212_000)
+# The share threshold at a turn end: the sizes it is given at, and the shares of the context a
+# compaction loses that it is given at beside the one the sessions measure.
+SIZES = (300_000, 400_000, 500_000, 600_000, 700_000, 800_000)
+LOSSES = (0.05, 0.10)
 
 
 def corrects(text):
@@ -362,80 +355,41 @@ def interval(values, q=(5, 95)):
     return np.percentile(np.array(values, float), q, axis=0)
 
 
-def share(S, p, c, u):
-    """The share threshold at a turn end (fit.share_threshold), with the requests to the next reset
-    from S and the prices and parameters from p and c: with no detail lost beyond what is read back,
-    the weight λ of what is lost (fit.weight), and the threshold less λ u, where a compaction also
-    loses the share u. Each band's requests to the reset have a 90% interval from resampling sessions;
-    each size's are interpolated between the bands', and give the u that puts the threshold on LOWER."""
-    x, n, k = fit.to_reset(S)
-    h, _, F0 = fit.terms(p, c)
-    star = lambda z, m: fit.share_threshold(p, c, z, m)
-    rng = np.random.default_rng(0)
-    bands = []
-    for lo, hi in BANDS:
-        sel = (x >= lo) & (x < hi)
-        # Each session's requests to the reset and turn ends in the band, to resample whole sessions.
-        ids, at = np.unique(k[sel], return_inverse=True)
-        total, ends = np.bincount(at, n[sel]), np.bincount(at)
-        boot = []
-        for _ in range(DRAWS):
-            pick = rng.integers(0, len(ids), len(ids))
-            boot.append(total[pick].sum() / ends[pick].sum())
-        mean, mid = n[sel].mean(), np.median(x[sel])
-        bands.append(
-            {
-                "from": lo,
-                "to": hi,
-                "turn_ends": int(sel.sum()),
-                "sessions": len(ids),
-                "requests_to_reset": {"value": mean, "interval_90": interval(boot)},
-                "median_context": mid,
-                "threshold": {
-                    "value": star(mid, mean),
-                    "interval_90": star(mid, interval(boot)),
-                },
-                "weight": fit.weight(p, c, mean),
-                "threshold_at_u": star(mid, mean) - fit.weight(p, c, mean) * u,
-            }
+def share(p, c, u, boot):
+    """The share threshold at a turn end (fit.share_threshold), from the cost model's prices and
+    parameters alone, at each of SIZES: with nothing lost beyond what is read back, with a 90%
+    interval over `boot`, the parameters fitted to resampled sessions, which leaves out a resample
+    with no compactions, since its parameters are undefined; with E, which K holds and s also
+    counts, taken out of K; and where a compaction also loses u, the share the user's and Claude
+    Code's compactions lose, or one of LOSSES. `floor` is where each starts, at s = 0."""
+    losses = (u, *LOSSES)
+    drawn = np.array([[fit.share_threshold(b, c, z) for z in SIZES] for b in boot])
+    if missing := int(np.isnan(drawn).any(axis=1).sum()):
+        print(
+            f"{missing} of {len(boot)} resamples have no compactions; the share thresholds'"
+            " intervals leave them out"
         )
-    sizes = []
-    for z in SIZES:
-        m = np.interp(
-            z,
-            [b["median_context"] for b in bands],
-            [b["requests_to_reset"]["value"] for b in bands],
-        )
-        lower = LOWER[0] * (1 - LOWER[1] / z)
-        weight = fit.weight(p, c, m)
-        u_lower = (star(z, m) - lower) / weight
-        sizes.append(
-            {
-                "context": z,
-                "requests_to_reset": m,
-                "threshold": star(z, m),
-                "weight": weight,
-                "threshold_at_u": star(z, m) - weight * u,
-                "lower": lower,
-                "u_for_lower": u_lower,
-                # What a compaction at z that loses that share costs to redo.
-                "u_for_lower_usd": fit.redo(p, c) * u_lower * z * c.read,
-            }
-        )
-    mean = n.mean()
     return {
-        "turn_ends": len(x),
-        "sessions": len(np.unique(k)),
-        "requests_to_reset": mean,
         "rho": fit.redo(p, c),
         "u": u,
-        "bands": bands,
-        "sizes": sizes,
-        "form": {
-            "A": (mean * h - 1) / (mean * h + c.write - 1),
-            "FLOOR": (mean * h * p.K + F0) / (mean * h - 1),
-        },
-        "lower": {"A": LOWER[0], "FLOOR": LOWER[1]},
+        "floor": [
+            {"u": v, "context": fit.closed_form(p, c, 0, v)} for v in (0.0, *losses)
+        ],
+        "sizes": [
+            {
+                "context": z,
+                "threshold": {
+                    "value": fit.share_threshold(p, c, z),
+                    "interval_90": np.nanpercentile(drawn[:, k], (5, 95)),
+                },
+                "without_E": fit.share_threshold(replace(p, K=p.K - p.E), c, z),
+                "at_u": [
+                    {"u": v, "threshold": fit.share_threshold(p, c, z, v)}
+                    for v in losses
+                ],
+            }
+            for k, z in enumerate(SIZES)
+        ],
     }
 
 
@@ -478,7 +432,7 @@ def main():
     x = derived(e, m, price, rho)
     rng = np.random.default_rng(0)
     boot_e, boot_x = [], []
-    for _ in range(DRAWS):
+    for _ in range(fit.DRAWS):
         dd = frame([R[i] for i in rng.integers(0, len(R), len(R))])
         boot_e.append(coefficients(dd))
         # J is uncertain too: draw it to match its 90% interval from resampling the labels.
@@ -582,8 +536,12 @@ def main():
         "other_turns": raw(rest),
     }
 
-    # At the u the user's and Claude Code's compactions lose, which the doc's parameters give.
-    figures["share"] = share(S, p, c, x["u other"])
+    # At the u the user's and Claude Code's compactions lose, which the doc's parameters give, and
+    # over the cost model's sessions resampled as docs.py resamples them.
+    rng = np.random.default_rng(0)
+    draws = [rng.integers(0, len(C), len(C)) for _ in range(fit.DRAWS)]
+    boot = [fit.measure([C[i] for i in d], ttl) for d in draws]
+    figures["share"] = share(p, c, x["u other"], boot)
 
     fit.save_figures({"calibrate": figures})
     print(f"wrote the calibrate section of {fit.DOC_FIGURES}")
