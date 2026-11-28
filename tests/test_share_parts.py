@@ -5,9 +5,10 @@ import copy
 import importlib.util
 import itertools
 import json
-import os
 import subprocess
 from pathlib import Path
+
+from test_report import isolated
 
 ROOT = Path(__file__).parents[1]
 spec = importlib.util.spec_from_file_location("parts", ROOT / "evals/parts.py")
@@ -504,12 +505,11 @@ def test_the_next_work_runs_through_compactions_until_its_context_would_pass_the
         cwd=ROOT,
         capture_output=True,
         text=True,
-        env={
-            "PATH": os.environ["PATH"],
-            "TMPDIR": str(tmp_path),
-            "CLAUDE_CONFIG_DIR": str(tmp_path),
-            "SPARKJOY_DATA": str(tmp_path / "data"),
-        },
+        env=isolated(
+            tmp_path,
+            CLAUDE_CONFIG_DIR=str(tmp_path),
+            SPARKJOY_DATA=str(tmp_path / "data"),
+        ),
         check=True,
     )
     assert json.loads(run.stdout) == [
