@@ -50,6 +50,8 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.TEND_BOT_TOKEN }}
 
+      - uses: oven-sh/setup-bun@v2
+
       - uses: max-sixty/tend/claude@0.3.28
         with:
           github_token: ${{ secrets.TEND_BOT_TOKEN }}

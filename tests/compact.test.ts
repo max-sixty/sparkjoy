@@ -40,10 +40,10 @@ const FIVE_MINUTES = {
   ephemeral_1h_input_tokens: 0,
 }
 
-// The user's home, and the figures file `/sparkjoy report` saves in Claude
-// Code's configuration directory there.
+// The user's home, and sparkjoy's data folder there.
 const HOME = '/home/u'
-const FIGURES = `${HOME}/.claude/sparkjoy/figures.json`
+const DATA = `${HOME}/.claude/plugins/data/sparkjoy-sparkjoy`
+const TRANSCRIPT = `${HOME}/.claude/projects/-work/s1.jsonl`
 
 // Stands for the engine beneath the mod: a context of `tokens` until `resize`
 // changes it or a compaction leaves it unmeasured, the rate-limit windows
@@ -51,13 +51,15 @@ const FIGURES = `${HOME}/.claude/sparkjoy/figures.json`
 // otherwise), turns that end reporting `usage` (`HOUR` unless told
 // otherwise), a fork that answers `verdict` after a turn and `idleVerdict`
 // after an idle wait, each after `forkMs` (`null`: an empty reply) and
-// reporting `forkUsage`,
+// reporting `forkUsage` (the whole context read from the cache unless told
+// otherwise),
 // compactions that take `compactMs` and fail `compactFailures` times before
 // one succeeds, a turn whose end settles after `endMs`, a store holding
 // `stored` (what an earlier process left), a conversation of user messages
 // with the texts `conversation`, which a turn adds a message to and a
-// compaction its summary, a process environment of `env` (`HOME` unless told
-// otherwise), a file at `figuresAt` holding `saved` (none when undefined),
+// compaction its summary, a data folder at `data` (`DATA` unless told
+// otherwise, and null for one Claude Code can't make), a figures file there
+// holding `saved` (none when undefined),
 // settings that take each change the mod makes, and a record of what it was
 // asked.
 function engine(
@@ -68,7 +70,7 @@ function engine(
     verdict = COMPACT as string | null,
     idleVerdict = COMPACT as string | null,
     forkMs = 0,
-    forkUsage = USAGE as ModelUsage,
+    forkUsage = undefined as ModelUsage | undefined,
     endMs = 0,
     compactMs = 0,
     compactFailures = 0,
@@ -79,8 +81,7 @@ function engine(
       { kind: 'seven_day', percentUsed: 30 },
     ],
     usage = HOUR as TurnUsage,
-    env = { HOME } as Record<string, string>,
-    figuresAt = FIGURES,
+    data = DATA as string | null,
     saved = undefined as string | undefined,
   } = {},
 ) {
@@ -99,13 +100,28 @@ function engine(
   const sets: { key: string; value: unknown }[] = []
   const logs: string[] = []
 
+  // The files the mod wrote, by path.
+  const files: Record<string, string> = {}
+
   mock.store(on, stored)
   on('session.id', () => ({ value: 's1' }))
-  on('env.get', (_, e) => ({ value: env[e.name] }))
+  on('session.info', () => ({ value: { transcriptPath: TRANSCRIPT } }))
+  on('session.version', () => ({ value: { version: '2.1.332', base: '2.1.332' } }))
+  on('process.hookEnv', () => {
+    if (data === null) throw new Error('EACCES: permission denied, mkdir')
+    return { value: { CLAUDE_PLUGIN_DATA: data } }
+  })
   on('fs.read', (_, e) => {
-    if (e.path !== figuresAt || saved === undefined)
+    const written = files[e.path]
+    if (written !== undefined) return { value: written }
+    if (e.path !== `${data}/figures.json` || saved === undefined)
       throw new Error(`ENOENT: no such file or directory, open '${e.path}'`)
     return { value: saved }
+  })
+  on('fs.exists', (_, e) => ({ value: e.path in files }))
+  on('fs.write', (_, e) => {
+    files[e.path] = e.text
+    return { value: undefined }
   })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('turn.start', (_, e) => {
@@ -129,11 +145,13 @@ function engine(
   }))
   on('model.fork', async (_, e) => {
     forks.push(e.prompt)
+    // What the fork read: the context as it was sent.
+    const usage = forkUsage ?? { ...USAGE, cache_read_input_tokens: size ?? 0 }
     await clock.sleep(forkMs)
     const answer = e.prompt.includes('minutes ago') ? idleVerdict : verdict
     if (answer === null)
-      return { value: { isAnswered: false, reason: 'empty-reply', usage: forkUsage } }
-    return { value: { isAnswered: true, text: answer, usage: forkUsage } }
+      return { value: { isAnswered: false, reason: 'empty-reply', usage } }
+    return { value: { isAnswered: true, text: answer, usage } }
   })
   // A plugin's `$.session.compact` reaches here as the plugin made it, with no
   // `trigger`; the engine stamps it `plugin`.
@@ -201,6 +219,13 @@ function engine(
       presentation: { isFullscreen: false, columns: 80 },
     })
 
+  // The records the mod logged on each day, as it wrote them.
+  const records = (day: string) =>
+    (files[`${DATA}/log/s1/${day}.jsonl`] ?? '')
+      .split('\n')
+      .filter(line => line !== '')
+      .map(line => JSON.parse(line))
+
   return {
     clock,
     forks,
@@ -210,6 +235,7 @@ function engine(
     prompts,
     sets,
     logs,
+    records,
     begin,
     turn,
     resize,
@@ -229,15 +255,13 @@ const FITTED = JSON.stringify({
   P: 20_000,
   LAPSE: 0.01,
   TURN_MEDIAN: 12,
-  TURN_MEAN: 49.6,
 })
 
 // What the question says at 500k with the author's figures.
 const AUTHORS = [
-  'outputs about 6k tokens, thinking included.\n- Afterwards the context holds about 142k tokens',
-  'all of it but the 30k of system prompt and tools, which stay cached.\n- A cache write costs as much as 40 cached reads, and an output token as much as 100.',
-  'At 500k a compaction pays for itself after about 13 more requests',
-  'A turn runs a median of 9 requests and a mean of 38,',
+  'with 500k tokens of context. A compaction would cut it to about 142k,',
+  'and pays for itself once the session runs 13 more requests that need nothing it dropped',
+  'a turn runs a median of 9)',
 ]
 
 test('a finished turn compacts with no instructions and no /compact row', async ($, on) => {
@@ -252,6 +276,46 @@ test('a finished turn compacts with no instructions and no /compact row', async 
   expect(logs).toEqual(['Compacting at 500k tokens: the PR merged'])
 })
 
+test('each verdict and compaction is logged outside the transcript, with what its line drops', async ($, on) => {
+  const { begin, turn, resize, records } = engine(on)
+  await begin($)
+
+  await turn($, 't1')
+  resize(400_000)
+  await turn($, 't2')
+
+  const [kept, start, end, ...rest] = records('1970-01-01')
+  expect(rest.length).toBe(3)
+  expect(kept).toEqual({
+    t: '1970-01-01T00:00:00.000Z',
+    session: 's1',
+    transcript: TRANSCRIPT,
+    version: null,
+    claude_code: '2.1.332',
+    event: 'verdict',
+    kind: 'Compacting',
+    reason: 'the PR merged',
+    tokens: 500_000,
+    figures: expect.objectContaining({ FLOOR: 250_000, K: 142_000 }),
+    usage: { ...USAGE, cache_read_input_tokens: 500_000 },
+    missed: false,
+    answer: { compact: true, reason: 'the PR merged' },
+  })
+  expect(start).toEqual(
+    expect.objectContaining({
+      event: 'compaction',
+      phase: 'start',
+      tokens: 500_000,
+      resumed: false,
+    }),
+  )
+  expect(end).toEqual(expect.objectContaining({ event: 'compaction', phase: 'end' }))
+  expect(end.error).toBeUndefined()
+  expect(rest[0]).toEqual(
+    expect.objectContaining({ kind: 'Compacting', tokens: 400_000 }),
+  )
+})
+
 test('the question sizes the saving for the context it asks about', async ($, on) => {
   const { begin, forks, turn, resize } = engine(on, { verdict: KEEP })
   await begin($)
@@ -262,19 +326,10 @@ test('the question sizes the saving for the context it asks about', async ($, on
 
   // (500k read + 100 × 5.6k output + 39 × (142k − 30k) cache write) over the
   // 1.22 × (500k − 142k) each later request saves, rounded up.
-  expect(forks[0]).toContain(
-    'At 500k a compaction pays for itself after about 13 more requests',
-  )
-  expect(forks[1]).toContain(
-    'At 250k a compaction pays for itself after about 40 more requests',
-  )
-  // 9 and 38 requests × that saving, over what a compaction costs.
-  expect(forks[0]).toContain(
-    'keeping 500k through one more turn costs as much as about 0.7 compactions for a median turn and 3 for a mean one',
-  )
-  expect(forks[1]).toContain(
-    'keeping 250k through one more turn costs as much as about 0.2 compactions for a median turn and 1.0 for a mean one',
-  )
+  expect(forks[0]).toContain('with 500k tokens of context')
+  expect(forks[0]).toContain('pays for itself once the session runs 13 more requests')
+  expect(forks[1]).toContain('with 250k tokens of context')
+  expect(forks[1]).toContain('pays for itself once the session runs 40 more requests')
 })
 
 test('the question states the figures the report fitted to the user’s sessions', async ($, on) => {
@@ -283,22 +338,11 @@ test('the question states the figures the report fitted to the user’s sessions
 
   await turn($, 't1')
 
-  expect(forks[0]).toContain(
-    'outputs about 8k tokens, thinking included.\n- Afterwards the context holds about 120k tokens',
-  )
-  expect(forks[0]).toContain(
-    'all of it but the 20k of system prompt and tools, which stay cached.\n- A cache write costs as much as 25 cached reads, and an output token as much as 100.',
-  )
+  expect(forks[0]).toContain('A compaction would cut it to about 120k,')
   // (500k read + 100 × 8k output + 24 × (120k − 20k) cache write) over the
   // 1.24 × (500k − 120k) each later request saves, rounded up.
-  expect(forks[0]).toContain(
-    'At 500k a compaction pays for itself after about 8 more requests',
-  )
-  // 12 and 49.6 requests × that saving, over what a compaction costs: 1.53
-  // and 6.3.
-  expect(forks[0]).toContain(
-    'A turn runs a median of 12 requests and a mean of 50, so keeping 500k through one more turn costs as much as about 2 compactions for a median turn and 6 for a mean one',
-  )
+  expect(forks[0]).toContain('pays for itself once the session runs 8 more requests')
+  expect(forks[0]).toContain('a turn runs a median of 12)')
 })
 
 test('an idle session’s question states the fitted figures too', async ($, on) => {
@@ -310,24 +354,7 @@ test('an idle session’s question states the fitted figures too', async ($, on)
   await clock.settle()
 
   expect(forks[0]).toContain(
-    'makes a cache write of all but 20k of its 200k tokens, against about 100k after a compaction',
-  )
-})
-
-test('the figures are read from $CLAUDE_CONFIG_DIR where it is set', async ($, on) => {
-  const env = { HOME, CLAUDE_CONFIG_DIR: '/work/claude' }
-  const { begin, forks, turn } = engine(on, {
-    verdict: KEEP,
-    env,
-    figuresAt: '/work/claude/sparkjoy/figures.json',
-    saved: FITTED,
-  })
-  await begin($)
-
-  await turn($, 't1')
-
-  expect(forks[0]).toContain(
-    'At 500k a compaction pays for itself after about 8 more requests',
+    'the next request will write all but 20k of it to the cache again, against about 100k after a compaction',
   )
 })
 
@@ -362,9 +389,7 @@ test('a report saved mid-session counts from the next question', async ($, on) =
   await turn($, 't2')
 
   for (const text of AUTHORS) expect(forks[0]).toContain(text)
-  expect(forks[1]).toContain(
-    'At 500k a compaction pays for itself after about 8 more requests',
-  )
+  expect(forks[1]).toContain('pays for itself once the session runs 8 more requests')
 })
 
 test('each figure the file lacks, or holds where the sums can’t use it, stays the author’s', async ($, on) => {
@@ -382,17 +407,14 @@ test('each figure the file lacks, or holds where the sums can’t use it, stays 
 
   await turn($, 't1')
 
-  for (const text of AUTHORS.slice(0, 3)) expect(forks[0]).toContain(text)
-  // 12 requests × the author's saving, over what a compaction costs: 0.96.
-  expect(forks[0]).toContain(
-    'A turn runs a median of 12 requests and a mean of 38, so keeping 500k through one more turn costs as much as about 1.0 compactions for a median turn and 3 for a mean one',
-  )
+  for (const text of AUTHORS.slice(0, 2)) expect(forks[0]).toContain(text)
+  expect(forks[0]).toContain('a turn runs a median of 12)')
 })
 
 for (const [name, options] of [
   ['a figures file that isn’t JSON', { saved: '{"K": 120' }],
   ['a figures file that holds no object', { saved: 'null' }],
-  ['a process with no home or configuration directory', { saved: FITTED, env: {} }],
+  ['a data folder Claude Code can’t make', { saved: FITTED, data: null }],
 ] as const) {
   test(`${name} leaves the question the author’s`, async ($, on) => {
     const { begin, forks, turn } = engine(on, { verdict: KEEP, ...options })
@@ -463,14 +485,15 @@ test(
 
     await turn($, 't1')
 
-    expect(forks[0]).toContain('Afterwards the context holds about 300k tokens')
+    expect(forks[0]).toContain('A compaction would cut it to about 300k,')
   },
 )
 
-// What the question at 500k says between its costs and the answer's format.
+// What the question says between what it asks to decide and the answer's
+// format.
 const INSTRUCTIONS =
   'Keep the context while a pull request awaits review, and compact once it merges.'
-const ADDED = `still pay.\n\nThe user added these instructions for this decision:\n${INSTRUCTIONS}\n\nAnswer with`
+const ADDED = `\n\nThe user added these instructions for this decision:\n${INSTRUCTIONS}\n\nAnswer with`
 
 test(
   'the user’s instructions join both questions before the answer’s format',
@@ -504,7 +527,7 @@ for (const [name, options] of [
 
       await turn($, 't1')
 
-      expect(forks[0]).toContain('still pay.\n\nAnswer with')
+      expect(forks[0]).toContain('cost the next turns.\n\nAnswer with')
     },
   )
 }
@@ -600,6 +623,15 @@ test('a fork with no answer says so', async ($, on) => {
   expect(logs).toEqual(['No verdict at 500k tokens: empty-reply'])
 })
 
+test('a fork whose request was refused, and so read nothing, says nothing of the cache', async ($, on) => {
+  const { begin, logs, turn } = engine(on, { verdict: null, forkUsage: USAGE })
+  await begin($)
+
+  await turn($, 't1')
+
+  expect(logs).toEqual(['No verdict at 500k tokens: empty-reply'])
+})
+
 // What the question at 500k read and wrote: on a hit, all but the question
 // itself from the cache; on a miss, only the system prompt and tools, which
 // sit in a cache shared across sessions, writing the rest again.
@@ -611,7 +643,7 @@ const MISS = {
   cache_creation_input_tokens: 470_000,
 }
 
-test('a question read from the prompt cache adds no line', async ($, on) => {
+test('a question read from the prompt cache says nothing of it', async ($, on) => {
   const { begin, logs, turn } = engine(on, { forkUsage: HIT })
   await begin($)
 
@@ -620,10 +652,41 @@ test('a question read from the prompt cache adds no line', async ($, on) => {
   expect(logs).toEqual(['Compacting at 500k tokens: the PR merged'])
 })
 
+test('a question that read the whole context from the cache hit it, however long the reply after it', async ($, on) => {
+  const { begin, logs, turn } = engine(on, {
+    forkUsage: { ...USAGE, input_tokens: 80_000, cache_read_input_tokens: 500_000 },
+  })
+  await begin($)
+
+  await turn($, 't1')
+
+  expect(logs).toEqual(['Compacting at 500k tokens: the PR merged'])
+})
+
+test('near the context window the model still decides, at a turn end and in an idle session', async ($, on) => {
+  const { begin, clock, compactions, forks, logs, turn } = engine(on, {
+    tokens: 920_000,
+    verdict: KEEP,
+    idleVerdict: KEEP,
+  })
+  await begin($)
+
+  await turn($, 't1')
+  await clock.advance(IDLE)
+  await clock.settle()
+
+  expect(forks.length).toBe(2)
+  expect(compactions).toEqual([])
+  expect(logs).toEqual([
+    'Kept at 920k tokens: mid-debug',
+    'Kept at 920k tokens, idle 55 minutes: mid-debug',
+  ])
+})
+
 // The line sparkjoy adds after one reporting a bug.
 const BUG = 'That looks like a bug: /sparkjoy bug drafts a report of it.'
 
-test('a question at a turn’s end that missed the prompt cache says so and calls it a bug', async ($, on) => {
+test('a question at a turn’s end that missed the prompt cache says so in its verdict’s line and calls it a bug', async ($, on) => {
   const { begin, compactions, logs, turn } = engine(on, { forkUsage: MISS })
   await begin($)
 
@@ -631,9 +694,20 @@ test('a question at a turn’s end that missed the prompt cache says so and call
 
   expect(compactions).toEqual([''])
   expect(logs).toEqual([
-    'Missed the prompt cache at 500k tokens: read 30k of 502k from it',
+    'Compacting at 500k tokens, after missing the prompt cache the turn had just written to (read 30k of 502k): the PR merged',
     BUG,
-    'Compacting at 500k tokens: the PR merged',
+  ])
+})
+
+test('an unreadable verdict from a question that missed the prompt cache calls it a bug once', async ($, on) => {
+  const { begin, logs, turn } = engine(on, { forkUsage: MISS, verdict: 'compact it' })
+  await begin($)
+
+  await turn($, 't1')
+
+  expect(logs).toEqual([
+    'Unreadable verdict at 500k tokens, after missing the prompt cache the turn had just written to (read 30k of 502k): compact it',
+    BUG,
   ])
 })
 
@@ -647,8 +721,7 @@ test('a question after a turn that wrote nothing to the cache says it missed, bu
   await turn($, 't1')
 
   expect(logs).toEqual([
-    'Missed the prompt cache at 500k tokens: read 30k of 502k from it',
-    'Compacting at 500k tokens: the PR merged',
+    'Compacting at 500k tokens, after missing the prompt cache (read 30k of 502k): the PR merged',
   ])
 })
 
@@ -662,7 +735,7 @@ test('an unreadable verdict says so and calls it a bug', async ($, on) => {
   expect(logs).toEqual(['Unreadable verdict at 500k tokens: compact it', BUG])
 })
 
-test('an idle question that missed the prompt cache names an account switch', async ($, on) => {
+test('an idle question that missed the prompt cache says so in its verdict’s line, and not that it’s a bug', async ($, on) => {
   const { begin, clock, logs, turn } = engine(on, {
     tokens: 200_000,
     forkUsage: { ...MISS, cache_creation_input_tokens: 170_000 },
@@ -674,13 +747,14 @@ test('an idle question that missed the prompt cache names an account switch', as
   await clock.settle()
 
   expect(logs).toEqual([
-    'Missed the prompt cache at 200k tokens, idle 55 minutes: read 30k of 202k from it. Signing in to another account while idle drops the cache.',
-    'Compacting at 200k tokens, idle 55 minutes: the PR merged',
+    'Compacting at 200k tokens, idle 55 minutes, after missing the prompt cache (read 30k of 202k; /sparkjoy report lists the misses): the PR merged',
   ])
 })
 
 test('a compaction the engine refuses says why, and is tried again once the session sits idle', async ($, on) => {
-  const { begin, clock, compactions, logs, turn } = engine(on, { compactFailures: 1 })
+  const { begin, clock, compactions, logs, records, turn } = engine(on, {
+    compactFailures: 1,
+  })
   await begin($)
 
   await turn($, 't1')
@@ -689,6 +763,9 @@ test('a compaction the engine refuses says why, and is tried again once the sess
   expect(logs.length).toBe(2)
   expect(logs[0]).toBe('Compacting at 500k tokens: the PR merged')
   expect(logs[1]).toStartWith("Didn't compact at 500k tokens: ")
+  // The log's end of the compaction carries the same error.
+  const refused = logs[1] ?? ''
+  expect(records('1970-01-01')[2]?.error).toBe(refused.slice(refused.indexOf(': ') + 2))
 
   await clock.advance(IDLE)
   await clock.settle()
@@ -858,7 +935,7 @@ test('a session left idle is asked again before its prompt cache lapses', async 
   await clock.settle()
   expect(forks.length).toBe(1)
   expect(forks[0]).toContain(
-    'makes a cache write of all but 30k of its 200k tokens, against about 112k after a compaction',
+    'the next request will write all but 30k of it to the cache again, against about 112k after a compaction',
   )
   expect(forks[0]).not.toContain('pays for itself')
   expect(compactions).toEqual([''])
@@ -1030,9 +1107,7 @@ test('an idle session on a five-minute cache is asked after 4 minutes', async ($
   await clock.settle()
   expect(forks.length).toBe(1)
   expect(forks[0]).toContain('Your turn ended 4 minutes ago')
-  expect(forks[0]).toContain(
-    'The prompt cache holding the conversation lapses within a few minutes.',
-  )
+  expect(forks[0]).toContain('the prompt cache holding it lapses within a few minutes')
 
   // Kept, the context stays as it was, and nothing asks again at 55 minutes.
   await clock.advance(IDLE)
@@ -1202,20 +1277,6 @@ test('/sparkjoy says when the session’s window leaves it nothing to ask', asyn
   expect(text?.split('\n')[1]).toBe(
     "This session's context window is 200k, and sparkjoy acts only in sessions with a 1M window, so it asks nothing here.",
   )
-})
-
-test('on Windows, sparkjoy finds the report’s figures under %USERPROFILE%', async ($, on) => {
-  const profile = '/Users/u'
-  const { begin, type } = engine(on, {
-    env: { USERPROFILE: profile },
-    figuresAt: `${profile}/.claude/sparkjoy/figures.json`,
-    saved: JSON.stringify({ IDLE_FLOOR: 120_000 }),
-  })
-  await begin($)
-
-  const { text } = await type($, 'sparkjoy')
-
-  expect(text).toContain("in an idle session from 120k (the report's fit).")
 })
 
 test(

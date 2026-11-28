@@ -7,6 +7,7 @@ transcripts modified since the window's start are opened, and `read` lowers the 
 priority, since a full scan of ~/.claude/projects is heavy.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -29,12 +30,21 @@ PRICES = {
     "claude-opus-5": (5, 25, 6.25, 10, 0.50),
     "claude-haiku-5-5": (0.5, 2.5, 0.625, 1, 0.05),  # its long-context tier, above 100k
 }
-PROJECTS = (
-    Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "projects"
+CONFIG = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+PROJECTS = CONFIG / "projects"
+# sparkjoy's data folder, where hooks/register.ts keeps its log and /sparkjoy report saves the figures
+# it reads: $SPARKJOY_DATA, which sparkjoy's skills set from the ${CLAUDE_PLUGIN_DATA} Claude Code
+# substitutes in their text, or else the folder Claude Code gives sparkjoy installed from its own
+# marketplace. Not $CLAUDE_PLUGIN_DATA itself: a session's shell can hold another plugin's.
+DATA = Path(
+    os.environ.get("SPARKJOY_DATA") or CONFIG / "plugins" / "data" / "sparkjoy-sparkjoy"
 )
 WINDOW = 1_000_000
 AUTO = 965_000  # where Claude Code compacts a 1M window on its own
 SPAN = 20  # requests over which re-reads after a compaction are counted
+# What the first request after a compaction grew by, at most, as though the session hadn't compacted:
+# its growth can't be told from the compacted prompt, so a new message's worth stands in for it.
+NEW_MESSAGE = 4_000
 # β, the exponent of a request's effectiveness at context x, (x / WINDOW)^β: each doubling of the
 # context makes a request 2^β times as effective, and at 0 every request is equally effective. No
 # session measures it, so every figure takes this base case, where a request at 250k gets half as
@@ -61,23 +71,36 @@ IDLE = {
     3600: 55 * 60,
     300: 4 * 60,
 }  # seconds idle before sparkjoy asks, by cache lifetime (IDLE_MS, hooks/register.ts)
-# The line sparkjoy writes in the transcript for each verdict (`judge` and `afterTurn` in
-# hooks/register.ts), under its current name and the one it had before it was published.
+# The line sparkjoy writes in the transcript for each verdict (`judge` in hooks/register.ts),
+# under its current name and the one it had before it was published. A question that missed the
+# prompt cache (MISSED there) says how much of its input it read from it, then may say more.
 VERDICT = re.compile(
     r"(?P<plugin>sparkjoy|compact-when-done): (?:(?P<kind>Compacting|Would compact|Kept|Unreadable verdict|"
-    r"No verdict|Dropped the verdict) at (?P<tokens>\d+)k tokens(?:, idle (?P<idle>\d+) minutes)?|Failed): "
-    r"(?P<reason>.*)",
+    r"No verdict|Dropped the verdict) at (?P<tokens>\d+)k tokens(?:, idle (?P<idle>\d+) minutes)?"
+    r"(?:, after missing the prompt cache[^(]* \(read (?P<read>\d+)k of (?P<input>\d+)k(?:;[^)]*)?\))?"
+    r"|Failed): (?P<reason>.*)",
     re.S,
-)
-# The line it writes before a verdict whose question read less than nine tenths of its input from
-# the prompt cache (MISSED in hooks/register.ts), which in an idle session goes on to say why.
-MISSED = re.compile(
-    r"sparkjoy: Missed the prompt cache at \d+k tokens(?:, idle \d+ minutes)?: "
-    r"read (?P<read>\d+)k of (?P<input>\d+)k from it(?:\. .*)?"
 )
 # Every line sparkjoy writes in the transcript, under either name, and those Claude Code writes
 # about it there.
 LINE = ("sparkjoy: ", "compact-when-done: ")
+# The line sparkjoy writes as it starts a compaction: its verdict to compact, or, after Claude Code
+# restarted before one landed, that it is finishing it (`resume` in hooks/register.ts).
+COMPACTING = re.compile(
+    r"(?:sparkjoy|compact-when-done): (?:Compacting|Finishing the compaction) at "
+)
+# The row a typed `/compact` draws. Until 8 November 2026 sparkjoy compacted by running `/compact`,
+# which drew one too, beside its line.
+TYPED = "<command-name>/compact</command-name>"
+# How long before a compaction starts each mark of its origin may have been logged, in seconds; a
+# mark logged after it ended is another compaction's. A mark is placed by when it was logged rather
+# than where: Claude Code can log the end of the turn a compaction follows, the mark among it, after
+# the compaction's boundary. Of sparkjoy's 1,352 compactions in my sessions from 16 October to 27
+# November 2026, all but 10 began within a second of its line and the rest within 60 s; 411 of the
+# 421 typed `/compact` rows lie within a second of the start and the rest within 10 s; Claude
+# Code's line about an idle compaction follows its boundary within 10 s.
+BEFORE = {"sparkjoy": 60, "typed": 10}
+IDLE_LINE = 10
 KINDS = {
     "Compacting": "compacted",
     "Would compact": "would compact",
@@ -85,8 +108,15 @@ KINDS = {
     "Unreadable verdict": "unreadable",
     "No verdict": "no verdict",
     "Dropped the verdict": "dropped",
-    None: "failed",
+    "Failed": "failed",
 }
+# sparkjoy's log in its data folder (LOG in hooks/register.ts): a JSON line for each
+# verdict, its `kind` the line's word for it, and for each compaction it starts and ends, in a file
+# a session and a day. Where a session has one, it is what `transcript` reads sparkjoy's verdicts
+# and compactions from; the lines and marks above stand for it in sessions from before it, and a
+# line for a verdict whose record was never written.
+LOG = DATA / "log"
+
 # Where a session's name comes from, in order of preference: one the user gave it, then
 # the ones Claude Code generates. Failing all three, its first prompt names it.
 TITLES = {
@@ -96,9 +126,10 @@ TITLES = {
 }
 
 # Request kinds. A FIRST request opens the session; a USER request is the first
-# after a compaction the user typed, which every replayed arm keeps; a POLICY
-# request is the first after one that sparkjoy or Claude Code's auto-compaction
-# made, which each arm decides for itself; NORMAL is every other request.
+# after a compaction no replayed arm decides, which every arm keeps: one the user
+# typed, or one another tool made; a POLICY request is the first after one that
+# sparkjoy or Claude Code's auto-compaction made, which each arm decides for
+# itself; NORMAL is every other request.
 FIRST, USER, POLICY, NORMAL = range(4)
 
 
@@ -129,6 +160,7 @@ class Session:
     verdicts: list  # what sparkjoy logged
     lines: list  # every line in `LINE`, as (seconds since the epoch, text)
     t: np.ndarray  # when each request started, in seconds since the epoch
+    done: np.ndarray  # when the last block of each request's reply was logged
     sparkjoy: np.ndarray  # the request is the first after a compaction sparkjoy made
     kind: np.ndarray  # one of the request kinds above
     size: np.ndarray  # prompt tokens: uncached input + cache read + cache write
@@ -150,7 +182,7 @@ class Session:
     calls: list  # each request's tool calls, as (name, digest of the input, the file_path it names or None)
     failed: list  # each request's tool calls whose result was an error, as the result's opening text
     said: list  # what the user typed, as (seconds since the epoch, text, whether it came mid-turn)
-    compactions: list  # (seconds since the epoch, "sparkjoy", "idle", "auto" or "user", tokens before)
+    compactions: list  # (seconds since the epoch, its origin (`origin`), tokens before)
     summaries: (
         list  # the text of each compaction's summary, in tokens at 4 characters each
     )
@@ -281,6 +313,79 @@ def typed(e):
     )
 
 
+def digest(message):
+    """A message's hash, as Claude Code's request records name it: sha256 of its JSON, keys sorted
+    and compact."""
+    return hashlib.sha256(
+        json.dumps(
+            message, separators=(",", ":"), sort_keys=True, ensure_ascii=False
+        ).encode()
+    ).hexdigest()
+
+
+def request_messages(lines):
+    """The requests a transcript records, by id, and a function giving a request's messages in
+    order, each None where neither a blob nor the transcript's lines hold it.
+
+    An `api-request` record lists its messages as its base's first `keep` and then the hashes of its
+    `tail`. An `api-request-blob` holds a message by its hash; the rest are rebuilt from the user and
+    assistant lines, whose hash names them: an assistant message from its lines merged by message
+    id, a user message from one line or a run of consecutive ones, as for the results of parallel
+    tool calls."""
+    blobs, rebuilt, requests = {}, {}, {}
+    run, by_id = [], {}
+
+    def add(message):
+        rebuilt[digest(message)] = message
+
+    for e in lines:
+        kind = e.get("type")
+        if kind == "api-request-blob":
+            blobs[e["hash"]] = e["message"]
+        elif kind == "api-request":
+            requests[e["id"]] = e
+        elif (
+            kind in ("user", "assistant")
+            and isinstance(e.get("message"), dict)
+            and not e.get("isSidechain")
+        ):
+            m = e["message"]
+            content = m.get("content")
+            add({"role": m.get("role"), "content": content})
+            blocks = (
+                [{"type": "text", "text": content}]
+                if isinstance(content, str)
+                else list(content or [])
+            )
+            if m.get("role") == "user":
+                run.append(blocks)
+                for start in range(len(run)):
+                    add(
+                        {"role": "user", "content": [b for c in run[start:] for b in c]}
+                    )
+            else:
+                run = []
+                merged = by_id.setdefault(m.get("id"), [])
+                merged.extend(blocks)
+                add({"role": "assistant", "content": list(merged)})
+    memo = {}
+
+    def messages(rid):
+        # Down the chain of bases without recursion, since it runs hundreds of requests deep.
+        chain, r = [], rid
+        while r in requests and r not in memo:
+            chain.append(r)
+            r = requests[r].get("base")
+        for r in reversed(chain):
+            record = requests[r]
+            base = record.get("base")
+            head = memo[base][: record.get("keep", 0)] if base in memo else []
+            memo[r] = head + [blobs.get(h) or rebuilt.get(h) for h in record["tail"]]
+        return memo[rid]
+
+    return requests, messages
+
+
 def load(root, since, until):
     """The main thread of each interactive session in [since, until)."""
     # A subagent's transcript sits a level deeper. Sorted, so the resampling draws the same sessions
@@ -302,8 +407,10 @@ def transcript(path, since=None, until=None):
         for t, default in ((since, "0"), (until, "~"))
     )
     title_lines = tuple(f'{{"type":"{t}"' for t in TITLES)
-    reqs, comps, prompts, verdicts, lines = {}, [], [], [], []
-    entry, version, asked, missed, background = None, None, None, None, False
+    reqs, prompts, verdicts, lines = {}, [], [], []
+    entry, version, background = None, None, False
+    # When each mark of a compaction's origin was logged, and each compaction's boundary.
+    marks, bounds = {"sparkjoy": [], "typed": [], "idle": []}, []
     titles, first, models, said, failed, summaries = {}, None, Counter(), [], {}, []
     for raw in path.open(errors="replace"):
         prompt = (
@@ -343,6 +450,9 @@ def transcript(path, since=None, until=None):
             prompts.append(t)
             if text := typed(e):
                 said.append((t, text, False))
+            content = (e.get("message") or {}).get("content")
+            if isinstance(content, str) and content.lstrip().startswith(TYPED):
+                marks["typed"].append(t)
         elif e.get("type") == "attachment":
             # Plain text typed mid-turn is folded into the turn at its next tool result. Its
             # timestamp is when it was typed; another agent's message carries isMeta.
@@ -408,10 +518,13 @@ def transcript(path, since=None, until=None):
             text = str(e.get("content", ""))
             if text.startswith(LINE):
                 lines.append((t, text))
-            if line := MISSED.fullmatch(text):
-                missed = int(line["read"]) * 1000, int(line["input"]) * 1000
-            elif line := VERDICT.fullmatch(text):
-                kind = KINDS[line["kind"]]
+            if COMPACTING.match(text):
+                marks["sparkjoy"].append(t)
+            elif text.startswith("Compacted while idle"):
+                # Claude Code's idle compaction logs as an auto compaction, then says so.
+                marks["idle"].append(t)
+            if line := VERDICT.fullmatch(text):
+                kind = KINDS[line["kind"] or "Failed"]
                 verdicts.append(
                     Verdict(
                         t,
@@ -420,43 +533,40 @@ def transcript(path, since=None, until=None):
                         line["tokens"] and int(line["tokens"]) * 1000,
                         line["idle"] and int(line["idle"]),
                         line["reason"],
-                        missed,
+                        line["read"]
+                        and (int(line["read"]) * 1000, int(line["input"]) * 1000),
                     )
                 )
-                missed = None
-                asked = t if kind == "compacted" else asked
-            elif (
-                text.startswith("Compacted while idle")
-                and comps
-                and t - comps[-1][0] < 10
-            ):
-                # Claude Code's idle compaction logs as an auto compaction, then says so.
-                comps[-1][4] = "idle"
         elif e.get("subtype") == "compact_boundary":
             md = e.get("compactMetadata") or {}
-            took = (md.get("durationMs") or 0) / 1000
-            # sparkjoy starts compacting as soon as it writes its line. Of the 351 compactions
-            # that followed one in my sessions (16 Oct to 15 Nov 2026), 349 began
-            # within 2 s of it; the other two were the user's, 20 minutes or more later, after
-            # a compaction of sparkjoy's that never ran.
-            mod = asked is not None and t - took - asked < 60
-            auto = md.get("trigger") == "auto"
-            comps.append(
-                [
+            bounds.append(
+                (
                     t,
-                    mod or auto,
-                    took,
-                    mod,
-                    "sparkjoy" if mod else "auto" if auto else "user",
+                    (md.get("durationMs") or 0) / 1000,
+                    md.get("trigger"),
                     md.get("preTokens"),
-                ]
+                )
             )
-            asked = None
     if entry != "cli" or len(reqs) < 2:
         return None
     name = (
         next((titles[k] for k in TITLES if titles.get(k)), None) or first or "untitled"
     )
+    records = logged(path, lo, hi)
+    if records:
+        # A verdict's record stands for its line, timed within a second of it. A line whose record
+        # was never written, as when the process exited with the write still queued, still counts.
+        recorded = [logged_verdict(r) for r in records if r["event"] == "verdict"]
+        verdicts = [
+            v
+            for v in verdicts
+            if not any(r.kind == v.kind and abs(r.t - v.t) <= 1 for r in recorded)
+        ] + recorded
+        verdicts.sort(key=lambda v: v.t)
+    comps = [
+        (t, took, origin(t - took, t, trigger, marks, spans(records)), before)
+        for t, took, trigger, before in bounds
+    ]
     return session(
         sorted(reqs.values(), key=lambda q: q[0]),
         comps,
@@ -472,6 +582,82 @@ def transcript(path, since=None, until=None):
         said=sorted(said),
         summaries=summaries,
     )
+
+
+def logged(path, lo="0", hi="~"):
+    """The records sparkjoy logged in [lo, hi), ISO times, for the session whose transcript is at
+    `path`, oldest first."""
+    found = []
+    for f in (LOG / path.stem).glob("*.jsonl"):
+        for raw in f.open(errors="replace"):
+            try:
+                r = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if lo <= r.get("t", "") < hi:
+                found.append(r)
+    return sorted(found, key=lambda r: r["t"])
+
+
+def epoch(iso):
+    return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
+
+
+def logged_verdict(r):
+    """A verdict from its record in sparkjoy's log."""
+    u = r.get("usage")
+    read = u and u["cache_read_input_tokens"]
+    return Verdict(
+        epoch(r["t"]),
+        "sparkjoy",
+        KINDS[r["kind"]],
+        r.get("tokens"),
+        r.get("idle_minutes"),
+        r["reason"],
+        (read, u["input_tokens"] + read + u["cache_creation_input_tokens"])
+        if r.get("missed")
+        else None,
+    )
+
+
+def spans(records):
+    """Each compaction sparkjoy logged, from its start to its end, in seconds since the epoch. A
+    start whose process ended before its end leaves none; the next process logs its own."""
+    made, start = [], None
+    for r in records:
+        if r["event"] != "compaction":
+            continue
+        if r["phase"] == "start":
+            start = epoch(r["t"])
+        elif start is not None:
+            made.append((start, epoch(r["t"])))
+            start = None
+    return made
+
+
+# The origins of the compactions each replayed arm decides for itself (POLICY); the rest, "user"
+# and "other", every arm keeps (USER).
+DECIDED = ("sparkjoy", "auto", "idle")
+
+
+def origin(start, end, trigger, marks, made=()):
+    """Who made a compaction that ran from `start` to `end`: "sparkjoy", where it lies within
+    one sparkjoy logged (`made`, each from its start to its end) or its line marks it; "user", by a
+    typed `/compact` row; Claude Code's own, "idle" where it said so and "auto" otherwise; or
+    "other", another tool, such as a mod under test, where nothing marks it. `marks` holds the times
+    the transcript logged each kind of mark."""
+
+    def near(kind):
+        return any(start - BEFORE[kind] <= m <= end for m in marks[kind])
+
+    if any(a - 1 <= start and end <= b + 1 for a, b in made) or near("sparkjoy"):
+        return "sparkjoy"
+    if near("typed"):
+        return "user"
+    if trigger == "auto":
+        idle = any(end - 1 <= m <= end + IDLE_LINE for m in marks["idle"])
+        return "idle" if idle else "auto"
+    return "other"
 
 
 def session(reqs, comps, prompts, failed, **meta):
@@ -494,16 +680,14 @@ def session(reqs, comps, prompts, failed, **meta):
     kind = np.full(n, NORMAL)
     kind[0] = FIRST
     sparkjoy = np.zeros(n, bool)
-    for ct, policy, _, mod, _, _ in comps:
+    for ct, _, by, _ in comps:
         j = np.searchsorted(t, ct)  # the first request after the compaction
         if 0 < j < n:
-            kind[j] = POLICY if policy else USER
-            sparkjoy[j] = mod
+            kind[j] = POLICY if by in DECIDED else USER
+            sparkjoy[j] = by == "sparkjoy"
     grew = np.maximum(np.diff(size, prepend=0), 0)
     grew[kind != NORMAL] = 0
-    # Across a compaction the request's growth can't be told from the compacted
-    # prompt; a new message's worth stands in for it.
-    grew[kind == POLICY] = np.minimum(write[kind == POLICY], 4_000)
+    grew[kind == POLICY] = np.minimum(write[kind == POLICY], NEW_MESSAGE)
     # The requests after a compaction, whose growth includes what it made them read again.
     recent = np.zeros(n, bool)
     for j in np.flatnonzero((kind == USER) | (kind == POLICY)):
@@ -511,6 +695,7 @@ def session(reqs, comps, prompts, failed, **meta):
     return Session(
         **meta,
         t=t,
+        done=np.array([q[4] for q in reqs]),
         sparkjoy=sparkjoy,
         kind=kind,
         size=size,
@@ -525,11 +710,11 @@ def session(reqs, comps, prompts, failed, **meta):
         rewrote=(kind == NORMAL) & (write > 0.5 * size) & (size > 50_000),
         end=np.array([q[2] for q in reqs]),
         ttl=300 if 2 * write5.sum() >= write.sum() else 3600,
-        durations=[c[2] for c in comps if c[2]],
+        durations=[took for _, took, _, _ in comps if took],
         reads=[q[3] for q in reqs],
         calls=[list(q[5].values()) for q in reqs],
         failed=[[failed[i] for i in q[5] if i in failed] for q in reqs],
-        compactions=[(c[0], c[4], c[5]) for c in comps],
+        compactions=[(ct, by, before) for ct, _, by, before in comps],
         visible=np.array(
             [sum(q[6].values()) / 4 if q[7] == meta["model"] else np.nan for q in reqs]
         ),
@@ -697,22 +882,30 @@ def terms(p, c):
     return h, c0, F0
 
 
+def redo(p, c):
+    """ρ, what redoing one token of the work a compaction lost costs, in cached reads: a request just
+    after a compaction costs c(K) and adds g tokens, so ρ = c(K) / g. A compaction at context x that
+    loses u, the share of x that is unfinished state its summary can't carry, then costs ρ u x more."""
+    h, c0, _ = terms(p, c)
+    return (h * p.K + c0) / p.g
+
+
 def eta(x, beta):
     """The effectiveness of a request with context x, (x / WINDOW)^β: 1 at the full window, and at any x
     where β is 0."""
     return (np.asarray(x, float) / WINDOW) ** beta
 
 
-def cycle(p, c, X, beta, lost=0.0, asks=None):
+def cycle(p, c, X, beta, u=0.0, asks=None):
     """A cycle that compacts at X, as integrals over its context from K to X, so each is g times the sum
-    over its (X - K) / g requests: its cost, the requests' c(x) plus g (F(X) + D) for the compaction, and
-    its effectiveness, the requests' η(x) with exponent β. `lost` is D, what the detail a compaction
-    drops costs the requests after it, in cached reads. With `asks`, sparkjoy's turn-end floor, the cost
-    also counts its questions: one at each turn end from the floor, a turn growing the context by its
-    measured mean growth per turn, and the one that compacts at X short of AUTO."""
+    over its (X - K) / g requests: its cost, the requests' c(x) plus g (F(X) + ρ u X) for the compaction,
+    and its effectiveness, the requests' η(x) with exponent β. `u` is the share of the context a
+    compaction loses (`redo`). With `asks`, sparkjoy's turn-end floor, the cost also counts its
+    questions: one at each turn end from the floor, a turn growing the context by its measured mean
+    growth per turn, and the one that compacts at X short of AUTO."""
     h, c0, F0 = terms(p, c)
     K, X = p.K, np.asarray(X, float)
-    cost = p.g * (X + F0 + lost) + h * (X**2 - K**2) / 2 + c0 * (X - K)
+    cost = p.g * (X + F0 + redo(p, c) * u * X) + h * (X**2 - K**2) / 2 + c0 * (X - K)
     if asks is not None:
         q0 = c.output * CHECK_OUTPUT
         a = np.minimum(asks, X)
@@ -728,38 +921,41 @@ def cycle(p, c, X, beta, lost=0.0, asks=None):
     return cost, effectiveness
 
 
-def per_unit(p, c, X, beta, lost=0.0, asks=None):
+def per_unit(p, c, X, beta, u=0.0, asks=None):
     """J(X), the long-run cost per unit of effectiveness of compacting at X; at β = 0, a request's mean cost
     over the cycle, its share of the compaction included, and with `asks`, sparkjoy's questions."""
-    cost, effectiveness = cycle(p, c, X, beta, lost, asks)
+    cost, effectiveness = cycle(p, c, X, beta, u, asks)
     return cost / effectiveness
 
 
-def curve(p, c, beta, lost=0.0, step=1_000, asks=None):
+def curve(p, c, beta, u=0.0, step=1_000, asks=None):
     """J on a grid of X from K, or with `asks`, from sparkjoy's floor, below which it can't compact, to
     AUTO, every `step` tokens."""
     start = p.K + step if asks is None else asks
     X = np.append(np.arange(start, AUTO, float(step)), AUTO)
-    return X, per_unit(p, c, X, beta, lost, asks)
+    return X, per_unit(p, c, X, beta, u, asks)
 
 
-def steady(p, c, beta, lost=0.0):
+def steady(p, c, beta, u=0.0):
     """The compaction threshold that minimises cost per unit of effectiveness, to 100 tokens, which at β = 0
     is the closed form's; AUTO means not before Claude Code."""
-    X, J = curve(p, c, beta, lost, step=100)
+    X, J = curve(p, c, beta, u, step=100)
     return float(X[J.argmin()])
 
 
-def lost_for(p, c, X, beta):
-    """D, in cached reads, that puts the steady-state most efficient threshold at X, or None where none
-    does. At the most efficient threshold one more request's cost, c(X) + g, per unit of its effectiveness
-    η(X), equals J(X), which solved for D gives this; it is negative where the threshold lies beyond X
-    with no lost detail. Near β = 1 that condition marks J's maximum rather than its minimum, and no D
-    puts the threshold at X."""
+def u_for(p, c, X, beta):
+    """The u that puts the steady-state most efficient threshold at X, or None where none does. At the
+    most efficient threshold the cost of compacting one request later, c(X) + g (1 + ρ u), per unit of
+    that request's effectiveness η(X), equals J(X), which solved for u gives this; it is negative where
+    the threshold lies beyond X when a compaction loses nothing. Near β = 1 that condition marks J's
+    maximum rather than its minimum, and no u puts the threshold at X."""
     h, c0, _ = terms(p, c)
     cost, effectiveness = cycle(p, c, X, beta)
-    D = ((h * X + c0 + p.g) * effectiveness / eta(X, beta) - cost) / p.g
-    return D if abs(steady(p, c, beta, D) - X) < 1_000 else None
+    n = eta(X, beta)
+    u = (cost * n - (h * X + c0 + p.g) * effectiveness) / (
+        p.g * redo(p, c) * (effectiveness - X * n)
+    )
+    return u if abs(steady(p, c, beta, u) - X) < 1_000 else None
 
 
 def points(p, c):
@@ -820,6 +1016,47 @@ def idle_break_even(p, c):
     return (c.output * p.N + c.write * p.K) / (c.write - 1)
 
 
+# The decision at a turn end, given the share of the context the work ahead needs.
+
+
+def to_reset(S, low=200_000):
+    """Each turn end at a context of `low` or more, as arrays of its context, the requests until its
+    session's next reset (the next compaction, or the session's end), and the session's index. A turn
+    end a compaction ended at once is left out: how long its session would have run on had it kept is
+    unobserved, not zero."""
+    x, n, k = [], [], []
+    for i, s in enumerate(S):
+        resets = np.flatnonzero((s.kind == USER) | (s.kind == POLICY))
+        for j in np.flatnonzero(s.end & (s.size >= low)):
+            later = resets[resets > j]
+            left = (later[0] if len(later) else len(s.size)) - (j + 1)
+            if len(later) and left == 0:
+                continue
+            x.append(s.size[j])
+            n.append(left)
+            k.append(i)
+    return np.array(x, float), np.array(n, float), np.array(k)
+
+
+def share_threshold(p, c, x, n):
+    """s*(x), the share of a context x that the work ahead needs under which compacting at a turn end
+    costs less over the n requests to the session's next reset, when the compaction loses nothing
+    beyond what is read back. Keeping, they read x each, n h x. Compacting costs F(x) = x + F0, and
+    they read K and what the work reads back, the share s of x, written once:
+    x + F0 + n h K + s x (n h + w - 1). With one n, s*(x) = A (1 - FLOOR / x), with
+    A = (n h - 1) / (n h + w - 1) and FLOOR = (n h K + F0) / (n h - 1). A compaction that also loses u
+    (`redo`) costs ρ u x more, so it pays when s + λ u < s*(x) (`weight`)."""
+    h, _, F0 = terms(p, c)
+    return (n * h * (x - p.K) - x - F0) / (x * (n * h + c.write - 1))
+
+
+def weight(p, c, n):
+    """λ = ρ / (n h + w - 1), what a share u lost weighs against the share s read back at a turn end
+    with n requests to the session's next reset: ρ u x against s x (n h + w - 1)."""
+    h, _, _ = terms(p, c)
+    return redo(p, c) / (n * h + c.write - 1)
+
+
 CHECK_OUTPUT = 100  # output tokens of a question
 
 
@@ -834,21 +1071,22 @@ def question(size, c, read=None):
 # and only the compactions move.
 
 
-def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0, asks=None):
-    """One session's cost under a policy, with the context each request then carried and what
-    each request cost, a compaction before it included.
+def replay(s, p, c, threshold, ttl, every=False, idle=None, asks=None):
+    """One session's cost under a policy, with the context each request then carried, what each
+    request cost, a compaction before it included, and the context each compaction the policy or
+    Claude Code made before a request compacted (0 where none did), from which a caller prices
+    what the compactions lost (`redo`).
     The policy compacts at the end of any turn (or with `every`, after any request) whose
     context reaches `threshold`, and with `idle`, at any turn end from that size after which
-    the session sits idle for IDLE[ttl] seconds, as sparkjoy's timer does. Each
-    compaction the policy or Claude Code makes also costs `lost`, D in cached reads. Each of
-    `threshold`, `idle` and `lost` can instead hold one value per request: the threshold at a turn
-    end after that request, the threshold if the session then sits idle, and what a compaction
-    after it costs. With `asks`, sparkjoy's floors at a turn end and in an idle session (None for no idle
-    floor), each request's cost also counts the `question` sparkjoy asks after it: at a turn end from
-    the first floor, and once the session has sat idle, from the second, unless the turn end
-    compacted. An idle question that keeps the context keeps its cache alive for `ttl` more."""
+    the session sits idle for IDLE[ttl] seconds, as sparkjoy's timer does. Each of `threshold`
+    and `idle` can instead hold one value per request: the threshold at a turn end after that
+    request, and the threshold if the session then sits idle. With `asks`, sparkjoy's floors at a
+    turn end and in an idle session (None for no idle floor), each request's cost also counts the
+    `question` sparkjoy asks after it: at a turn end from the first floor, and once the session has
+    sat idle, from the second, unless the turn end compacted. An idle question that keeps the
+    context keeps its cache alive for `ttl` more."""
     K, P = p.K, p.P
-    threshold, lost = (np.broadcast_to(v, len(s.size)) for v in (threshold, lost))
+    threshold = np.broadcast_to(threshold, len(s.size))
     idle = None if idle is None else np.broadcast_to(idle, len(s.size))
     lapse = lapsed(s, ttl)
     # Each compaction an arm makes brings the context to K, the E tokens read again included, all
@@ -861,7 +1099,11 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0, asks=None)
         for i in range(j + 1, min(j + SPAN, len(growth))):
             take = min(growth[i], left)
             growth[i], left = growth[i] - take, left - take
-    trace, paid = np.empty(len(s.size)), np.empty(len(s.size))
+    trace, paid, compacted = (
+        np.empty(len(s.size)),
+        np.empty(len(s.size)),
+        np.zeros(len(s.size)),
+    )
     cost, ctx, pending, ended = 0.0, 0.0, False, False
     for j in range(len(s.size)):
         before = cost
@@ -887,9 +1129,9 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0, asks=None)
             # had another cause, which the question doesn't prevent.
             cold = lapse[j] and not (asked and ttl < s.gap[j] <= IDLE[ttl] + ttl)
             if pending or (idle is not None and ctx >= idle[j - 1] and idled):
-                cost += (
-                    ctx + c.output * p.N + lost[j - 1]
-                )  # read from the cache, which the turn end left warm
+                # The compaction reads the context from the cache, which the turn end left warm.
+                cost += ctx + c.output * p.N
+                compacted[j] += ctx
                 # After a compaction the context is K, or less where it held less to begin with,
                 # which happens only below K, at a session's first turn ends.
                 left = min(K, ctx)
@@ -899,11 +1141,8 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0, asks=None)
                 written = ctx - P if cold else grew
             if ctx >= AUTO:
                 # Claude Code compacts before sending, so after a lapse its summary reads uncached input.
-                cost += (
-                    (P + c.input * (ctx - P) if cold else ctx)
-                    + c.output * p.N
-                    + lost[j - 1]
-                )
+                cost += (P + c.input * (ctx - P) if cold else ctx) + c.output * p.N
+                compacted[j] += ctx
                 ctx, written = K + grew, K - P + grew
             cost += (
                 max(ctx - written - inp, 0)
@@ -931,7 +1170,7 @@ def replay(s, p, c, threshold, ttl, every=False, idle=None, lost=0.0, asks=None)
         after += ctx + c.output * p.N
     cost += after
     paid[-1] += after
-    return cost, trace, paid
+    return cost, trace, paid, compacted
 
 
 def arm(S, p, c, ttl, threshold, betas=(BASE,), **kw):
@@ -939,7 +1178,7 @@ def arm(S, p, c, ttl, threshold, betas=(BASE,), **kw):
     of its requests' η, for each β in `betas`."""
     cost, effectiveness = np.empty(len(S)), np.empty((len(S), len(betas)))
     for i, s in enumerate(S):
-        cost[i], trace, _ = replay(s, p, c, threshold, ttl, **kw)
+        cost[i], trace, _, _ = replay(s, p, c, threshold, ttl, **kw)
         effectiveness[i] = [eta(trace, b).sum() for b in betas]
     return cost, effectiveness
 
@@ -1012,16 +1251,21 @@ def as_run(s, p, opened=None, model=None):
     c = prices(model if priced else "claude-opus-5-5", s.ttl)
     opened = not s.background if opened is None else opened
     idle = CC_IDLE if opened and s.ttl == 3600 else None
-    # As compactions the user typed, sparkjoy's stay where the log has them.
-    ran, ran_trace, _ = replay(
+    # As compactions the user typed, sparkjoy's stay where the log has them. One after the
+    # session's last request has no request after it to mark, so a threshold of 0 after that
+    # request stands in for it, and the replay prices its summary.
+    last = np.full(len(s.size), np.inf)
+    if any(by == "sparkjoy" and t > s.t[-1] for t, by, _ in s.compactions):
+        last[-1] = 0
+    ran, ran_trace, _, _ = replay(
         replace(s, kind=np.where(s.sparkjoy, USER, s.kind)),
         p,
         c,
-        np.inf,
+        last,
         s.ttl,
         idle=idle,
     )
-    without, without_trace, _ = replay(s, p, c, np.inf, s.ttl, idle=idle)
+    without, without_trace, _, _ = replay(s, p, c, np.inf, s.ttl, idle=idle)
     checks = sum(check(v, c) for v in s.verdicts if v.tokens)
     dollars = (
         ((ran + checks) * c.read, without * c.read, checks * c.read) if priced else None
@@ -1041,32 +1285,25 @@ MOMENTS = (
 
 def moments(S, p, c, ttl, betas, policies=MOMENTS):
     """For each policy, keyed (turn-end threshold, any-request threshold): the cost summed over the
-    sessions, the compactions made in the middle of a turn, Claude Code's own included, and the
-    effectiveness at each β in `betas`, all also compacting idle sessions from IDLE_FLOOR. Cost grows by
-    D with each mid-turn compaction, so a caller charges D, what a mid-turn compaction loses beyond one
-    at a turn end, as cost + D * mid."""
+    sessions; the compactions made in the middle of a turn, Claude Code's own included, and the
+    contexts they compacted, summed; and the effectiveness at each β in `betas`, all also compacting
+    idle sessions from IDLE_FLOOR. A mid-turn compaction at x that loses Δu more than one at a turn
+    end costs ρ Δu x more (`redo`), so a caller charges Δu as cost + ρ Δu * compacted."""
     out = {}
     for turn, anywhere in policies:
-        cost = mid = 0.0
+        cost = mid = compacted = 0.0
         effectiveness = np.zeros(len(betas))
         for s in S:
             threshold = np.where(s.end, min(turn, anywhere), anywhere)
-            plain, trace, _ = replay(
+            spent, trace, _, at = replay(
                 s, p, c, threshold, ttl, every=True, idle=IDLE_FLOOR
             )
-            charged, _, _ = replay(
-                s,
-                p,
-                c,
-                threshold,
-                ttl,
-                every=True,
-                idle=IDLE_FLOOR,
-                lost=(~s.end).astype(float),
-            )
-            cost, mid = cost + plain, mid + charged - plain
+            # A compaction before request j falls mid-turn where request j - 1 ended no turn.
+            during = at[1:][~s.end[:-1]]
+            cost, mid = cost + spent, mid + (during > 0).sum()
+            compacted += during.sum()
             effectiveness += [eta(trace, b).sum() for b in betas]
-        out[turn, anywhere] = cost, mid, effectiveness
+        out[turn, anywhere] = cost, mid, compacted, effectiveness
     return out
 
 
@@ -1117,7 +1354,7 @@ def mixed(
     cost, effectiveness = np.zeros(len(mix)), np.zeros(len(mix))
     for i, s in enumerate(S):
         if not judged:
-            _, trace, paid = replay(s, p, c, threshold, ttl, every, idle, asks=asks)
+            _, trace, paid, _ = replay(s, p, c, threshold, ttl, every, idle, asks=asks)
         for draw in draws:
             kind, said = draw[i]
             if judged:
@@ -1127,7 +1364,9 @@ def mixed(
                 )
                 if claude_idle is not None:
                     idles = np.minimum(np.inf if idles is None else idles, claude_idle)
-                _, trace, paid = replay(s, p, c, at[said], ttl, idle=idles, asks=asks)
+                _, trace, paid, _ = replay(
+                    s, p, c, at[said], ttl, idle=idles, asks=asks
+                )
             cost += np.bincount(kind, paid, len(mix))
             effectiveness += np.bincount(kind, eta(trace, betas[kind]), len(mix))
     return cost, effectiveness

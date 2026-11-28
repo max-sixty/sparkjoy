@@ -9,6 +9,21 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 DAY = "2026-11-02T"
 ids = count()
+PROXY = [
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "no_proxy",
+]
+
+
+def isolated(tmp_path, **extra):
+    """An environment for uv that keeps out the user's settings but keeps any proxy, which a
+    sandbox may need to reach the script's dependencies."""
+    env = {name: os.environ[name] for name in PROXY if name in os.environ}
+    return {**env, "PATH": os.environ["PATH"], "TMPDIR": str(tmp_path), **extra}
 
 
 def request(time, read, write, model="claude-opus-5-5", text="Done.", output=500):
@@ -90,8 +105,25 @@ def transcript(tmp_path, entries, session="session"):
     return tmp_path / "projects"
 
 
-def report(tmp_path, entries, *args):
+def log(tmp_path, records, session="session"):
+    """Writes `records` as sparkjoy logs them for the session with the id `session`, in the data
+    folder in `tmp_path` that the report reads."""
+    path = tmp_path / "plugin-data" / "log" / session / f"{DAY[:-1]}.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps(r) + "\n" for r in records))
+
+
+def logged(time, **facts):
+    """A record in sparkjoy's log, at `time` on DAY."""
+    return {"t": f"{DAY}{time}.000Z", "session": "session", **facts}
+
+
+def report(tmp_path, entries, *args, others=(), data=None):
+    """The report's summary and page on the session of `entries` and the sessions of `others`,
+    with sparkjoy's data folder in `tmp_path` unless `data` gives the environment naming it."""
     projects = transcript(tmp_path, entries)
+    for n, other in enumerate(others):
+        transcript(tmp_path, other, f"other-{n}")
     run = subprocess.run(
         [
             "uv",
@@ -110,7 +142,14 @@ def report(tmp_path, entries, *args):
         ],
         capture_output=True,
         text=True,
-        env={"PATH": os.environ["PATH"], "TMPDIR": str(tmp_path)},
+        env=isolated(
+            tmp_path,
+            **(
+                {"SPARKJOY_DATA": str(tmp_path / "plugin-data")}
+                if data is None
+                else data
+            ),
+        ),
         check=True,
     )
     *summary, page = run.stdout.splitlines()
@@ -140,13 +179,9 @@ def session_with_compactions():
         prompt("12:30:00Z", "back again"),  # after two and a half hours, at 240k
         request("12:30:10Z", 30_000, 230_000),
         line(
-            "13:25:19Z",
-            "sparkjoy: Missed the prompt cache at 260k tokens, idle 55 minutes: read 30k of 262k "
-            "from it. Signing in to another account while idle drops the cache.",
-        ),
-        line(
             "13:25:20Z",
-            "sparkjoy: Compacting at 260k tokens, idle 55 minutes: the lexer is done",
+            "sparkjoy: Compacting at 260k tokens, idle 55 minutes, after missing the prompt cache "
+            "(read 30k of 262k; /sparkjoy report lists the misses): the lexer is done",
         ),
         boundary("13:26:00Z"),
         compact_summary("13:26:00Z"),
@@ -154,16 +189,14 @@ def session_with_compactions():
         request("15:00:10Z", 30_000, 195_000),
         line("15:00:20Z", "sparkjoy: Failed: Error: the fork failed"),
         line(
-            "15:00:39Z",
-            "sparkjoy: Missed the prompt cache at 226k tokens: read 30k of 227k from it",
-        ),
+            "15:00:40Z",
+            "sparkjoy: Compacting at 226k tokens, after missing the prompt cache the turn had just "
+            "written to (read 30k of 227k): all done",
+        ),  # a compaction that never ran
         line(
-            "15:00:39Z",
+            "15:00:40Z",
             "sparkjoy: That looks like a bug: /sparkjoy bug drafts a report of it.",
         ),
-        line(
-            "15:00:40Z", "sparkjoy: Compacting at 226k tokens: all done"
-        ),  # a compaction that never ran
         # A verdict to compact in the mode `classify`, just before the user's own compaction.
         line("15:29:50Z", "sparkjoy: Would compact at 226k tokens: the lexer is done"),
         prompt("15:30:00Z", "<command-name>/compact</command-name>"),
@@ -180,13 +213,16 @@ def test_counts_verdicts_and_returns(tmp_path):
     assert summary == [
         "Cost $5.31 more, 90% more than these sessions would have cost without sparkjoy's compactions.",
         "7 verdicts in 1 of 1 sessions: 3 compacted, 1 would compact, 1 kept, 0 unreadable, "
-        "1 no verdict, 0 dropped, 1 failed; 2 missed the prompt cache",
+        "1 no verdict, 0 dropped, 1 failed; 2 missed the prompt cache, 0 while another session lost "
+        "its cache too",
         "Replayed at the list prices of each session's model, with Claude Code compacting on its own "
         "when the window fills and, in a session you had open, an idle context from 200k, these "
         "sessions cost $11 with "
         "sparkjoy's compactions, $3.70 of it for its checks, against $5.93 without them.",
         "Asking from 350k at turn ends and 250k in idle sessions costs least in this session's "
         "replay, of the floors it tried.",
+        "None of sparkjoy's 2 compactions ended a session. Of the 2, the next request came once "
+        "before the prompt cache lapsed, and once after it lapsed.",
         "3 returns after an hour or more idle to sessions left with 175k or more in context; 2 had "
         "been compacted in between (1 by /compact, 1 by sparkjoy). The other 1 wrote 230k tokens to "
         "the cache again, for $1.84.",
@@ -195,14 +231,127 @@ def test_counts_verdicts_and_returns(tmp_path):
     assert '<span class="mark would-compact"' in page
     assert "Fix the parser" in page
     assert "hooks.json" not in page
-    assert (
-        "2 missed the prompt cache" in page
-        and "missed the cache (read 30k of 227k)" in page
-        and "missed the cache (read 30k of 262k)" in page
-    )
+    assert "2 missed the prompt cache" in page and "turn end, missed the cache" in page
+    assert "<td>30k of 227k</td>" in page and "<td>30k of 262k</td>" in page
     # The lockup, its dots in the accent, and the icon as the favicon.
     assert '<svg class="logo"' in page and page.count('class="accent"') == 3
     assert '<link rel="icon"' in page
+
+
+def test_counts_the_other_sessions_that_lost_their_cache_beside_each_miss(tmp_path):
+    """The same session beside two others that sent requests while it sat idle before its question
+    missed the cache: one wrote its whole context to the cache again within the cache's hour, as
+    after a sign-in to another account, and one read its context from the cache."""
+    summary, page = report(
+        tmp_path,
+        session_with_compactions(),
+        others=[
+            [
+                prompt("12:40:00Z", "start"),
+                request("12:40:10Z", 0, 120_000),
+                prompt("13:00:00Z", "go on"),
+                request("13:00:10Z", 30_000, 100_000),
+            ],
+            [
+                prompt("12:45:00Z", "start"),
+                request("12:45:10Z", 0, 120_000),
+                prompt("13:05:00Z", "go on"),
+                request("13:05:10Z", 120_000, 1_000),
+            ],
+        ],
+    )
+    assert summary[1].endswith(
+        "2 missed the prompt cache, 1 while another session lost its cache too"
+    )
+    # The idle miss saw both other sessions, and one lose its cache; the miss at a turn end, none.
+    assert (
+        "<td>idle 55 min</td><td>30k of 262k</td><td class=num>2</td><td class=num>1</td>"
+        in page
+    )
+    assert (
+        "<td>turn end</td><td>30k of 227k</td><td class=num>0</td><td class=num>0</td>"
+        in page
+    )
+
+
+def test_a_compaction_after_the_last_request_ends_its_session_and_costs_its_summary(
+    tmp_path,
+):
+    """The same session, closed right after one more compaction of sparkjoy's. The replay with
+    sparkjoy's compactions prices that compaction's request, which raises what they cost by more
+    than the question before it."""
+    summary, _ = report(
+        tmp_path,
+        [
+            *session_with_compactions(),
+            line(
+                "17:00:20Z", "sparkjoy: Compacting at 120k tokens: the lexer has landed"
+            ),
+            boundary("17:01:00Z"),
+            compact_summary("17:01:00Z"),
+        ],
+    )
+    assert summary[0] == (
+        "Cost $5.39 more, 91% more than these sessions would have cost without sparkjoy's "
+        "compactions."
+    )
+    assert (
+        "1 of sparkjoy's 3 compactions ended a session, with no request after it by the window's "
+        "end. Of the other 2, the next request came once before the prompt cache lapsed, and once "
+        "after it lapsed." in summary
+    )
+
+
+def test_names_who_made_each_compaction_by_its_mark_wherever_the_log_puts_it(tmp_path):
+    """Four compactions, each followed by a return after an hour or more idle. Claude Code can log
+    the end of the turn before a compaction, sparkjoy's line or a typed `/compact` among it, after
+    the compaction's boundary, so each mark counts by its time. sparkjoy's line marks its
+    compaction, as does the line it writes on finishing one that Claude Code's restart cut short;
+    a typed `/compact` row marks the user's; and a compaction nothing marks is another tool's, not
+    the user's."""
+
+    def turn(at, then):
+        """A turn ending at 230k at `at`, and a return to it at `then`."""
+        return [prompt(f"{at}:00Z", "go on"), request(f"{at}:10Z", 30_000, 200_000)], [
+            prompt(f"{then}:00Z", "back again"),
+            request(f"{then}:10Z", 30_000, 200_000),
+        ]
+
+    first, back1 = turn("10:00", "11:30")
+    _, back2 = turn("11:30", "13:00")
+    _, back3 = turn("13:00", "14:30")
+    _, back4 = turn("14:30", "16:00")
+    summary, _ = report(
+        tmp_path,
+        [
+            *first,
+            boundary("10:02:00Z"),
+            line("10:00:59Z", "sparkjoy: Compacting at 230k tokens: the fix landed"),
+            compact_summary("10:02:00Z"),
+            *back1,
+            boundary("11:32:00Z"),
+            line(
+                "11:30:59Z",
+                "sparkjoy: Finishing the compaction at 230k tokens: Claude Code restarted before "
+                "it landed",
+            ),
+            compact_summary("11:32:00Z"),
+            *back2,
+            boundary("13:02:00Z"),
+            prompt("13:01:00Z", "<command-name>/compact</command-name>"),
+            compact_summary("13:02:00Z"),
+            *back3,
+            boundary("14:32:00Z"),
+            compact_summary("14:32:00Z"),
+            *back4,
+        ],
+    )
+    assert "None of sparkjoy's 2 compactions ended a session." in " ".join(summary)
+    assert (
+        "4 returns after an hour or more idle to sessions left with 175k or more in context; 4 "
+        "had been compacted in between (2 by sparkjoy, 1 by another tool, 1 by /compact)."
+        in summary
+    )
 
 
 def test_a_first_run_leads_with_what_the_fitted_floors_would_have_saved(tmp_path):
@@ -277,9 +426,10 @@ def test_a_session_below_the_floor_had_nothing_to_ask(tmp_path):
     ]
 
 
-def test_saves_the_figures_the_question_states(tmp_path):
-    figures = tmp_path / "data" / "figures.json"  # in a folder the report makes
-    summary, page = report(tmp_path, session_with_compactions(), "--figures", figures)
+def test_saves_the_figures_the_question_uses(tmp_path):
+    # In sparkjoy's data folder, where the plugin reads them, which the report makes.
+    figures = tmp_path / "plugin-data" / "figures.json"
+    summary, page = report(tmp_path, session_with_compactions(), "--figures")
     # K is the median first request after the three compactions, 240k, 225k and 120k, as no turn is long
     # enough to measure what they read again; P what those requests read from the cache; SUMMARY the
     # 1k-token summary times the 1.5 output per visible token of the reply its size. Every request ends
@@ -293,7 +443,6 @@ def test_saves_the_figures_the_question_states(tmp_path):
         "P": 30_000,
         "SUMMARY": 1_500,
         "TURN_MEDIAN": 1,
-        "TURN_MEAN": 1,
         "LAPSE": 0.5,
         "WRITE": 40,
         "OUTPUT": 100,
@@ -311,6 +460,20 @@ def test_saves_the_figures_the_question_states(tmp_path):
         "sparkjoy asks from these floors, except where you set a floor of your own, and its question"
         in page
     )
+
+
+def test_keeps_to_sparkjoys_data_folder_whatever_plugins_shell_it_runs_in(tmp_path):
+    # A session's shell can hold another plugin's $CLAUDE_PLUGIN_DATA; without $SPARKJOY_DATA, the
+    # figures go to the folder Claude Code gives sparkjoy.
+    config, other = tmp_path / "config", tmp_path / "other-plugin"
+    report(
+        tmp_path,
+        session_with_compactions(),
+        "--figures",
+        data={"CLAUDE_CONFIG_DIR": str(config), "CLAUDE_PLUGIN_DATA": str(other)},
+    )
+    assert (config / "plugins/data/sparkjoy-sparkjoy/figures.json").exists()
+    assert not other.exists()
 
 
 def test_saves_no_figures_without_compactions(tmp_path):
@@ -331,7 +494,7 @@ def test_saves_no_figures_without_compactions(tmp_path):
         summary[-1]
         == "sparkjoy keeps the floors and figures it has: the window holds no compactions to fit them to"
     )
-    assert "its question states these figures" not in page
+    assert "its question uses these figures" not in page
 
 
 def test_a_figures_file_it_cannot_save_leaves_the_page(tmp_path):
@@ -345,4 +508,115 @@ def test_a_figures_file_it_cannot_save_leaves_the_page(tmp_path):
     assert summary[-1].startswith(
         "sparkjoy keeps the floors and figures it has: saving them failed: "
     )
-    assert "its question states these figures" not in page and "Fix the parser" in page
+    assert "its question uses these figures" not in page and "Fix the parser" in page
+
+
+def test_reads_verdicts_and_compactions_from_sparkjoys_log_where_a_session_has_one(
+    tmp_path,
+):
+    """A session whose log records two verdicts to compact and the compactions. The first also has
+    its line in the transcript, and counts once; the second has none, so only the log says the
+    compaction after it was sparkjoy's. A question that missed the prompt cache reports the
+    tokens it read exactly, as its record's usage gives them."""
+    usage = {
+        "input_tokens": 2,
+        "cache_read_input_tokens": 30_000,
+        "cache_creation_input_tokens": 200_011,
+        "output_tokens": 90,
+    }
+    log(
+        tmp_path,
+        [
+            logged(
+                "10:00:59",
+                event="verdict",
+                kind="Compacting",
+                reason="the fix landed",
+                tokens=230_000,
+                usage=usage,
+                missed=True,
+            ),
+            logged("10:01:00", event="compaction", phase="start", tokens=230_000),
+            logged("10:02:01", event="compaction", phase="end"),
+            logged(
+                "11:30:59",
+                event="verdict",
+                kind="Compacting",
+                reason="the docs landed",
+                tokens=230_000,
+                usage={**usage, "cache_read_input_tokens": 230_000},
+                missed=False,
+            ),
+            logged("11:31:00", event="compaction", phase="start", tokens=230_000),
+            logged("11:32:01", event="compaction", phase="end"),
+        ],
+    )
+    summary, page = report(
+        tmp_path,
+        [
+            prompt("10:00:00Z", "go on"),
+            request("10:00:10Z", 30_000, 200_000),
+            line(
+                "10:00:59Z",
+                "sparkjoy: Compacting at 230k tokens, after missing the prompt cache the turn had "
+                "just written to (read 30k of 230k): the fix landed",
+            ),
+            boundary("10:02:00Z"),
+            compact_summary("10:02:00Z"),
+            prompt("11:30:00Z", "back again"),
+            request("11:30:10Z", 30_000, 200_000),
+            boundary("11:32:00Z"),
+            compact_summary("11:32:00Z"),
+            prompt("13:00:00Z", "and again"),
+            request("13:00:10Z", 30_000, 200_000),
+        ],
+    )
+    assert summary[1].startswith("2 verdicts in 1 of 1 sessions: 2 compacted")
+    assert "1 missed the prompt cache" in summary[1]
+    assert "<td>30k of 230k</td>" in page
+    assert "2 had been compacted in between (2 by sparkjoy)" in " ".join(summary)
+
+
+def test_a_verdict_whose_record_was_never_written_keeps_its_line(tmp_path):
+    """A session whose log records the first and last of three verdicts to keep: the middle one's
+    record was lost, as when its process exited with the write still queued. All three count, the
+    recorded ones as their records give them."""
+    log(
+        tmp_path,
+        [
+            logged(
+                "10:00:59",
+                event="verdict",
+                kind="Kept",
+                reason="as recorded first",
+                tokens=301_000,
+            ),
+            logged(
+                "12:00:59",
+                event="verdict",
+                kind="Kept",
+                reason="as recorded last",
+                tokens=301_000,
+            ),
+        ],
+    )
+    summary, page = report(
+        tmp_path,
+        [
+            prompt("10:00:00Z", "fix the parser"),
+            request("10:00:10Z", 290_000, 10_000),
+            line("10:00:59Z", "sparkjoy: Kept at 300k tokens: as the line said first"),
+            prompt("11:00:00Z", "go on"),
+            request("11:00:10Z", 290_000, 10_000),
+            line("11:00:59Z", "sparkjoy: Kept at 300k tokens: the fix is half done"),
+            prompt("12:00:00Z", "and on"),
+            request("12:00:10Z", 290_000, 10_000),
+            line("12:00:59Z", "sparkjoy: Kept at 300k tokens: as the line said last"),
+        ],
+    )
+    assert summary[1].startswith(
+        "3 verdicts in 1 of 1 sessions: 0 compacted, 0 would compact, 3 kept"
+    )
+    assert "the fix is half done" in page
+    assert "as recorded first" in page and "as recorded last" in page
+    assert "as the line said" not in page

@@ -1,0 +1,839 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["numpy>=2.1", "matplotlib>=3.9"]
+# ///
+"""Asks the model, at each case's turn end, how much of its context might be
+helpful for the work ahead, and checks the answer against what that work used.
+
+    uv run --script evals/share.py [--case ID ...] [--repeat N] [--jobs N]
+    uv run --script evals/share.py --build     # the made-up cases' requests, to publish
+    uv run --script evals/share.py --report    # the tables, and the chart to publish
+
+Whether compacting pays turns on that share: what the work ahead uses of what
+a compaction drops has to be read back after it, and each token read back is
+written to the cache again. A run asks for it with `SHARE`, after the case's
+request as the fork sends it (`run.body_of`), alone, since the plugin's
+question asks for no share yet, stating the size the plugin states.
+
+Two kinds of case check the answer:
+
+- the turn ends in `cases.json`, but for the idle one, since the question
+  says the turn just ended. `parts.py` cuts the request into its parts, each
+  with its tokens as the API counts them (`counted`), and the same model,
+  shown what the session did next (`next_work`), through any compaction,
+  as far as one window would have held it (`horizon`), one JSON record per
+  message, tool call or result, with the parts listed a line each, both cut
+  where they don't fit the window beside the request and the answer
+  (`fitted`), labels each part needed, helpful or neither (`LABEL`), in
+  `RUNS` runs.
+  Only I can label a case, since labelling reads my transcripts. Each label
+  names the request and a hash of the question it was asked (`shown`), which
+  holds the next work and the parts, and a case labelled on both is not
+  labelled again;
+- the turn ends `contrived.py` makes up, whose share is known by
+  construction, from a turn end just after loading the skills the next step
+  needs to one after the work moved on to something else.
+
+A turn end's run sends its request rebuilt from the transcript where that is
+on this machine, as the live fork sends it, thinking and all, and otherwise
+the published one (`run.request_of`); each row says which (`source`), and
+names the published request, which the made-up cases always send. Each
+run's row goes to a batch of its own, published to `evals/share/` in
+sparkjoy-assets when the batch ends: the parts as kind and tokens, the
+labels' part ids, and the share's answer. What the session did next, and
+what each part holds, stay in `.tmp/share/`, where a labelled case's file
+shows them beside the labels. `--report` prints, for each case, the model's
+share in each run beside what the labels give: first what a compaction
+drops that the work needed, and needed or was helped by, as a share of the
+whole context, which is what the share is weighed against, then the same of
+all of it, as the question asks. It draws the request of each labelled
+case, its parts coloured by their labels, light and dark, left waiting to
+publish.
+"""
+
+import argparse
+import hashlib
+import http.client
+import itertools
+import json
+import math
+import sys
+import tempfile
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
+from pathlib import Path
+
+HERE = Path(__file__).parent
+ROOT = HERE.parent
+sys.path.insert(0, str(ROOT / "model"))
+import build  # noqa: E402
+import charts  # noqa: E402
+import contrived  # noqa: E402
+import fit  # noqa: E402
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
+import parts  # noqa: E402
+import run  # noqa: E402
+import sparkjoy_assets  # noqa: E402
+from matplotlib.patches import Patch  # noqa: E402
+
+RUNS = 2  # label runs per case
+# The label runs' max_tokens, which the window keeps free beside the next
+# work: their answers have taken at most 9,438 tokens, thinking included.
+LABEL_OUTPUT = 16_000
+DIRECTORY = "evals/share"
+LOCAL = ROOT / ".tmp/share"
+
+# TODO: the share should leave out what comes back after a compaction anyway,
+# the system prompt, tools and instruction files, and what the first requests
+# after one read back on average (E). The cost model's K, the context after a
+# compaction, already prices both, so counting them in the share charges them
+# twice and leans the verdict toward keeping. The wording leaves that out for
+# simplicity while the question is being pushed to keep more, and `--report`
+# weighs the share against what a compaction drops that the work needed.
+SHARE = """Estimate how much of this session's context might possibly be helpful for the work ahead, for deciding whether to compact it now. This request comes from the sparkjoy plugin, not from the user, and a program reads your answer.
+
+Your turn just ended, with {size} tokens of context. Compacting replaces the transcript with a summary of about 5k tokens. Weigh:
+
+- *For compacting: later requests read less.* Every later request stops reading the parts of this context that the work ahead won't use.
+- *Against: what the work uses costs 40 times as much to read back.* Whatever the work ahead does use, such as files, skills or what was said earlier in the transcript, has to be read back once, and each token read back is written to the cache again, at 40 times the price of reading it from the cache.
+- *Against: the summary loses detail.* The more complicated the work, the more it loses: exact output, what was tried and failed, a design or fix still taking shape. Weigh that against compacting in the middle of something.
+- *Against: the summary costs something to write*, about as much as reading 500k tokens from the cache.
+- *Against: it takes about a minute.* Weigh that if the user is waiting on the next turn.
+
+**So the decision turns on the share of this context that might possibly be helpful for the work ahead.**
+
+Generally models underweigh the chance of context being helpful. So lean toward counting it as helpful if there's a foreseeable case where it could be.
+
+Answer with nothing but one JSON object that matches this schema, filling its fields in the order listed:
+
+```json
+{{
+  "type": "object",
+  "properties": {{
+    "next": {{"type": "string", "description": "what most likely comes next, in a few words"}},
+    "helpful": {{"type": "integer", "description": "the percentage of this context that might possibly be helpful for the work ahead, from 0 to 100"}}
+  }},
+  "required": ["next", "helpful"],
+  "additionalProperties": false
+}}
+```"""
+
+LABEL = """This is not a request to continue the work. It comes from the sparkjoy plugin, which is measuring which parts of this context the work after this turn end used, to check its estimates. A program reads your answer.
+
+Below is what the session actually did next, taken from its transcript, and then the parts of the context above, numbered in order, each with its kind, its size in tokens and what it holds. A long part shows its opening and closing words around " […] ", or, where that would read like another part's line, its opening and the words from where it departs from the nearest of them. A part repeated word for word has one line, which names each of its ids and gives their tokens in all.
+
+Judge each part by the work that followed:
+- "needed": the next work used it, or would have gone wrong or had to fetch it again without it. Count what the work relied on without reading it again, such as the state of a fix, a decision taken, or what the user asked for, as well as what it read. Where the context was compacted, at this turn end or later, the work after the compaction ran without it, so a part whose content it then read, searched for or ran again is needed: that fetch is what losing it cost.
+- "helpful": it would have helped the next work, such as by saving a lookup or giving background to a decision, but the work could have done without it.
+- Every other part is not needed.
+
+What the session did next is below, one JSON object per line, in order, through any compaction, until the context, grown by what each later request added to it, would have passed the 1M-token window, or until the session ended. Each has "t", when it happened, and "kind": "user" for what the user typed; "mid-turn" for what the user typed while the session worked, which it read with its next tool result; "page" for what the user did on a Leaf page the session served, with its "event": "comment" or "reply" with the "text" they wrote, "action" for a choice they made, with what they chose in "detail" and its words in "says", or "resolve" where they closed a thread; "agent" for a message another agent or session sent, or a notification from a task the session started, such as a background command or subagent finishing; "assistant" for what the assistant wrote; "call" for a tool call, with its "tool" and "input"; "result" for what a call returned, with its "tool", and "error": true where it failed; and "compaction" where the context was compacted. A long value may be cut in the middle, at " […] ".
+
+{next}
+
+The parts:
+
+{parts}
+
+Answer with nothing but one JSON object: {{"needed": [part ids], "helpful": [part ids]}}. Mark a repeated part by any one of its ids."""
+
+
+def share_question(tokens: int) -> str:
+    return SHARE.format(size=f"{round(tokens / 1000)}k")
+
+
+def grown(session: fit.Session) -> np.ndarray:
+    """Each request's new tokens, compactions or not: what `fit` counts it
+    grew by, and for the first request after a compaction, whose growth the
+    compacted prompt hides, `fit.NEW_MESSAGE` at most, as `fit` counts it
+    where a replay drops the compaction. What the work reads again after a
+    compaction counts, as the work did read it."""
+    first = (session.kind == fit.USER) | (session.kind == fit.POLICY)
+    return np.where(first, np.minimum(session.write, fit.NEW_MESSAGE), session.grew)
+
+
+def horizon(session: fit.Session, after: float, context: int) -> slice:
+    """The requests of the work after a turn end at `after`, with `context`
+    tokens: from the first after it, while the context, grown from `context`
+    by each request's new tokens (`grown`), stays within the window, through
+    any compaction, or to the session's end."""
+    start = int(np.searchsorted(session.t, after, side="right"))
+    over = np.flatnonzero(context + np.cumsum(grown(session)[start:]) > fit.WINDOW)
+    return slice(start, start + int(over[0]) if len(over) else len(session.t))
+
+
+def next_work(case: dict) -> list[dict]:
+    """What the session did after the case's turn end, as `parts.next_work`
+    reads it from the transcript, up to the end of the reply of the last
+    request within its `horizon`: the input of the first past it, such as
+    the prompt that opened it, stays out with it."""
+    path = next(fit.PROJECTS.glob(f"*/{case['source']['session']}.jsonl"), None)
+    if path is None:
+        raise LookupError(f"no transcript of session {case['source']['session']}")
+    if (session := fit.transcript(path)) is None:
+        raise LookupError(f"session {case['source']['session']} has no requests")
+    with path.open() as f:
+        after = (
+            json.loads(raw) for n, raw in enumerate(f) if n >= case["source"]["line"]
+        )
+        span = horizon(session, fit.epoch(next(after)["timestamp"]), case["tokens"])
+        end = session.done[span.stop - 1] if span.stop < len(session.t) else math.inf
+        return parts.next_work(
+            itertools.takewhile(
+                lambda e: "timestamp" not in e or fit.epoch(e["timestamp"]) <= end,
+                after,
+            )
+        )
+
+
+def fitted(
+    request: dict, headers: dict, cut: list[dict], then: list[dict]
+) -> tuple[str, list[dict]]:
+    """`LABEL` asked with the listing of the request's parts `cut` and what
+    the session did next (`then`), cut to fit the window beside the request
+    and `LABEL_OUTPUT`, by the API's count (`parts.fitting`), and the records
+    shown."""
+
+    def tokens(listing: str, records: list[dict]) -> int:
+        return plain(
+            {
+                "model": request["params"]["model"],
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": f"{listing}\n\n{parts.rendered(records)}",
+                    }
+                ],
+            },
+            headers,
+        )
+
+    room = (
+        fit.WINDOW
+        - LABEL_OUTPUT
+        - count(request, headers, LABEL.format(next="", parts=""))
+    )
+    # Each pass asks for fewer characters than the last, in proportion to how
+    # far what is shown passes the room, until it fits or every line and value
+    # is cut to nothing.
+    chars = len(parts.listing(cut)) + len(parts.rendered(then))
+    shown, bare = parts.fitting(cut, then, chars), parts.fitting(cut, then, 0)
+    while (used := tokens(*shown)) > room:
+        if shown == bare:
+            raise LookupError(
+                f"the window holds {room} tokens beside the request, too few for its parts and the next work"
+            )
+        chars = chars * room // used * 97 // 100
+        shown = parts.fitting(cut, then, chars)
+    listing, records = shown
+    return LABEL.format(next=parts.rendered(records), parts=listing), records
+
+
+def count(request: dict, headers: dict, question: str = ".") -> int:
+    """The tokens of `request`'s context, with `question` after it, by the
+    API's count."""
+    body = run.body_of(request, question)
+    return plain(
+        {
+            k: body[k]
+            for k in ("model", "system", "tools", "messages", "thinking")
+            if k in body
+        },
+        headers,
+    )
+
+
+def sizes(request: dict, headers: dict) -> tuple[int, int, int]:
+    """The request's tokens, its system prompt's and its tools'."""
+    stub = [
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "content": [{"type": "text", "text": "hi"}]},
+    ]
+    blank = [{"type": "text", "text": "."}]
+    total = count(request, headers)
+    with_tools = count(request | {"messages": stub}, headers)
+    with_system = count(request | {"messages": stub, "tools": []}, headers)
+    bare = count(request | {"messages": stub, "tools": [], "system": blank}, headers)
+    return total, with_system - bare, with_tools - with_system
+
+
+def counted(request: dict, headers: dict) -> tuple[int, list[dict]]:
+    """The request's tokens, and its parts (`parts.parts_of`) each with its
+    `tokens`: each kind's as the API counts the request without it, shared
+    among its parts by characters, and each image's on its own."""
+    cut = parts.parts_of(request)
+    x, system, tools = sizes(request, headers)
+    kinds = sorted({p["kind"] for p in cut} - {"system prompt", "tools", "thinking"})
+    # A thinking block counts only in the conversation it was written in, so
+    # changing anything before it drops it from the count: each kind is
+    # counted from the request without its thinking.
+    thought = [p["id"] for p in cut if p["kind"] == "thinking"]
+    unthought = count(parts.blank(request, cut, thought), headers)
+
+    def without(kind: str) -> int:
+        ids = [p["id"] for p in cut if p["kind"] == kind]
+        return unthought - count(parts.blank(request, cut, thought + ids), headers)
+
+    stub = {
+        "model": request["params"]["model"],
+        "messages": [{"role": "user", "content": "."}],
+    }
+
+    def alone(image: dict) -> int:
+        body = stub | {
+            "messages": [
+                {"role": "user", "content": [image, {"type": "text", "text": "."}]}
+            ]
+        }
+        return plain(body, headers) - plain(stub, headers)
+
+    with ThreadPoolExecutor(4) as pool:
+        counts = dict(zip(kinds, pool.map(without, kinds), strict=True))
+        held = [(p["id"], image) for p in cut for image in parts.images_of(request, p)]
+        tokens = list(pool.map(alone, [image for _, image in held]))
+    images = {}
+    for (i, _), n in zip(held, tokens, strict=True):
+        images[i] = images.get(i, 0) + n
+    counts |= {"system prompt": system, "tools": tools, "thinking": x - unthought}
+    return x, parts.sized(cut, counts, images, x)
+
+
+def plain(body: dict, headers: dict) -> int:
+    """`count` of a body given as is."""
+    conn = http.client.HTTPSConnection("api.anthropic.com", timeout=300)
+    conn.request(
+        "POST", "/v1/messages/count_tokens", json.dumps(body).encode(), headers
+    )
+    response = conn.getresponse()
+    data = response.read()
+    conn.close()
+    if response.status != 200:
+        raise RuntimeError(f"count {response.status}: {data[:300]!r}")
+    return json.loads(data)["input_tokens"]
+
+
+def answer(text: str) -> dict | None:
+    try:
+        value = json.loads(text[text.index("{") : text.rindex("}") + 1])
+    except ValueError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def ids(value, cut: list[dict]) -> list[int] | None:
+    """The parts `cut` that the ids the labeller gave, such as 12 or "#12",
+    mark (`parts.marked`)."""
+    if not isinstance(value, list):
+        return None
+    try:
+        return parts.marked([int(str(v).lstrip("#")) for v in value], cut)
+    except ValueError:
+        return None
+
+
+def rows() -> list[dict]:
+    return [
+        json.loads(line)
+        for path in sparkjoy_assets.results(DIRECTORY)
+        for line in path.open()
+    ]
+
+
+def pointers() -> dict[str, str]:
+    return json.loads(sparkjoy_assets.POINTERS.read_text())
+
+
+def run_cases(names: list[str], repeat: int, jobs: int) -> None:
+    cases = {c["id"]: c for c in json.loads((HERE / "cases.json").read_text())}
+    auth = run.credential()
+    sparkjoy_assets.fetch()
+    # The share's question, named by its wording.
+    question = hashlib.sha256(SHARE.encode()).hexdigest()[:8]
+    earlier = rows()
+    spent = []
+
+    def labelled(case: str, digest: str, shown: str) -> int:
+        return sum(
+            r["kind"] == "label"
+            and r["case"] == case
+            and r["request"] == digest
+            and r.get("shown") == shown
+            and bool(r["needed"])
+            for r in earlier
+        )
+
+    def write(row: dict) -> None:
+        results.write(json.dumps(row) + "\n")
+        results.flush()
+        spent.append(row.get("cost", 0))
+
+    def one(name: str) -> None:
+        digest = pointers().get(name)
+        case = cases.get(name)
+        found = run.request_of(case or {"id": name}, case is None)
+        if found is None or digest is None:
+            print(f"SKIP {name}: no published request", flush=True)
+            return
+        request, source = found
+        model = request["params"]["model"]
+        if model not in fit.PRICES:
+            print(f"SKIP {name}: fit.PRICES has no price for {model}", flush=True)
+            return
+        headers = run.headers_of(request, auth)
+        x, cut = counted(request, headers)
+        # The size the plugin states: the context the reply answered, which
+        # a made-up case doesn't record.
+        stated = case["tokens"] if case else x
+        base = {"case": name, "request": digest, "source": source}
+        if name in contrived.CASES:
+            # A made-up case is labelled by its construction.
+            shown = hashlib.sha256(parts.listing(cut).encode()).hexdigest()[:12]
+            if not labelled(name, digest, shown):
+                at = datetime.now(UTC).isoformat(timespec="seconds")
+                write(
+                    base
+                    | {
+                        "kind": "parts",
+                        "shown": shown,
+                        "at": at,
+                        "context": x,
+                        "parts": [[p["kind"], p["tokens"]] for p in cut],
+                    }
+                )
+                write(
+                    base
+                    | {
+                        "kind": "label",
+                        "shown": shown,
+                        "at": at,
+                        "by": "construction",
+                        **contrived.labels(name, cut),
+                    }
+                )
+        if case:
+            try:
+                asked, then = fitted(request, headers, cut, next_work(case))
+            except LookupError as error:
+                print(f"NO LABELS {name}: {error}", flush=True)
+            else:
+                shown = hashlib.sha256(asked.encode()).hexdigest()[:12]
+                if (have := labelled(name, digest, shown)) < RUNS:
+                    label(
+                        base | {"shown": shown},
+                        request,
+                        headers,
+                        x,
+                        cut,
+                        asked,
+                        then,
+                        RUNS - have,
+                        write,
+                    )
+        for _ in range(repeat):
+            try:
+                text, used = run.ask(
+                    run.body_of(request, share_question(stated)), headers
+                )
+            except (RuntimeError, OSError) as error:
+                print(f"ERROR {name} [share]: {error}", flush=True)
+                continue
+            got = answer(text) or {}
+            helpful = (
+                got.get("helpful") if isinstance(got.get("helpful"), int) else None
+            )
+            write(
+                base
+                | {
+                    "kind": "share",
+                    "question": question,
+                    "at": datetime.now(UTC).isoformat(timespec="seconds"),
+                    "context": x,
+                    "stated": stated,
+                    "helpful": helpful,
+                    "next": got.get("next") if helpful is not None else text[:300],
+                    "cache_read": used["cache_read_input_tokens"],
+                    "output": used["output_tokens"],
+                    "thinking": used["thinking"],
+                    "cost": round(run.cost_of(used, model), 4),
+                }
+            )
+            print(
+                f"{name} share {helpful}% at {x // 1000}k (${run.cost_of(used, model):.2f})",
+                flush=True,
+            )
+
+    try:
+        with (
+            sparkjoy_assets.batch(DIRECTORY) as results,
+            ThreadPoolExecutor(jobs) as pool,
+        ):
+            list(pool.map(one, names))
+        print(f"${sum(spent):.2f}")
+    finally:
+        sparkjoy_assets.publish(sparkjoy_assets.RESULTS)
+
+
+def label(base, request, headers, x, cut, asked, then, n, write) -> None:
+    """Label the request's parts `cut` by what the session did next (`then`),
+    asking `asked` `n` times, and keep what each part holds and the labels
+    in `LOCAL`, beside those of its earlier runs of the same question. An
+    answer that marks no part needed is unreadable, since the work after any
+    turn end uses the system prompt and tools."""
+    model = request["params"]["model"]
+    write(
+        base
+        | {
+            "kind": "parts",
+            "at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "context": x,
+            "parts": [[p["kind"], p["tokens"]] for p in cut],
+        }
+    )
+    body = run.body_of(request, asked) | {"max_tokens": LABEL_OUTPUT}
+    path = LOCAL / f"{base['case']}-{base['request']}.json"
+    earlier = json.loads(path.read_text()) if path.exists() else {}
+    runs = [
+        r
+        for r in earlier.get("runs", [])
+        if earlier.get("shown") == base["shown"] and r["needed"] and r["text"] is None
+    ]
+    for _ in range(n):
+        try:
+            text, used = run.ask(body, headers)
+        except (RuntimeError, OSError) as error:
+            print(f"ERROR {base['case']} [label]: {error}", flush=True)
+            continue
+        got = answer(text) or {}
+        needed, helpful = ids(got.get("needed"), cut), ids(got.get("helpful"), cut)
+        ok = bool(needed) and helpful is not None
+        runs.append(
+            {"needed": needed, "helpful": helpful, "text": None if ok else text[:2000]}
+        )
+        write(
+            base
+            | {
+                "kind": "label",
+                "at": datetime.now(UTC).isoformat(timespec="seconds"),
+                "needed": needed if ok else None,
+                "helpful": helpful if ok else None,
+                "output": used["output_tokens"],
+                "thinking": used["thinking"],
+                "cost": round(run.cost_of(used, model), 4),
+            }
+        )
+        if ok:
+            got = parts.scored([(p["kind"], p["tokens"]) for p in cut], [runs[-1]])
+            print(
+                f"{base['case']} labels: needed {got['needed'][0]}%, needed or helpful {got['helpful'][0]}% "
+                f"(${run.cost_of(used, model):.2f})",
+                flush=True,
+            )
+        else:
+            print(f"{base['case']} labels unreadable: {text[:200]!r}", flush=True)
+    LOCAL.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {**base, "context": x, "parts": cut, "next": then, "runs": runs}, indent=1
+        )
+    )
+
+
+def build_contrived() -> None:
+    """Leave each made-up case's request waiting to publish."""
+    found = run.request_of({"id": contrived.BASE}, True)
+    if found is None:
+        sys.exit(f"no published request of {contrived.BASE}")
+    skill = contrived.skill_dir()
+    for name in contrived.CASES:
+        build.write(name, contrived.request(name, found[0], skill))
+    print("Publish them with `uv run --script model/sparkjoy_assets.py publish`.")
+
+
+def span(values: list[float]) -> str:
+    if not values:
+        return ""
+    lo, hi = round(min(values)), round(max(values))
+    return f"{lo}%" if lo == hi else f"{lo}–{hi}%"
+
+
+def said(shares: list[dict], question: str) -> list[int]:
+    """The shares a case's rows give in answer to `question`: those asked of
+    the request rebuilt from the transcript where there are any, since that
+    is what the live fork sends, and otherwise those of the published one."""
+    asked = [r for r in shares if r["question"] == question]
+    rebuilt = [r for r in asked if r.get("source") == "transcript"]
+    return [r["helpful"] for r in rebuilt or asked]
+
+
+def latest(
+    every: list[dict], name: str, digest: str | None
+) -> tuple[dict | None, list[dict]]:
+    """A case's latest labelling: its parts row, and the label rows made with
+    the same question."""
+    cut = [
+        r
+        for r in every
+        if r["case"] == name
+        and r["kind"] == "parts"
+        and r["request"] == digest
+        and r.get("shown")
+    ][-1:]
+    if not cut:
+        return None, []
+    return cut[0], [
+        r
+        for r in every
+        if r["case"] == name
+        and r["kind"] == "label"
+        and r["request"] == digest
+        and r.get("shown") == cut[0]["shown"]
+        and r["needed"]
+    ]
+
+
+def report() -> None:
+    every = rows()
+    digests = pointers()
+    cases = [
+        c for c in json.loads((HERE / "cases.json").read_text()) if c["kind"] == "turn"
+    ]
+
+    def shares_of(name):
+        return [
+            r
+            for r in every
+            if r["case"] == name
+            and r["kind"] == "share"
+            and r["request"] == digests.get(name)
+            and r["helpful"] is not None
+        ]
+
+    questions = list(
+        dict.fromkeys(r["question"] for r in every if r["kind"] == "share")
+    )
+    print(
+        "The model's share beside what the labels give: first what a compaction drops that the work needed,"
+        " and needed or was helped by, as a share of the whole context, which the share is weighed against;"
+        " then the same of all the context, as the question asks. Each question's share is of the request rebuilt"
+        " from the transcript where the case has one, as the live fork sends it.\n"
+    )
+    print(
+        "| case | context | "
+        + " | ".join(f"model's share ({q})" for q in questions)
+        + " | lost: needed | lost: needed or helpful | all: needed | all: needed or helpful | dropped |"
+    )
+    print("|---|---|" + "---|" * len(questions) + "---|---|---|---|---|")
+    drawn, kinds = [], []
+    for case in cases:
+        name = case["id"]
+        shares = shares_of(name)
+        cut, runs = latest(every, name, digests.get(name))
+        cells = [span(said(shares, q)) for q in questions]
+        scores = [""] * 5
+        if cut and runs:
+            got = parts.scored(cut["parts"], runs)
+            scores = [
+                span(got["lost_needed"]),
+                span(got["lost_helpful"]),
+                span(got["needed"]),
+                span(got["helpful"]),
+                f"{got['dropped']:.0f}%",
+            ]
+            # The chart shows the share the latest question gave.
+            model = said(shares, questions[-1]) if questions else []
+            drawn.append((name, cut["parts"], got, model))
+            kinds.append(got["kinds"])
+        size = f"{case['tokens'] // 1000}k"
+        print(f"| {name} | {size} | " + " | ".join(cells + scores) + " |")
+    if kinds:
+        print(
+            f"\nBy kind, the mean over the {len(kinds)} labelled cases, as percentages of the context:\n"
+        )
+        print("| kind | a compaction | size | needed | needed or helpful |")
+        print("|---|---|---|---|---|")
+        for g in parts.ORDER:
+            size, need, helps = (
+                sum(k[g][f] for k in kinds) / len(kinds)
+                for f in ("size", "needed", "helpful")
+            )
+            if size:
+                keeps = "puts it back" if kinds[0][g]["returns"] else "drops it"
+                print(f"| {g} | {keeps} | {size:.1f}% | {need:.1f}% | {helps:.1f}% |")
+    # Each question's share at the made-up cases, with how many of its runs
+    # fall in the range their construction gives, on what a compaction drops
+    # and on all the context.
+    print(
+        "\n| made-up case | the turn end | context | should be: lost | of all | "
+        + " | ".join(f"model's share ({q})" for q in questions)
+        + " |"
+    )
+    print("|---|---|---|---|---|" + "---|" * len(questions))
+    for name, made in contrived.CASES.items():
+        shares = shares_of(name)
+        cut, runs = latest(every, name, digests.get(name))
+        if not (cut and runs):
+            continue
+        lost, whole = contrived.should(parts.scored(cut["parts"], runs))
+        cells = []
+        for q in questions:
+            got = said(shares, q)
+            inside = [sum(lo <= v <= hi for v in got) for lo, hi in (lost, whole)]
+            cells.append(
+                f"{span(got)} ({inside[0]}/{len(got)} in range on what's lost, {inside[1]}/{len(got)} of all)"
+                if got
+                else ""
+            )
+        print(
+            f"| {name} | {made['what']} | {cut['context'] // 1000}k "
+            f"| {lost[0]}–{lost[1]}% | {whole[0]}–{whole[1]}% | "
+            + " | ".join(cells)
+            + " |"
+        )
+    spent = sum(r.get("cost", 0) for r in every)
+    print(f"\n{len(every)} rows, ${spent:.2f} in all")
+    if drawn:
+        draw(drawn)
+
+
+# Where the columns of shares right of the bars end, in fractions of the plot's width.
+COLUMNS = (1.08, 1.17, 1.26)
+
+
+def draw(cases: list[tuple[str, list, dict, list[int]]]) -> None:
+    """Each labelled case's request as a bar, its parts coloured by their
+    labels and hatched where a compaction puts them back, with the model's
+    share beside it and the labels' share needed or helpful, of what a
+    compaction drops and of all the context, each the mean of its runs;
+    light and dark, left waiting to publish."""
+    strength = {"needed": 0.85, "helpful": 0.5, "one run": 0.25, "not needed": 0.08}
+    names = {
+        "needed": "needed",
+        "helpful": "helpful",
+        "one run": "needed or helpful in one run",
+        "not needed": "not needed",
+    }
+    with tempfile.TemporaryDirectory() as scratch:
+        for theme, t in charts.THEMES.items():
+            colours = {
+                k: charts.tint(t["ink"], t["page"], v) for k, v in strength.items()
+            }
+            fig, ax = plt.subplots(figsize=(8.4, 0.42 * len(cases) + 1.5))
+            charts.style(ax, t)
+            ax.grid(axis="y", visible=False)
+            ax.grid(axis="x", color=t["grid"], lw=0.8)
+            for row, (_, cut, got, model) in enumerate(cases):
+                segments, at = [], 0
+                for (kind, tokens), label in zip(cut, got["labels"], strict=True):
+                    back = kind in parts.RETURNS
+                    if segments and segments[-1][2:] == [label, back]:
+                        segments[-1][1] += tokens
+                    else:
+                        segments.append([at, tokens, label, back])
+                    at += tokens
+                for back in (False, True):
+                    drawn = [s for s in segments if s[3] == back]
+                    ax.broken_barh(
+                        [(a, w) for a, w, *_ in drawn],
+                        (row - 0.34, 0.68),
+                        facecolors=[colours[k] for _, _, k, _ in drawn],
+                        edgecolor=t["page"],
+                        hatch="////" if back else None,
+                        linewidth=0,
+                    )
+                said = f"{sum(model) / len(model):.0f}%" if model else "–"
+                shares = [
+                    f"{sum(got[k]) / len(got[k]):.0f}%"
+                    for k in ("lost_helpful", "helpful")
+                ]
+                for x, text in zip(COLUMNS, (said, *shares), strict=True):
+                    ax.annotate(
+                        text,
+                        (x, row),
+                        xycoords=("axes fraction", "data"),
+                        ha="right",
+                        va="center",
+                        fontsize=9,
+                        color=t["ink"],
+                    )
+            for x, text in zip(COLUMNS, ("model", "lost", "of all"), strict=True):
+                ax.annotate(
+                    text,
+                    (x, -0.85),
+                    xycoords=("axes fraction", "data"),
+                    ha="right",
+                    va="center",
+                    fontsize=9,
+                    color=t["muted"],
+                )
+            ax.set_yticks(
+                range(len(cases)), [name for name, *_ in cases], color=t["ink"]
+            )
+            ax.set_ylim(len(cases) - 0.5, -1.2)
+            ax.xaxis.set_major_formatter(charts.tokens)
+            ax.set_xlim(0, None)
+            ax.set_xlabel("tokens of context, in order", color=t["muted"], fontsize=10)
+            ax.legend(
+                handles=[Patch(color=colours[k], label=names[k]) for k in strength]
+                + [
+                    Patch(
+                        facecolor=colours["not needed"],
+                        edgecolor=t["ink"],
+                        hatch="////",
+                        linewidth=0,
+                        label="a compaction puts it back",
+                    )
+                ],
+                loc="lower left",
+                bbox_to_anchor=(0, 1.01),
+                ncols=3,
+                frameon=False,
+                fontsize=9,
+                labelcolor=t["ink"],
+                handlelength=1,
+            )
+            path = Path(scratch) / f"share-parts-{theme}.svg"
+            charts.save(fig, path)
+            print(f"waiting to publish: {sparkjoy_assets.image(path)}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument(
+        "--case",
+        action="append",
+        help="case id to run (default: every turn end and made-up case)",
+    )
+    parser.add_argument(
+        "--repeat", type=int, default=2, help="times to ask the share at each case"
+    )
+    parser.add_argument("--jobs", type=int, default=3, help="cases run at once")
+    parser.add_argument(
+        "--build",
+        action="store_true",
+        help="make the made-up cases' requests, to publish",
+    )
+    parser.add_argument(
+        "--report",
+        action="store_true",
+        help="print the tables, draw the chart, and exit",
+    )
+    args = parser.parse_args()
+    if args.build:
+        return build_contrived()
+    if args.report:
+        return report()
+    turns = [
+        c["id"]
+        for c in json.loads((HERE / "cases.json").read_text())
+        if c["kind"] == "turn"
+    ]
+    known = [*turns, *contrived.CASES]
+    if args.case and (unknown := set(args.case) - set(known)):
+        sys.exit(f"Unknown cases: {sorted(unknown)}")
+    run_cases(args.case or known, args.repeat, args.jobs)
+
+
+if __name__ == "__main__":
+    main()

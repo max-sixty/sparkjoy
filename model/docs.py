@@ -22,12 +22,14 @@ the cache lifetime most sessions used. It writes every figure to docs/figures.js
   charts    the figures the cost model quotes from its charts (charts.py)
   replay    the figures the README quotes from its charts (replay_charts.py)
 
-calibrate.py writes its own section, `calibrate`, which measures D over a longer window. The charts go to assets/, in
-a light and a dark theme. Figures keep their units: tokens, dollars under keys ending in `_usd`,
+calibrate.py writes its own section, `calibrate`, which measures u over a longer window. It draws each chart in a
+light and a dark theme, and publishes them to sparkjoy-assets with sparkjoy_assets.py, which points the README's
+and docs' links at them. Figures keep their units: tokens, dollars under keys ending in `_usd`,
 and shares and savings as fractions; a threshold never reached is null.
 """
 
 import argparse
+import tempfile
 from dataclasses import replace
 from pathlib import Path
 
@@ -36,6 +38,7 @@ import context
 import fit
 import numpy as np
 import replay_charts
+import sparkjoy_assets
 from fit import (
     ASKS,
     AUTO,
@@ -56,7 +59,6 @@ from fit import (
 SINCE, UNTIL = "2026-11-18T00:00Z", "2026-11-23T00:00Z"
 # A prefix of the id of the session the README's session chart shows.
 SESSION = "00e0c1c4"
-ASSETS = Path(__file__).parents[1] / "assets"
 
 
 def k(x):
@@ -111,7 +113,13 @@ def parameters(S, p, c, boot):
             ].mean()
             for lo in range(100_000, 800_000, 100_000)
         },
-        "terms": {"h": h, "c0": c0, "F0": F0, "F0_usd": F0 * c.read},
+        "terms": {
+            "h": h,
+            "c0": c0,
+            "F0": F0,
+            "F0_usd": F0 * c.read,
+            "rho": fit.redo(p, c),
+        },
         "closed_form_threshold": interval(
             fit.closed_form(p, c), [fit.closed_form(b, c) for b in boot]
         ),
@@ -121,16 +129,16 @@ def parameters(S, p, c, boot):
 
 def steady_state(p, c, boot, BX):
     """The steady state at the base case: its most efficient threshold, X*, how far it moves with each
-    parameter, and the β and D that would put it elsewhere."""
+    parameter, and the β and u that would put it elsewhere."""
     ib = list(CHART_BETAS).index(BASE)
     X0 = fit.steady(p, c, BASE)
 
-    def J0(x, d=0.0):  # cost per unit of effectiveness against Claude Code's default
-        return fit.per_unit(p, c, x, BASE, d) / fit.per_unit(p, c, AUTO, BASE, d)
+    def J0(x, u=0.0):  # cost per unit of effectiveness against Claude Code's default
+        return fit.per_unit(p, c, x, BASE, u) / fit.per_unit(p, c, AUTO, BASE, u)
 
     near = [x for x in range(150_000, AUTO, 1_000) if J0(x) <= J0(X0) + 0.01]
     x0, Xl, Jl = fit.log_steady(p, c, BASE)
-    d = fit.lost_for(p, c, 700_000, BASE)
+    u = fit.u_for(p, c, 700_000, BASE)
     reach = {}
     for level in (300_000, 400_000, 600_000, 700_000, AUTO):
         beta = next(
@@ -174,9 +182,14 @@ def steady_state(p, c, boot, BX):
         },
         # With η = ln(x / x0), x0 set so a request at 150k is as effective against 1M as at the base case.
         "log_effectiveness": {"x0": x0, "threshold": Xl, "saved": 1 - Jl},
-        "D_for_700k": None
-        if d is None
-        else {"usd": d * c.read, "gain_against_claude_code": 1 / J0(700_000, d) - 1},
+        "u_for_700k": None
+        if u is None
+        else {
+            "u": u,
+            # What a compaction at 700k then loses.
+            "usd": fit.redo(p, c) * u * 700_000 * c.read,
+            "gain_against_claude_code": 1 / J0(700_000, u) - 1,
+        },
         "beta_for_threshold": reach,
     }
 
@@ -323,44 +336,44 @@ PLACES = {
 def mid_turn(S, p, c, ttl, cost, effectiveness):
     """Compacting after any request, only at turn ends, or at turn ends with a backstop after any
     request, each at its most efficient thresholds and compacting idle sessions from IDLE_FLOOR, with
-    each mid-turn compaction charged D wasted requests beyond what one at a turn end loses, each priced
-    as a request at K."""
-    h, c0, _ = fit.terms(p, c)
+    each mid-turn compaction losing a share Δu of its context more than one at a turn end, which
+    costs ρ Δu x (fit.redo)."""
     betas = (0.0, BASE)
     mo = fit.moments(S, p, c, ttl, betas)
-    wasted = h * p.K + c0
+    rho = fit.redo(p, c)
 
-    def unit(key, i, D):  # cost per unit of work
-        return (mo[key][0] + D * wasted * mo[key][1]) / mo[key][2][i]
+    def unit(key, i, du):  # cost per unit of work
+        cost, _, compacted, effectiveness = mo[key]
+        return (cost + rho * du * compacted) / effectiveness[i]
 
     nothing = [
         cost[:, -1].sum() / effectiveness[:, -1, list(CHART_BETAS).index(b)].sum()
         for b in betas
     ]
 
-    def lowest(kind, i, D):
+    def lowest(kind, i, du):
         return min(
-            (key for key in mo if PLACES[kind](*key)), key=lambda key: unit(key, i, D)
+            (key for key in mo if PLACES[kind](*key)), key=lambda key: unit(key, i, du)
         )
 
-    def policy(key, i, D):
+    def policy(key, i, du):
         return {
             "turn_threshold": key[0],
             "any_request_threshold": key[1],
-            "saved": 1 - unit(key, i, D) / nothing[i],
+            "saved": 1 - unit(key, i, du) / nothing[i],
             "mid_turn_compactions": mo[key][1],
         }
 
-    out = {"wasted_request_usd": wasted * c.read}
+    out = {}
     for i, b in enumerate(betas):
-        # The D, in wasted requests, from which each costs as little as compacting after any request.
+        # The Δu, to half a point, from which each costs as little as compacting after any request.
         even = {
             kind: next(
                 (
-                    D
-                    for D in range(101)
-                    if unit(lowest(kind, i, D), i, D)
-                    <= unit(lowest("after_any_request", i, D), i, D)
+                    du
+                    for du in np.arange(0, 201) / 200
+                    if unit(lowest(kind, i, du), i, du)
+                    <= unit(lowest("after_any_request", i, du), i, du)
                 ),
                 None,
             )
@@ -368,12 +381,7 @@ def mid_turn(S, p, c, ttl, cost, effectiveness):
         }
         out[f"beta_{b:g}"] = {
             "policies": {kind: policy(lowest(kind, i, 0), i, 0) for kind in PLACES},
-            "break_even": {
-                kind: None
-                if D is None
-                else {"wasted_requests": D, "usd": D * wasted * c.read}
-                for kind, D in even.items()
-            },
+            "break_even_u": even,
             "backstops_from_floor": {
                 k(y): policy((t, y), i, 0)
                 for t, y in mo
@@ -383,17 +391,6 @@ def mid_turn(S, p, c, ttl, cost, effectiveness):
                 k(t): policy((t, y), i, 0)
                 for t, y in mo
                 if t == y and t % 50_000 == 0 and t >= 200_000
-            },
-            "losing": {
-                str(D): {
-                    "turn_ends_with_backstop": policy(
-                        lowest("turn_ends_with_backstop", i, D), i, D
-                    ),
-                    "after_any_request": policy(
-                        lowest("after_any_request", i, D), i, D
-                    ),
-                }
-                for D in (2, 6)
             },
         }
     return out
@@ -553,6 +550,16 @@ def main():
         "mixed_work": mixed_work(S, p, c, ttl),
         "models": models(S),
     }
+    with tempfile.TemporaryDirectory() as scratch:
+        drawn = Path(scratch)
+        drawings = {
+            "charts": charts.draw(
+                drawn, p, c, boot, cost, effectiveness, BT, BX, parts
+            ),
+            "replay": replay_charts.draw(drawn, S, runs, SESSION),
+        }
+        for chart in sorted(drawn.glob("*.svg")):
+            sparkjoy_assets.image(chart)
     fit.save_figures(
         {
             "window": {
@@ -565,13 +572,11 @@ def main():
             },
             "fit": fitted,
             "context": parts,
-            "charts": charts.draw(
-                ASSETS, p, c, boot, cost, effectiveness, BT, BX, parts
-            ),
-            "replay": replay_charts.draw(ASSETS, S, runs, SESSION),
+            **drawings,
         }
     )
-    print(f"wrote {fit.DOC_FIGURES} and the charts in {ASSETS}")
+    print(f"wrote {fit.DOC_FIGURES}")
+    sparkjoy_assets.publish(sparkjoy_assets.IMAGES)
 
 
 if __name__ == "__main__":

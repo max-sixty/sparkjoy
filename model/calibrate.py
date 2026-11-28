@@ -3,9 +3,8 @@
 # requires-python = ">=3.12"
 # dependencies = ["numpy>=2.1", "matplotlib>=3.9"]
 # ///
-"""Measures how trouble varies with the context in your sessions, and fits D, the cost of the detail
-a compaction drops, as the extra wasted requests after a compaction, which sparkjoy's question
-states (WASTED in hooks/register.ts).
+"""Measures how trouble varies with the context in your sessions, and fits u, the share of the
+context a compaction loses, from the extra wasted requests after a compaction.
 
     uv run --script model/calibrate.py --since 2026-09-17T00:00Z --until 2026-11-16T00:00Z \
         --costs-since 2026-11-18T00:00Z --costs-until 2026-11-23T00:00Z
@@ -15,9 +14,9 @@ varies with the context within a session. A request is in trouble when a tool ca
 failed or when it repeated a lookup its context already held; a turn is in trouble when the
 user's next message corrects it or they interrupt it. Regressions with a fixed effect for each
 session estimate how trouble changes with the context, and how much more of it follows a
-compaction, which gives D, with 90% intervals from resampling sessions. Outcomes need many sessions, so the
-cost model that prices D and finds X* can come from a shorter, more recent window: the docs take
-docs.py's.
+compaction, which, priced at the cost model's ρ (fit.redo), gives u, with 90% intervals from
+resampling sessions. Outcomes need many sessions, so the cost model that prices them can come from a
+shorter, more recent window: the docs take docs.py's.
 
 It writes its figures to the `calibrate` section of docs/figures.json, with the windows it read
 (`window`, and `costs_window` for the cost model's). `outcomes` gives each outcome's mean, per
@@ -26,9 +25,11 @@ e-fold of context, in the first fit.SPAN requests or the first turn after a comp
 session's start. A request is wasted when it failed or looked again; `failed_guard_aside` leaves out
 requests whose failures were all the worktree guard's; it explored when every call it made was a
 lookup. `corrected` counts CORRECTION's matches, which J scales to `corrections_share`, the share of
-requests in turns the user corrected. Trouble is against REFERENCE's band, and the thresholds are at
-fit.BASE's β. `D_top_usd` is D at the top of its interval, and `replayed` the best turn-end
-threshold, with its saving and the saving at fit.FLOOR.
+requests in turns the user corrected. Trouble is against REFERENCE's band. `loss` is what each
+source's compactions lost, as wasted requests, dollars and u. `share` is the share threshold at a
+turn end, by band and size, with the requests to the next reset from these sessions and the prices
+and parameters from the cost model's: at u = 0, the weight λ of u, and at the u the user's and
+Claude Code's compactions lose.
 """
 
 import argparse
@@ -88,6 +89,14 @@ REFERENCE = 3  # 400k to 600k, where most compactions happen
 # The half points searched for the saturating form, 1 - 2^(-x/s), which the comparison of forms fits
 # beside the power law.
 DRAWS = 200
+# The share threshold at a turn end: the bands of context it is given for, with the requests to the
+# next reset averaged over each, and the sizes it is given at, with those requests interpolated
+# between the bands' means at their median contexts.
+BANDS = ((200_000, 300_000), (300_000, 450_000), (450_000, 650_000), (650_000, 965_000))
+SIZES = (230_000, 300_000, 400_000, 600_000, 800_000)
+# A curve A (1 - FLOOR / x) under the fitted one, whose u the doc gives: a proposed wording of the
+# question stated the threshold from a height of 0.25 and a floor of 212k.
+LOWER = (0.25, 212_000)
 
 
 def corrects(text):
@@ -136,12 +145,13 @@ def rows(s):
     context, which Claude Code sometimes writes."""
     n = len(s.size)
     # Who made the latest compaction, 1 sparkjoy or 2 anyone else, and src the same for the SPAN
-    # requests after it.
-    by, src = np.zeros(n, int), np.zeros(n, int)
-    for t, how, _ in s.compactions:
+    # requests after it, with the context it compacted.
+    by, src, before = np.zeros(n, int), np.zeros(n, int), np.full(n, np.nan)
+    for t, how, pre in s.compactions:
         j = np.searchsorted(s.t, t)
         if j < n and s.kind[j] in (fit.USER, fit.POLICY):
             by[j:] = src[j : j + fit.SPAN] = 1 if how == "sparkjoy" else 2
+            before[j : j + fit.SPAN] = np.nan if pre is None else pre
     # A lookup repeated with no edit between that could change what it finds: none at all for a
     # search, none to the file for a Read. A command could change either; polling a log that a
     # command writes is the commonest repeat this lets through.
@@ -167,6 +177,7 @@ def rows(s):
     r = {
         "x": s.size,
         "src": src,
+        "before": before,
         "start": (np.arange(n) < fit.SPAN) & (s.kind[0] == fit.FIRST),
         "failed": failed,
         "looked": looked,
@@ -286,9 +297,10 @@ def trouble(e, key="", j=J, f=F):
     return e["wasted" + key] + f * (e["corrected" + key] / j + e["interrupted" + key])
 
 
-def derived(e, m, j=J, f=F, cost=None):
-    """The trouble per e-fold of context and by band, and D, from one set of coefficients e; m holds
-    the sample's means, and cost(x) prices a request at context x for D."""
+def derived(e, m, cost, rho, j=J, f=F):
+    """The trouble per e-fold of context and by band, and what a compaction loses, from one set of
+    coefficients e; m holds the sample's means, cost(x) prices a request at context x, and ρ
+    (fit.redo) turns what the requests cost into u."""
     w = m["wasted"] + f * (
         m["corrected"] / j + m["interrupted"]
     )  # the mean share of requests wasted
@@ -297,8 +309,9 @@ def derived(e, m, j=J, f=F, cost=None):
         [trouble(e, f" band {k}", j, f) for k in range(len(BINS) - 1)]
     )
     out["w"], out["band x"] = w, m["band x"]
-    # D: the extra trouble over each source's own requests after its compactions, priced at its
-    # own context there.
+    # What a compaction loses: the extra trouble over each source's own requests after its
+    # compactions, priced at its own context there. u is that loss over ρ x, with x the context
+    # the compactions compacted, so redoing u x tokens at ρ each costs as much.
     for key in ("", " sparkjoy", " other"):
         n = (
             e["wasted after" + key] * m["post requests" + key]
@@ -309,14 +322,16 @@ def derived(e, m, j=J, f=F, cost=None):
             * (e["corrected after 2" + key] / j + e["interrupted after 2" + key])
             * m["turn 2" + key]
         )
-        out["D requests" + key] = n
-        out["D" + key] = n * cost(m["post x" + key]) if cost else np.nan
+        out["extra requests" + key] = n
+        out["loss" + key] = n * cost(m["post x" + key])
+        out["u" + key] = out["loss" + key] / (rho * m["before x" + key])
     return out
 
 
 def means(d):
     """The sample's mean rates, the mean context in each band, and, after each source's compactions,
-    the requests in its SPAN window and first two turns and their mean context."""
+    the requests in its SPAN window and first two turns, their mean context, and the mean context the
+    compactions compacted."""
     band = np.digitize(d["x"], BINS) - 1
     m = {
         "wasted": d["wasted"].mean(),
@@ -337,6 +352,7 @@ def means(d):
         windows = np.flatnonzero(src & ~np.roll(src, 1))
         m["post requests" + key] = src.sum() / max(len(windows), 1)
         m["post x" + key] = d["x"][src].mean()
+        m["before x" + key] = np.nanmean(d["before"][windows])
         m["turn 1" + key] = d["tlen"][(d["tpost"] == 1) & tsrc].mean()
         m["turn 2" + key] = d["tlen"][(d["tpost"] == 2) & tsrc].mean()
     return m
@@ -344,6 +360,83 @@ def means(d):
 
 def interval(values, q=(5, 95)):
     return np.percentile(np.array(values, float), q, axis=0)
+
+
+def share(S, p, c, u):
+    """The share threshold at a turn end (fit.share_threshold), with the requests to the next reset
+    from S and the prices and parameters from p and c: with no detail lost beyond what is read back,
+    the weight λ of what is lost (fit.weight), and the threshold less λ u, where a compaction also
+    loses the share u. Each band's requests to the reset have a 90% interval from resampling sessions;
+    each size's are interpolated between the bands', and give the u that puts the threshold on LOWER."""
+    x, n, k = fit.to_reset(S)
+    h, _, F0 = fit.terms(p, c)
+    star = lambda z, m: fit.share_threshold(p, c, z, m)
+    rng = np.random.default_rng(0)
+    bands = []
+    for lo, hi in BANDS:
+        sel = (x >= lo) & (x < hi)
+        # Each session's requests to the reset and turn ends in the band, to resample whole sessions.
+        ids, at = np.unique(k[sel], return_inverse=True)
+        total, ends = np.bincount(at, n[sel]), np.bincount(at)
+        boot = []
+        for _ in range(DRAWS):
+            pick = rng.integers(0, len(ids), len(ids))
+            boot.append(total[pick].sum() / ends[pick].sum())
+        mean, mid = n[sel].mean(), np.median(x[sel])
+        bands.append(
+            {
+                "from": lo,
+                "to": hi,
+                "turn_ends": int(sel.sum()),
+                "sessions": len(ids),
+                "requests_to_reset": {"value": mean, "interval_90": interval(boot)},
+                "median_context": mid,
+                "threshold": {
+                    "value": star(mid, mean),
+                    "interval_90": star(mid, interval(boot)),
+                },
+                "weight": fit.weight(p, c, mean),
+                "threshold_at_u": star(mid, mean) - fit.weight(p, c, mean) * u,
+            }
+        )
+    sizes = []
+    for z in SIZES:
+        m = np.interp(
+            z,
+            [b["median_context"] for b in bands],
+            [b["requests_to_reset"]["value"] for b in bands],
+        )
+        lower = LOWER[0] * (1 - LOWER[1] / z)
+        weight = fit.weight(p, c, m)
+        u_lower = (star(z, m) - lower) / weight
+        sizes.append(
+            {
+                "context": z,
+                "requests_to_reset": m,
+                "threshold": star(z, m),
+                "weight": weight,
+                "threshold_at_u": star(z, m) - weight * u,
+                "lower": lower,
+                "u_for_lower": u_lower,
+                # What a compaction at z that loses that share costs to redo.
+                "u_for_lower_usd": fit.redo(p, c) * u_lower * z * c.read,
+            }
+        )
+    mean = n.mean()
+    return {
+        "turn_ends": len(x),
+        "sessions": len(np.unique(k)),
+        "requests_to_reset": mean,
+        "rho": fit.redo(p, c),
+        "u": u,
+        "bands": bands,
+        "sizes": sizes,
+        "form": {
+            "A": (mean * h - 1) / (mean * h + c.write - 1),
+            "FLOOR": (mean * h * p.K + F0) / (mean * h - 1),
+        },
+        "lower": {"A": LOWER[0], "FLOOR": LOWER[1]},
+    }
 
 
 def main():
@@ -359,11 +452,6 @@ def main():
         default="claude-opus-5-5",
         choices=fit.PRICES,
         help="whose prices to fit",
-    )
-    ap.add_argument(
-        "--no-replay",
-        action="store_true",
-        help="skip replaying the sessions with D at the top of its interval",
     )
     a = ap.parse_args()
     S, since, until = fit.read(a)
@@ -386,7 +474,8 @@ def main():
     m = means(d)
     e = coefficients(d)
     price = lambda z: h * z + c0  # a request at context z, in cached reads
-    x = derived(e, m, cost=price)
+    rho = fit.redo(p, c)
+    x = derived(e, m, price, rho)
     rng = np.random.default_rng(0)
     boot_e, boot_x = [], []
     for _ in range(DRAWS):
@@ -394,7 +483,7 @@ def main():
         boot_e.append(coefficients(dd))
         # J is uncertain too: draw it to match its 90% interval from resampling the labels.
         j = float(np.clip(rng.normal(J, J_SD), 0.15, 0.85))
-        boot_x.append(derived(boot_e[-1], means(dd), j=j, cost=price))
+        boot_x.append(derived(boot_e[-1], means(dd), price, rho, j=j))
     E = {k: interval([b[k] for b in boot_e]) for k in e}
     X = {k: interval([b[k] for b in boot_x]) for k in x}
     est = lambda k, v=e, ci=E: {"value": v[k], "interval_90": ci[k]}
@@ -463,16 +552,18 @@ def main():
         "mean": x["w"],
     }
 
-    figures["D"] = {
+    figures["loss"] = {
         name: {
-            "wasted_requests": est("D requests" + key, x, X),
+            "wasted_requests": est("extra requests" + key, x, X),
             "first_turn_requests": m["turn 1" + key],
             "second_turn_requests": m["turn 2" + key],
             "mean_context": m["post x" + key],
+            "context_compacted": m["before x" + key],
             "cost_usd": {
-                "value": x["D" + key] * c.read,
-                "interval_90": X["D" + key] * c.read,
+                "value": x["loss" + key] * c.read,
+                "interval_90": X["loss" + key] * c.read,
             },
+            "u": est("u" + key, x, X),
         }
         for key, name in (
             ("", "all"),
@@ -480,24 +571,6 @@ def main():
             (" other", "user_and_claude_code"),
         )
     }
-    # The fitted D is near zero, and below zero after sparkjoy's compactions, which come where a piece
-    # of work ends. A threshold compacts anywhere, so the results take D as 0 or at the top of its
-    # interval, where the user's and Claude Code's compactions reach.
-    high = max(X["D"][1], X["D other"][1])
-    wasted = price(m["post x"])  # a request after a compaction
-    figures["D_for_steady_threshold"] = {
-        "request_usd": wasted * c.read,
-        "thresholds": [],
-    }
-    for threshold in (400_000, 700_000):
-        lost = fit.lost_for(p, c, threshold, fit.BASE)
-        figures["D_for_steady_threshold"]["thresholds"].append(
-            {
-                "threshold": threshold,
-                "cost_usd": None if lost is None else lost * c.read,
-                "wasted_requests": None if lost is None else lost / wasted,
-            }
-        )
     # A LangWatch-style comparison, without the session effects or the context.
     first, rest = d["tpost"] == 1, d["tpost"] == 0
     raw = lambda sel: {
@@ -509,27 +582,8 @@ def main():
         "other_turns": raw(rest),
     }
 
-    figures["D_top_usd"] = high * c.read
-    figures["steady_threshold"] = {
-        "D_zero": fit.steady(p, c, fit.BASE),
-        "D_top": fit.steady(p, c, fit.BASE, high),
-    }
-    if not a.no_replay:
-        figures["replayed"] = {}
-        for lost, name in ((0.0, "D_zero"), (high, "D_top")):
-            cost, effectiveness = fit.grid(C, p, c, ttl, betas=(fit.BASE,), lost=lost)
-            (T,), (saved,) = fit.best(cost, effectiveness)
-            at = list(fit.THRESHOLDS).index(fit.FLOOR)
-            floor = (
-                cost[:, at].sum()
-                / effectiveness[:, at, 0].sum()
-                / (cost[:, -1].sum() / effectiveness[:, -1, 0].sum())
-            )
-            figures["replayed"][name] = {
-                "threshold": T,
-                "saving": 1 - saved,
-                "saving_at_floor": 1 - floor,
-            }
+    # At the u the user's and Claude Code's compactions lose, which the doc's parameters give.
+    figures["share"] = share(S, p, c, x["u other"])
 
     fit.save_figures({"calibrate": figures})
     print(f"wrote the calibrate section of {fit.DOC_FIGURES}")
