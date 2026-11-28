@@ -18,8 +18,8 @@ before 200k, as in a 200k context window, where sparkjoy doesn't act. It reads, 
 and fits with fit.py, so it opens only the transcripts modified since --since, at low
 priority.
 With --figures it also saves, as JSON, the figures sparkjoy's question uses, fitted to
-the same sessions, to sparkjoy/figures.json in Claude Code's configuration directory,
-where hooks/register.ts reads them, or to the file it names. It prints a summary and the
+the same sessions, to figures.json in sparkjoy's data folder, $SPARKJOY_DATA, where
+hooks/register.ts reads them, or to the file it names. It prints a summary and the
 page's path.
 """
 
@@ -890,12 +890,12 @@ def main():
     ap.add_argument(
         "--no-open", action="store_true", help="write the page without opening it"
     )
-    # The file hooks/register.ts reads (FIGURES there), in Claude Code's configuration directory.
+    # The file hooks/register.ts reads (FIGURES there), in sparkjoy's data folder.
     ap.add_argument(
         "--figures",
         type=Path,
         nargs="?",
-        const=fit.PROJECTS.parent / "sparkjoy" / "figures.json",
+        const=fit.DATA / "figures.json",
         help="also save the figures sparkjoy's question uses, fitted to these sessions, to this "
         "JSON file; with no file named, to the one the plugin reads",
     )

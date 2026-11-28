@@ -57,7 +57,12 @@ def test_drafts_sparkjoys_lines_beside_the_requests_around_them(tmp_path):
         ],
         capture_output=True,
         text=True,
-        env={"PATH": os.environ["PATH"], "TMPDIR": str(tmp_path), "TZ": "UTC"},
+        env={
+            "PATH": os.environ["PATH"],
+            "TMPDIR": str(tmp_path),
+            "TZ": "UTC",
+            "SPARKJOY_DATA": str(tmp_path / "plugin-data"),
+        },
         check=True,
     )
     path, where = run.stdout.splitlines()
