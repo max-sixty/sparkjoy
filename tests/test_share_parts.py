@@ -522,7 +522,7 @@ def test_the_next_work_runs_through_compactions_until_its_context_would_pass_the
     ]
 
 
-def test_copies_of_a_part_share_a_line_and_alike_parts_show_where_they_differ():
+def test_a_line_shows_the_head_and_tail_of_its_part_and_copies_share_one():
     def call(command):
         return {
             "type": "tool_use",
@@ -538,15 +538,14 @@ def test_copies_of_a_part_share_a_line_and_alike_parts_show_where_they_differ():
     def result(text):
         return {"type": "tool_result", "tool_use_id": "x", "content": text}
 
-    def notice(task):
-        boilerplate = "Background task finished. " * 6
-        return f"[SYSTEM NOTIFICATION - NOT USER INPUT] {boilerplate}Task {task} done."
+    def notice(task, end=""):
+        boilerplate = "Background task finished. " * 10
+        return f"[SYSTEM NOTIFICATION - NOT USER INPUT] {boilerplate}Task {task} done.{end}"
 
     # An idle wait polled three times, the first two polls alike; an edit of
-    # one file twice; two thinking blocks, their text not kept; two notices
-    # whose first 160 characters match; and a poll whose answers differ at
-    # the start, two of them only after 200 characters.
-    same = "same " * 40
+    # one file twice; two notices that differ at their ends; and two that
+    # differ only in the middle, so that their heads and tails read alike.
+    tail = " See the log for the rest." * 6
     request = {
         "system": [{"type": "text", "text": "You are Claude Code."}],
         "tools": [],
@@ -559,91 +558,50 @@ def test_copies_of_a_part_share_a_line_and_alike_parts_show_where_they_differ():
             {"role": "user", "content": [result("a comment")]},
             {"role": "assistant", "content": [edit("a {}")]},
             {"role": "assistant", "content": [edit("b {}")]},
-            {
-                "role": "assistant",
-                "content": [
-                    {"type": "thinking", "thinking": "", "signature": "s1"},
-                    {"type": "thinking", "thinking": "", "signature": "s2"},
-                ],
-            },
             {"role": "user", "content": notice("A")},
             {"role": "user", "content": notice("B")},
-            {"role": "assistant", "content": [call("poll")]},
-            {"role": "user", "content": [result(same + "A")]},
-            {"role": "assistant", "content": [call("poll")]},
-            {"role": "user", "content": [result(same + "B")]},
-            {"role": "assistant", "content": [call("poll")]},
-            {"role": "user", "content": [result("other")]},
+            {"role": "user", "content": notice("C", tail)},
+            {"role": "user", "content": notice("D", tail)},
         ],
     }
     cut = parts.parts_of(request)
     for p in cut:
         p["tokens"] = 10
-    opening = notice("A")[:160]
+    # A long text shows its head and tail, `LINE` characters in all, or where
+    # that reads alike, its head and the words from where it departs.
+    half = (parts.LINE - len(parts.CUT)) // 2
+    head, end = notice("A")[:half], notice("A")[-half:]
+    middle = notice("C", tail)
+    at = middle.index("C done.") - half // 3
+    middle = middle[at : at + half]
     assert parts.listing(cut).splitlines() == [
         "#0 system prompt, 10 tokens: system prompt",
         "#1 tools, 10 tokens: 0 tool definitions",
         "#2, #4, #6 tool call ×3, 30 tokens: Bash: leaf wait /p",
-        "#3, #5 tool result ×2, 20 tokens: result of Bash: leaf wait /p … nothing new",
-        "#7 tool result, 10 tokens: result of Bash: leaf wait /p … a comment",
-        '#8 tool call, 10 tokens: Edit: /w/x.css … "a {}", "new_string": ""}',
-        '#9 tool call, 10 tokens: Edit: /w/x.css … "b {}", "new_string": ""}',
-        "#10 thinking, 10 tokens: thinking, its text not kept",
-        "#11 thinking, 10 tokens: thinking, its text not kept",
-        f"#12 user text, 10 tokens: {opening} … A done.",
-        f"#13 user text, 10 tokens: {opening} … B done.",
-        "#14, #16, #18 tool call ×3, 30 tokens: Bash: poll",
-        f"#15 tool result, 10 tokens: result of Bash: poll … {same[:60].strip()} … A",
-        f"#17 tool result, 10 tokens: result of Bash: poll … {same[:60].strip()} … B",
-        "#19 tool result, 10 tokens: result of Bash: poll … other",
+        "#3, #5 tool result ×2, 20 tokens: result of Bash: leaf wait /p: nothing new",
+        "#7 tool result, 10 tokens: result of Bash: leaf wait /p: a comment",
+        '#8 tool call, 10 tokens: Edit: /w/x.css {"old_string": "a {}", "new_string": ""}',
+        '#9 tool call, 10 tokens: Edit: /w/x.css {"old_string": "b {}", "new_string": ""}',
+        f"#10 user text, 10 tokens: {head}{parts.CUT}{end}",
+        f"#11 user text, 10 tokens: {head}{parts.CUT}{end.replace('A', 'B')}",
+        f"#12 user text, 10 tokens: {head}{parts.CUT}{middle}",
+        f"#13 user text, 10 tokens: {head}{parts.CUT}{middle.replace('C', 'D')}",
     ]
     # A mark on a line marks the latest of its copies, whose text the work
     # needs once, and an id on no line marks nothing.
     assert parts.marked([3, 0], cut) == [0, 5]
     assert parts.marked([99], cut) == []
-    # An instruction file read again unchanged keeps its earlier copy, which
-    # a compaction drops, off the line of the latest, which it puts back.
+    # An instruction file read again unchanged shares the line of its latest
+    # copy, which a compaction puts back, and a mark on it marks that copy.
     again = copy.deepcopy(REQUEST)
     again["messages"][3]["content"][2]["text"] = INSTRUCTIONS
-    copies = [
-        p["id"] for p in parts.parts_of(again) if "CLAUDE.md" in p.get("path", "")
-    ]
-    assert (
-        len(copies) == 2
-        and parts.marked(copies[:1], parts.parts_of(again)) == copies[:1]
-    )
+    cut = parts.parts_of(again)
+    copies = [p["id"] for p in cut if "CLAUDE.md" in p.get("path", "")]
+    assert parts.marked(copies[:1], cut) == copies[1:]
+    assert cut[copies[1]]["kind"] == "instruction files"
 
 
-def test_records_past_what_the_window_holds_are_counted_in_one_record():
-    records = [
-        {"t": "2026-11-08T18:28", "kind": "user", "text": "u" * 100},
-        {
-            "t": "2026-11-08T18:28",
-            "kind": "call",
-            "tool": "Read",
-            "input": {"file_path": "/w/SKILL.md"},
-        },
-        {"t": "2026-11-08T18:29", "kind": "result", "tool": "Read", "text": "r" * 5000},
-        {"t": "2026-11-08T18:29", "kind": "assistant", "text": "a" * 100},
-        {"t": "2026-11-08T19:00", "kind": "compaction"},
-    ]
-    whole = len(parts.rendered(records))
-    assert parts.omitted(records, whole, 5000) == records
-    # Measured with each record cut to the limit, the long result takes no
-    # more room than the others, so the records up to and with the one that
-    # crosses the length stay, whole, and one record counts the rest.
-    each = [len(parts.rendered([parts.capped(r, 100)])) + 1 for r in records]
-    got = parts.omitted(records, sum(each[:3]) + 10, 100)
-    assert got == [*records[:4], {"kind": "omitted", "records": 1}]
-    assert parts.omitted(records, sum(each[:3]) + 10, 5000)[-1] == {
-        "kind": "omitted",
-        "records": 2,
-    }
-    for line in parts.rendered(got).splitlines():
-        json.loads(line)
-
-
-def test_shortening_cuts_long_values_and_keeps_every_record_whole_json():
+def test_records_too_long_for_the_window_keep_every_record_and_cut_the_longest_values():
     records = [
         {"t": "2026-11-04T18:16", "kind": "user", "text": "short"},
         {
@@ -670,25 +628,27 @@ def test_shortening_cuts_long_values_and_keeps_every_record_whole_json():
             "detail": {"value": ["drop"]},
             "says": {"drop": "Drop the box " + "s" * 1500},
         },
+        {"t": "2026-11-04T19:00", "kind": "compaction"},
     ]
-    assert parts.shortened(records, 10_000) == records
-    got = parts.shortened(records, 400)
-    assert got[0] == records[0]
+    whole = len(parts.rendered(records))
+    assert parts.fitting(records, whole) == records
+    got = parts.fitting(records, whole // 4)
+    assert len(parts.rendered(got)) <= whole // 4
+    assert got[0] == records[0] and got[-1] == records[-1]
     for before, after in zip(records, got, strict=True):
         assert json.loads(parts.rendered([after])) == after
         assert {k: v for k, v in after.items() if k not in parts.CONTENT} == {
             k: v for k, v in before.items() if k not in parts.CONTENT
         }
-    # Within a record the longest values are cut first, each to its head and tail.
+    # Each value past one common length is cut to it, keeping its head and
+    # tail; shorter ones stay whole.
     call = got[1]["input"]
     assert call["file_path"] == "/w/a.css" and call["replace_all"] is False
     assert call["old_string"].startswith("o") and parts.CUT in call["old_string"]
     assert got[2]["text"].startswith("head") and got[2]["text"].endswith("tail")
+    assert len(call["new_string"]) == len(got[2]["text"])
     assert got[3]["detail"] == {"value": ["drop"]}
-    says = got[3]["says"]["drop"]
-    assert says.startswith("Drop the box") and parts.CUT in says
-    assert sum(map(parts.length, got)) <= 400 + 4 * len(parts.CUT)
+    assert got[3]["says"]["drop"].startswith("Drop the box")
     # Fewer characters never give longer records.
-    assert sum(map(parts.length, parts.shortened(records, 200))) < sum(
-        map(parts.length, got)
-    )
+    shorter = parts.fitting(records, whole // 8)
+    assert len(parts.rendered(shorter)) < len(parts.rendered(got))

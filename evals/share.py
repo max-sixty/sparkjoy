@@ -23,9 +23,9 @@ Two kinds of case check the answer:
   with its tokens as the API counts them (`counted`), and the same model,
   shown what the session did next (`next_work`), through any compaction,
   as far as one window would have held it (`horizon`), one JSON record per
-  message, tool call or result, as much of it as the window holds beside
-  the request (`fitted`), labels each part needed, helpful or neither
-  (`LABEL`), in `RUNS` runs.
+  message, tool call or result, cut where they don't fit the window beside
+  the request, its parts and the answer (`fitted`), labels each part
+  needed, helpful or neither (`LABEL`), in `RUNS` runs.
   Only I can label a case, since labelling reads my transcripts. Each label
   names the request and a hash of the question it was asked (`shown`), which
   holds the next work and the parts, and a case labelled on both is not
@@ -42,13 +42,13 @@ run's row goes to a batch of its own, published to `evals/share/` in
 sparkjoy-assets when the batch ends: the parts as kind and tokens, the
 labels' part ids, and the share's answer. What the session did next, and
 what each part holds, stay in `.tmp/share/`, where a labelled case's file
-shows them beside the labels and the labeller's reasons. `--report` prints,
-for each case, the model's share in each run beside what the labels give:
-first what a compaction drops that the work needed, and needed or was
-helped by, as a share of the whole context, which is what the share is
-weighed against, then the same of all of it, as the question asks. It draws
-the request of each labelled case, its parts coloured by their labels,
-light and dark, left waiting to publish.
+shows them beside the labels. `--report` prints, for each case, the model's
+share in each run beside what the labels give: first what a compaction
+drops that the work needed, and needed or was helped by, as a share of the
+whole context, which is what the share is weighed against, then the same of
+all of it, as the question asks. It draws the request of each labelled
+case, its parts coloured by their labels, light and dark, left waiting to
+publish.
 """
 
 import argparse
@@ -57,7 +57,6 @@ import http.client
 import itertools
 import json
 import math
-import statistics
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
@@ -80,7 +79,7 @@ from matplotlib.patches import Patch  # noqa: E402
 
 RUNS = 2  # label runs per case
 # The label runs' max_tokens, which the window keeps free beside the next
-# work: their answers have taken at most 5,180 tokens, thinking included.
+# work: their answers have taken at most 9,438 tokens, thinking included.
 LABEL_OUTPUT = 16_000
 DIRECTORY = "evals/share"
 LOCAL = ROOT / ".tmp/share"
@@ -122,14 +121,14 @@ Answer with nothing but one JSON object that matches this schema, filling its fi
 
 LABEL = """This is not a request to continue the work. It comes from the sparkjoy plugin, which is measuring which parts of this context the work after this turn end used, to check its estimates. A program reads your answer.
 
-Below is what the session actually did next, taken from its transcript, and then the parts of the context above, numbered in order, each with its kind, its size in tokens and its opening words. Where parts open alike, each line adds " … " and the words where its part first differs from them. A part repeated word for word has one line, which names each of its ids and gives their tokens in all.
+Below is what the session actually did next, taken from its transcript, and then the parts of the context above, numbered in order, each with its kind, its size in tokens and what it holds. A long part shows its opening and closing words around " […] ", or, where that would read like another part's line, its opening and the words from where it departs from the nearest of them. A part repeated word for word has one line, which names each of its ids and gives their tokens in all.
 
 Judge each part by the work that followed:
 - "needed": the next work used it, or would have gone wrong or had to fetch it again without it. Count what the work relied on without reading it again, such as the state of a fix, a decision taken, or what the user asked for, as well as what it read. Where the context was compacted, at this turn end or later, the work after the compaction ran without it, so a part whose content it then read, searched for or ran again is needed: that fetch is what losing it cost.
 - "helpful": it would have helped the next work, such as by saving a lookup or giving background to a decision, but the work could have done without it.
 - Every other part is not needed.
 
-What the session did next is below, one JSON object per line, in order, through any compaction, until the context, grown by what each later request added to it, would have passed the 1M-token window, or until the session ended. Each has "t", when it happened, and "kind": "user" for what the user typed; "mid-turn" for what the user typed while the session worked, which it read with its next tool result; "page" for what the user did on a Leaf page the session served, with its "event": "comment" or "reply" with the "text" they wrote, "action" for a choice they made, with what they chose in "detail" and its words in "says", or "resolve" where they closed a thread; "agent" for a message another agent or session sent, or a notification from a task the session started, such as a background command or subagent finishing; "assistant" for what the assistant wrote; "call" for a tool call, with its "tool" and "input"; "result" for what a call returned, with its "tool", and "error": true where it failed; "compaction" where the context was compacted; and "omitted", last, standing in for its "records" later records that the window has no room for, so the work went on past the last record shown. A long value may be cut in the middle, at " […] ".
+What the session did next is below, one JSON object per line, in order, through any compaction, until the context, grown by what each later request added to it, would have passed the 1M-token window, or until the session ended. Each has "t", when it happened, and "kind": "user" for what the user typed; "mid-turn" for what the user typed while the session worked, which it read with its next tool result; "page" for what the user did on a Leaf page the session served, with its "event": "comment" or "reply" with the "text" they wrote, "action" for a choice they made, with what they chose in "detail" and its words in "says", or "resolve" where they closed a thread; "agent" for a message another agent or session sent, or a notification from a task the session started, such as a background command or subagent finishing; "assistant" for what the assistant wrote; "call" for a tool call, with its "tool" and "input"; "result" for what a call returned, with its "tool", and "error": true where it failed; and "compaction" where the context was compacted. A long value may be cut in the middle, at " […] ".
 
 {next}
 
@@ -137,7 +136,7 @@ The parts:
 
 {parts}
 
-Answer with nothing but one JSON object: {{"needed": [part ids], "helpful": [part ids], "why": {{"<part id>": "a few words on what the next work used it for"}}}}, with "why" for the 20 largest lines you marked needed or helpful. Mark a repeated part by any one of its ids."""
+Answer with nothing but one JSON object: {{"needed": [part ids], "helpful": [part ids]}}. Mark a repeated part by any one of its ids."""
 
 
 def share_question(tokens: int) -> str:
@@ -191,9 +190,9 @@ def next_work(case: dict) -> list[dict]:
 def fitted(
     request: dict, headers: dict, cut: list[dict], then: list[dict]
 ) -> tuple[str, list[dict]]:
-    """`LABEL` asked with what the session did next (`then`) shortened to
-    fit the window beside the request and `LABEL_OUTPUT`, by the API's
-    count, and the records of it shown."""
+    """`LABEL` asked with what the session did next (`then`) cut to fit the
+    window beside the request, its parts and `LABEL_OUTPUT`, by the API's
+    count (`parts.fitting`), and the records shown."""
 
     def asked(records: list[dict]) -> str:
         return LABEL.format(next=parts.rendered(records), parts=parts.listing(cut))
@@ -210,31 +209,18 @@ def fitted(
         )
 
     room = fit.WINDOW - LABEL_OUTPUT - count(request, headers, asked([]))
-    # Each pass asks for fewer characters than the last, so the records
-    # shorten until they fit or can't shorten further. Where even every value
-    # cut doesn't fit, the work right after the turn end stays: as many of the
-    # earliest records as fit with each cut to the median record's length, so
-    # that most show whole and long results their head and tail, and one
-    # record counts the rest.
-    records, chars = then, sum(map(parts.length, then))
-    used = tokens(then)
-    while used > room:
+    # Each pass asks for fewer characters than the last, in proportion to how
+    # far the records shown pass the room, until they fit or every value is
+    # cut to nothing.
+    shown, chars, bare = then, len(parts.rendered(then)), parts.fitting(then, 0)
+    while (used := tokens(shown)) > room:
+        if shown == bare:
+            raise LookupError(
+                f"the window holds {room} tokens beside the request and its parts, too few for the next work"
+            )
         chars = chars * room // used * 97 // 100
-        if (shorter := parts.shortened(then, chars)) == records:
-            typical = int(statistics.median(map(parts.length, then)))
-            each = [parts.capped(r, typical) for r in then]
-            target = len(parts.rendered(each)) * room // tokens(each)
-            if then[-1]["kind"] == "omitted" or (
-                (fewer := parts.omitted(then, target, typical)) == then
-            ):
-                raise LookupError(
-                    f"the window holds {room} tokens, too few for the next work"
-                )
-            then = fewer
-            shorter, chars = then, sum(map(parts.length, then))
-        records = shorter
-        used = tokens(records)
-    return asked(records), records
+        shown = parts.fitting(then, chars)
+    return asked(shown), shown
 
 
 def count(request: dict, headers: dict, question: str = ".") -> int:
@@ -483,10 +469,10 @@ def run_cases(names: list[str], repeat: int, jobs: int) -> None:
 
 def label(base, request, headers, x, cut, asked, then, n, write) -> None:
     """Label the request's parts `cut` by what the session did next (`then`),
-    asking `asked` `n` times, and keep what each part holds and the
-    labeller's reasons in `LOCAL`, beside those of its earlier runs of the
-    same question. An answer that marks no part needed is unreadable, since
-    the work after any turn end uses the system prompt and tools."""
+    asking `asked` `n` times, and keep what each part holds and the labels
+    in `LOCAL`, beside those of its earlier runs of the same question. An
+    answer that marks no part needed is unreadable, since the work after any
+    turn end uses the system prompt and tools."""
     model = request["params"]["model"]
     write(
         base
@@ -515,12 +501,7 @@ def label(base, request, headers, x, cut, asked, then, n, write) -> None:
         needed, helpful = ids(got.get("needed"), cut), ids(got.get("helpful"), cut)
         ok = bool(needed) and helpful is not None
         runs.append(
-            {
-                "needed": needed,
-                "helpful": helpful,
-                "why": got.get("why"),
-                "text": None if ok else text[:2000],
-            }
+            {"needed": needed, "helpful": helpful, "text": None if ok else text[:2000]}
         )
         write(
             base

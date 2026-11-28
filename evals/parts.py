@@ -23,17 +23,20 @@ comes back in the later one.
 parts out of the request) and `sized` shares a kind's count among its parts
 by characters, with each image counted on its own.
 
-A labeller is shown the parts one line each (`listing`), each line adding
-where its part differs from any whose line would read the same
-(`distinguish`). Copies of one part share a line, and a mark on it marks the
-latest copy, since the work needs their text once (`marked`). It marks each part needed, helpful or neither, in several runs
-(`share.py`), and `scored` turns the runs into shares of the context:
-what the work needed, and needed or was helped by, of the whole context, and
-of it what a compaction drops (`lost_*`), which is what the work then has to
-read back and what the share is weighed against. It judges them by what the
-session did next (`next_work`), one record per message, tool call or result,
-and per message the user typed mid-turn or event of theirs on a Leaf page,
-which `shortened` cuts to the window, each value keeping its head and tail.
+A labeller is shown the parts a line each (`listing`): its kind of block,
+its tokens and what it holds (`desc`), in at most `LINE` characters, where
+lines would read alike showing where each part departs from the rest
+(`lined`). Copies of one part share a line, and a mark on it marks the
+latest copy, since the work needs their text once (`marked`). It marks each part needed, helpful or
+neither, in several runs (`share.py`), and `scored` turns the runs into
+shares of the context: what the work needed, and needed or was helped by, of
+the whole context, and of it what a compaction drops (`lost_*`), which is
+what the work then has to read back and what the share is weighed against.
+It judges them by what the session did next (`next_work`), one record per
+message, tool call or result, and per message the user typed mid-turn or
+event of theirs on a Leaf page, every record shown, and where they don't
+fit the window, each value cut to the longest common length at which they
+do (`fitting`). A line or value cut keeps its head and tail (`abridged`).
 """
 
 import copy
@@ -90,9 +93,12 @@ LABELS = ("needed", "helpful", "one run", "not needed")
 # invoked_skills attachments from 2.1.325 to 2.1.332 never passed either.
 SKILL_CHARS = 20_000
 SKILLS_CHARS = 100_000
-# The characters of a part's text the listing shows from where it first
-# differs from a part whose line would read the same (`distinguish`).
-EXCERPT = 120
+# The characters of what a part holds that its line in the listing shows.
+LINE = 140
+# Where `abridged` takes out the middle of a text, between its head and tail.
+CUT = " […] "
+# The fields of a record that hold what it says, which `fitting` may cut.
+CONTENT = ("text", "input", "detail", "says")
 
 # How a text block opens, for the kinds Claude Code writes into the messages.
 OPENINGS = [
@@ -155,12 +161,13 @@ CD = re.compile(r"""^cd\s+("[^"]*"|'[^']*'|\S+)\s*(&&|;)\s*""")
 PRINTS_FILES = {"cat", "sed", "head", "tail", "nl"}
 
 
-def describe_call(block: dict) -> str:
-    """A tool call in a line: the tool, and what it was called on."""
+def describe_call(block: dict) -> tuple[str, dict]:
+    """A tool call: the tool and what it was called on, such as a file or a
+    command, and the rest of its input."""
     name, given = block["name"], block.get("input") or {}
-    target = next(
+    key = next(
         (
-            given[k]
+            k
             for k in (
                 "file_path",
                 "command",
@@ -172,12 +179,14 @@ def describe_call(block: dict) -> str:
             )
             if given.get(k)
         ),
-        json.dumps(given),
+        None,
     )
-    # Most commands open by moving to a worktree, whose path would leave no
-    # room for the file a read names.
-    target = CD.sub("", str(target))
-    return f"{name}: {target[:160]}"
+    if key is None:
+        return f"{name}: {json.dumps(given, ensure_ascii=False)}", {}
+    # Most commands open by moving to a worktree, whose path would take the
+    # room of what the command does.
+    rest = {k: v for k, v in given.items() if k != key}
+    return f"{name}: {CD.sub('', str(given[key]))}", rest
 
 
 def text_of(content) -> str:
@@ -199,10 +208,23 @@ def blocks_of(message: dict) -> list[dict]:
     return content if isinstance(content, list) else [{"type": "text", "text": content}]
 
 
-# Where `shortened` cuts a value, between its head and tail.
-CUT = " […] "
-# The fields of a record that hold what it says, which `shortened` may cut.
-CONTENT = ("text", "input", "detail", "says")
+def abridged(value, chars: int):
+    """`value` with each string in it longer than `chars` kept to its head
+    and tail, `chars` in all with the `CUT` between them."""
+    if isinstance(value, str):
+        half = max(chars - len(CUT), 0) // 2
+        return (
+            value
+            if len(value) <= chars
+            else f"{value[:half]}{CUT}{value[len(value) - half :]}"
+        )
+    if isinstance(value, dict):
+        return {k: abridged(v, chars) for k, v in value.items()}
+    if isinstance(value, list):
+        return [abridged(v, chars) for v in value]
+    return value
+
+
 # Where a Leaf delivery opens, in what a hook adds to the context.
 DELIVERY = re.compile(r'\{"format": "leaf-delivery/')
 # How Claude Code opens another session's message, which older releases log
@@ -250,7 +272,7 @@ def next_work(entries: Iterable[dict]) -> list[dict]:
     user typed, at the prompt or while the work ran, each event of theirs on
     a Leaf page, each message another agent sent and each task's
     notification, each text of the model's, each tool call with its input,
-    each result, and each compaction, each whole, for `shortened` to cut to
+    each result, and each compaction, each whole, for `fitting` to cut to
     the window. What else Claude Code adds to the context, such as a skill's
     body or its reminders, stays out."""
     records, tools = [], {}
@@ -303,36 +325,20 @@ def next_work(entries: Iterable[dict]) -> list[dict]:
     return records
 
 
-def values(value) -> list[str]:
-    """The strings in a value, such as a record's `CONTENT`, which `shortened`
-    may cut."""
+def rendered(records: list[dict]) -> str:
+    """The records as the labeller reads them, one JSON object per line."""
+    return "\n".join(json.dumps(r, ensure_ascii=False) for r in records)
+
+
+def strings(value) -> list[str]:
+    """The strings in a value, such as a record's `CONTENT`."""
     if isinstance(value, str):
         return [value]
     if isinstance(value, dict):
         value = value.values()
     elif not isinstance(value, list):
         return []
-    return [s for v in value for s in values(v)]
-
-
-def length(record: dict) -> int:
-    return sum(map(len, values([record.get(k) for k in CONTENT])))
-
-
-def cut(value, half: int):
-    """`value` with each string longer than twice `half` kept to its head
-    and tail."""
-    if isinstance(value, str):
-        return (
-            f"{value[:half]}{CUT}{value[len(value) - half :]}"
-            if len(value) > 2 * half
-            else value
-        )
-    if isinstance(value, dict):
-        return {k: cut(v, half) for k, v in value.items()}
-    if isinstance(value, list):
-        return [cut(v, half) for v in value]
-    return value
+    return [s for v in value for s in strings(v)]
 
 
 def common(lengths: list[int], budget: int) -> int | None:
@@ -346,40 +352,16 @@ def common(lengths: list[int], budget: int) -> int | None:
     return None
 
 
-def capped(record: dict, limit: int) -> dict:
-    """`record` with its `CONTENT` in about `limit` characters, its longest
-    values cut first, each keeping its head and tail."""
-    within = common(list(map(len, values([record.get(k) for k in CONTENT]))), limit)
-    if within is None:
-        return record
-    return record | {k: cut(record[k], within // 2) for k in CONTENT if k in record}
-
-
-def shortened(records: list[dict], chars: int) -> list[dict]:
-    """`records` with their `CONTENT` in about `chars` characters:
-    each record longer than a common length is cut to it (`capped`), the
-    length the longest that fits, so every record stays whole JSON."""
-    if (limit := common([length(r) for r in records], chars)) is None:
+def fitting(records: list[dict], chars: int) -> list[dict]:
+    """`records` in about `chars` characters as the labeller reads them:
+    whole, or with each string of their `CONTENT` longer than one common
+    length kept to that length (`abridged`), the longest at which they fit.
+    Every record stays, and stays whole JSON."""
+    lengths = [len(s) for r in records for s in strings([r.get(k) for k in CONTENT])]
+    frame = len(rendered(records)) - sum(lengths)
+    if (limit := common(lengths, chars - frame)) is None:
         return records
-    return [capped(r, limit) for r in records]
-
-
-def rendered(records: list[dict]) -> str:
-    """The records as the labeller reads them, one JSON object per line."""
-    return "\n".join(json.dumps(r, ensure_ascii=False) for r in records)
-
-
-def omitted(records: list[dict], chars: int, limit: int) -> list[dict]:
-    """The earliest `records` that take about `chars` characters as the
-    labeller reads them, each cut to `limit` (`capped`), up to and with the
-    one that crosses it, left whole for `shortened`, and in place of the rest
-    one record counting them."""
-    total = 0
-    for n, r in enumerate(records, 1):
-        total += len(rendered([capped(r, limit)])) + 1
-        if total > chars and n < len(records):
-            return [*records[:n], {"kind": "omitted", "records": len(records) - n}]
-    return records
+    return [r | {k: abridged(r[k], limit) for k in CONTENT if k in r} for r in records]
 
 
 def sections(text: str, role: str) -> list[tuple[int, int]]:
@@ -397,9 +379,10 @@ def sections(text: str, role: str) -> list[tuple[int, int]]:
 
 def parts_of(request: dict) -> list[dict]:
     """The request's parts in order, each with its `id`, `kind`, `chars`, the
-    kind of `block` it is, a line describing it, where it is in the request
-    (`at`: "system", "tools", or a message and block, and for a section its
-    span), a `digest` of what it holds and, for text, its opening (`head`)."""
+    kind of `block` it is, what it holds in a line (`desc`) of at most `LINE`
+    characters, where it is in the request (`at`: "system", "tools", or a
+    message and block, and for a section its span), a `digest` of what it
+    holds and, for text, its opening (`head`)."""
     parts = [
         {
             "kind": "system prompt",
@@ -408,7 +391,6 @@ def parts_of(request: dict) -> list[dict]:
             "chars": sum(len(b.get("text", "")) for b in request["system"]),
             "at": "system",
             "digest": digest(request["system"]),
-            "_text": None,
         },
         {
             "kind": "tools",
@@ -417,7 +399,6 @@ def parts_of(request: dict) -> list[dict]:
             "chars": len(json.dumps(request["tools"])),
             "at": "tools",
             "digest": digest(request["tools"]),
-            "_text": None,
         },
     ]
     calls = {}
@@ -427,18 +408,20 @@ def parts_of(request: dict) -> list[dict]:
             at = [i, j]
             if t == "tool_use":
                 calls[b["id"]] = b
+                said, rest = describe_call(b)
                 part = {
                     "kind": "model's tool calls",
                     "block": "tool call",
-                    "desc": describe_call(b),
+                    "desc": f"{said} {json.dumps(rest, ensure_ascii=False)}"
+                    if rest
+                    else said,
                     "chars": len(json.dumps(b.get("input"))),
                     "digest": digest([b["name"], b.get("input")]),
-                    "_text": json.dumps(b.get("input"), ensure_ascii=False),
                 }
             elif t == "tool_result":
                 body = text_of(b.get("content"))
                 call = calls.get(b.get("tool_use_id"))
-                said = describe_call(call) if call else "?"
+                said = describe_call(call)[0] if call else "?"
                 content = b.get("content")
                 kind = tool_output_kind(call)
                 if kind == "skill body" and not SKILL_DIR.search(body[:600]):
@@ -448,11 +431,10 @@ def parts_of(request: dict) -> list[dict]:
                 part = {
                     "kind": kind,
                     "block": "tool result",
-                    "desc": f"result of {said}",
+                    "desc": f"result of {said}: {body}",
                     "chars": len(body.replace("[image]", "")),
                     "head": body[:300],
                     "digest": digest(content),
-                    "_text": body,
                     "images": sum(
                         x.get("type") == "image"
                         for x in (content if isinstance(content, list) else [])
@@ -466,11 +448,10 @@ def parts_of(request: dict) -> list[dict]:
                     part = {
                         "kind": kind,
                         "block": f"{m['role']} text",
-                        "desc": text.lstrip()[:160].replace("\n", " "),
+                        "desc": text,
                         "chars": len(text),
                         "head": text[:300],
                         "digest": digest(text),
-                        "_text": text,
                         "at": at
                         if (start, end) == (0, len(body))
                         else [i, j, start, end],
@@ -478,8 +459,9 @@ def parts_of(request: dict) -> list[dict]:
                     if kind == "instruction files" and (
                         found := INSTRUCTION_FILE.search(text)
                     ):
+                        # The first file of a block opens after its preamble.
                         part["path"] = found.group(1)
-                        part["desc"] = f"instruction file {found.group(1)}"
+                        part["desc"] = text[found.start() :]
                     if kind == "skill body" and (found := SKILL_DIR.search(text[:600])):
                         part["skill"] = found.group(1)
                     parts.append(part)
@@ -488,13 +470,11 @@ def parts_of(request: dict) -> list[dict]:
                 part = {
                     "kind": "thinking",
                     "block": "thinking",
-                    "desc": (b.get("thinking") or "").strip()[:160].replace("\n", " ")
-                    or "thinking, its text not kept",
+                    "desc": b.get("thinking") or "thinking, its text not kept",
                     # The transcript keeps no thinking text; its signature
                     # grows with it.
                     "chars": len(b.get("thinking") or "")
                     or len(b.get("signature") or b.get("data") or ""),
-                    "_text": b.get("thinking") or None,
                 }
             elif t == "tool_addition":
                 tool = (b.get("tool") or {}).get("definition") or {}
@@ -517,7 +497,6 @@ def parts_of(request: dict) -> list[dict]:
             part.setdefault("block", part["kind"])
             part.setdefault("at", at)
             part.setdefault("digest", digest(b))
-            part.setdefault("_text", None)
             parts.append(part)
     for p in parts:
         # A skill loaded by the Skill tool can arrive in its result.
@@ -527,52 +506,34 @@ def parts_of(request: dict) -> list[dict]:
             and (found := SKILL_DIR.search(p.get("head", "")))
         ):
             p["skill"] = found.group(1)
-    return distinguish(resolve(parts))
+    return lined(resolve(parts))
 
 
-def distinguish(parts: list[dict]) -> list[dict]:
-    """Give each part whose line would read like another's, though it holds
-    other text, the words from where the texts or inputs of its group of
-    alike parts first differ, and where its own departs from the nearest of
-    them later on, those words too (`differs`), which the `listing` shows
-    after its opening; then drop the texts compared. A part with no text to
-    show, such as a thinking block the transcript keeps none of, or an
-    image, keeps its line."""
-
-    def shared(a: str, b: str) -> int:
-        # The characters two texts open with alike.
-        return len(os.path.commonprefix([a, b]))  # noqa: RUF071
-
-    def words(text: str, at: int, chars: int) -> str:
-        # From the start of the word that differs.
-        space = text.rfind(" ", max(at - 30, 0), at)
-        at = space + 1 if space >= 0 else at
-        return text[at : at + chars]
-
+def lined(parts: list[dict]) -> list[dict]:
+    """Cut each part's `desc`, what it holds as one line of text, to at most
+    `LINE` characters: its head and tail. Where lines would read alike though
+    their parts hold different text, the tail gives way to the words from
+    where each part's text departs from the nearest of theirs."""
+    half = (LINE - len(CUT)) // 2
+    texts = [(p["block"], " ".join(p["desc"].split())) for p in parts]
     alike = {}
-    for p in parts:
-        alike.setdefault((p["block"], p["desc"][:170]), []).append(p)
-    for group in alike.values():
-        texts = sorted({p["_text"] for p in group if p["_text"]})
-        if len(texts) < 2:
-            continue
-        first = shared(texts[0], texts[-1])
-        # Sorted, a text's nearest is beside it.
-        near = dict.fromkeys(texts, 0)
-        for a, b in itertools.pairwise(texts):
-            n = shared(a, b)
-            near[a], near[b] = max(near[a], n), max(near[b], n)
-        for p in group:
-            if text := p["_text"]:
-                differs = words(text, first, EXCERPT).strip()
-                if near[text] >= first + EXCERPT // 2:
-                    differs = (
-                        f"{words(text, first, EXCERPT // 2).strip()} … "
-                        f"{words(text, near[text], EXCERPT // 2).strip()}"
-                    )
-                p["differs"] = differs.replace("\n", " ")
-    for p in parts:
-        del p["_text"]
+    for p, (block, text) in zip(parts, texts, strict=True):
+        p["desc"] = abridged(text, LINE)
+        alike.setdefault((block, p["desc"]), set()).add(text)
+    # Sorted, a text's nearest is beside it.
+    near = {}
+    for (block, _), group in alike.items():
+        for a, b in itertools.pairwise(sorted(group)):
+            n = len(os.path.commonprefix([a, b]))  # noqa: RUF071
+            near[block, a] = max(near.get((block, a), 0), n)
+            near[block, b] = max(near.get((block, b), 0), n)
+    for p, key in zip(parts, texts, strict=True):
+        if (n := near.get(key)) is not None:
+            # A third of the words shown come before the departure, so that
+            # what departs shows whole, such as a file name that differs in
+            # its last digit.
+            at = max(n - half // 3, 0)
+            p["desc"] = f"{key[1][:half]}{CUT}{key[1][at : at + half]}"
     return parts
 
 
@@ -666,15 +627,16 @@ def resolve(parts: list[dict]) -> list[dict]:
             start, end = (
                 (p["at"][2], p["at"][3]) if len(p["at"]) == 4 else (0, p["chars"])
             )
+            # A text part's `desc` is still its text.
             keep = cut[k]
-            head, rest = p["_text"][:keep], p["_text"][keep:]
+            head, rest = p["desc"][:keep], p["desc"][keep:]
             out.append(
                 p
                 | {
+                    "desc": head,
                     "chars": keep,
                     "at": [*p["at"][:2], start, start + keep],
                     "digest": digest(head),
-                    "_text": head,
                 }
             )
             out.append(
@@ -685,7 +647,6 @@ def resolve(parts: list[dict]) -> list[dict]:
                     "chars": p["chars"] - keep,
                     "at": [*p["at"][:2], start + keep, end],
                     "digest": digest(rest),
-                    "_text": rest,
                 }
             )
         else:
@@ -697,30 +658,24 @@ def resolve(parts: list[dict]) -> list[dict]:
 
 def lines(parts: list[dict]) -> list[list[dict]]:
     """The parts on each line of the `listing`: one each, but copies of one
-    part, of one kind and holding the same, share one, where the first of
-    them is. An earlier copy of an instruction file keeps a line of its own
-    beside the latest, which a compaction puts back."""
+    part, which read and hold the same, share one, where the first of them
+    is."""
     same = {}
     for p in parts:
-        key = (p["kind"], p["block"], p["desc"][:170], p["digest"])
-        same.setdefault(key, []).append(p)
+        same.setdefault((p["block"], p["desc"], p["digest"]), []).append(p)
     return list(same.values())
 
 
 def listing(parts: list[dict]) -> str:
-    """The parts as the labeller is shown them, each by its kind of block and
-    its opening, and where its line would read like another part's, the
-    words where it differs (`distinguish`); copies of one part as one line
-    naming each of their ids, with their tokens in all."""
+    """The parts as the labeller is shown them, a line each: its kind of
+    block, its tokens and what it holds (`desc`); copies of one part as one
+    line naming each of their ids, with their tokens in all."""
 
     def line(same: list[dict]) -> str:
         ids = ", ".join(f"#{p['id']}" for p in same)
         block = same[0]["block"] + (f" ×{len(same)}" if len(same) > 1 else "")
         tokens = sum(p["tokens"] for p in same)
-        desc = same[0]["desc"][:170]
-        if differs := same[0].get("differs"):
-            desc += f" … {differs}"
-        return f"{ids} {block}, {tokens} tokens: {desc}"
+        return f"{ids} {block}, {tokens} tokens: {same[0]['desc']}"
 
     return "\n".join(map(line, lines(parts)))
 

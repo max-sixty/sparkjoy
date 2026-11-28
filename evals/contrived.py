@@ -71,8 +71,9 @@ def labels(case: str, cut: list[dict]) -> dict:
     fix = [
         p["id"]
         for p in cut
-        if p["desc"]
-        in ("result of Read: src/export/dates.py", "Edit: src/export/dates.py")
+        if p["desc"].startswith(
+            ("result of Read: src/export/dates.py:", "Edit: src/export/dates.py ")
+        )
     ]
     log = [p["id"] for p in cut if p["desc"].startswith("result of Bash: gh run view")]
     needed = [*always, *fix, ids[-1]]
