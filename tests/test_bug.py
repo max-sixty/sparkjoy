@@ -57,9 +57,7 @@ def test_drafts_sparkjoys_lines_beside_the_requests_around_them(tmp_path):
         ],
         capture_output=True,
         text=True,
-        env=isolated(
-            tmp_path, TZ="UTC", CLAUDE_PLUGIN_DATA=str(tmp_path / "plugin-data")
-        ),
+        env=isolated(tmp_path, TZ="UTC", SPARKJOY_DATA=str(tmp_path / "plugin-data")),
         check=True,
     )
     path, where = run.stdout.splitlines()

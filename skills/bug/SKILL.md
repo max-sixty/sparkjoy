@@ -14,7 +14,7 @@ Draft the report with the script, passing the session's id. It writes the draft
 to the temp directory, and prints its path and where to file it:
 
 ```
-CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" uv run --script --locked "${CLAUDE_PLUGIN_ROOT}/model/bug.py" <session id>
+SPARKJOY_DATA="${CLAUDE_PLUGIN_DATA}" uv run --script --locked "${CLAUDE_PLUGIN_ROOT}/model/bug.py" <session id>
 ```
 
 It needs `uv`, which fetches Python and numpy on first use. If `uv` is missing,
