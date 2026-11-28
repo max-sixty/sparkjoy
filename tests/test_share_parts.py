@@ -1,9 +1,12 @@
 """Cuts a made-up request into parts, records what the session did next, and scores
-labels on them, as evals/share.py does: `uvx pytest tests`."""
+labels on them, as evals/share.py does: `uvx pytest tests`. It needs uv."""
 
+import copy
 import importlib.util
 import itertools
 import json
+import os
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
@@ -257,19 +260,61 @@ def test_a_command_reads_a_file_where_a_step_of_it_prints_one():
     assert kind("gh pr view 5244 --json body | head -60") == "other tool output"
 
 
-def test_the_next_work_is_one_record_per_message_call_and_result():
-    def user(t, content, **more):
-        return {"type": "user", "timestamp": t, "message": {"content": content}} | more
+def test_the_next_work_records_what_the_user_and_other_agents_sent_and_each_call():
+    def user(t, content, origin=None, **more):
+        entry = {"type": "user", "timestamp": t, "message": {"content": content}}
+        return entry | ({"origin": {"kind": origin}} if origin else {}) | more
 
+    def attached(t, attachment):
+        return {"type": "attachment", "timestamp": t, "attachment": attachment}
+
+    def compaction(t):
+        return {"type": "system", "subtype": "compact_boundary", "timestamp": t}
+
+    # A Leaf delivery as the hook adds it, with an event of the agent's
+    # beside the user's and text after it.
+    delivery = {
+        "format": "leaf-delivery/15",
+        "batches": [
+            {
+                "threads": [{"id": "t1", "messages": []}],
+                "events": [
+                    {"kind": "comment", "author": "user", "text": "why a box?"},
+                    {"kind": "reply", "author": "agent", "text": "It frames it."},
+                    {
+                        "kind": "action",
+                        "author": "user",
+                        "detail": {"value": ["drop"]},
+                        "says": {"drop": "Drop the box"},
+                        "seq": 7,
+                    },
+                ],
+            }
+        ],
+    }
     entries = [
-        {
-            "type": "system",
-            "subtype": "compact_boundary",
-            "timestamp": "2026-11-04T17:17:05Z",
-        },
+        # sparkjoy asks for the compaction at the turn end, which the work
+        # after it runs without.
+        user("2026-11-04T17:16:00Z", "/compact", "plugin"),
+        compaction("2026-11-04T17:17:05Z"),
         user("", "summary", isCompactSummary=True),
         user("", "caveat", isMeta=True),
-        user("2026-11-04T18:16:00Z", "check the leaf"),
+        user("2026-11-04T18:16:00Z", "check the leaf", "human"),
+        attached(
+            "2026-11-04T18:16:01Z",
+            {
+                "type": "hook_additional_context",
+                "content": [
+                    "Leaf has new input for your turn.\n"
+                    + json.dumps(delivery)
+                    + "\nLeaf's turn-end check found nothing."
+                ],
+            },
+        ),
+        attached(
+            "2026-11-04T18:16:02Z",
+            {"type": "hook_additional_context", "content": ["Leaf: your status"]},
+        ),
         {
             "type": "assistant",
             "timestamp": "2026-11-04T18:16:30Z",
@@ -290,6 +335,23 @@ def test_the_next_work_is_one_record_per_message_call_and_result():
             "isSidechain": True,
             "message": {"content": [{"type": "text", "text": "aside"}]},
         },
+        attached(
+            "2026-11-04T18:16:40Z",
+            {
+                "type": "queued_command",
+                "prompt": "and the tests",
+                "origin": {"kind": "human"},
+            },
+        ),
+        attached(
+            "2026-11-04T18:16:41Z",
+            {
+                "type": "queued_command",
+                "prompt": "CI passed",
+                "isMeta": True,
+                "origin": {"kind": "peer"},
+            },
+        ),
         user(
             "2026-11-04T18:17:00Z",
             [
@@ -302,16 +364,34 @@ def test_the_next_work_is_one_record_per_message_call_and_result():
                 {"type": "text", "text": "<system-reminder>x</system-reminder>"},
             ],
         ),
-        {
-            "type": "system",
-            "subtype": "compact_boundary",
-            "timestamp": "2026-11-04T19:00:00Z",
-        },
-        user("2026-11-04T19:01:00Z", "after"),
+        user("2026-11-04T18:18:00Z", "<task-notification>", "task-notification"),
+        # Older releases log another session's message with no origin.
+        user("2026-11-04T18:18:30Z", "Another Claude session sent a message: done"),
+        user(
+            "2026-11-04T18:19:00Z",
+            "<command-message>merge-pr</command-message>",
+            "human",
+        ),
+        # A compaction later in the work doesn't end it.
+        compaction("2026-11-04T19:00:00Z"),
+        user("2026-11-04T19:01:00Z", "after", "human"),
     ]
     assert parts.next_work(iter(entries)) == [
         {"t": "2026-11-04T17:17", "kind": "compaction"},
         {"t": "2026-11-04T18:16", "kind": "user", "text": "check the leaf"},
+        {
+            "t": "2026-11-04T18:16",
+            "kind": "page",
+            "event": "comment",
+            "text": "why a box?",
+        },
+        {
+            "t": "2026-11-04T18:16",
+            "kind": "page",
+            "event": "action",
+            "detail": {"value": ["drop"]},
+            "says": {"drop": "Drop the box"},
+        },
         {"t": "2026-11-04T18:16", "kind": "assistant", "text": "Reading it."},
         {
             "t": "2026-11-04T18:16",
@@ -319,6 +399,8 @@ def test_the_next_work_is_one_record_per_message_call_and_result():
             "tool": "Read",
             "input": {"file_path": "/w/SKILL.md"},
         },
+        {"t": "2026-11-04T18:16", "kind": "mid-turn", "text": "and the tests"},
+        {"t": "2026-11-04T18:16", "kind": "agent", "text": "CI passed"},
         {
             "t": "2026-11-04T18:17",
             "kind": "result",
@@ -326,40 +408,203 @@ def test_the_next_work_is_one_record_per_message_call_and_result():
             "error": True,
             "text": "no such file",
         },
-        {"t": "2026-11-04T19:00", "kind": "compaction"},
-    ]
-
-
-def test_records_past_what_the_window_holds_are_counted_in_one_record():
-    records = [
-        {"t": "2026-11-08T18:28", "kind": "user", "text": "u" * 100},
+        {"t": "2026-11-04T18:18", "kind": "agent", "text": "<task-notification>"},
         {
-            "t": "2026-11-08T18:28",
-            "kind": "call",
-            "tool": "Read",
-            "input": {"file_path": "/w/SKILL.md"},
+            "t": "2026-11-04T18:18",
+            "kind": "agent",
+            "text": "Another Claude session sent a message: done",
         },
-        {"t": "2026-11-08T18:29", "kind": "result", "tool": "Read", "text": "r" * 5000},
-        {"t": "2026-11-08T18:29", "kind": "assistant", "text": "a" * 100},
-        {"t": "2026-11-08T19:00", "kind": "compaction"},
+        {
+            "t": "2026-11-04T18:19",
+            "kind": "user",
+            "text": "<command-message>merge-pr</command-message>",
+        },
+        {"t": "2026-11-04T19:00", "kind": "compaction"},
+        {"t": "2026-11-04T19:01", "kind": "user", "text": "after"},
     ]
-    whole = len(parts.rendered(records))
-    assert parts.omitted(records, whole, 5000) == records
-    # Measured with each record cut to the limit, the long result takes no
-    # more room than the others, so the records up to and with the one that
-    # crosses the length stay, whole, and one record counts the rest.
-    each = [len(parts.rendered([parts.capped(r, 100)])) + 1 for r in records]
-    got = parts.omitted(records, sum(each[:3]) + 10, 100)
-    assert got == [*records[:4], {"kind": "omitted", "records": 1}]
-    assert parts.omitted(records, sum(each[:3]) + 10, 5000)[-1] == {
-        "kind": "omitted",
-        "records": 2,
+
+
+def test_the_next_work_runs_through_compactions_until_its_context_would_pass_the_window(
+    tmp_path,
+):
+    def at(t):
+        return f"2026-11-04T{t}Z"
+
+    def request(t, size, write, text):
+        """A main-thread request with `size` tokens of context, `write` of them
+        written to the cache."""
+        usage = {
+            "input_tokens": 0,
+            "cache_read_input_tokens": size - write,
+            "cache_creation_input_tokens": write,
+            "output_tokens": 10,
+        }
+        return {
+            "type": "assistant",
+            "timestamp": at(t),
+            "isSidechain": False,
+            "entrypoint": "cli",
+            "message": {
+                "model": "claude-opus-5-5",
+                "id": f"msg_{t}",
+                "usage": usage,
+                "content": [{"type": "text", "text": text}],
+            },
+        }
+
+    def prompt(t, text, origin="human"):
+        return {
+            "type": "user",
+            "timestamp": at(t),
+            "isSidechain": False,
+            "origin": {"kind": origin},
+            "message": {"role": "user", "content": text},
+        }
+
+    entries = [
+        prompt("09:00:00", "start"),
+        request("09:00:10", 860_000, 860_000, "Started."),
+        prompt("10:00:00", "build it"),
+        request("10:00:10", 900_000, 40_000, "Built."),  # the turn end, at 900k
+        prompt("10:05:00", "now test it"),
+        request("10:05:10", 930_000, 30_000, "Tested."),  # 930k
+        prompt("10:06:00", "/compact", "plugin"),
+        {"type": "system", "subtype": "compact_boundary", "timestamp": at("10:07:00")},
+        {
+            "type": "user",
+            "timestamp": at("10:07:00"),
+            "isSidechain": False,
+            "isCompactSummary": True,
+            "message": {"role": "user", "content": "summary"},
+        },
+        prompt("10:08:00", "and the docs"),
+        # The compacted prompt hides what the request added: 4k stands in.
+        request("10:08:10", 50_000, 45_000, "Writing them."),  # 934k
+        request("10:09:10", 110_000, 60_000, "Written."),  # 994k
+        # The prompt of the request that passes the window goes with it.
+        prompt("10:10:00", "one more"),
+        request("10:10:10", 120_000, 10_000, "Past the window."),  # 1,004k
+        prompt("10:11:00", "later still"),
+    ]
+    transcript = tmp_path / "projects" / "project" / "s.jsonl"
+    transcript.parent.mkdir(parents=True)
+    transcript.write_text(
+        "".join(json.dumps(e, separators=(",", ":")) + "\n" for e in entries)
+    )
+    case = {"id": "c", "tokens": 900_000, "source": {"session": "s", "line": 3}}
+    code = (
+        "import json, sys; sys.path.insert(0, 'evals'); import share; "
+        "print(json.dumps(share.next_work(json.loads(sys.argv[1]))))"
+    )
+    run = subprocess.run(
+        [
+            *("uv", "run", "--no-project", "--with-requirements", "evals/share.py"),
+            *("python", "-c", code, json.dumps(case)),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": os.environ["PATH"],
+            "TMPDIR": str(tmp_path),
+            "CLAUDE_CONFIG_DIR": str(tmp_path),
+            "SPARKJOY_DATA": str(tmp_path / "data"),
+        },
+        check=True,
+    )
+    assert json.loads(run.stdout) == [
+        {"t": "2026-11-04T10:05", "kind": "user", "text": "now test it"},
+        {"t": "2026-11-04T10:05", "kind": "assistant", "text": "Tested."},
+        {"t": "2026-11-04T10:07", "kind": "compaction"},
+        {"t": "2026-11-04T10:08", "kind": "user", "text": "and the docs"},
+        {"t": "2026-11-04T10:08", "kind": "assistant", "text": "Writing them."},
+        {"t": "2026-11-04T10:09", "kind": "assistant", "text": "Written."},
+    ]
+
+
+def test_a_line_shows_the_head_and_tail_of_its_part_and_copies_share_one():
+    def call(command):
+        return {
+            "type": "tool_use",
+            "id": "x",
+            "name": "Bash",
+            "input": {"command": command},
+        }
+
+    def edit(old):
+        given = {"file_path": "/w/x.css", "old_string": old, "new_string": ""}
+        return {"type": "tool_use", "id": "y", "name": "Edit", "input": given}
+
+    def result(text):
+        return {"type": "tool_result", "tool_use_id": "x", "content": text}
+
+    def notice(task, end=""):
+        boilerplate = "Background task finished. " * 10
+        return f"[SYSTEM NOTIFICATION - NOT USER INPUT] {boilerplate}Task {task} done.{end}"
+
+    # An idle wait polled three times, the first two polls alike; an edit of
+    # one file twice; two notices that differ at their ends; and two that
+    # differ only in the middle, so that their heads and tails read alike.
+    tail = " See the log for the rest." * 6
+    request = {
+        "system": [{"type": "text", "text": "You are Claude Code."}],
+        "tools": [],
+        "messages": [
+            {"role": "assistant", "content": [call("leaf wait /p")]},
+            {"role": "user", "content": [result("nothing new")]},
+            {"role": "assistant", "content": [call("leaf wait /p")]},
+            {"role": "user", "content": [result("nothing new")]},
+            {"role": "assistant", "content": [call("leaf wait /p")]},
+            {"role": "user", "content": [result("a comment")]},
+            {"role": "assistant", "content": [edit("a {}")]},
+            {"role": "assistant", "content": [edit("b {}")]},
+            {"role": "user", "content": notice("A")},
+            {"role": "user", "content": notice("B")},
+            {"role": "user", "content": notice("C", tail)},
+            {"role": "user", "content": notice("D", tail)},
+        ],
     }
-    for line in parts.rendered(got).splitlines():
-        json.loads(line)
+    cut = parts.parts_of(request)
+    for p in cut:
+        p["tokens"] = 10
+    # A long text shows its head and tail, `LINE` characters in all, or where
+    # that reads alike, its head and the words from where it departs.
+    half = (parts.LINE - len(parts.CUT)) // 2
+    head, end = notice("A")[:half], notice("A")[-half:]
+    middle = notice("C", tail)
+    at = middle.index("C done.") - half // 3
+    middle = middle[at : at + half]
+    assert parts.listing(cut).splitlines() == [
+        "#0 system prompt, 10 tokens: system prompt",
+        "#1 tools, 10 tokens: 0 tool definitions",
+        "#2, #4, #6 tool call ×3, 30 tokens: Bash: leaf wait /p",
+        "#3, #5 tool result ×2, 20 tokens: result of Bash: leaf wait /p: nothing new",
+        "#7 tool result, 10 tokens: result of Bash: leaf wait /p: a comment",
+        '#8 tool call, 10 tokens: Edit: /w/x.css {"old_string": "a {}", "new_string": ""}',
+        '#9 tool call, 10 tokens: Edit: /w/x.css {"old_string": "b {}", "new_string": ""}',
+        f"#10 user text, 10 tokens: {head}{parts.CUT}{end}",
+        f"#11 user text, 10 tokens: {head}{parts.CUT}{end.replace('A', 'B')}",
+        f"#12 user text, 10 tokens: {head}{parts.CUT}{middle}",
+        f"#13 user text, 10 tokens: {head}{parts.CUT}{middle.replace('C', 'D')}",
+    ]
+    # A mark on a line marks the latest of its copies, whose text the work
+    # needs once, and an id on no line marks nothing.
+    assert parts.marked([3, 0], cut) == [0, 5]
+    assert parts.marked([99], cut) == []
+    # An instruction file read again unchanged shares the line of its latest
+    # copy, which a compaction puts back, and a mark on it marks that copy.
+    again = copy.deepcopy(REQUEST)
+    again["messages"][3]["content"][2]["text"] = INSTRUCTIONS
+    cut = parts.parts_of(again)
+    copies = [p["id"] for p in cut if "CLAUDE.md" in p.get("path", "")]
+    assert parts.marked(copies[:1], cut) == copies[1:]
+    assert cut[copies[1]]["kind"] == "instruction files"
 
 
-def test_shortening_cuts_long_values_and_keeps_every_record_whole_json():
+def test_what_doesnt_fit_the_window_keeps_every_line_and_record_and_cuts_the_longest():
+    cut = parts.parts_of(REQUEST)
+    for p in cut:
+        p["tokens"] = 10
     records = [
         {"t": "2026-11-04T18:16", "kind": "user", "text": "short"},
         {
@@ -379,22 +624,40 @@ def test_shortening_cuts_long_values_and_keeps_every_record_whole_json():
             "tool": "Edit",
             "text": "head\n" + "r" * 2000 + "\ntail",
         },
+        {
+            "t": "2026-11-04T18:18",
+            "kind": "page",
+            "event": "action",
+            "detail": {"value": ["drop"]},
+            "says": {"drop": "Drop the box " + "s" * 1500},
+        },
+        {"t": "2026-11-04T19:00", "kind": "compaction"},
     ]
-    assert parts.shortened(records, 10_000) == records
-    got = parts.shortened(records, 400)
-    assert got[0] == records[0]
+    listing = parts.listing(cut)
+    whole = len(listing) + len(parts.rendered(records))
+    assert parts.fitting(cut, records, whole) == (listing, records)
+    # The records' long values are cut first, since a line already shows no
+    # more than `LINE` characters; each value past one common length is cut
+    # to it, keeping its head and tail, and shorter ones stay whole.
+    lines, got = parts.fitting(cut, records, len(listing) + whole // 4)
+    assert lines == listing
+    assert got[0] == records[0] and got[-1] == records[-1]
     for before, after in zip(records, got, strict=True):
         assert json.loads(parts.rendered([after])) == after
-        assert {k: v for k, v in after.items() if k not in ("text", "input")} == {
-            k: v for k, v in before.items() if k not in ("text", "input")
+        assert {k: v for k, v in after.items() if k not in parts.CONTENT} == {
+            k: v for k, v in before.items() if k not in parts.CONTENT
         }
-    # Within a record the longest values are cut first, each to its head and tail.
     call = got[1]["input"]
     assert call["file_path"] == "/w/a.css" and call["replace_all"] is False
     assert call["old_string"].startswith("o") and parts.CUT in call["old_string"]
     assert got[2]["text"].startswith("head") and got[2]["text"].endswith("tail")
-    assert sum(map(parts.length, got)) <= 400 + 3 * len(parts.CUT)
-    # Fewer characters never give longer records.
-    assert sum(map(parts.length, parts.shortened(records, 200))) < sum(
-        map(parts.length, got)
+    assert len(call["new_string"]) == len(got[2]["text"]) > parts.LINE
+    assert got[3]["detail"] == {"value": ["drop"]}
+    # With less room the lines are cut too, to the same length as the values.
+    lines, tight = parts.fitting(cut, records, whole // 3)
+    shown = [line.split(" tokens: ", 1)[1] for line in lines.splitlines()]
+    assert len(shown) == len(listing.splitlines())
+    assert max(map(len, shown)) == len(tight[2]["text"]) < parts.LINE
+    assert len(lines) + len(parts.rendered(tight)) < len(listing) + len(
+        parts.rendered(got)
     )
