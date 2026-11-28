@@ -259,7 +259,7 @@ def test_a_command_reads_a_file_where_a_step_of_it_prints_one():
     assert kind("gh pr view 5244 --json body | head -60") == "other tool output"
 
 
-def test_the_next_work_is_a_record_per_message_call_result_and_word_of_the_users():
+def test_the_next_work_records_what_the_user_and_other_agents_sent_and_each_call():
     def user(t, content, origin=None, **more):
         entry = {"type": "user", "timestamp": t, "message": {"content": content}}
         return entry | ({"origin": {"kind": origin}} if origin else {}) | more
@@ -364,6 +364,8 @@ def test_the_next_work_is_a_record_per_message_call_result_and_word_of_the_users
             ],
         ),
         user("2026-11-04T18:18:00Z", "<task-notification>", "task-notification"),
+        # Older releases log another session's message with no origin.
+        user("2026-11-04T18:18:30Z", "Another Claude session sent a message: done"),
         user(
             "2026-11-04T18:19:00Z",
             "<command-message>merge-pr</command-message>",
@@ -397,12 +399,19 @@ def test_the_next_work_is_a_record_per_message_call_result_and_word_of_the_users
             "input": {"file_path": "/w/SKILL.md"},
         },
         {"t": "2026-11-04T18:16", "kind": "mid-turn", "text": "and the tests"},
+        {"t": "2026-11-04T18:16", "kind": "agent", "text": "CI passed"},
         {
             "t": "2026-11-04T18:17",
             "kind": "result",
             "tool": "Read",
             "error": True,
             "text": "no such file",
+        },
+        {"t": "2026-11-04T18:18", "kind": "agent", "text": "<task-notification>"},
+        {
+            "t": "2026-11-04T18:18",
+            "kind": "agent",
+            "text": "Another Claude session sent a message: done",
         },
         {
             "t": "2026-11-04T18:19",

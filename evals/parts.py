@@ -198,13 +198,25 @@ CUT = " […] "
 CONTENT = ("text", "input", "detail", "says")
 # Where a Leaf delivery opens, in what a hook adds to the context.
 DELIVERY = re.compile(r'\{"format": "leaf-delivery/')
+# How Claude Code opens another session's message, which older releases log
+# with no origin.
+PEER = "Another Claude session sent a message"
 
 
-def human(logged: dict) -> bool:
-    """Whether the user wrote a message Claude Code logged, by the origin it
-    logs with it: a plugin's message, another agent's, a task's notification
-    and Claude Code's own text carry another, or none."""
-    return (logged.get("origin") or {}).get("kind") == "human"
+def sender(logged: dict, text: str) -> str | None:
+    """Who sent a message Claude Code logged, by the origin it logs with it:
+    "user" for the user, "agent" for another agent or session, or a task's
+    notification that a background command or subagent finished; None for a
+    plugin's message, such as sparkjoy's /compact, and for Claude Code's own
+    text, which carry another origin or none."""
+    origin = (logged.get("origin") or {}).get("kind")
+    if origin == "human":
+        return "user"
+    if origin in ("peer", "task-notification") or (
+        origin is None and text.startswith(PEER)
+    ):
+        return "agent"
+    return None
 
 
 def page_events(content) -> list[dict]:
@@ -229,10 +241,11 @@ def next_work(entries: Iterable[dict]) -> list[dict]:
     """What the session did after a turn end, from the entries of its
     transcript after it that `share.py` takes: one record for each thing the
     user typed, at the prompt or while the work ran, each event of theirs on
-    a Leaf page, each text of the model's, each tool call with its input,
+    a Leaf page, each message another agent sent and each task's
+    notification, each text of the model's, each tool call with its input,
     each result, and each compaction, each whole, for `shortened` to cut to
-    the window. What else Claude Code attaches to the context stays out,
-    since it holds none of the user's words."""
+    the window. What else Claude Code adds to the context, such as a skill's
+    body or its reminders, stays out."""
     records, tools = [], {}
     for e in entries:
         t = e.get("timestamp", "")[:16]
@@ -241,10 +254,11 @@ def next_work(entries: Iterable[dict]) -> list[dict]:
             continue
         if e.get("isSidechain") or e.get("isCompactSummary"):
             continue
-        if e.get("type") == "user" and not e.get("isMeta"):
+        if e.get("type") == "user":
             for b in blocks_of(e["message"]):
-                if b.get("type") == "text" and b.get("text") and human(e):
-                    records.append({"t": t, "kind": "user", "text": b["text"]})
+                text = b.get("text") or ""
+                if b.get("type") == "text" and text and (kind := sender(e, text)):
+                    records.append({"t": t, "kind": kind, "text": text})
                 elif b.get("type") == "tool_result":
                     record = {"t": t, "kind": "result"}
                     if tool := tools.get(b.get("tool_use_id")):
@@ -254,12 +268,12 @@ def next_work(entries: Iterable[dict]) -> list[dict]:
                     records.append(record | {"text": text_of(b.get("content"))})
         elif e.get("type") == "attachment":
             a = e["attachment"]
-            # What the user typed while the turn ran reaches the model with
-            # its next tool result.
-            if a.get("type") == "queued_command" and human(a):
-                records.append(
-                    {"t": t, "kind": "mid-turn", "text": text_of(a.get("prompt"))}
-                )
+            # A message that arrives while the turn runs reaches the model
+            # with its next tool result.
+            text = text_of(a.get("prompt"))
+            if a.get("type") == "queued_command" and (kind := sender(a, text)):
+                kind = "mid-turn" if kind == "user" else kind
+                records.append({"t": t, "kind": kind, "text": text})
             elif a.get("type") == "hook_additional_context":
                 records += [
                     {"t": t, "kind": "page"} | event

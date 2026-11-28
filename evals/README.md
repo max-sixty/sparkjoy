@@ -355,8 +355,10 @@ writes back after a compaction. Each kind of part takes the tokens the API
 counts for it, and its parts share them by characters. The same model,
 after the same request, is shown what the session did next as JSON Lines:
 one record for each thing the user typed, at the prompt or while the session
-worked, each comment, reply or choice of theirs on a Leaf page, and each
-text the model wrote, tool call with its input, result and compaction. The
+worked, each comment, reply or choice of theirs on a Leaf page, each message
+another agent sent and each notification from a task the session started,
+and each text the model wrote, tool call with its input, result and
+compaction. The
 records run on through any compaction until the context, grown from the turn
 end's by what each later request added, would have passed the 1M window, or
 to the session's end; the first request after a compaction counts as
