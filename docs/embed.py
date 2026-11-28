@@ -17,11 +17,7 @@ END = "<!-- End of the generated copy. -->"
 def from_root(text):
     """`text` from the doc, with paths from the repo root, and links to the doc's sections opening the
     doc's own page there."""
-    return (
-        text.replace('"../', '"')
-        .replace("](../", "](")
-        .replace("](#", "](docs/cost-model.md#")
-    )
+    return text.replace("](../", "](").replace("](#", "](docs/cost-model.md#")
 
 
 def section(doc):

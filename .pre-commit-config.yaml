@@ -5,18 +5,12 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
-        # The charts keep the bytes matplotlib writes.
-        exclude: &generated ^assets/
       - id: end-of-file-fixer
-        exclude: *generated
       - id: mixed-line-ending
-        exclude: *generated
       - id: check-yaml
       - id: check-json
       - id: check-toml
       - id: check-added-large-files
-        # A recorded session is about 500 KB compressed.
-        exclude: ^evals/fixtures/
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.17.5
     hooks:

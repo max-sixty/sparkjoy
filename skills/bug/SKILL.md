@@ -14,7 +14,7 @@ Draft the report with the script, passing the session's id. It writes the draft
 to the temp directory, and prints its path and where to file it:
 
 ```
-uv run --script --locked "${CLAUDE_PLUGIN_ROOT}/model/bug.py" <session id>
+CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" uv run --script --locked "${CLAUDE_PLUGIN_ROOT}/model/bug.py" <session id>
 ```
 
 It needs `uv`, which fetches Python and numpy on first use. If `uv` is missing,
@@ -26,8 +26,9 @@ Fill in its two sections in italics:
 
 - **What happened**: what the user says went wrong and expected, in their
   words, and the line it concerns. If they gave no account, describe the latest
-  line that sparkjoy followed with one suggesting `/sparkjoy bug`, and ask
-  whether that's the one.
+  line of sparkjoy's that `/sparkjoy bug` concerns, and ask whether that's the
+  one: the line before one saying "That looks like a bug", or an idle
+  session's line saying its question missed the prompt cache.
 - **Settings**: the quoted settings, whole.
 
 Then show the user the draft's path, the title you'd give the issue, the

@@ -8,16 +8,16 @@
 // the mod compacts if it says to. A session left idle at IDLE_FLOOR or more is
 // asked again just before its prompt cache lapses, whether the cache lives an
 // hour or five minutes, told that the next request would otherwise write the
-// whole context to the cache again. Each decision shows in the transcript as
-// a dim line the model never reads, so a session that stays large says why.
-// The engine's auto-compaction at its threshold still runs as before, and
-// covers a turn that grows past the floor before it ends.
+// whole context to the cache again. Each decision shows in the transcript as a
+// dim line the model never reads, so a session that stays large says why.
+// Claude Code's own auto-compaction still runs at its threshold, so a context
+// the judge keeps, or one that fills within a turn, compacts there as before.
 //
 // The judge is the session's model over the whole transcript rather than a
 // small model over the last reply: which parts the work ahead still needs
 // depends on the work, and the fork reads it from cache. The question gives
-// the judge the costs and the saving, sized for the context it holds, to weigh
-// rather than a rule, and never names the floor. Its figures are the user's own
+// the judge what a compaction would save at the context it holds and what a
+// summary drops, and never names the floor. Its figures are the user's own
 // once `/sparkjoy report` has fitted them. The mod runs only where a person is
 // at the prompt: a `-p` run or an SDK host keeps the engine's own compaction, so
 // no script pays for a judge or finds its conversation changed.
@@ -41,19 +41,20 @@
 import type {
   CommandRunResult,
   EngineInterface,
+  ModelUsage,
   PluginOptions,
   Register,
   SessionMessage,
   TurnUsage,
 } from 'claude-code'
-import { checkForUpdate } from './update'
+import { checkForUpdate, installOf } from './update'
 
 // Set while this process compacts. `$.state` outlives a reload of the mod but
 // not the process, so a reload that finds a compaction announced leaves it to
 // the copy already making it.
 const COMPACTING = { plugin: 'sparkjoy', key: 'compacting' } as const
 
-// The floors sparkjoy asks from and the figures the question states, as my
+// The floors sparkjoy asks from and the figures the question's sums use, as my
 // sessions of 7-15 Nov 2026 measured them (docs/cost-model.md); FLOOR's
 // comment gives what my sessions of 18-22 Nov 2026 say of the floors.
 // `/sparkjoy report` fits the same figures to the user's own sessions and
@@ -126,31 +127,65 @@ const AUTHOR = {
   // The share of requests that find the prompt cache lapsed and make a cache
   // write of the whole context but P (ℓ), mostly after a gap of over an hour.
   LAPSE: 0.0056,
-  // Requests in a turn: the median, and the mean, which a few long turns
-  // raise.
+  // The median requests in a turn.
   TURN_MEDIAN: 9,
-  TURN_MEAN: 38,
 }
 
 type Figures = typeof AUTHOR
 
-// The wasted requests (failed tool calls, repeated lookups, corrections)
-// beyond the usual after a compaction the user or Claude Code made, which
-// model/calibrate.py measured over 60 days of my sessions. After sparkjoy's,
-// which came where a piece of work ended, there were fewer wasted requests
-// than usual. The report doesn't fit it to the user's sessions: over the
-// report's two weeks, resampling the sessions moves it by more than its own
-// size.
-const WASTED = 6
+// The file `/sparkjoy report` saves the user's figures to, in sparkjoy's data
+// folder (`dataDir`), as model/report.py names it.
+const FIGURES = 'figures.json'
 
-// The file `/sparkjoy report` saves the user's figures to, under Claude Code's
-// configuration directory, as model/report.py names it. Its home would be the
-// plugin's data folder, but Claude Code before 2.1.326 gives a hooks module no
-// way to find that folder, and refuses at load a module that calls
-// `$.process.hookEnv()`, the API that names it.
-// TODO: save and read it in that folder once every release CI tests has
-// `$.process.hookEnv()`.
-const FIGURES = 'sparkjoy/figures.json'
+// sparkjoy's log, beside FIGURES: a JSON line for each verdict and for each
+// compaction the mod starts and ends, in a file a session and a day,
+// `<LOG>/<session>/<day>.jsonl`, the day in UTC. The transcript's line says
+// what a person reads; the record keeps what model/fit.py and the report read
+// back, which that line drops: the context in tokens, the figures the question
+// stated, the model's whole answer and what its fork read. A record's `kind`
+// is the line's word for the verdict, and a verdict without `usage` was
+// reached with no request. `$.fs` writes only whole files, so each record
+// reads its file and writes it back a line longer, one record at a time; a
+// day's records stay far under the 4 MiB a read returns.
+const LOG = 'log'
+
+// sparkjoy's data folder, ${CLAUDE_PLUGIN_DATA}, which Claude Code keeps across
+// updates and deletes with the plugin. Rejects where it can't be made.
+async function dataDir($: EngineInterface) {
+  return (await $.process.hookEnv()).CLAUDE_PLUGIN_DATA
+}
+
+// What a record says beside when, which session and which release.
+type Facts = Record<string, unknown>
+
+// The records waiting to be written, in order, since each rewrites the file.
+let logging = Promise.resolve()
+
+// Appends a record of `facts` to the session's log, timed when it was asked
+// for rather than when its turn to be written came. A failure goes to the
+// debug log, since the transcript's line already says what happened.
+function record($: EngineInterface, facts: Facts) {
+  const now = $.clock.now()
+  logging = logging
+    .then(async () => {
+      const data = await dataDir($)
+      const t = new Date(await now).toISOString()
+      const session = await $.session.id()
+      const path = `${data}/${LOG}/${session}/${t.slice(0, 10)}.jsonl`
+      const line = JSON.stringify({
+        t,
+        session,
+        transcript: (await $.session.info()).transcriptPath,
+        version: installOf($.plugin.root)?.commit ?? null,
+        claude_code: (await $.session.version()).version,
+        ...facts,
+      })
+      const before = (await $.fs.exists(path)) ? await $.fs.read(path) : ''
+      await $.fs.write(path, `${before}${line}\n`)
+    })
+    .catch(error => $.ui.log(`Logging failed: ${error}`, { to: 'debug' }))
+  return logging
+}
 
 // The user's settings, from the fields `userConfig` declares in
 // .claude-plugin/plugin.json. Off, the mod asks nothing and compacts nothing,
@@ -230,8 +265,8 @@ const WINDOW = 1_000_000
 //
 // The cache belongs to the account's organization, so once Claude Code signs
 // in to another account the question finds it gone and pays to write the
-// context to it again, as the user's next request would have. All 3 of my
-// idle questions that missed it (21-22 Nov 2026) followed such a switch.
+// context to it again, as the user's next request would have. All 15 of my
+// idle questions that missed it (21-27 Nov 2026) followed such a switch.
 // Otherwise the API keeps it for the hour: of my requests 5 to 60 minutes
 // after one they extended unchanged, on the same account, 11 of 2,392 found
 // it gone (1-22 Nov 2026).
@@ -244,9 +279,11 @@ const IDLE_MS = { '1h': 55 * 60_000, '5m': 4 * 60_000 }
 // no test reaches this.
 const LATE_MS = 60_000
 
-// The share of the fork's input not read from the prompt cache past which the
-// question missed it: a hit leaves only the question uncached and a miss most
-// of the context, so any share between separates them.
+// The share of the turn's last request that the question didn't read from the
+// prompt cache, past which it missed the cache. The fork sends that request
+// again, which the request itself left cached, so a hit reads all of it and a
+// miss only the system prompt and tools, and any share between separates them.
+// The turn's reply and the question come after it, and are never cached.
 const MISSED = 0.1
 
 // What the line after one reporting a bug, in sparkjoy or in the Claude Code
@@ -254,6 +291,11 @@ const MISSED = 0.1
 const BUG = 'That looks like a bug: /sparkjoy bug drafts a report of it.'
 
 type Verdict = { compact: boolean; reason: string }
+
+// A moment the mod decides at: `at` names it in the transcript's lines,
+// `tokens` is the context then, `idleMinutes` how long the session had sat
+// idle when it was asked for that, and `figures` those its question states.
+type Ask = { at: string; tokens: number; idleMinutes?: number; figures: Figures }
 
 type Watch = {
   // Whether the mod asks in this session: it is on or classifying, and a
@@ -357,25 +399,15 @@ async function afterTurn(
       )
     }
     if (tokens < figures.FLOOR) return
+    const ask: Ask = { at: `${thousands(tokens)} tokens`, tokens, figures }
     const prompt = question(tokens, undefined, figures, settings.instructions)
     // A turn that wrote to the cache left it seconds old, so a question that
     // misses it had a prompt that differed from the turn's, which is a bug. A
     // turn that wrote nothing left nothing to read.
-    const sayMiss =
-      (usage?.cache_creation_input_tokens ?? 0) > 0
-        ? (line: string) => sayBug(say, line)
-        : say
-    await judge(
-      $,
-      settings,
-      say,
-      async () => isCurrent(),
-      `${thousands(tokens)} tokens`,
-      prompt,
-      sayMiss,
-    )
+    const miss = (usage?.cache_creation_input_tokens ?? 0) > 0 ? 'bug' : 'plain'
+    await judge($, settings, say, async () => isCurrent(), ask, prompt, miss)
   } catch (error) {
-    sayBug(say, `Failed: ${error}`)
+    fail($, say, error)
   }
 }
 
@@ -397,78 +429,113 @@ async function idle(
     isCurrent() && (await $.session.usage()).context.tokens === tokens
   try {
     if ((await $.clock.now()) > due + LATE_MS || !(await isUntouched())) return
-    const prompt = question(
-      tokens,
-      minutes,
-      (await fitted($, settings)).figures,
-      settings.instructions,
-    )
-    // Claude Code may have signed in to another account meanwhile (IDLE_MS),
-    // or, as the wait runs from the turn's end, a last request that ran long
-    // may have used up the five-minute cache's margin.
-    await judge(
-      $,
-      settings,
-      say,
-      isUntouched,
-      `${thousands(tokens)} tokens, idle ${minutes} minutes`,
-      prompt,
-      line => say(`${line}. Signing in to another account while idle drops the cache.`),
-    )
+    const { figures } = await fitted($, settings)
+    const at = `${thousands(tokens)} tokens, idle ${minutes} minutes`
+    const ask: Ask = { at, tokens, idleMinutes: minutes, figures }
+    const prompt = question(tokens, minutes, figures, settings.instructions)
+    await judge($, settings, say, isUntouched, ask, prompt, 'idle')
   } catch (error) {
-    sayBug(say, `Failed: ${error}`)
+    fail($, say, error)
   }
 }
 
-// Asks the session's model whether to compact, and compacts if it says to and
-// the mod is on, saying too, with `sayMiss`, when the question missed the
-// prompt cache. The verdict stands only while `stands` holds once the model
-// has answered; `at` names the moment in each line.
+// Asks the session's model whether to compact at `ask`, and compacts if it
+// says to and the mod is on. The verdict stands only while `stands` holds once
+// the model has answered. `miss` says what the question's line makes of a miss
+// of the prompt cache.
 async function judge(
   $: EngineInterface,
   { mode }: Settings,
   say: (text: string) => void,
   stands: () => Promise<boolean>,
-  at: string,
+  ask: Ask,
   prompt: string,
-  sayMiss: (text: string) => void,
+  miss: Miss,
 ) {
   const answer = await $.model.fork({ prompt })
-  // A line of its own, so the verdict's line, which model/fit.py parses, keeps
-  // its reason clean. A fork that made no request reports no usage.
-  if ('usage' in answer) {
-    const { usage } = answer
-    const read = usage.cache_read_input_tokens
-    const input = usage.input_tokens + read + usage.cache_creation_input_tokens
-    if (input - read > MISSED * input)
-      sayMiss(
-        `Missed the prompt cache at ${at}: read ${thousands(read)} of ${thousands(input)} from it`,
-      )
-  }
-  if (!(await stands()))
-    return say(`Dropped the verdict at ${at}: the conversation moved on`)
+  // A fork that made no request reports no usage.
+  const usage = 'usage' in answer ? answer.usage : undefined
+  const missed = usage ? missing(usage, ask.tokens, miss) : ''
   const verdict = answer.isAnswered ? parse(answer.text) : undefined
+  // Says what came of the question in one line: its kind, then the clause on a
+  // missed cache, if any, and after a colon the reason, which is the model's
+  // alone, as model/fit.py's VERDICT parses it. When the line reports a bug, or
+  // the question's miss is one, the line saying how to report it follows. Each
+  // line is also recorded in the log (LOG), with what the question's fork
+  // answered and read.
+  const line = (kind: string, reason: string, isBug = false) => {
+    const text = `${kind} at ${ask.at}${missed}: ${reason}`
+    if (isBug || (missed !== '' && miss === 'bug')) sayBug(say, text)
+    else say(text)
+    void record($, {
+      event: 'verdict',
+      kind,
+      reason,
+      tokens: ask.tokens,
+      idle_minutes: ask.idleMinutes,
+      figures: ask.figures,
+      usage,
+      missed: missed !== '',
+      // The whole answer, `next` and `needs_detail` with what the mod reads.
+      answer: verdict,
+    })
+  }
+  if (!(await stands())) return line('Dropped the verdict', 'the conversation moved on')
   if (verdict?.compact && mode === 'classify') {
-    say(`Would compact at ${at}: ${verdict.reason}`)
+    line('Would compact', verdict.reason)
   } else if (verdict?.compact) {
     // `$.session.compact` draws no `/compact` row, so neither the user nor
     // the model reads the compaction as one the user typed. A hook's veto
     // draws its own line.
-    say(`Compacting at ${at}: ${verdict.reason}`)
-    await compact($, say, at)
+    line('Compacting', verdict.reason)
+    await compact($, say, ask)
   } else if (verdict) {
-    say(`Kept at ${at}: ${verdict.reason}`)
+    line('Kept', verdict.reason)
   } else if (answer.isAnswered) {
-    sayBug(say, `Unreadable verdict at ${at}: ${answer.text}`)
+    line('Unreadable verdict', answer.text, true)
   } else {
-    say(`No verdict at ${at}: ${answer.reason}`)
+    line('No verdict', answer.reason)
   }
 }
 
+// What a question's line makes of a miss of the prompt cache. After a turn
+// that had just written to the cache (`bug`), the miss is a bug, and the line
+// says so. In an idle session (`idle`) it needn't be: Claude Code may have
+// signed in to another account meanwhile (IDLE_MS), or, as the wait runs from
+// the turn's end, a last request that ran long may have used up the cache's
+// margin. The mod can't tell which, since `$.session.identity` answers only a
+// mod that managed settings enable. So the line points to `/sparkjoy report`,
+// whose table of misses shows whether other sessions lost their cache at the
+// same time, as a switch makes them do, and the README's FAQ lists the causes.
+// The mod acts on an idle question's verdict even when the question missed.
+// The miss wrote the context to the cache again, so waiting another lifetime
+// and asking again would keep the context for a user who returns within it.
+// That would be a second path for a case that should stay rare, and the report
+// and `/sparkjoy bug` are there to make it rarer. After a turn that wrote
+// nothing (`plain`), there was nothing to read.
+type Miss = 'bug' | 'idle' | 'plain'
+
+// The clause a question's line carries when the question missed the prompt
+// cache (MISSED) at a context of `tokens`, or "" when it didn't. A fork whose
+// request the API refused, as at a rate limit, reports no input, and read
+// nothing it could have missed.
+function missing(usage: ModelUsage, tokens: number, miss: Miss) {
+  const read = usage.cache_read_input_tokens
+  const input = usage.input_tokens + read + usage.cache_creation_input_tokens
+  if (input === 0 || read >= (1 - MISSED) * tokens) return ''
+  const cache =
+    miss === 'bug'
+      ? 'the prompt cache the turn had just written to'
+      : 'the prompt cache'
+  const route = miss === 'idle' ? '; /sparkjoy report lists the misses' : ''
+  return `, after missing ${cache} (read ${thousands(read)} of ${thousands(input)}${route})`
+}
+
 // A compaction under way, as `$.store` keeps it for the next process: `at`
-// names the moment, and `messages` the keys of the conversation's messages
-// then (`messageKey`).
-type Announcement = { at: string; messages: string[] }
+// names the moment, `tokens` the context then, and `messages` the keys of the
+// conversation's messages then (`messageKey`). One an earlier release stored
+// has no `tokens`.
+type Announcement = { at: string; tokens?: number; messages: string[] }
 
 // Compacts, keeping the announcement in `$.store` under the session's id until
 // the compaction settles, for `resume` to finish if the process ends first.
@@ -482,13 +549,35 @@ type Announcement = { at: string; messages: string[] }
 // some tenths of a second before its `turn.start` reaches this mod. That is no
 // bug, since the next turn end asks again, so `say` gives the engine's reason
 // without calling it one.
-async function compact($: EngineInterface, say: (text: string) => void, at: string) {
+//
+// `$.session.compact` takes instructions for the summary, and this passes
+// none. The summary is written from the same transcript the judge read, so
+// anything the mod could tell it, such as the verdict's `next` or `reason`, is
+// the judge's reading of what the summarizer already sees.
+//
+// The log (LOG) records the compaction's start and end, so model/fit.py tells
+// it from another by the time between them; `resumed` marks one a new process
+// finishes, and `error` one the engine refused.
+async function compact(
+  $: EngineInterface,
+  say: (text: string) => void,
+  { at, tokens }: { at: string; tokens?: number },
+  resumed = false,
+) {
   const key = `compacting:${await $.session.id()}`
   await $.state.set(COMPACTING, true)
   try {
-    const announcement: Announcement = { at, messages: await messageKeys($) }
+    const announcement: Announcement = { at, tokens, messages: await messageKeys($) }
     await $.store.set(key, announcement)
-    await $.session.compact().catch(error => say(`Didn't compact at ${at}: ${error}`))
+    void record($, { event: 'compaction', phase: 'start', tokens, resumed })
+    const error = await $.session.compact().then(
+      () => undefined,
+      error => {
+        say(`Didn't compact at ${at}: ${error}`)
+        return `${error}`
+      },
+    )
+    void record($, { event: 'compaction', phase: 'end', error })
   } finally {
     await $.store.delete(key)
     await $.state.set(COMPACTING, false)
@@ -512,9 +601,9 @@ async function resume($: EngineInterface) {
     $.ui.log(
       `Finishing the compaction at ${announced.at}: Claude Code restarted before it landed`,
     )
-    await compact($, text => $.ui.log(text), announced.at)
+    await compact($, text => $.ui.log(text), announced, true)
   } catch (error) {
-    sayBug(text => $.ui.log(text), `Failed: ${error}`)
+    fail($, text => $.ui.log(text), error)
   }
 }
 
@@ -522,6 +611,12 @@ async function resume($: EngineInterface) {
 function sayBug(say: (text: string) => void, text: string) {
   say(text)
   say(BUG)
+}
+
+// Says that the mod failed with `error`, as a bug, and records it.
+function fail($: EngineInterface, say: (text: string) => void, error: unknown) {
+  sayBug(say, `Failed: ${error}`)
+  void record($, { event: 'verdict', kind: 'Failed', reason: `${error}` })
 }
 
 // The keys of the conversation's messages, of the newest 4096, the most
@@ -561,78 +656,58 @@ function hash(text: string) {
   return (h >>> 0).toString(36)
 }
 
-// The question opens with its goal, then lists what a compaction, keeping the
-// context and lost detail each cost. Asked of an idle session, it says the
-// prompt cache is about to lapse, so keeping costs the cache write that
-// follows. README.md shows both versions with the figures in `AUTHOR`, for a
-// 500k context, and `$CUSTOM_INSTRUCTIONS` where the user's `instructions` add
-// a paragraph of their own. They change nothing else, so the question keeps
-// its figures and the format the hook parses whatever they say.
+// The question gives the context's size and what a compaction would save,
+// summed into one figure, the requests it takes to pay for itself, and says
+// keeping only puts the compaction off; then what a summary drops, and which
+// work needs that; then asks the model to weigh the two. Asked of an idle
+// session, it says the prompt cache is about to lapse instead, so keeping
+// costs the cache write that follows. README.md shows both
+// versions with the figures in `AUTHOR`, for a 500k context, and
+// `$CUSTOM_INSTRUCTIONS` where the user's `instructions` add a paragraph of
+// their own. They change nothing else, so the question keeps its figures and
+// the format the hook parses whatever they say.
 //
-// The fork replays the turn's last request, which ends before the reply the
-// turn closed with, and the question doesn't quote the reply: the tool calls
-// and results before it show where the work stands, and in the evals quoting it
-// made no measurable difference to the verdicts. The answer gives what most
-// likely comes next and whether that needs the transcript's detail before
-// `compact`, though the hook reads only `compact` and `reason`. Without those
-// two fields the model almost never keeps the context mid-task, even when asked
-// for `reason` first or told to consider what comes next (README.md, "Evals").
-// TODO: try a shorter question. This one gives the model every figure behind
-// the costs. Code could do that arithmetic beforehand and state only its
-// result, such as how many compactions keeping the context through the next
-// turn costs, and leave the model mainly to judge whether the next turns need
-// the transcript's detail.
+// An earlier question stated every figure behind the sum, and the cost of each
+// side in its own list. Asked as the fork asks it, at the turn ends in the
+// middle of a task it compacted in all 16 runs, though in 12 it answered that
+// the next turns would need the detail. This one keeps there in 22 of 24, and
+// its verdict follows that answer whatever it says of the context's size
+// (evals/README.md, "Size"), so a long task whose next turns need the detail
+// can keep it until Claude Code compacts on its own.
+// The fork sends the turn's last request with the turn's reply after it, so
+// the question needn't quote the reply. The answer gives what most likely
+// comes next and whether that needs the transcript's detail before `compact`,
+// though the hook reads only `compact` and `reason` (evals/README.md, "Fields
+// the hook doesn't read").
 function question(
   tokens: number,
   idleMinutes?: number,
   figures: Figures = AUTHOR,
   instructions = '',
 ) {
-  const { WRITE, OUTPUT, SUMMARY, K, P, TURN_MEDIAN, TURN_MEAN } = figures
+  const { K, P, TURN_MEDIAN } = figures
   const now = thousands(tokens)
   const isIdle = idleMinutes !== undefined
   const goal = isIdle
     ? 'Decide whether to compact this session now, before its prompt cache lapses.'
     : 'Decide whether to compact this session now.'
-  const opening = isIdle
-    ? `Your turn ended ${idleMinutes} minutes ago, and nothing has happened since.`
-    : 'Your turn just ended.'
-  // Idle, the cache is about to go whatever the answer, so a compaction needs
-  // no payback sum, and keeping costs the one cache write the lapse brings.
-  const sum = isIdle
-    ? ''
-    : `\n- At ${now} a compaction pays for itself after about ${payback(tokens, figures)} more requests that need nothing it dropped.`
-  const keeping = isIdle
-    ? `What keeping costs now:
-- The prompt cache holding the conversation lapses within a few minutes.
-- The first request after that makes a cache write of all but ${thousands(P)} of its ${now} tokens, against about ${thousands(K - P)} after a compaction.
-
-So compact unless the next turn continues work that needs the transcript's detail.`
-    : `What keeping costs, more the larger the context:
-- Every later request reads all ${now} tokens, against about ${thousands(K)} after a compaction.
-- Keeping only puts the compaction off to a later turn end.
-- A turn runs a median of ${Math.round(TURN_MEDIAN)} requests and a mean of ${Math.round(TURN_MEAN)}, so keeping ${now} through one more turn costs as much as about ${turnCost(tokens, TURN_MEDIAN, figures)} compactions for a median turn and ${turnCost(tokens, TURN_MEAN, figures)} for a mean one.`
+  const requests = payback(tokens, figures)
+  const situation = isIdle
+    ? `Your turn ended ${idleMinutes} minutes ago, and nothing has happened since. The context holds ${now} tokens, and the prompt cache holding it lapses within a few minutes, so the next request will write all but ${thousands(P)} of it to the cache again, against about ${thousands(K - P)} after a compaction.`
+    : `Your turn just ended, with ${now} tokens of context. A compaction would cut it to about ${thousands(K)}, and pays for itself once the session runs ${requests} more requests that need nothing it dropped (a turn runs a median of ${Math.round(TURN_MEDIAN)}). Keeping only puts the compaction off: Claude Code compacts on its own, in the middle of a turn, once the context nears its limit.`
+  const decide = isIdle
+    ? 'Compact unless the next turn continues work that needs that detail.'
+    : 'Weigh the saving against what losing that detail would cost the next turns.'
   const added = instructions
     ? `\n\nThe user added these instructions for this decision:\n${instructions}`
     : ''
   return `${goal} This request comes from the sparkjoy plugin, not from the user, and a program reads your answer.
 
-${opening}
+${situation}
 
-Nearly every long transcript is mostly finished work, so that alone is no reason to compact. Base the decision on whether the next turns will need detail a summary drops: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary.
+A summary drops detail: exact output, what was tried and failed, what the user objected to and why, the state of a design or fix still taking shape. Work that iterates with the user on something just shown, or takes up a half-done fix or design, needs that detail; after a compaction it re-reads and re-runs what it can and loses the rest. Work that only reports a result, or starts something new, needs no more than a summary. Nearly every long transcript is mostly finished work, so that alone is no reason to compact.
 
-What a compaction costs:
-- It takes about a minute, and the request that writes its summary outputs about ${thousands(SUMMARY)} tokens, thinking included.
-- Afterwards the context holds about ${thousands(K)} tokens, counting the files the next requests read again. Those requests make a cache write of all of it but the ${thousands(P)} of system prompt and tools, which stay cached.
-- A cache write costs as much as ${WRITE} cached reads, and an output token as much as ${OUTPUT}.${sum}
-
-${keeping}
-
-What lost detail costs:
-- It's very noisy and hard to judge, but as some indication, past sessions had about ${WASTED} more wasted requests than usual after a compaction: failed tool calls, repeated lookups and corrections.
-- That count misses detail lost without such a failure, such as a design's rejected options or what the user likes.
-
-Weigh what keeping costs against what losing the detail would cost the next turns. The larger the context, the more detail a compaction can drop and still pay.${added}
+${decide}${added}
 
 Answer with nothing but one JSON object that matches this schema, filling its fields in the order listed:
 
@@ -655,13 +730,6 @@ Answer with nothing but one JSON object that matches this schema, filling its fi
 // its cost over what each later request saves.
 function payback(tokens: number, figures: Figures) {
   return Math.ceil(compaction(tokens, figures) / saving(tokens, figures))
-}
-
-// What keeping `tokens` through a turn of `requests` costs, in compactions:
-// what its requests cost beyond what they would after one.
-function turnCost(tokens: number, requests: number, figures: Figures) {
-  const n = (requests * saving(tokens, figures)) / compaction(tokens, figures)
-  return n < 1.5 ? n.toFixed(1) : `${Math.round(n)}`
 }
 
 // What a compaction at `tokens` costs, in cached reads, F(x) = x + F0: the
@@ -689,16 +757,12 @@ function saving(tokens: number, { WRITE, K, LAPSE }: Figures) {
 // one request. The user's floor at a turn end must also lie above the context
 // after a compaction, where a compaction can pay for itself.
 // Read for each question, so a report run mid-session counts from the next one;
-// a configuration directory or file that can't be found or read leaves every
-// figure but the user's floors at `AUTHOR`'s. The directory is
-// $CLAUDE_CONFIG_DIR, or ~/.claude, as Claude Code and model/fit.py find it:
-// Windows names the home %USERPROFILE% and sets no HOME.
+// a data folder (`dataDir`) or file that can't be made or read leaves every
+// figure but the user's floors at `AUTHOR`'s.
 async function fitted($: EngineInterface, settings: Settings) {
   let saved: Record<string, unknown> | undefined
   try {
-    const home = (await $.env.get('HOME')) || (await $.env.get('USERPROFILE'))
-    const config = (await $.env.get('CLAUDE_CONFIG_DIR')) || (home && `${home}/.claude`)
-    if (config) saved = JSON.parse(await $.fs.read(`${config}/${FIGURES}`))
+    saved = JSON.parse(await $.fs.read(`${await dataDir($)}/${FIGURES}`))
   } catch {
     saved = undefined
   }
@@ -749,7 +813,6 @@ async function fitted($: EngineInterface, settings: Settings) {
   take('P', v => v >= 0 && v < figures.K)
   take('LAPSE', v => v >= 0 && v <= 1)
   take('TURN_MEDIAN', v => v >= 1)
-  take('TURN_MEAN', v => v >= 1)
   return { figures, from }
 }
 
