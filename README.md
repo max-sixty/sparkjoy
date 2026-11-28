@@ -116,14 +116,16 @@ The [cost model](#cost-model) has a lot of detail about compactions. In doing th
   request's output contributes only \$0.10 of the \$1.12.
 - Most of a compaction's cost, \$0.82, is the cache write of the subsequent request after compaction, mostly files, skills, instructions and
   memory read again.
-- Because the cache write contributes most of the cost, other forms of context reduction, such as dropping old tool results in
-  place of compacting, are rarely cheaper. (Once about 130k tokens
-  follow the first result dropped, the cache write costs as much as a
-  compaction.)
-- Getting compacting policy right is really important for costs, particularly for long
-  sessions
-  - ...and so using the full context is worthwhile to get that
-    right: in my sessions the \$47 cost of the requests compares to a \$2,905 overall saving.
+- Because the cache write is most of a compaction's cost, other ways to shrink
+  the context, such as dropping old tool results, are rarely cheaper. A request
+  reads from the cache only the context before its first change, so after old
+  tool results are dropped, the next request writes everything after the
+  earliest of them to the cache again. Once that is about 130k tokens, the write
+  costs as much as a compaction.
+- When to compact makes a large difference to cost, particularly in long
+  sessions, so it's worth asking the model with the session's whole context. In
+  my sessions, the questions cost \$47, and sparkjoy saved \$2,905 after paying
+  for them.
 - This shape of costs is particularly prominent since the recent changes in Opus & Fable cache-read costs; where Fable 5.2 and Opus 5.5 cut their cache-read costs by 80% & 60% respectively.
 
 [^prices]:
