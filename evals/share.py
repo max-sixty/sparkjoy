@@ -22,7 +22,8 @@ Two kinds of case check the answer:
   says the turn just ended. `parts.py` cuts the request into its parts, each
   with its tokens as the API counts them (`counted`), and the same model,
   shown what the session did next up to its next compaction (`next_work`),
-  as much of it as the window holds beside the request (`fitted`), labels
+  one JSON record per message, tool call or result, as much of it as the
+  window holds beside the request (`fitted`), labels
   each part needed, helpful or neither (`LABEL`), in `RUNS` runs.
   Only I can label a case, since labelling reads my transcripts. Each label
   names the request and a hash of the question it was asked (`shown`), which
@@ -53,6 +54,7 @@ import argparse
 import hashlib
 import http.client
 import json
+import statistics
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
@@ -119,11 +121,11 @@ LABEL = """This is not a request to continue the work. It comes from the sparkjo
 Below is what the session actually did next, taken from its transcript, and then the parts of the context above, numbered in order, each with its kind, its size in tokens and its opening words.
 
 Judge each part by the work that followed:
-- "needed": the next work used it, or would have gone wrong or had to fetch it again without it. Count what the work relied on without reading it again, such as the state of a fix, a decision taken, or what the user asked for, as well as what it read.
+- "needed": the next work used it, or would have gone wrong or had to fetch it again without it. Count what the work relied on without reading it again, such as the state of a fix, a decision taken, or what the user asked for, as well as what it read. Where the context was compacted before the work, the work ran without it, so a part whose content it then read, searched for or ran again is needed: that fetch is what losing it cost.
 - "helpful": it would have helped the next work, such as by saving a lookup or giving background to a decision, but the work could have done without it.
 - Every other part is not needed.
 
-What the session did next:
+What the session did next is below, one JSON object per line, in order, up to its next compaction. Each has "t", when it happened, and "kind": "user" for what the user typed; "assistant" for what the assistant wrote; "call" for a tool call, with its "tool" and "input"; "result" for what a call returned, with its "tool", and "error": true where it failed; "compaction" where the context was compacted; and "omitted", last, standing in for its "records" later records that the window has no room for, so the work went on past the last record shown. A compaction at the start, at this turn end, means the work after it ran without the context above. A long value may be cut in the middle, at " […] ".
 
 {next}
 
@@ -146,103 +148,65 @@ def listing(request_parts: list[dict]) -> str:
     )
 
 
-def next_work(case: dict) -> list[str]:
-    """What the session did after the turn end, up to its next compaction,
-    where the context starts again whatever this turn end decided: what the
-    user typed, the model's text, its calls and what each returned, each
-    whole, for `fitted` to shorten to the window. A compaction at the turn
-    end itself, as when sparkjoy compacted there, doesn't end it, since the
-    work after it is what the context would have served."""
+def next_work(case: dict) -> list[dict]:
+    """What the session did after the case's turn end, as `parts.next_work`
+    reads it from the transcript."""
     path = next(fit.PROJECTS.glob(f"*/{case['source']['session']}.jsonl"), None)
     if path is None:
         raise LookupError(f"no transcript of session {case['source']['session']}")
-    lines, began = [], False
     with path.open() as f:
-        for n, raw in enumerate(f):
-            if n <= case["source"]["line"]:
-                continue
-            e = json.loads(raw)
-            ts = e.get("timestamp", "")[:16]
-            if e.get("type") == "system" and e.get("subtype") == "compact_boundary":
-                if began:
-                    lines.append(f"[{ts}] COMPACTED, and the session went on")
-                    break
-                lines.append(f"[{ts}] COMPACTED")
-                continue
-            if e.get("isSidechain") or e.get("isCompactSummary"):
-                continue
-            if e.get("type") == "user" and not e.get("isMeta"):
-                for b in parts.blocks_of(e["message"]):
-                    text = b.get("text") or ""
-                    if b.get("type") == "text" and text and not text.startswith("<"):
-                        lines.append(f"[{ts}] USER: {text}")
-                    elif b.get("type") == "tool_result":
-                        error = " (error)" if b.get("is_error") else ""
-                        result = parts.text_of(b.get("content"))
-                        lines.append(f"[{ts}] RESULT{error}: {result}")
-            elif e.get("type") == "assistant":
-                began = True
-                for b in e["message"].get("content") or []:
-                    if b.get("type") == "text" and b.get("text"):
-                        lines.append(f"[{ts}] ASSISTANT: {b['text']}")
-                    elif b.get("type") == "tool_use":
-                        given = json.dumps(b.get("input") or {}, ensure_ascii=False)
-                        lines.append(f"[{ts}] CALL {b['name']}: {given}")
-    return lines
-
-
-def shortened(lines: list[str], chars: int) -> list[str]:
-    """`lines` in about `chars` characters: each line longer than a common
-    length keeps its head and tail, the length the longest that fits."""
-    lengths = sorted(map(len, lines))
-    total = 0
-    for i, n in enumerate(lengths):
-        if total + n * (len(lengths) - i) > chars:
-            half = max((chars - total) // (len(lengths) - i), 0) // 2
-            break
-        total += n
-    else:
-        return lines
-    return [
-        f"{line[:half]} […] {line[len(line) - half :]}"
-        if len(line) > 2 * half
-        else line
-        for line in lines
-    ]
+        return parts.next_work(
+            json.loads(raw) for n, raw in enumerate(f) if n > case["source"]["line"]
+        )
 
 
 def fitted(
-    request: dict, headers: dict, cut: list[dict], then: list[str]
-) -> tuple[str, list[str]]:
+    request: dict, headers: dict, cut: list[dict], then: list[dict]
+) -> tuple[str, list[dict]]:
     """`LABEL` asked with what the session did next (`then`) shortened to
     fit the window beside the request and `LABEL_OUTPUT`, by the API's
-    count, and the lines of it shown."""
+    count, and the records of it shown."""
 
-    def asked(lines: list[str]) -> str:
-        return LABEL.format(next="\n".join(lines), parts=listing(cut))
+    def asked(records: list[dict]) -> str:
+        return LABEL.format(next=parts.rendered(records), parts=listing(cut))
 
-    def tokens(lines: list[str]) -> int:
-        log = "\n".join(lines) or "."
+    def tokens(records: list[dict]) -> int:
         return plain(
             {
                 "model": request["params"]["model"],
-                "messages": [{"role": "user", "content": log}],
+                "messages": [
+                    {"role": "user", "content": parts.rendered(records) or "."}
+                ],
             },
             headers,
         )
 
     room = fit.WINDOW - LABEL_OUTPUT - count(request, headers, asked([]))
-    # Each pass asks for fewer characters than the last, so the lines
-    # shorten until they fit or can't shorten further.
-    lines, chars = then, sum(map(len, then))
-    while (used := tokens(lines)) > room:
+    # Each pass asks for fewer characters than the last, so the records
+    # shorten until they fit or can't shorten further. Where even every value
+    # cut doesn't fit, the work right after the turn end stays: as many of the
+    # earliest records as fit with each cut to the median record's length, so
+    # that most show whole and long results their head and tail, and one
+    # record counts the rest.
+    records, chars = then, sum(map(parts.length, then))
+    used = tokens(then)
+    while used > room:
         chars = chars * room // used * 97 // 100
-        if (shorter := shortened(then, chars)) == lines:
-            raise LookupError(
-                f"the window holds {room} tokens, too few for the next work"
-            )
-        lines = shorter
-    return asked(lines), lines
+        if (shorter := parts.shortened(then, chars)) == records:
+            typical = int(statistics.median(map(parts.length, then)))
+            each = [parts.capped(r, typical) for r in then]
+            target = len(parts.rendered(each)) * room // tokens(each)
+            if then[-1]["kind"] == "omitted" or (
+                (fewer := parts.omitted(then, target, typical)) == then
+            ):
+                raise LookupError(
+                    f"the window holds {room} tokens, too few for the next work"
+                )
+            then = fewer
+            shorter, chars = then, sum(map(parts.length, then))
+        records = shorter
+        used = tokens(records)
+    return asked(records), records
 
 
 def count(request: dict, headers: dict, question: str = ".") -> int:
@@ -373,7 +337,7 @@ def run_cases(names: list[str], repeat: int, jobs: int) -> None:
             and r["case"] == case
             and r["request"] == digest
             and r.get("shown") == shown
-            and r["needed"] is not None
+            and bool(r["needed"])
             for r in earlier
         )
 
@@ -432,7 +396,7 @@ def run_cases(names: list[str], repeat: int, jobs: int) -> None:
                 print(f"NO LABELS {name}: {error}", flush=True)
             else:
                 shown = hashlib.sha256(asked.encode()).hexdigest()[:12]
-                if labelled(name, digest, shown) < RUNS:
+                if (have := labelled(name, digest, shown)) < RUNS:
                     label(
                         base | {"shown": shown},
                         request,
@@ -441,6 +405,7 @@ def run_cases(names: list[str], repeat: int, jobs: int) -> None:
                         cut,
                         asked,
                         then,
+                        RUNS - have,
                         write,
                     )
         for _ in range(repeat):
@@ -487,10 +452,12 @@ def run_cases(names: list[str], repeat: int, jobs: int) -> None:
         sparkjoy_assets.publish(sparkjoy_assets.RESULTS)
 
 
-def label(base, request, headers, x, cut, asked, then, write) -> None:
+def label(base, request, headers, x, cut, asked, then, n, write) -> None:
     """Label the request's parts `cut` by what the session did next (`then`),
-    asking `asked` `RUNS` times, and keep what each part holds and the
-    labeller's reasons in `LOCAL`."""
+    asking `asked` `n` times, and keep what each part holds and the
+    labeller's reasons in `LOCAL`, beside those of its earlier runs of the
+    same question. An answer that marks no part needed is unreadable, since
+    the work after any turn end uses the system prompt and tools."""
     model = request["params"]["model"]
     write(
         base
@@ -502,8 +469,14 @@ def label(base, request, headers, x, cut, asked, then, write) -> None:
         }
     )
     body = run.body_of(request, asked) | {"max_tokens": LABEL_OUTPUT}
-    runs = []
-    for _ in range(RUNS):
+    path = LOCAL / f"{base['case']}-{base['request']}.json"
+    earlier = json.loads(path.read_text()) if path.exists() else {}
+    runs = [
+        r
+        for r in earlier.get("runs", [])
+        if earlier.get("shown") == base["shown"] and r["needed"] and r["text"] is None
+    ]
+    for _ in range(n):
         try:
             text, used = run.ask(body, headers)
         except (RuntimeError, OSError) as error:
@@ -511,7 +484,7 @@ def label(base, request, headers, x, cut, asked, then, write) -> None:
             continue
         got = answer(text) or {}
         needed, helpful = ids(got.get("needed")), ids(got.get("helpful"))
-        ok = needed is not None and helpful is not None
+        ok = bool(needed) and helpful is not None
         runs.append(
             {
                 "needed": needed,
@@ -542,7 +515,7 @@ def label(base, request, headers, x, cut, asked, then, write) -> None:
         else:
             print(f"{base['case']} labels unreadable: {text[:200]!r}", flush=True)
     LOCAL.mkdir(parents=True, exist_ok=True)
-    (LOCAL / f"{base['case']}-{base['request']}.json").write_text(
+    path.write_text(
         json.dumps(
             {**base, "context": x, "parts": cut, "next": then, "runs": runs}, indent=1
         )
@@ -598,7 +571,7 @@ def latest(
         and r["kind"] == "label"
         and r["request"] == digest
         and r.get("shown") == cut[0]["shown"]
-        and r["needed"] is not None
+        and r["needed"]
     ]
 
 

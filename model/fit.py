@@ -30,8 +30,14 @@ PRICES = {
     "claude-opus-5": (5, 25, 6.25, 10, 0.50),
     "claude-haiku-5-5": (0.5, 2.5, 0.625, 1, 0.05),  # its long-context tier, above 100k
 }
-PROJECTS = (
-    Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "projects"
+CONFIG = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+PROJECTS = CONFIG / "projects"
+# sparkjoy's data folder, where hooks/register.ts keeps its log and /sparkjoy report saves the figures
+# it reads: the one Claude Code names in $CLAUDE_PLUGIN_DATA, which the report's skill passes on, or,
+# run outside Claude Code, the one it gives sparkjoy installed from its own marketplace.
+DATA = Path(
+    os.environ.get("CLAUDE_PLUGIN_DATA")
+    or CONFIG / "plugins" / "data" / "sparkjoy-sparkjoy"
 )
 WINDOW = 1_000_000
 AUTO = 965_000  # where Claude Code compacts a 1M window on its own
@@ -99,8 +105,15 @@ KINDS = {
     "Unreadable verdict": "unreadable",
     "No verdict": "no verdict",
     "Dropped the verdict": "dropped",
-    None: "failed",
+    "Failed": "failed",
 }
+# sparkjoy's log in its data folder (LOG in hooks/register.ts): a JSON line for each
+# verdict, its `kind` the line's word for it, and for each compaction it starts and ends, in a file
+# a session and a day. Where a session has one, it is what `transcript` reads sparkjoy's verdicts
+# and compactions from; the lines and marks above stand for it in sessions from before it, and a
+# line for a verdict whose record was never written.
+LOG = DATA / "log"
+
 # Where a session's name comes from, in order of preference: one the user gave it, then
 # the ones Claude Code generates. Failing all three, its first prompt names it.
 TITLES = {
@@ -507,7 +520,7 @@ def transcript(path, since=None, until=None):
                 # Claude Code's idle compaction logs as an auto compaction, then says so.
                 marks["idle"].append(t)
             if line := VERDICT.fullmatch(text):
-                kind = KINDS[line["kind"]]
+                kind = KINDS[line["kind"] or "Failed"]
                 verdicts.append(
                     Verdict(
                         t,
@@ -535,8 +548,19 @@ def transcript(path, since=None, until=None):
     name = (
         next((titles[k] for k in TITLES if titles.get(k)), None) or first or "untitled"
     )
+    records = logged(path, lo, hi)
+    if records:
+        # A verdict's record stands for its line, timed within a second of it. A line whose record
+        # was never written, as when the process exited with the write still queued, still counts.
+        recorded = [logged_verdict(r) for r in records if r["event"] == "verdict"]
+        verdicts = [
+            v
+            for v in verdicts
+            if not any(r.kind == v.kind and abs(r.t - v.t) <= 1 for r in recorded)
+        ] + recorded
+        verdicts.sort(key=lambda v: v.t)
     comps = [
-        (t, took, origin(t - took, t, trigger, marks), before)
+        (t, took, origin(t - took, t, trigger, marks, spans(records)), before)
         for t, took, trigger, before in bounds
     ]
     return session(
@@ -556,21 +580,73 @@ def transcript(path, since=None, until=None):
     )
 
 
+def logged(path, lo="0", hi="~"):
+    """The records sparkjoy logged in [lo, hi), ISO times, for the session whose transcript is at
+    `path`, oldest first."""
+    found = []
+    for f in (LOG / path.stem).glob("*.jsonl"):
+        for raw in f.open(errors="replace"):
+            try:
+                r = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if lo <= r.get("t", "") < hi:
+                found.append(r)
+    return sorted(found, key=lambda r: r["t"])
+
+
+def epoch(iso):
+    return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
+
+
+def logged_verdict(r):
+    """A verdict from its record in sparkjoy's log."""
+    u = r.get("usage")
+    read = u and u["cache_read_input_tokens"]
+    return Verdict(
+        epoch(r["t"]),
+        "sparkjoy",
+        KINDS[r["kind"]],
+        r.get("tokens"),
+        r.get("idle_minutes"),
+        r["reason"],
+        (read, u["input_tokens"] + read + u["cache_creation_input_tokens"])
+        if r.get("missed")
+        else None,
+    )
+
+
+def spans(records):
+    """Each compaction sparkjoy logged, from its start to its end, in seconds since the epoch. A
+    start whose process ended before its end leaves none; the next process logs its own."""
+    made, start = [], None
+    for r in records:
+        if r["event"] != "compaction":
+            continue
+        if r["phase"] == "start":
+            start = epoch(r["t"])
+        elif start is not None:
+            made.append((start, epoch(r["t"])))
+            start = None
+    return made
+
+
 # The origins of the compactions each replayed arm decides for itself (POLICY); the rest, "user"
 # and "other", every arm keeps (USER).
 DECIDED = ("sparkjoy", "auto", "idle")
 
 
-def origin(start, end, trigger, marks):
-    """Who made a compaction that ran from `start` to `end`, from the marks the transcript logged
-    near it (`marks`, the times of each kind): "sparkjoy", by its line; "user", by a typed
-    `/compact` row; Claude Code's own, "idle" where it said so and "auto" otherwise; or "other",
-    another tool, such as a mod under test, where nothing marks it."""
+def origin(start, end, trigger, marks, made=()):
+    """Who made a compaction that ran from `start` to `end`: "sparkjoy", where it lies within
+    one sparkjoy logged (`made`, each from its start to its end) or its line marks it; "user", by a
+    typed `/compact` row; Claude Code's own, "idle" where it said so and "auto" otherwise; or
+    "other", another tool, such as a mod under test, where nothing marks it. `marks` holds the times
+    the transcript logged each kind of mark."""
 
     def near(kind):
         return any(start - BEFORE[kind] <= m <= end for m in marks[kind])
 
-    if near("sparkjoy"):
+    if any(a - 1 <= start and end <= b + 1 for a, b in made) or near("sparkjoy"):
         return "sparkjoy"
     if near("typed"):
         return "user"

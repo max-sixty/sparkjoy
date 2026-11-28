@@ -1,8 +1,9 @@
-"""Cuts a made-up request into parts and scores labels on them, as evals/share.py does:
-`uvx pytest tests`."""
+"""Cuts a made-up request into parts, records what the session did next, and scores
+labels on them, as evals/share.py does: `uvx pytest tests`."""
 
 import importlib.util
 import itertools
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
@@ -254,3 +255,146 @@ def test_a_command_reads_a_file_where_a_step_of_it_prints_one():
     assert kind("P=/w/page && sed -n 1,150p $P/index.html") == "file reads"
     assert kind("pnpm build | tail -5") == "other tool output"
     assert kind("gh pr view 5244 --json body | head -60") == "other tool output"
+
+
+def test_the_next_work_is_one_record_per_message_call_and_result():
+    def user(t, content, **more):
+        return {"type": "user", "timestamp": t, "message": {"content": content}} | more
+
+    entries = [
+        {
+            "type": "system",
+            "subtype": "compact_boundary",
+            "timestamp": "2026-11-04T17:17:05Z",
+        },
+        user("", "summary", isCompactSummary=True),
+        user("", "caveat", isMeta=True),
+        user("2026-11-04T18:16:00Z", "check the leaf"),
+        {
+            "type": "assistant",
+            "timestamp": "2026-11-04T18:16:30Z",
+            "message": {
+                "content": [
+                    {"type": "text", "text": "Reading it."},
+                    {
+                        "type": "tool_use",
+                        "id": "a",
+                        "name": "Read",
+                        "input": {"file_path": "/w/SKILL.md"},
+                    },
+                ]
+            },
+        },
+        {
+            "type": "assistant",
+            "isSidechain": True,
+            "message": {"content": [{"type": "text", "text": "aside"}]},
+        },
+        user(
+            "2026-11-04T18:17:00Z",
+            [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "a",
+                    "is_error": True,
+                    "content": [{"type": "text", "text": "no such file"}],
+                },
+                {"type": "text", "text": "<system-reminder>x</system-reminder>"},
+            ],
+        ),
+        {
+            "type": "system",
+            "subtype": "compact_boundary",
+            "timestamp": "2026-11-04T19:00:00Z",
+        },
+        user("2026-11-04T19:01:00Z", "after"),
+    ]
+    assert parts.next_work(iter(entries)) == [
+        {"t": "2026-11-04T17:17", "kind": "compaction"},
+        {"t": "2026-11-04T18:16", "kind": "user", "text": "check the leaf"},
+        {"t": "2026-11-04T18:16", "kind": "assistant", "text": "Reading it."},
+        {
+            "t": "2026-11-04T18:16",
+            "kind": "call",
+            "tool": "Read",
+            "input": {"file_path": "/w/SKILL.md"},
+        },
+        {
+            "t": "2026-11-04T18:17",
+            "kind": "result",
+            "tool": "Read",
+            "error": True,
+            "text": "no such file",
+        },
+        {"t": "2026-11-04T19:00", "kind": "compaction"},
+    ]
+
+
+def test_records_past_what_the_window_holds_are_counted_in_one_record():
+    records = [
+        {"t": "2026-11-08T18:28", "kind": "user", "text": "u" * 100},
+        {
+            "t": "2026-11-08T18:28",
+            "kind": "call",
+            "tool": "Read",
+            "input": {"file_path": "/w/SKILL.md"},
+        },
+        {"t": "2026-11-08T18:29", "kind": "result", "tool": "Read", "text": "r" * 5000},
+        {"t": "2026-11-08T18:29", "kind": "assistant", "text": "a" * 100},
+        {"t": "2026-11-08T19:00", "kind": "compaction"},
+    ]
+    whole = len(parts.rendered(records))
+    assert parts.omitted(records, whole, 5000) == records
+    # Measured with each record cut to the limit, the long result takes no
+    # more room than the others, so the records up to and with the one that
+    # crosses the length stay, whole, and one record counts the rest.
+    each = [len(parts.rendered([parts.capped(r, 100)])) + 1 for r in records]
+    got = parts.omitted(records, sum(each[:3]) + 10, 100)
+    assert got == [*records[:4], {"kind": "omitted", "records": 1}]
+    assert parts.omitted(records, sum(each[:3]) + 10, 5000)[-1] == {
+        "kind": "omitted",
+        "records": 2,
+    }
+    for line in parts.rendered(got).splitlines():
+        json.loads(line)
+
+
+def test_shortening_cuts_long_values_and_keeps_every_record_whole_json():
+    records = [
+        {"t": "2026-11-04T18:16", "kind": "user", "text": "short"},
+        {
+            "t": "2026-11-04T18:16",
+            "kind": "call",
+            "tool": "Edit",
+            "input": {
+                "file_path": "/w/a.css",
+                "old_string": "o" * 400,
+                "new_string": "n" * 600,
+                "replace_all": False,
+            },
+        },
+        {
+            "t": "2026-11-04T18:17",
+            "kind": "result",
+            "tool": "Edit",
+            "text": "head\n" + "r" * 2000 + "\ntail",
+        },
+    ]
+    assert parts.shortened(records, 10_000) == records
+    got = parts.shortened(records, 400)
+    assert got[0] == records[0]
+    for before, after in zip(records, got, strict=True):
+        assert json.loads(parts.rendered([after])) == after
+        assert {k: v for k, v in after.items() if k not in ("text", "input")} == {
+            k: v for k, v in before.items() if k not in ("text", "input")
+        }
+    # Within a record the longest values are cut first, each to its head and tail.
+    call = got[1]["input"]
+    assert call["file_path"] == "/w/a.css" and call["replace_all"] is False
+    assert call["old_string"].startswith("o") and parts.CUT in call["old_string"]
+    assert got[2]["text"].startswith("head") and got[2]["text"].endswith("tail")
+    assert sum(map(parts.length, got)) <= 400 + 3 * len(parts.CUT)
+    # Fewer characters never give longer records.
+    assert sum(map(parts.length, parts.shortened(records, 200))) < sum(
+        map(parts.length, got)
+    )
