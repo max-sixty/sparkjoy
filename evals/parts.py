@@ -23,8 +23,10 @@ comes back in the later one.
 parts out of the request) and `sized` shares a kind's count among its parts
 by characters, with each image counted on its own.
 
-A labeller is shown the parts one line each (`listing`), but parts that hold
-the same share one, and marking it marks each of them (`marked`). It marks each part needed, helpful or neither, in several runs
+A labeller is shown the parts one line each (`listing`), each line adding
+where its part differs from any whose line would read the same
+(`distinguish`). Copies of one part share a line, and a mark on it marks the
+latest copy, since the work needs their text once (`marked`). It marks each part needed, helpful or neither, in several runs
 (`share.py`), and `scored` turns the runs into shares of the context:
 what the work needed, and needed or was helped by, of the whole context, and
 of it what a compaction drops (`lost_*`), which is what the work then has to
@@ -36,7 +38,9 @@ which `shortened` cuts to the window, each value keeping its head and tail.
 
 import copy
 import hashlib
+import itertools
 import json
+import os
 import re
 from collections.abc import Iterable
 
@@ -86,6 +90,9 @@ LABELS = ("needed", "helpful", "one run", "not needed")
 # invoked_skills attachments from 2.1.325 to 2.1.332 never passed either.
 SKILL_CHARS = 20_000
 SKILLS_CHARS = 100_000
+# The characters of a part's text the listing shows from where it first
+# differs from a part whose line would read the same (`distinguish`).
+EXCERPT = 120
 
 # How a text block opens, for the kinds Claude Code writes into the messages.
 OPENINGS = [
@@ -401,6 +408,7 @@ def parts_of(request: dict) -> list[dict]:
             "chars": sum(len(b.get("text", "")) for b in request["system"]),
             "at": "system",
             "digest": digest(request["system"]),
+            "_text": None,
         },
         {
             "kind": "tools",
@@ -409,6 +417,7 @@ def parts_of(request: dict) -> list[dict]:
             "chars": len(json.dumps(request["tools"])),
             "at": "tools",
             "digest": digest(request["tools"]),
+            "_text": None,
         },
     ]
     calls = {}
@@ -424,6 +433,7 @@ def parts_of(request: dict) -> list[dict]:
                     "desc": describe_call(b),
                     "chars": len(json.dumps(b.get("input"))),
                     "digest": digest([b["name"], b.get("input")]),
+                    "_text": json.dumps(b.get("input"), ensure_ascii=False),
                 }
             elif t == "tool_result":
                 body = text_of(b.get("content"))
@@ -442,6 +452,7 @@ def parts_of(request: dict) -> list[dict]:
                     "chars": len(body.replace("[image]", "")),
                     "head": body[:300],
                     "digest": digest(content),
+                    "_text": body,
                     "images": sum(
                         x.get("type") == "image"
                         for x in (content if isinstance(content, list) else [])
@@ -459,6 +470,7 @@ def parts_of(request: dict) -> list[dict]:
                         "chars": len(text),
                         "head": text[:300],
                         "digest": digest(text),
+                        "_text": text,
                         "at": at
                         if (start, end) == (0, len(body))
                         else [i, j, start, end],
@@ -482,6 +494,7 @@ def parts_of(request: dict) -> list[dict]:
                     # grows with it.
                     "chars": len(b.get("thinking") or "")
                     or len(b.get("signature") or b.get("data") or ""),
+                    "_text": b.get("thinking") or None,
                 }
             elif t == "tool_addition":
                 tool = (b.get("tool") or {}).get("definition") or {}
@@ -504,6 +517,7 @@ def parts_of(request: dict) -> list[dict]:
             part.setdefault("block", part["kind"])
             part.setdefault("at", at)
             part.setdefault("digest", digest(b))
+            part.setdefault("_text", None)
             parts.append(part)
     for p in parts:
         # A skill loaded by the Skill tool can arrive in its result.
@@ -513,7 +527,53 @@ def parts_of(request: dict) -> list[dict]:
             and (found := SKILL_DIR.search(p.get("head", "")))
         ):
             p["skill"] = found.group(1)
-    return resolve(parts)
+    return distinguish(resolve(parts))
+
+
+def distinguish(parts: list[dict]) -> list[dict]:
+    """Give each part whose line would read like another's, though it holds
+    other text, the words from where the texts or inputs of its group of
+    alike parts first differ, and where its own departs from the nearest of
+    them later on, those words too (`differs`), which the `listing` shows
+    after its opening; then drop the texts compared. A part with no text to
+    show, such as a thinking block the transcript keeps none of, or an
+    image, keeps its line."""
+
+    def shared(a: str, b: str) -> int:
+        # The characters two texts open with alike.
+        return len(os.path.commonprefix([a, b]))  # noqa: RUF071
+
+    def words(text: str, at: int, chars: int) -> str:
+        # From the start of the word that differs.
+        space = text.rfind(" ", max(at - 30, 0), at)
+        at = space + 1 if space >= 0 else at
+        return text[at : at + chars]
+
+    alike = {}
+    for p in parts:
+        alike.setdefault((p["block"], p["desc"][:170]), []).append(p)
+    for group in alike.values():
+        texts = sorted({p["_text"] for p in group if p["_text"]})
+        if len(texts) < 2:
+            continue
+        first = shared(texts[0], texts[-1])
+        # Sorted, a text's nearest is beside it.
+        near = dict.fromkeys(texts, 0)
+        for a, b in itertools.pairwise(texts):
+            n = shared(a, b)
+            near[a], near[b] = max(near[a], n), max(near[b], n)
+        for p in group:
+            if text := p["_text"]:
+                differs = words(text, first, EXCERPT).strip()
+                if near[text] >= first + EXCERPT // 2:
+                    differs = (
+                        f"{words(text, first, EXCERPT // 2).strip()} … "
+                        f"{words(text, near[text], EXCERPT // 2).strip()}"
+                    )
+                p["differs"] = differs.replace("\n", " ")
+    for p in parts:
+        del p["_text"]
+    return parts
 
 
 def digest(value) -> str:
@@ -607,7 +667,16 @@ def resolve(parts: list[dict]) -> list[dict]:
                 (p["at"][2], p["at"][3]) if len(p["at"]) == 4 else (0, p["chars"])
             )
             keep = cut[k]
-            out.append(p | {"chars": keep, "at": [*p["at"][:2], start, start + keep]})
+            head, rest = p["_text"][:keep], p["_text"][keep:]
+            out.append(
+                p
+                | {
+                    "chars": keep,
+                    "at": [*p["at"][:2], start, start + keep],
+                    "digest": digest(head),
+                    "_text": head,
+                }
+            )
             out.append(
                 p
                 | {
@@ -615,6 +684,8 @@ def resolve(parts: list[dict]) -> list[dict]:
                     "desc": f"the rest of {p.get('skill', 'a skill')}, past its first {SKILL_CHARS:,} characters",
                     "chars": p["chars"] - keep,
                     "at": [*p["at"][:2], start + keep, end],
+                    "digest": digest(rest),
+                    "_text": rest,
                 }
             )
         else:
@@ -625,11 +696,10 @@ def resolve(parts: list[dict]) -> list[dict]:
 
 
 def lines(parts: list[dict]) -> list[list[dict]]:
-    """The parts on each line of the `listing`: one each, but parts of a kind
-    that hold the same share one, where the first of them is. Parts that only
-    read the same, such as two edits of one file, keep a line each, since the
-    context tells them apart, and so does an earlier copy of an instruction
-    file beside the latest, which a compaction puts back."""
+    """The parts on each line of the `listing`: one each, but copies of one
+    part, of one kind and holding the same, share one, where the first of
+    them is. An earlier copy of an instruction file keeps a line of its own
+    beside the latest, which a compaction puts back."""
     same = {}
     for p in parts:
         key = (p["kind"], p["block"], p["desc"][:170], p["digest"])
@@ -638,24 +708,30 @@ def lines(parts: list[dict]) -> list[list[dict]]:
 
 
 def listing(parts: list[dict]) -> str:
-    """The parts as the labeller is shown them, each by its kind of block,
-    and parts that hold the same as one line naming each of their ids, with
-    their tokens in all."""
+    """The parts as the labeller is shown them, each by its kind of block and
+    its opening, and where its line would read like another part's, the
+    words where it differs (`distinguish`); copies of one part as one line
+    naming each of their ids, with their tokens in all."""
 
     def line(same: list[dict]) -> str:
         ids = ", ".join(f"#{p['id']}" for p in same)
         block = same[0]["block"] + (f" ×{len(same)}" if len(same) > 1 else "")
         tokens = sum(p["tokens"] for p in same)
-        return f"{ids} {block}, {tokens} tokens: {same[0]['desc'][:170]}"
+        desc = same[0]["desc"][:170]
+        if differs := same[0].get("differs"):
+            desc += f" … {differs}"
+        return f"{ids} {block}, {tokens} tokens: {desc}"
 
     return "\n".join(map(line, lines(parts)))
 
 
 def marked(ids: list[int], parts: list[dict]) -> list[int]:
-    """The parts a labeller's `ids` mark: each part on a line of the
-    `listing` that one of them names."""
-    on = {p["id"]: same for same in lines(parts) for p in same}
-    return sorted({p["id"] for i in ids if i in on for p in on[i]})
+    """The parts a labeller's `ids` mark: for each line of the `listing` one
+    of them names, the latest of the copies on it, since the work needs
+    their text once and the latest decides whether a compaction loses it,
+    as with an earlier copy of what comes back (`COPIES`)."""
+    latest = {p["id"]: same[-1]["id"] for same in lines(parts) for p in same}
+    return sorted({latest[i] for i in ids if i in latest})
 
 
 def blank(request: dict, cut: list[dict], ids) -> dict:

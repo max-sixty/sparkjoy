@@ -369,10 +369,12 @@ first, each keeping its head and tail, so every record stays whole JSON.
 Where even every value cut doesn't fit, it sees as many of the earliest
 records as fit with each cut to the median record's length, and a record
 counting the rest. It is shown the parts a line each, with its kind, tokens
-and opening words, and parts that hold the same content, such as the reminder
-of the output style that Claude Code repeats at each turn, share one line
-that names all their ids, so that marking the line marks each of them. It
-then marks each part needed, helpful or neither, in two runs; an answer that
+and opening words; where parts open alike, as task notifications or edits of
+one file do, each line adds the words where its part differs. Copies of one
+part, such as the reminder of the output style that Claude Code repeats at
+each turn, share one line that names all their ids, and a mark on it counts
+their text once, as the latest copy, since the work needs it once. It then
+marks each part needed, helpful or neither, in two runs; an answer that
 marks no part needed counts as unreadable, since the work after any turn end
 uses the system prompt and tools, and is asked again. Where the session compacted, at the turn end
 itself, as at six of the 13, or later in the work, the work after the

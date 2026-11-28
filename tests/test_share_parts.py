@@ -522,7 +522,7 @@ def test_the_next_work_runs_through_compactions_until_its_context_would_pass_the
     ]
 
 
-def test_parts_that_hold_the_same_share_a_line_and_a_mark_on_it():
+def test_copies_of_a_part_share_a_line_and_alike_parts_show_where_they_differ():
     def call(command):
         return {
             "type": "tool_use",
@@ -538,8 +538,15 @@ def test_parts_that_hold_the_same_share_a_line_and_a_mark_on_it():
     def result(text):
         return {"type": "tool_result", "tool_use_id": "x", "content": text}
 
-    # An idle wait polled three times, the first two polls alike, and an
-    # edit of one file twice, which reads the same but holds different text.
+    def notice(task):
+        boilerplate = "Background task finished. " * 6
+        return f"[SYSTEM NOTIFICATION - NOT USER INPUT] {boilerplate}Task {task} done."
+
+    # An idle wait polled three times, the first two polls alike; an edit of
+    # one file twice; two thinking blocks, their text not kept; two notices
+    # whose first 160 characters match; and a poll whose answers differ at
+    # the start, two of them only after 200 characters.
+    same = "same " * 40
     request = {
         "system": [{"type": "text", "text": "You are Claude Code."}],
         "tools": [],
@@ -552,22 +559,47 @@ def test_parts_that_hold_the_same_share_a_line_and_a_mark_on_it():
             {"role": "user", "content": [result("a comment")]},
             {"role": "assistant", "content": [edit("a {}")]},
             {"role": "assistant", "content": [edit("b {}")]},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "thinking", "thinking": "", "signature": "s1"},
+                    {"type": "thinking", "thinking": "", "signature": "s2"},
+                ],
+            },
+            {"role": "user", "content": notice("A")},
+            {"role": "user", "content": notice("B")},
+            {"role": "assistant", "content": [call("poll")]},
+            {"role": "user", "content": [result(same + "A")]},
+            {"role": "assistant", "content": [call("poll")]},
+            {"role": "user", "content": [result(same + "B")]},
+            {"role": "assistant", "content": [call("poll")]},
+            {"role": "user", "content": [result("other")]},
         ],
     }
     cut = parts.parts_of(request)
     for p in cut:
         p["tokens"] = 10
+    opening = notice("A")[:160]
     assert parts.listing(cut).splitlines() == [
         "#0 system prompt, 10 tokens: system prompt",
         "#1 tools, 10 tokens: 0 tool definitions",
         "#2, #4, #6 tool call ×3, 30 tokens: Bash: leaf wait /p",
-        "#3, #5 tool result ×2, 20 tokens: result of Bash: leaf wait /p",
-        "#7 tool result, 10 tokens: result of Bash: leaf wait /p",
-        "#8 tool call, 10 tokens: Edit: /w/x.css",
-        "#9 tool call, 10 tokens: Edit: /w/x.css",
+        "#3, #5 tool result ×2, 20 tokens: result of Bash: leaf wait /p … nothing new",
+        "#7 tool result, 10 tokens: result of Bash: leaf wait /p … a comment",
+        '#8 tool call, 10 tokens: Edit: /w/x.css … "a {}", "new_string": ""}',
+        '#9 tool call, 10 tokens: Edit: /w/x.css … "b {}", "new_string": ""}',
+        "#10 thinking, 10 tokens: thinking, its text not kept",
+        "#11 thinking, 10 tokens: thinking, its text not kept",
+        f"#12 user text, 10 tokens: {opening} … A done.",
+        f"#13 user text, 10 tokens: {opening} … B done.",
+        "#14, #16, #18 tool call ×3, 30 tokens: Bash: poll",
+        f"#15 tool result, 10 tokens: result of Bash: poll … {same[:60].strip()} … A",
+        f"#17 tool result, 10 tokens: result of Bash: poll … {same[:60].strip()} … B",
+        "#19 tool result, 10 tokens: result of Bash: poll … other",
     ]
-    # Any one id of a line marks every part on it, and no other.
-    assert parts.marked([5, 0], cut) == [0, 3, 5]
+    # A mark on a line marks the latest of its copies, whose text the work
+    # needs once, and an id on no line marks nothing.
+    assert parts.marked([3, 0], cut) == [0, 5]
     assert parts.marked([99], cut) == []
     # An instruction file read again unchanged keeps its earlier copy, which
     # a compaction drops, off the line of the latest, which it puts back.

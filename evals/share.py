@@ -122,7 +122,7 @@ Answer with nothing but one JSON object that matches this schema, filling its fi
 
 LABEL = """This is not a request to continue the work. It comes from the sparkjoy plugin, which is measuring which parts of this context the work after this turn end used, to check its estimates. A program reads your answer.
 
-Below is what the session actually did next, taken from its transcript, and then the parts of the context above, numbered in order, each with its kind, its size in tokens and its opening words. Parts that hold the same content share one line, which names each of their ids and gives their tokens in all.
+Below is what the session actually did next, taken from its transcript, and then the parts of the context above, numbered in order, each with its kind, its size in tokens and its opening words. Where parts open alike, each line adds " … " and the words where its part first differs from them. A part repeated word for word has one line, which names each of its ids and gives their tokens in all.
 
 Judge each part by the work that followed:
 - "needed": the next work used it, or would have gone wrong or had to fetch it again without it. Count what the work relied on without reading it again, such as the state of a fix, a decision taken, or what the user asked for, as well as what it read. Where the context was compacted, at this turn end or later, the work after the compaction ran without it, so a part whose content it then read, searched for or ran again is needed: that fetch is what losing it cost.
@@ -137,7 +137,7 @@ The parts:
 
 {parts}
 
-Answer with nothing but one JSON object: {{"needed": [part ids], "helpful": [part ids], "why": {{"<part id>": "a few words on what the next work used it for"}}}}, with "why" for the 20 largest lines you marked needed or helpful. Any one id of a line that names several marks them all."""
+Answer with nothing but one JSON object: {{"needed": [part ids], "helpful": [part ids], "why": {{"<part id>": "a few words on what the next work used it for"}}}}, with "why" for the 20 largest lines you marked needed or helpful. Mark a repeated part by any one of its ids."""
 
 
 def share_question(tokens: int) -> str:
