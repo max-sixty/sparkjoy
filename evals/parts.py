@@ -625,13 +625,15 @@ def resolve(parts: list[dict]) -> list[dict]:
 
 
 def lines(parts: list[dict]) -> list[list[dict]]:
-    """The parts on each line of the `listing`: one each, but parts that hold
-    the same share one, where the first of them is. Parts that only read the
-    same, such as two edits of one file, keep a line each, since the context
-    tells them apart."""
+    """The parts on each line of the `listing`: one each, but parts of a kind
+    that hold the same share one, where the first of them is. Parts that only
+    read the same, such as two edits of one file, keep a line each, since the
+    context tells them apart, and so does an earlier copy of an instruction
+    file beside the latest, which a compaction puts back."""
     same = {}
     for p in parts:
-        same.setdefault((p["block"], p["desc"][:170], p["digest"]), []).append(p)
+        key = (p["kind"], p["block"], p["desc"][:170], p["digest"])
+        same.setdefault(key, []).append(p)
     return list(same.values())
 
 

@@ -1,6 +1,7 @@
 """Cuts a made-up request into parts, records what the session did next, and scores
 labels on them, as evals/share.py does: `uvx pytest tests`. It needs uv."""
 
+import copy
 import importlib.util
 import itertools
 import json
@@ -568,6 +569,17 @@ def test_parts_that_hold_the_same_share_a_line_and_a_mark_on_it():
     # Any one id of a line marks every part on it, and no other.
     assert parts.marked([5, 0], cut) == [0, 3, 5]
     assert parts.marked([99], cut) == []
+    # An instruction file read again unchanged keeps its earlier copy, which
+    # a compaction drops, off the line of the latest, which it puts back.
+    again = copy.deepcopy(REQUEST)
+    again["messages"][3]["content"][2]["text"] = INSTRUCTIONS
+    copies = [
+        p["id"] for p in parts.parts_of(again) if "CLAUDE.md" in p.get("path", "")
+    ]
+    assert (
+        len(copies) == 2
+        and parts.marked(copies[:1], parts.parts_of(again)) == copies[:1]
+    )
 
 
 def test_records_past_what_the_window_holds_are_counted_in_one_record():
